@@ -1,6 +1,5 @@
-﻿# ==============================================================
+# ==============================================================
 # infrastructure/main.tf
-# Terraform IaC for the CLIP image-similarity ECS Fargate job.
 # ==============================================================
 
 terraform {
@@ -16,10 +15,6 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
-
-# --------------------------------------------------------------
-# VPC — falls back to account default VPC when vpc_id is null
-# --------------------------------------------------------------
 
 data "aws_vpc" "default" {
   default = true
@@ -58,7 +53,7 @@ resource "aws_ecr_lifecycle_policy" "locations_export" {
   policy = jsonencode({
     rules = [{
       rulePriority = 1
-      description  = "Keep only the last 5 images"
+      description  = "Keep last 5"
       selection = {
         tagStatus   = "any"
         countType   = "imageCountMoreThan"
@@ -70,7 +65,7 @@ resource "aws_ecr_lifecycle_policy" "locations_export" {
 }
 
 # ==============================================================
-# S3 — export bucket (legacy; kept for backward-compat)
+# S3 (legacy bucket kept)
 # ==============================================================
 
 resource "aws_s3_bucket" "export" {
@@ -88,7 +83,9 @@ resource "aws_s3_bucket_public_access_block" "export" {
 
 resource "aws_s3_bucket_versioning" "export" {
   bucket = aws_s3_bucket.export.id
-  versioning_configuration { status = "Enabled" }
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "export" {
@@ -101,7 +98,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "export" {
 }
 
 # ==============================================================
-# IAM — shared trust policy
+# IAM
 # ==============================================================
 
 data "aws_iam_policy_document" "ecs_assume_role" {
@@ -115,16 +112,13 @@ data "aws_iam_policy_document" "ecs_assume_role" {
   }
 }
 
-# ==============================================================
-# IAM — ecsTaskExecutionRole (pulls image, writes logs)
-# If it already exists: terraform import aws_iam_role.ecs_task_execution ecsTaskExecutionRole
-# ==============================================================
-
 resource "aws_iam_role" "ecs_task_execution" {
   name               = "ecsTaskExecutionRole"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
   tags               = var.tags
-  lifecycle { prevent_destroy = true }
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
@@ -132,18 +126,9 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# ==============================================================
-# IAM — locations-export-task-role
-# Permissions the application code needs at runtime:
-#   - RDS IAM auth token
-#   - S3 read from 4uproject-eafit/testing/
-#   - S3 write to  4uproject-eafit/output/
-#   - S3 write to  my-locations-export-2026/exports/ (legacy)
-# ==============================================================
-
 resource "aws_iam_role" "task_role" {
   name               = "locations-export-task-role"
-  description        = "CLIP similarity job: RDS IAM auth + S3 read/write"
+  description        = "CLIP similarity API: RDS IAM auth + S3"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
   tags               = var.tags
 }
@@ -151,7 +136,6 @@ resource "aws_iam_role" "task_role" {
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "task_role_policy" {
-  # RDS IAM authentication
   statement {
     sid     = "AllowRDSIAMAuth"
     effect  = "Allow"
@@ -160,8 +144,6 @@ data "aws_iam_policy_document" "task_role_policy" {
       "arn:aws:rds-db:${var.aws_region}:${data.aws_caller_identity.current.account_id}:dbuser:*/${var.db_user}"
     ]
   }
-
-  # List the testing/ prefix (needed for list_objects_v2)
   statement {
     sid     = "AllowS3ListInput"
     effect  = "Allow"
@@ -170,27 +152,21 @@ data "aws_iam_policy_document" "task_role_policy" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["${var.input_prefix}*"]
+      values   = ["${var.input_prefix}*", "${var.output_prefix}*"]
     }
   }
-
-  # Read query images from testing/
   statement {
     sid     = "AllowS3ReadInput"
     effect  = "Allow"
     actions = ["s3:GetObject"]
     resources = ["arn:aws:s3:::${var.input_bucket}/${var.input_prefix}*"]
   }
-
-  # Write results CSV to output/
   statement {
     sid    = "AllowS3WriteOutput"
     effect = "Allow"
     actions = ["s3:PutObject", "s3:PutObjectAcl"]
     resources = ["arn:aws:s3:::${var.output_bucket}/${var.output_prefix}*"]
   }
-
-  # Legacy: write CSV to the export bucket
   statement {
     sid    = "AllowS3ExportLegacy"
     effect = "Allow"
@@ -229,67 +205,73 @@ resource "aws_ecs_cluster" "main" {
 }
 
 # ==============================================================
-# ECS Task Definition
-# CPU/Memory bumped to 2 vCPU / 4 GB for CLIP inference on CPU
+# ECS Task Definition (FastAPI on port 8080)
 # ==============================================================
 
 resource "aws_ecs_task_definition" "locations_export" {
   family                   = "locations-info-export"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "2048"   # 2 vCPU  (CLIP model needs it)
-  memory                   = "4096"   # 4 GB
+  cpu                      = "2048"
+  memory                   = "4096"
 
   execution_role_arn = aws_iam_role.ecs_task_execution.arn
   task_role_arn      = aws_iam_role.task_role.arn
 
-  container_definitions = jsonencode([
-    {
-      name      = "locations-export"
-      image     = "${aws_ecr_repository.locations_export.repository_url}:latest"
-      essential = true
+  container_definitions = jsonencode([{
+    name      = "locations-export"
+    image     = "${aws_ecr_repository.locations_export.repository_url}:latest"
+    essential = true
 
-      environment = [
-        # Database
-        { name = "DB_HOST",          value = var.db_host },
-        { name = "DB_PORT",          value = tostring(var.db_port) },
-        { name = "DB_USER",          value = var.db_user },
-        { name = "DB_NAME",          value = var.db_name },
-        { name = "DB_REGION",        value = var.aws_region },
-        { name = "EMBEDDINGS_TABLE", value = var.embeddings_table },
-        { name = "LOCATIONS_TABLE",  value = var.locations_table },
-        # S3 input (query images)
-        { name = "INPUT_BUCKET",     value = var.input_bucket },
-        { name = "INPUT_PREFIX",     value = var.input_prefix },
-        # S3 output (results CSV)
-        { name = "OUTPUT_BUCKET",    value = var.output_bucket },
-        { name = "OUTPUT_PREFIX",    value = var.output_prefix },
-        # CLIP model
-        { name = "CLIP_MODEL_ID",    value = var.clip_model_id },
-      ]
+    portMappings = [{
+      containerPort = 8080
+      protocol      = "tcp"
+    }]
 
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.ecs_task.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-        }
+    environment = [
+      { name = "DB_HOST",          value = var.db_host },
+      { name = "DB_PORT",          value = tostring(var.db_port) },
+      { name = "DB_USER",          value = var.db_user },
+      { name = "DB_NAME",          value = var.db_name },
+      { name = "DB_REGION",        value = var.aws_region },
+      { name = "EMBEDDINGS_TABLE", value = var.embeddings_table },
+      { name = "LOCATIONS_TABLE",  value = var.locations_table },
+      { name = "INPUT_BUCKET",     value = var.input_bucket },
+      { name = "INPUT_PREFIX",     value = var.input_prefix },
+      { name = "OUTPUT_BUCKET",    value = var.output_bucket },
+      { name = "OUTPUT_PREFIX",    value = var.output_prefix },
+      { name = "CLIP_MODEL_ID",    value = var.clip_model_id },
+    ]
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.ecs_task.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "ecs"
       }
     }
-  ])
+  }])
 
   tags = var.tags
 }
 
 # ==============================================================
-# Security Group — Fargate task (egress-only)
+# Security Group
 # ==============================================================
 
 resource "aws_security_group" "fargate_task" {
   name        = "locations-export-sg"
-  description = "Outbound to Aurora (5432) and AWS APIs (443)"
+  description = "FastAPI on 8080 plus outbound to RDS and AWS APIs"
   vpc_id      = local.resolved_vpc_id
+
+  ingress {
+    description = "FastAPI from internet"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   egress {
     description = "PostgreSQL to RDS"
@@ -300,7 +282,7 @@ resource "aws_security_group" "fargate_task" {
   }
 
   egress {
-    description = "HTTPS to AWS APIs (ECR, S3, CloudWatch, HuggingFace)"
+    description = "HTTPS to AWS APIs and HuggingFace"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -308,4 +290,27 @@ resource "aws_security_group" "fargate_task" {
   }
 
   tags = merge(var.tags, { Name = "locations-export-sg" })
+}
+
+# ==============================================================
+# ECS Service (always 1 task running, scaled to 0 to save cost)
+# ==============================================================
+
+resource "aws_ecs_service" "api" {
+  name            = "locations-export-api"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.locations_export.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = data.aws_subnets.public.ids
+    security_groups  = [aws_security_group.fargate_task.id]
+    assign_public_ip = true
+  }
+
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 100
+
+  tags = var.tags
 }

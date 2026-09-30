@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
-# deploy.sh — Build, push to ECR, register task def, run task
-# ============================================================
-# Usage:
-#   export ACCOUNT_ID=123456789012
-#   export CLUSTER=your-ecs-cluster-name
-#   export SUBNET_ID=subnet-xxxxxxxx          # PUBLIC subnet (Fargate needs internet to reach public RDS)
-#   export SECURITY_GROUP_ID=sg-xxxxxxxx      # must allow outbound TCP/5432 to 0.0.0.0/0
-#   export S3_BUCKET=your-export-bucket-name
-#   ./ecs/deploy.sh
+# deploy.sh -- Build, push to ECR, update ECS service.
+#              Auto-stops the service after 1 hour.
 # ============================================================
 
 set -euo pipefail
@@ -17,72 +10,76 @@ REGION="us-east-2"
 REPO_NAME="locations-export"
 IMAGE_TAG="latest"
 TASK_FAMILY="locations-info-export"
+SERVICE_NAME="locations-export-api"
 
-# ---- Validate required env vars ----
 : "${ACCOUNT_ID:?Set ACCOUNT_ID}"
 : "${CLUSTER:?Set CLUSTER}"
-: "${SUBNET_ID:?Set SUBNET_ID}"
-: "${SECURITY_GROUP_ID:?Set SECURITY_GROUP_ID}"
-: "${S3_BUCKET:?Set S3_BUCKET}"
 
 ECR_URI="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}"
+SCRIPT_DIR="$(dirname "$0")"
 
 echo "=== 1. Authenticate Docker to ECR ==="
 aws ecr get-login-password --region "${REGION}" \
   | docker login --username AWS --password-stdin "${ECR_URI}"
 
-echo "=== 2. Create ECR repo if it doesn't exist ==="
+echo "=== 2. Create ECR repo if it does not exist ==="
 aws ecr describe-repositories --repository-names "${REPO_NAME}" \
   --region "${REGION}" 2>/dev/null \
   || aws ecr create-repository --repository-name "${REPO_NAME}" \
        --region "${REGION}"
 
 echo "=== 3. Build Docker image ==="
-docker build -t "${REPO_NAME}:${IMAGE_TAG}" \
-  "$(dirname "$0")/.."
+docker build -t "${REPO_NAME}:${IMAGE_TAG}" "${SCRIPT_DIR}/.."
 
 echo "=== 4. Tag and push ==="
 docker tag "${REPO_NAME}:${IMAGE_TAG}" "${ECR_URI}:${IMAGE_TAG}"
 docker push "${ECR_URI}:${IMAGE_TAG}"
 
-echo "=== 5. Patch and register task definition ==="
-# Write to a real file in the current directory instead of piping through
-# /dev/stdin — /dev/stdin isn't reliably usable with `file://` under
-# Git Bash / MINGW64 on Windows.
+echo "=== 5. Register task definition ==="
 TMP_TASK_DEF="task_definition.patched.json"
-
 sed \
   -e "s/ACCOUNT_ID/${ACCOUNT_ID}/g" \
-  -e "s/YOUR_EXPORT_BUCKET_NAME/${S3_BUCKET}/g" \
-  "$(dirname "$0")/task_definition.json" > "${TMP_TASK_DEF}"
+  -e "s/YOUR_EXPORT_BUCKET_NAME/${S3_BUCKET:-my-locations-export-2026}/g" \
+  "${SCRIPT_DIR}/task_definition.json" > "${TMP_TASK_DEF}"
 
-# MSYS2_ARG_CONV_EXCL prevents Git Bash from mangling the file:// path
-# into a Windows-style path (harmless no-op on Linux/macOS).
 TASK_DEF_ARN=$(MSYS2_ARG_CONV_EXCL="*" aws ecs register-task-definition \
   --cli-input-json "file://${TMP_TASK_DEF}" \
   --region "${REGION}" \
   --query "taskDefinition.taskDefinitionArn" \
   --output text)
-
 rm -f "${TMP_TASK_DEF}"
-
 echo "Registered: ${TASK_DEF_ARN}"
 
-echo "=== 6. Run Fargate task ==="
-TASK_ARN=$(aws ecs run-task \
+echo "=== 6. Update ECS service ==="
+aws ecs update-service \
   --cluster "${CLUSTER}" \
-  --launch-type FARGATE \
+  --service "${SERVICE_NAME}" \
   --task-definition "${TASK_FAMILY}" \
-  --network-configuration "awsvpcConfiguration={
-      subnets=[${SUBNET_ID}],
-      securityGroups=[${SECURITY_GROUP_ID}],
-      assignPublicIp=ENABLED
-  }" \
+  --desired-count 1 \
+  --force-new-deployment \
   --region "${REGION}" \
-  --query "tasks[0].taskArn" \
-  --output text)
+  --query "service.{status:status,running:runningCount,desired:desiredCount}" \
+  --output table
 
-echo "Task started: ${TASK_ARN}"
 echo ""
-echo "=== Tail logs with: ==="
-echo "  aws logs tail /ecs/locations-info-export --follow --region ${REGION}"
+echo "=== 7. Auto-stop timer: 1 hour ==="
+# Schedules stop.sh to run in the background after 3600 seconds.
+# If you close this terminal, run stop.sh manually when done.
+(
+  sleep 3600
+  export CLUSTER="${CLUSTER}"
+  bash "${SCRIPT_DIR}/stop.sh"
+  echo "[auto-stop] Service stopped after 1 hour."
+) &
+AUTO_STOP_PID=$!
+echo "Auto-stop scheduled (PID ${AUTO_STOP_PID})."
+echo "To cancel auto-stop: kill ${AUTO_STOP_PID}"
+echo "To stop manually now: bash ecs/stop.sh"
+
+echo ""
+echo "=== Deployment started! ==="
+echo "Wait ~2 min for startup, then get the endpoint:"
+echo "  bash ecs/get_ip.sh"
+echo ""
+echo "Tail logs:"
+echo "  MSYS_NO_PATHCONV=1 aws logs tail /ecs/locations-info-export --follow --region ${REGION}"
