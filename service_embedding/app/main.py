@@ -1,118 +1,88 @@
-﻿"""
-main.py — Entry point for the CLIP image-similarity Fargate task.
+"""
+main.py -- FastAPI service for CLIP image similarity.
 
-Pipeline
---------
-1. Load reference embeddings matrix from DB (train_embeddings table).
-2. Load location name mapping from DB (locations_info table).
-3. List PNG images from s3://INPUT_BUCKET/INPUT_PREFIX/.
-4. Load CLIP model once.
-5. For every query image:
-     a. Download from S3.
-     b. Embed with CLIP.
-     c. Find closest reference row via cosine similarity (dot product of
-        L2-normalised vectors).
-     d. Collect result.
-6. Write summary CSV to s3://OUTPUT_BUCKET/OUTPUT_PREFIX/.
-7. Exit 0 on success, 1 on failure.
+Startup: loads CLIP model + all reference embeddings from DB into RAM.
+POST /predict: receives an image, returns the closest location in ~300ms.
+GET  /health:  used by ECS health checks.
 """
 
+import io
 import logging
-import os
 import sys
 
 import numpy as np
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
+from PIL import Image
 
-from app.db       import fetch_reference_embeddings, fetch_location_names
+import app.model_store as store
 from app.embedder import embed_image
-from app.s3_io    import list_input_images, download_image, upload_results_csv
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%SZ",
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
     stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
 
-
-def run() -> None:
-    logger.info("=== CLIP image-similarity job starting ===")
-
-    # 1. Load reference embeddings from DB
-    logger.info("Step 1/5 — loading reference embeddings from DB …")
-    ref_matrix, ref_meta = fetch_reference_embeddings()
-    logger.info("Reference matrix shape: %s", ref_matrix.shape)
-
-    # 2. Load location names from DB
-    logger.info("Step 2/5 — loading location names from DB …")
-    location_names = fetch_location_names()
-
-    # 3. List query images in S3
-    logger.info("Step 3/5 — listing query images in S3 …")
-    image_keys = list_input_images()
-    if not image_keys:
-        raise RuntimeError("No PNG images found in the input S3 prefix. Nothing to do.")
-
-    # 4 & 5. Embed each query image and find its best match
-    logger.info("Step 4/5 — embedding %d images and matching …", len(image_keys))
-    results = []
-
-    for key in image_keys:
-        filename = os.path.basename(key)
-        logger.info("  Processing: %s", filename)
-
-        # Download + embed
-        pil_image = download_image(key)
-        query_vec = embed_image(pil_image)          # shape: (D,), L2-normalised
-
-        # Cosine similarity = dot product (both sides L2-normalised)
-        similarities = ref_matrix @ query_vec       # shape: (N,)
-        best_idx     = int(np.argmax(similarities))
-        best_sim     = float(similarities[best_idx])
-
-        best_row       = ref_meta[best_idx]
-        point_id       = best_row["id_point"]
-        location_name  = location_names.get(point_id, "Unknown")
-        ref_image_name = best_row["image_name"]
-
-        logger.info(
-            "    → %s | similarity=%.4f | location=%s (point_id=%s)",
-            filename, best_sim, location_name, point_id,
-        )
-
-        results.append({
-            "query_image":       filename,
-            "predicted_point_id": point_id,
-            "predicted_location": location_name,
-            "similarity":         f"{best_sim * 100:.2f}%",
-            "matched_ref_image":  ref_image_name,
-        })
-
-    # 6. Upload summary CSV
-    logger.info("Step 5/5 — uploading results CSV …")
-    output_uri = upload_results_csv(results)
-
-    logger.info("=== Job finished successfully. Results → %s ===", output_uri)
-
-    # Print summary table to CloudWatch logs
-    print("\n" + "=" * 70)
-    print("SUMMARY")
-    print("=" * 70)
-    print(
-        f"{'Query Image':<35} {'Location':<20} {'Similarity':>10}"
-    )
-    print("-" * 70)
-    for r in results:
-        print(
-            f"{r['query_image']:<35} {r['predicted_location']:<20} {r['similarity']:>10}"
-        )
-    print("=" * 70)
+app = FastAPI(title="CLIP Location Similarity API")
 
 
-if __name__ == "__main__":
+@app.on_event("startup")
+def startup():
+    """Load model and DB embeddings once. All requests reuse this."""
+    store.load()
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "ready": store.is_ready()}
+
+
+@app.post("/predict")
+async def predict(image: UploadFile = File(...)):
+    """
+    Receive an image file, return the closest matching location.
+
+    Returns JSON:
+    {
+      "location":          "Cafeteria",
+      "point_id":          3,
+      "similarity":        0.94,
+      "matched_ref_image": "cafeteria_ref_01.png"
+    }
+    """
+    if not store.is_ready():
+        raise HTTPException(status_code=503, detail="Model not ready yet")
+
+    # Read uploaded image
+    contents = await image.read()
     try:
-        run()
-    except Exception as exc:
-        logger.exception("Job failed: %s", exc)
-        sys.exit(1)
+        pil_image = Image.open(io.BytesIO(contents)).convert("RGB")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image file")
+
+    # Embed query image
+    query_vec = embed_image(pil_image)                         # (512,)
+
+    # Cosine similarity against full reference matrix (dot product)
+    ref_matrix     = store.get_ref_matrix()                    # (N, 512)
+    similarities   = ref_matrix @ query_vec                    # (N,)
+    best_idx       = int(np.argmax(similarities))
+    best_sim       = float(similarities[best_idx])
+
+    best           = store.get_ref_meta()[best_idx]
+    point_id       = best["id_point"]
+    location_name  = store.get_location_names().get(point_id, "Unknown")
+
+    logger.info(
+        "Predicted: %s (point_id=%s, sim=%.4f) for file=%s",
+        location_name, point_id, best_sim, image.filename,
+    )
+
+    return JSONResponse({
+        "location":          location_name,
+        "point_id":          point_id,
+        "similarity":        round(best_sim, 4),
+        "matched_ref_image": best["image_name"],
+    })

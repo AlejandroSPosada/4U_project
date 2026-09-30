@@ -1,47 +1,52 @@
-﻿# ============================================================
-# Build stage: install Python deps into a clean layer
+# ============================================================
+# Build stage
 # ============================================================
 FROM python:3.11-slim AS builder
 
 WORKDIR /install
 
-# Install build tools needed by some packages (e.g. psycopg2-binary)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 
-# Install all deps (torch CPU wheel ~750 MB, transformers ~500 MB)
 RUN pip install --no-cache-dir --prefix=/install/pkg -r requirements.txt
 
+# Pre-download CLIP model weights into the image at build time.
+# This means the container starts instantly — no HuggingFace download at runtime.
+ENV PYTHONPATH=/install/pkg/lib/python3.11/site-packages
+RUN HF_HOME=/install/hf_cache \
+    python -c "from transformers import CLIPModel, CLIPProcessor; \
+               CLIPModel.from_pretrained('openai/clip-vit-base-patch32'); \
+               CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32'); \
+               print('CLIP model cached.')"
+
 # ============================================================
-# Runtime stage: minimal image
+# Runtime stage
 # ============================================================
 FROM python:3.11-slim
 
-# Runtime PostgreSQL shared lib required by psycopg2-binary
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Non-root user for least-privilege execution
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /install/pkg /usr/local
+COPY --from=builder /install/pkg      /usr/local
+COPY --from=builder /install/hf_cache /home/appuser/.cache/huggingface
 
-# Copy application source
 COPY app/ ./app/
 
-# HuggingFace caches the model here; make it writable for the non-root user
-ENV HF_HOME=/tmp/hf_cache
-ENV TRANSFORMERS_CACHE=/tmp/hf_cache
+# HuggingFace reads from this cache dir — already populated at build time
+ENV HF_HOME=/home/appuser/.cache/huggingface
+ENV TRANSFORMERS_CACHE=/home/appuser/.cache/huggingface
 
-# Switch to non-root
 USER appuser
 
-# One-shot job — no port exposed
-CMD ["python", "-m", "app.main"]
+EXPOSE 8080
+
+# Run FastAPI with uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]

@@ -1,19 +1,3 @@
-Now i want you to implement dinov2 in the container.
+perfect; everything so far as worked for the batch approach; now we have streaming, fast response
 
-take as example 
-
-G:\My Drive\baul\uni\2026-2\p2\4U_project\service_embedding\temp\code.py
-
-it worked with an csv; now i we use the database directly, to look for the most close embedding
-
-all the input images will be in the bucket
-
-s3://4uproject-eafit/testing
-
-they are png
-
-save the output in 
-
-s3://4uproject-eafit/output
-
-where each image will have the place
+cuz when the user send a photo from fronted_kotlin, it has to be fast;
