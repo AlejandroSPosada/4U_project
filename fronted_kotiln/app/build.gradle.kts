@@ -33,6 +33,9 @@ android {
     buildFeatures {
         compose = true
     }
+
+    androidResources { noCompress += "mbtiles" }   // evita que aapt comprima el .mbtiles
+
 }
 
 dependencies {
@@ -47,6 +50,19 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.coil.compose)
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.navigation:navigation-compose:2.8.5")
+    val cameraxVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:<tu versión>")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:<tu versión>")  // collectAsStateWithLifecycle
+    // Material3 >= 1.1 (ModalBottomSheet)
+
     // Networking
     implementation(libs.okhttp)
     implementation(libs.gson)
