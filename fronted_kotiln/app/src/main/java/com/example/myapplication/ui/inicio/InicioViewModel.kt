@@ -1,110 +1,130 @@
 package com.example.myapplication.ui.inicio
 
 import android.app.Application
-import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.ApiConfig
-import com.google.gson.Gson
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.concurrent.TimeUnit
 
-// ─── Result from the API ──────────────────────────────────────────────────────
-data class PredictionResult(
-    val location: String,
-    val point_id: Int,
-    val similarity: Float,
-    val matched_ref_image: String
-)
+/** Reemplaza la implementación por tu llamada real al backend (ej. GET /health). */
+interface BackendHealth {
+    suspend fun estaEnLinea(): Boolean
+}
 
-// ─── UI State ─────────────────────────────────────────────────────────────────
-sealed class PredictionState {
-    object Idle    : PredictionState()
-    object Loading : PredictionState()
-    data class Success(val result: PredictionResult) : PredictionState()
-    data class Error(val message: String)            : PredictionState()
+object BackendHealthStub : BackendHealth {
+    override suspend fun estaEnLinea(): Boolean = true
 }
 
 data class InicioUiState(
-    val imagenSeleccionada: Uri?           = null,
-    val predictionState: PredictionState  = PredictionState.Idle
+    val escuchando: Boolean = false,
+    val backendEnLinea: Boolean = false,
 )
 
-// ─── ViewModel ────────────────────────────────────────────────────────────────
-class InicioViewModel(application: Application) : AndroidViewModel(application) {
+sealed interface InicioEvento {
+    data object Ubicarme : InicioEvento
+    data object IrALugar : InicioEvento
+}
 
-    private val _uiState = MutableStateFlow(InicioUiState())
-    val uiState: StateFlow<InicioUiState> = _uiState.asStateFlow()
+class InicioViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+    private val backend: BackendHealth = BackendHealthStub
 
-    private val gson = Gson()
+    companion object {
+        const val BIENVENIDA =
+            "Di uno para saber dónde estás, o dos para ir a un lugar."
+        private const val NO_ENTENDI = "No te entendí. $BIENVENIDA"
+        private const val MAX_INTENTOS = 3
+    }
 
-    /** Called when the user picks one image from the gallery. */
-    fun onImagenSeleccionada(uri: Uri) {
-        _uiState.value = InicioUiState(
-            imagenSeleccionada = uri,
-            predictionState    = PredictionState.Loading
-        )
+    private val voz = VoiceController(app)
+    private var intentos = 0
+
+    private val _estado = MutableStateFlow(InicioUiState())
+    val estado: StateFlow<InicioUiState> = _estado.asStateFlow()
+
+    private val _eventos = MutableSharedFlow<InicioEvento>(extraBufferCapacity = 1)
+    val eventos: SharedFlow<InicioEvento> = _eventos.asSharedFlow()
+
+    init {
+        // Sondeo periódico del estado de conexión.
         viewModelScope.launch {
-            val state = withContext(Dispatchers.IO) { predict(uri) }
-            _uiState.value = _uiState.value.copy(predictionState = state)
-        }
-    }
-
-    /** Clear result so the user can pick a new image. */
-    fun reset() {
-        _uiState.value = InicioUiState()
-    }
-
-    // ── Private ────────────────────────────────────────────────────────────────
-
-    private fun predict(uri: Uri): PredictionState {
-        return try {
-            val bytes = getApplication<Application>()
-                .contentResolver
-                .openInputStream(uri)
-                ?.readBytes()
-                ?: return PredictionState.Error("No se pudo leer la imagen")
-
-            val body = MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart(
-                    name     = "image",
-                    filename = "photo.png",
-                    body     = bytes.toRequestBody("image/*".toMediaType())
-                )
-                .build()
-
-            val request = Request.Builder()
-                .url(ApiConfig.PREDICT_URL)
-                .post(body)
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return PredictionState.Error("Error del servidor: ${response.code}")
-                }
-                val json = response.body?.string()
-                    ?: return PredictionState.Error("Respuesta vacía del servidor")
-                val result = gson.fromJson(json, PredictionResult::class.java)
-                PredictionState.Success(result)
+            while (true) {
+                val ok = runCatching { backend.estaEnLinea() }.getOrDefault(false)
+                _estado.value = _estado.value.copy(backendEnLinea = ok)
+                delay(15_000)
             }
-        } catch (e: Exception) {
-            PredictionState.Error("No se pudo conectar: ${e.message}")
         }
+    }
+
+    /** Al abrir la pantalla: lee las instrucciones y empieza a escuchar. */
+    fun alAbrir() {
+        intentos = 0
+        voz.speak(BIENVENIDA) { escuchar() }
+    }
+
+    /** Toque en el orbe: interrumpe la voz y activa/reactiva la escucha. */
+    fun alPresionarOrbe() {
+        intentos = 0
+        navegar(InicioEvento.Ubicarme)   // ← antes: voz.stopAll(); escuchar()
+    }
+
+    /** Acciones directas (TalkBack / sin voz). */
+    fun ubicarme() = navegar(InicioEvento.Ubicarme)
+    fun irALugar() = navegar(InicioEvento.IrALugar)
+
+    fun alPausar() {
+        voz.stopAll()
+        _estado.value = _estado.value.copy(escuchando = false)
+    }
+
+    /** Se llama tras explicar los permisos y que la persona los acepte o rechace. */
+    fun explicarPermisos(alTerminar: () -> Unit) {
+        voz.speak(
+            "Necesito el micrófono para escucharte, la cámara para reconocer " +
+                "lo que hay a tu alrededor y los sensores de actividad para saber cómo te mueves.",
+            alTerminar,
+        )
+    }
+
+    private fun escuchar() {
+        _estado.value = _estado.value.copy(escuchando = true)
+        voz.listen(
+            onResult = { texto ->
+                _estado.value = _estado.value.copy(escuchando = false)
+                when (ComandoParser.parse(texto)) {
+                    Comando.UBICARME -> navegar(InicioEvento.Ubicarme)
+                    Comando.IR_A_LUGAR -> navegar(InicioEvento.IrALugar)
+                    Comando.NINGUNO -> repetirOpciones()
+                }
+            },
+            onFail = {
+                _estado.value = _estado.value.copy(escuchando = false)
+                repetirOpciones()
+            },
+        )
+    }
+
+    private fun repetirOpciones() {
+        if (++intentos >= MAX_INTENTOS) {
+            voz.speak("Presiona el botón central cuando quieras hablar.")
+            return
+        }
+        voz.speak(NO_ENTENDI) { escuchar() }
+    }
+
+    private fun navegar(evento: InicioEvento) {
+        voz.stopAll()
+        _estado.value = _estado.value.copy(escuchando = false)
+        _eventos.tryEmit(evento)
+    }
+
+    override fun onCleared() {
+        voz.release()
     }
 }

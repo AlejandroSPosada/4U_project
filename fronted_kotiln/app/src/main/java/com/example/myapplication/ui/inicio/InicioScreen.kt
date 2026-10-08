@@ -1,335 +1,435 @@
 package com.example.myapplication.ui.inicio
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.*
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.outlined.AdminPanelSettings
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil3.compose.AsyncImage
-import kotlin.math.roundToInt
 
-// ─── Palette ──────────────────────────────────────────────────────────────────
-private val BackgroundColor = Color(0xFF0D0D14)
-private val OrbCenter       = Color(0xFF9B4DFF)
-private val OrbMid          = Color(0xFF6B2BCC)
-private val OrbEdge         = Color(0xFF3D0080)
-private val GlowColor       = Color(0xFF7B3FE4)
-private val AccentPurple    = Color(0xFF9B4DFF)
-private val CardBg          = Color(0x22FFFFFF)
+// --- Paleta ---------------------------------------------------------------
+private val Fondo = Color(0xFF030712)
+private val Morado = Color(0xFF7C3AED)
+private val MoradoClaro = Color(0xFFC4B5FD)
+private val MoradoOscuro = Color(0xFF2E1F8A)
+private val TextoSecundario = Color(0xFF9CA3AF)
+private val Verde = Color(0xFF22E58B)
+private val Rojo = Color(0xFFEF4444)
+private val FondoAviso = Color(0xFF3B1D1D)
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
-@Composable
-fun InicioScreen(viewModel: InicioViewModel = viewModel()) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+// --- Permisos -------------------------------------------------------------
 
-    // Single image picker
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) viewModel.onImagenSeleccionada(uri)
+/** Permisos en runtime que necesita la app (cámara, voz y PDR). */
+private fun permisosNecesarios(): Array<String> = buildList {
+    add(Manifest.permission.CAMERA)
+    add(Manifest.permission.RECORD_AUDIO)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        add(Manifest.permission.ACTIVITY_RECOGNITION)
+    }
+}.toTypedArray()
+
+private fun permisosFaltantes(ctx: Context): List<String> =
+    permisosNecesarios().filter {
+        ctx.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "orb_anim")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1.57f, targetValue = 1.73f,
-        animationSpec = infiniteRepeatable(tween(1800, easing = EaseInOutSine), RepeatMode.Reverse),
-        label = "pulse"
-    )
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.45f, targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(tween(1800, easing = EaseInOutSine), RepeatMode.Reverse),
-        label = "glow"
-    )
-    val waveAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f, targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(tween(1200, easing = EaseInOut), RepeatMode.Reverse),
-        label = "wave"
-    )
+private fun tienePermisos(ctx: Context) = permisosFaltantes(ctx).isEmpty()
 
-    Box(
-        modifier = Modifier.fillMaxSize().background(BackgroundColor),
-        contentAlignment = Alignment.Center
+private fun nombreLegible(permiso: String): String = when (permiso) {
+    Manifest.permission.CAMERA -> "Cámara"
+    Manifest.permission.RECORD_AUDIO -> "Micrófono"
+    Manifest.permission.ACTIVITY_RECOGNITION -> "Sensores de actividad"
+    else -> permiso.substringAfterLast('.')
+}
+
+private fun abrirAjustesApp(ctx: Context) {
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.fromParts("package", ctx.packageName, null)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    ctx.startActivity(intent)
+}
+
+/** Punto de entrada: conecta ViewModel, permisos y navegación. */
+@Composable
+fun InicioScreen(
+    onUbicarme: () -> Unit,
+    onIrALugar: () -> Unit,
+    onAccesoAdministrador: () -> Unit,
+    viewModel: InicioViewModel = viewModel(),
+) {
+    val ctx = LocalContext.current
+    val estado by viewModel.estado.collectAsStateWithLifecycle()
+
+    // Permisos que faltan por conceder. Se refresca al volver de Ajustes y tras cada solicitud.
+    var faltantes by remember { mutableStateOf(permisosFaltantes(ctx)) }
+
+    val lanzadorPermisos = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding()
-                .padding(horizontal = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Top
-            Column(
-                modifier = Modifier.padding(top = 56.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                SignalIcon(waveAlpha)
-                Spacer(Modifier.height(28.dp))
-                Text(
-                    text = when (uiState.predictionState) {
-                        is PredictionState.Loading -> "Identificando..."
-                        is PredictionState.Success -> "Ubicacion encontrada"
-                        is PredictionState.Error   -> "Intentalo de nuevo"
-                        else                       -> "Toca para identificar\ndonde te encuentras"
-                    },
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 28.sp
-                )
-            }
+        faltantes = permisosFaltantes(ctx)
+        // Arranca siempre: sin micrófono no hay voz, pero el orbe y las acciones
+        // de accesibilidad siguen funcionando. El escaneo 360° solo necesitará cámara.
+        viewModel.alAbrir()
+    }
 
-            // Center: orb + image preview + result
-            Box(contentAlignment = Alignment.Center) {
-                GlowingOrb(
-                    pulseScale = pulseScale,
-                    glowAlpha  = glowAlpha,
-                    onClick    = {
-                        // Allow tapping again anytime
-                        galleryLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    }
-                )
+    // Primera vez: explicación hablada y luego solicitud de permisos.
+    LaunchedEffect(Unit) {
+        if (tienePermisos(ctx)) {
+            viewModel.alAbrir()
+        } else {
+            viewModel.explicarPermisos { lanzadorPermisos.launch(permisosNecesarios()) }
+        }
+    }
 
-                // Selected image (shown on the orb)
-                if (uiState.imagenSeleccionada != null) {
-                    AsyncImage(
-                        model = uiState.imagenSeleccionada,
-                        contentDescription = "Imagen seleccionada",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(160.dp)
-                            .clip(CircleShape)
-                            .border(3.dp, AccentPurple, CircleShape)
-                    )
-                }
-
-                // Loading spinner overlay
-                if (uiState.predictionState is PredictionState.Loading) {
-                    CircularProgressIndicator(
-                        color = AccentPurple,
-                        strokeWidth = 3.dp,
-                        modifier = Modifier.size(190.dp)
-                    )
-                }
-            }
-
-            // Result card + footer
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(bottom = 48.dp)
-            ) {
-                // Result card
-                AnimatedVisibility(
-                    visible = uiState.predictionState is PredictionState.Success,
-                    enter   = fadeIn() + scaleIn(),
-                    exit    = fadeOut()
-                ) {
-                    val result = (uiState.predictionState as? PredictionState.Success)?.result
-                    if (result != null) {
-                        ResultCard(result)
-                    }
-                }
-
-                // Error message
-                if (uiState.predictionState is PredictionState.Error) {
-                    Text(
-                        text = (uiState.predictionState as PredictionState.Error).message,
-                        color = Color(0xFFFF6B6B),
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 12.dp)
-                    )
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                // Footer hint
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Canvas(modifier = Modifier.size(18.dp)) { drawVolumeIcon(AccentPurple) }
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (uiState.predictionState is PredictionState.Success)
-                            "Toca el orbe para nueva foto"
-                        else
-                            "Activa el lector de pantalla",
-                        color = AccentPurple,
-                        fontSize = 14.sp
-                    )
-                }
+    // Eventos de navegación.
+    LaunchedEffect(Unit) {
+        viewModel.eventos.collect {
+            when (it) {
+                InicioEvento.Ubicarme -> onUbicarme()
+                InicioEvento.IrALugar -> onIrALugar()
             }
         }
     }
+
+    // Ciclo de vida: refrescar permisos al volver de Ajustes y detener voz al salir.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, e ->
+            when (e) {
+                Lifecycle.Event.ON_RESUME -> faltantes = permisosFaltantes(ctx)
+                Lifecycle.Event.ON_STOP -> viewModel.alPausar()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
+    InicioContent(
+        escuchando = estado.escuchando,
+        backendEnLinea = estado.backendEnLinea,
+        permisosFaltantes = faltantes,
+        onOrbe = viewModel::alPresionarOrbe,
+        onUbicarme = viewModel::ubicarme,
+        onIrALugar = viewModel::irALugar,
+        onAccesoAdministrador = onAccesoAdministrador,
+        onReintentarPermisos = { lanzadorPermisos.launch(permisosNecesarios()) },
+        onIrAAjustes = { abrirAjustesApp(ctx) },
+    )
 }
 
-// ─── Result Card ──────────────────────────────────────────────────────────────
 @Composable
-private fun ResultCard(result: PredictionResult) {
-    val pct = (result.similarity * 100).roundToInt()
-    Box(
+fun InicioContent(
+    escuchando: Boolean,
+    backendEnLinea: Boolean,
+    permisosFaltantes: List<String>,
+    onOrbe: () -> Unit,
+    onUbicarme: () -> Unit,
+    onIrALugar: () -> Unit,
+    onAccesoAdministrador: () -> Unit,
+    onReintentarPermisos: () -> Unit,
+    onIrAAjustes: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Fondo)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // Banner de permisos (solo si falta alguno).
+        if (permisosFaltantes.isNotEmpty()) {
+            BannerPermisos(
+                faltantes = permisosFaltantes,
+                onReintentar = onReintentarPermisos,
+                onIrAAjustes = onIrAAjustes,
+            )
+        }
+
+        Spacer(Modifier.height(if (permisosFaltantes.isEmpty()) 72.dp else 20.dp))
+
+        IconoSenal(modifier = Modifier.size(88.dp))
+
+        Spacer(Modifier.height(28.dp))
+
+        Text(
+            text = if (escuchando) "Te escucho…"
+            else "Presiona para ubicarte\no para llegar a un lugar.",
+            color = Color.White,
+            fontSize = 28.sp,
+            lineHeight = 36.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Orbe(
+                escuchando = escuchando,
+                onClick = onOrbe,
+                onUbicarme = onUbicarme,
+                onIrALugar = onIrALugar,
+            )
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.VolumeUp,
+                contentDescription = null,
+                tint = Morado,
+                modifier = Modifier.size(24.dp),
+            )
+            Text("Activa el lector de pantalla", color = TextoSecundario, fontSize = 16.sp)
+        }
+
+        Spacer(Modifier.height(48.dp))
+
+        BarraInferior(backendEnLinea, onAccesoAdministrador)
+    }
+}
+
+/** Aviso superior con los permisos que faltan y botones para resolverlo. */
+@Composable
+private fun BannerPermisos(
+    faltantes: List<String>,
+    onReintentar: () -> Unit,
+    onIrAAjustes: () -> Unit,
+) {
+    val nombres = faltantes.joinToString(", ") { nombreLegible(it) }
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(CardBg)
-            .border(1.dp, AccentPurple.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
-            .padding(vertical = 20.dp, horizontal = 24.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .background(FondoAviso, RoundedCornerShape(16.dp))
+            .border(1.dp, Rojo, RoundedCornerShape(16.dp))
+            .padding(16.dp)
+            .semantics {
+                contentDescription =
+                    "Faltan permisos: $nombres. Toca Permitir para concederlos " +
+                            "o Ajustes para abrirlos manualmente."
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = result.location.uppercase(),
-                color = Color.White,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "Similitud: $pct%",
-                color = AccentPurple,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium
-            )
+        Text(
+            text = "Faltan permisos: $nombres",
+            color = Color.White,
+            fontSize = 16.sp,
+            lineHeight = 22.sp,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Medium,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AccionPermiso(texto = "Permitir", onClick = onReintentar)
+            AccionPermiso(texto = "Ajustes", onClick = onIrAAjustes)
         }
     }
 }
 
-// ─── Signal Icon ──────────────────────────────────────────────────────────────
 @Composable
-private fun SignalIcon(waveAlpha: Float) {
-    Canvas(modifier = Modifier.size(64.dp)) {
-        val cx = size.width / 2f
-        val cy = size.height / 2f
-        drawCircle(color = Color.White, radius = 5.dp.toPx(), center = Offset(cx, cy))
-        listOf(14.dp.toPx(), 22.dp.toPx(), 30.dp.toPx()).forEachIndexed { i, r ->
-            val alpha = (waveAlpha - i * 0.18f).coerceIn(0f, 1f)
-            val stroke = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round)
-            val tl = Offset(cx - r, cy - r)
-            val sz = Size(r * 2, r * 2)
-            drawArc(color = Color.White.copy(alpha = alpha), startAngle = 210f, sweepAngle = 120f, useCenter = false, topLeft = tl, size = sz, style = stroke)
-            drawArc(color = Color.White.copy(alpha = alpha), startAngle = 30f,  sweepAngle = 120f, useCenter = false, topLeft = tl, size = sz, style = stroke)
-        }
-    }
-}
-
-// ─── Glowing Orb ─────────────────────────────────────────────────────────────
-@Composable
-private fun GlowingOrb(pulseScale: Float, glowAlpha: Float, onClick: () -> Unit) {
-    Canvas(
+private fun AccionPermiso(texto: String, onClick: () -> Unit) {
+    Text(
+        text = texto,
+        color = MoradoClaro,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.SemiBold,
         modifier = Modifier
-            .size(280.dp)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication        = null
-            ) { onClick() }
-    ) {
-        val cx = size.width / 2f
-        val cy = size.height / 2f
-        val radius = (size.minDimension / 2f) * 0.80f * pulseScale
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .semantics { contentDescription = texto },
+    )
+}
 
-        listOf(
-            radius * 1.38f to glowAlpha * 0.08f,
-            radius * 1.25f to glowAlpha * 0.16f,
-            radius * 1.13f to glowAlpha * 0.26f,
-            radius * 1.05f to glowAlpha * 0.38f
-        ).forEach { (r, a) ->
-            drawCircle(
-                brush = Brush.radialGradient(
-                    listOf(GlowColor.copy(alpha = a), Color.Transparent),
-                    Offset(cx, cy), r
-                ),
-                radius = r, center = Offset(cx, cy)
+@Composable
+private fun Orbe(
+    escuchando: Boolean,
+    onClick: () -> Unit,
+    onUbicarme: () -> Unit,
+    onIrALugar: () -> Unit,
+) {
+    val transicion = rememberInfiniteTransition(label = "pulso")
+    val pulso by transicion.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "escala",
+    )
+    val escala = if (escuchando) pulso else 1f
+
+    Box(
+        modifier = Modifier
+            .size(252.dp)
+            .scale(escala)
+            .shadow(
+                elevation = 48.dp,
+                shape = CircleShape,
+                ambientColor = Morado,
+                spotColor = Morado,
             )
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(MoradoOscuro, Color(0xFF5B2FD6), Color(0xFF7C45EE)),
+                ),
+                CircleShape,
+            )
+            .border(3.dp, MoradoClaro, CircleShape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics {
+                contentDescription =
+                    "Botón principal. Toca dos veces para iniciar el escaneo de 360 grados " +
+                            "y saber dónde estás."
+                customActions = listOf(
+                    CustomAccessibilityAction("Ir a un lugar") { onIrALugar(); true },
+                )
+            },
+    )
+}
+
+/** Icono de señal: punto central con dos arcos a cada lado. */
+@Composable
+private fun IconoSenal(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.semantics { contentDescription = "" }) {
+        val c = Offset(size.width / 2, size.height / 2)
+        val trazo = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+        drawCircle(Color.White, radius = 9.dp.toPx(), center = c)
+        listOf(20.dp.toPx(), 36.dp.toPx()).forEach { r ->
+            val tam = Size(r * 2, r * 2)
+            val tl = Offset(c.x - r, c.y - r)
+            drawArc(Color.White, startAngle = -50f, sweepAngle = 100f, useCenter = false,
+                topLeft = tl, size = tam, style = trazo)
+            drawArc(Color.White, startAngle = 130f, sweepAngle = 100f, useCenter = false,
+                topLeft = tl, size = tam, style = trazo)
         }
-        drawCircle(
-            brush = Brush.radialGradient(
-                listOf(OrbCenter, OrbMid, OrbEdge, Color(0x00000000)),
-                Offset(cx - radius * 0.15f, cy - radius * 0.15f), radius * 1.2f
-            ),
-            radius = radius, center = Offset(cx, cy)
-        )
-        drawCircle(
-            brush = Brush.sweepGradient(
-                listOf(
-                    GlowColor.copy(0.6f), Color.Transparent,
-                    GlowColor.copy(0.85f), GlowColor.copy(0.3f), Color.Transparent
-                ), Offset(cx, cy)
-            ),
-            radius = radius, center = Offset(cx, cy),
-            style = Stroke(2.5.dp.toPx())
-        )
-        drawCircle(
-            brush = Brush.radialGradient(
-                listOf(Color.White.copy(0.22f), Color.Transparent),
-                Offset(cx - radius * 0.28f, cy - radius * 0.28f), radius * 0.55f
-            ),
-            radius = radius * 0.55f,
-            center = Offset(cx - radius * 0.28f, cy - radius * 0.28f)
-        )
     }
 }
 
-// ─── Volume Icon ──────────────────────────────────────────────────────────────
-private fun DrawScope.drawVolumeIcon(color: Color) {
-    val w = size.width; val h = size.height
-    val stroke = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-    val path = Path().apply {
-        moveTo(w*.18f, h*.35f); lineTo(w*.38f, h*.35f)
-        lineTo(w*.62f, h*.15f); lineTo(w*.62f, h*.85f)
-        lineTo(w*.38f, h*.65f); lineTo(w*.18f, h*.65f); close()
+@Composable
+private fun BarraInferior(backendEnLinea: Boolean, onAccesoAdministrador: () -> Unit) {
+    Column(Modifier.padding(horizontal = 24.dp)) {
+        HorizontalDivider(color = Color(0xFF111827))
+        Spacer(Modifier.height(20.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics {
+                        contentDescription =
+                            if (backendEnLinea) "Conectado. Backend en línea."
+                            else "Sin conexión. Backend no disponible."
+                    },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier
+                        .size(14.dp)
+                        .background(if (backendEnLinea) Verde else Rojo, CircleShape)
+                )
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(
+                        if (backendEnLinea) "Conectado" else "Sin conexión",
+                        color = Color.White, fontSize = 16.sp,
+                    )
+                    Text(
+                        if (backendEnLinea) "Backend en línea" else "Backend no disponible",
+                        color = TextoSecundario, fontSize = 14.sp,
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .clickable(role = Role.Button, onClick = onAccesoAdministrador)
+                    .padding(vertical = 8.dp)
+                    .semantics { contentDescription = "Acceso administrador" },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.AdminPanelSettings, null, tint = Morado,
+                    modifier = Modifier.size(32.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Acceso administrador", color = MoradoClaro, fontSize = 16.sp)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Morado)
+            }
+        }
     }
-    drawPath(path, color, style = stroke)
-    drawArc(
-        color      = color,
-        startAngle = -40f,
-        sweepAngle = 80f,
-        useCenter  = false,
-        topLeft    = Offset(w * 0.60f, h * 0.28f),
-        size       = Size(w * 0.18f, h * 0.44f),
-        style      = stroke
-    )
-    drawArc(
-        color      = color,
-        startAngle = -50f,
-        sweepAngle = 100f,
-        useCenter  = false,
-        topLeft    = Offset(w * 0.62f, h * 0.16f),
-        size       = Size(w * 0.26f, h * 0.68f),
-        style      = stroke
-    )
 }
