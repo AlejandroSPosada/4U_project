@@ -148,7 +148,7 @@ fun AppNav() {
             EditorMapaScreen(
                 onVolver = { nav.popBackStack() },
                 onVerLista = { /* vista 17 aún no existe */ },
-                posicionAdmin = { null },
+                posicionAdmin = { null }
             )
         }
         composable("admin/imagenes") { /* placeholder */ }
