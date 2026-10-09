@@ -17,8 +17,8 @@ Campus Locator es una app Android para **personas con discapacidad visual** que 
 1. **Ubicarse** dentro del campus (*"¿dónde estoy?"*).
 2. **Ser guiado por voz** hasta un lugar del campus (*"quiero ir a…"*).
 3. (Admin) **Construir el dataset** de imágenes de referencia que hace posible lo anterior.
-4. (Admin) **Editar el mapa** (`eafit.mbtiles`) agregando **alertas de obstáculo** con un
-   mensaje que se le leerá al usuario ciego cuando se acerque.
+4. (Admin) **Editar el mapa** (capa de alertas sobre el mapa de OpenStreetMap) agregando
+   **alertas de obstáculo** con un mensaje que se le leerá al usuario ciego cuando se acerque.
 
 Es **una sola app / un solo APK**. La interfaz de administración se habilita únicamente
 cuando el usuario inicia sesión con rol `ADMIN`.
@@ -158,19 +158,66 @@ usuario ciego cuando está cerca.
 **Cómo las crea el admin:** desde el **Editor de mapa y alertas** (vista 15) o desde la
 vista de **Recolección en curso** con el botón "Agregar alerta aquí" (ver sección 7).
 
-> Importante: las alertas son una **capa propia** que se dibuja encima del mapa base
-> `eafit.mbtiles` y se guarda en el backend; **no se escriben dentro del archivo MBTiles**.
+> Importante: las alertas son una **capa propia** que se dibuja encima del mapa base de
+> OpenStreetMap (como capa de Leaflet) y se guarda en el backend; **el mapa base nunca se
+> modifica**.
 
-### 2.6 Mapa del campus (`eafit.mbtiles`)
+### 2.6 Mapa del campus (OpenStreetMap + Leaflet)
 
-- El mapa base es el archivo **`eafit.mbtiles`**, que se incluye en la app (carpeta
-  `assets/`, ya existente en el proyecto) o se descarga/actualiza desde el backend, y se
-  renderiza **sin conexión**.
-- MBTiles usa proyección Web Mercator, por lo que las coordenadas del sistema (posición del
-  usuario, fotos del dataset, lugares, alertas) se manejan como **latitud / longitud**.
-- Sobre el mapa base se dibujan **capas**: posición y orientación del usuario, ruta, lugares
-  de interés, **alertas de obstáculo** y, solo para el admin, cobertura de fotos y trayectoria.
+> **Decisión de arquitectura:** el archivo `eafit.mbtiles` **se descartó** porque no fue
+> posible implementarlo. El mapa ahora se carga **directamente desde internet** desde
+> OpenStreetMap, y se dibuja con **Leaflet** dentro de un `WebView`. Ya no hay un archivo de
+> mapa dentro de la app ni un endpoint para versionarlo.
+
+- **Mapa base:** teselas raster de OpenStreetMap, con la URL
+  `https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png` (zoom máximo 19). Se muestra la
+  atribución *© OpenStreetMap* (obligatoria; ya está en `app.js`).
+- **Render:** Leaflet 1.9.4, en la página web `index.html` + `app.js` ("StepTracker"), que
+  se incluye en la app como assets (`app/src/main/assets/`) y se carga en un `WebView`.
+- **Coordenadas:** el sistema completo (posición del usuario, fotos del dataset, lugares,
+  alertas) usa **latitud / longitud** (WGS84). Leaflet se encarga de la proyección Web
+  Mercator de las teselas.
+- **Capas** que se dibujan sobre el mapa base: posición y orientación del usuario, punto de
+  inicio, trayectoria recorrida y, a medida que se implementen, ruta, lugares de interés,
+  **alertas de obstáculo** y, solo para el admin, cobertura de fotos.
 - Para el admin, "modificar el mapa" significa editar estas capas (alertas y lugares).
+- **Requiere conexión para el mapa base.** Sin red, las teselas que el `WebView` ya
+  guardó en caché se siguen viendo y el PDR sigue calculando la posición, pero las zonas no
+  visitadas antes aparecen en blanco. Las alertas y la voz funcionan sin red porque no
+  dependen de las teselas (alertas en caché local, ver 2.5).
+
+#### Qué implementa hoy `app.js` (StepTracker)
+
+| Función | Detalle |
+|---|---|
+| Posición inicial | Toque en el mapa (solo si no se está rastreando) o botón GPS (`navigator.geolocation`). Al abrir, intenta usar el GPS automáticamente |
+| Seguimiento por pasos (PDR) | Cada paso avanza la posición `stepLength` (0,72 m) en la dirección del rumbo actual |
+| Rumbo | Promedio circular de las últimas 6 lecturas; la flecha del marcador se suaviza con un filtro adaptativo. Si no hay brújula, aparece una **rueda manual de rumbo** |
+| Trayectoria | Polilínea punteada con todos los puntos recorridos; botón de reinicio que vuelve al punto inicial |
+| Panel de estadísticas | Pasos, velocidad, aceleración (con gráfica en vivo), distancia, cadencia, rumbo, calorías y coordenadas |
+| Brújula | Widget con rosa de los vientos y orientación cardinal |
+| Centrar | Botón que centra el mapa en la posición actual |
+
+#### Puente WebView ↔ Android (`AndroidBridge`)
+
+En Android **todos los sensores vienen del lado nativo (Kotlin)**; registrar además los
+sensores web duplicaba los pasos y mezclaba dos brújulas distintas. Si la página **no**
+encuentra `window.AndroidBridge` (navegador o iOS), usa como alternativa los sensores web
+(`devicemotion` y `deviceorientation`).
+
+| Dirección | Función | Descripción |
+|---|---|---|
+| Web → Kotlin | `AndroidBridge.startSensors()` | Empieza a enviar pasos, aceleración y rumbo |
+| Web → Kotlin | `AndroidBridge.stopSensors()` | Detiene los sensores |
+| Kotlin → Web | `window.onNativeStep(count)` | Pasos acumulados desde `startSensors()` (contador de hardware) |
+| Kotlin → Web | `window.onNativeStepUnavailable(reason)` | No hay contador de pasos (`'permission_denied'` u otro motivo); la web cambia a pasos por acelerómetro |
+| Kotlin → Web | `window.onNativeAccel(x, y, z)` | Aceleración para la gráfica y, si hace falta, para detectar pasos |
+| Kotlin → Web | `window.onNativeHeading(degrees)` | Rumbo en grados (0–360, norte real) |
+
+Requisitos del lado Kotlin: JavaScript activado en el `WebView`, exponer el objeto con
+`addJavascriptInterface(..., "AndroidBridge")` y llamar a las funciones `window.onNative*`
+con `evaluateJavascript` **desde el hilo principal**. Estos sensores son los mismos del
+paquete `sensors/` (ver sección 4).
 
 ### 2.7 Interacción por voz
 
@@ -203,6 +250,18 @@ vista de **Recolección en curso** con el botón "Agregar alerta aquí" (ver sec
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+**El mapa** no pasa por el backend: el `WebView` de la app (Leaflet) pide las teselas
+**directamente a OpenStreetMap** por internet.
+
+```
+┌──────────── WebView (index.html + app.js · Leaflet) ───────────┐
+│  Mapa · marcador · trayectoria · capas (alertas, lugares, ...) │
+└───────┬───────────────────────────────────────────────▲────────┘
+        │ HTTPS (teselas)                  AndroidBridge │ (sensores, pasos, rumbo)
+        ▼                                                │
+ tile.openstreetmap.org                       Kotlin: sensors/ (PDR)
+```
+
 ### Responsabilidades del backend (resumen de endpoints)
 
 | Endpoint (propuesto) | Quién lo usa | Función |
@@ -211,7 +270,6 @@ vista de **Recolección en curso** con el botón "Agregar alerta aquí" (ver sec
 | `POST /localize/frame` | Público | Corrección visual durante la navegación (1 foto) |
 | `GET /places` | Público | Lista de lugares/destinos |
 | `GET /alerts` | Público | Alertas de obstáculo activas (se cachean en el dispositivo) |
-| `GET /map/version` | Público | Versión del `eafit.mbtiles` para actualizarlo si cambió |
 | `GET /route?from&to` | Público | Ruta entre dos coordenadas (o se calcula en el dispositivo) |
 | `POST /auth/login` | Todos | Inicio de sesión, devuelve token + rol |
 | `POST /collect/videos` | Admin | Crea un video (recorrido) y devuelve su `video_id` |
@@ -269,10 +327,13 @@ com.example.myapplication/
 │   ├── StepDetector, OrientationProvider, PdrEngine
 │
 ├── camera/                      # CameraX, captura automática (una carpeta por escaneo), calidad de imagen (sin uso por ahora)
-├── map/                         # Lectura de eafit.mbtiles, capas (usuario, ruta, lugares, alertas)
+├── map/                         # WebView del mapa Leaflet/OSM, AndroidBridge y datos de capas (usuario, ruta, lugares, alertas)
 ├── voice/                       # Wrappers de TextToSpeech y SpeechRecognizer
 └── session/                     # Sesión, token, rol (USER / ADMIN)
 ```
+
+> Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
+> (Leaflet + OpenStreetMap, ver 2.6).
 
 > Actualmente en el repo existen `ui/`, `camera/`, `sensors/`, `logs/`, `ApiConfig.kt`,
 > `MyApp.kt` y `MainActivity.kt`; el resto de paquetes se crean a medida que se implementan.
@@ -289,15 +350,18 @@ com.example.myapplication/
 
 | Permiso | Para qué | Tipo |
 |---|---|---|
-| `INTERNET` | Llamadas al backend | Normal |
+| `INTERNET` | Llamadas al backend y descarga de teselas de OpenStreetMap en el `WebView` | Normal |
 | `ACCESS_NETWORK_STATE` | Indicador y aviso de pérdida de conexión | Normal |
 | `CAMERA` | Escaneo 360°, corrección visual y recolección | Diálogo |
 | `RECORD_AUDIO` | `SpeechRecognizer` (comandos y dictado) | Diálogo |
 | `ACTIVITY_RECOGNITION` | Detector de pasos del PDR (Android 10+) | Diálogo |
 | `VIBRATE` | Vibración al capturar, girar y alertar | Normal |
+| `ACCESS_FINE_LOCATION` | **Opcional.** Solo si se mantiene el botón GPS del mapa web (posición inicial). Requiere también atender los permisos de geolocalización del `WebView` | Diálogo |
 
 No requieren permiso: acelerómetro, giroscopio, magnetómetro, rotation vector, almacenamiento
-privado de la app, `keepScreenOn`. No se usa GPS ni almacenamiento externo.
+privado de la app, `keepScreenOn`. La ubicación del usuario **no depende del GPS** (se calcula con
+PDR + fotos); el GPS solo es una ayuda opcional para fijar el punto inicial. No se usa
+almacenamiento externo.
 
 **Flujo de solicitud (`MainActivity.kt`):**
 - **Inicio:** pide cámara, micrófono y actividad física en un solo diálogo del sistema. Inicio
@@ -744,6 +808,11 @@ composable("admin/panel") {
 - Botón **Cancelar**.
 - Mensaje de ayuda: "Colócate en un punto reconocible y marca tu posición exacta".
 
+**Estado de implementación:** el mapa Leaflet de `app.js` ya permite colocar el punto con un
+**toque**, usar el **GPS**, fijar el rumbo con la **brújula del dispositivo** o con la **rueda
+manual** y ver las coordenadas. Falta: marcador arrastrable, campos de coordenadas editables
+y los botones "Usar mi última posición" y "Confirmar y comenzar".
+
 ---
 
 ### 7.4 Recolección en curso — `ui/admin/recoleccion/RecoleccionScreen.kt`
@@ -825,93 +894,103 @@ perder datos si la app se cierra; mantiene la pantalla activa y funciona en prim
 
 ![alt text](<assets/editor_de_mapa_y_alertas.png>)
 
-**Propósito:** permitir al admin modificar el mapa `eafit.mbtiles` agregando, moviendo,
-editando y eliminando alertas de obstáculo (y visualizando lugares).
+**Propósito:** permitir al admin modificar el mapa agregando, moviendo, editando y eliminando
+alertas de obstáculo (y visualizando lugares). El mapa es **OpenStreetMap en línea con Leaflet**,
+dentro de un `WebView` (ver 2.6); el formulario de alerta (7.9) es nativo.
 
 **Elementos:**
-- **Mapa a pantalla casi completa** con zoom/desplazamiento sobre `eafit.mbtiles`.
-- **Marcadores de alertas** con ícono según tipo y color según prioridad; las inactivas se
-  ven atenuadas. Al tocar un marcador se muestra un resumen (mensaje) con acciones.
-- **Círculo del radio de activación** de la alerta seleccionada (visual, ajustable).
-- Botón flotante **"Nueva alerta"** → modo colocar: se toca el mapa para fijar el punto y
-  se abre el formulario de alerta.
-- Opción de **arrastrar un marcador** para moverlo.
-- **Selector de capas** (mostrar/ocultar alertas, lugares, cobertura de fotos, rutas).
-- **Filtros**: por tipo, prioridad, estado.
-- Botón **"Mi posición"** (centrar en la posición actual del admin).
-- Botón **"Ver lista"** → Lista de alertas.
-- Botón **Guardar / sincronizar** con indicador de cambios pendientes.
+- **Cabecera**: botón Atrás, título y chip de estado: **"Cambios pendientes (n)"** (ámbar) o
+  **"Todo sincronizado"** (verde).
+- **Marcadores de alertas** con ícono según tipo y color del borde según prioridad (rojo = Alta,
+  ámbar = Normal); las inactivas se ven atenuadas. Al tocar un marcador se abre una **tarjeta**
+  con tipo, prioridad, mensaje, posición, radio de activación y los botones Mover / Editar /
+  Eliminar.
+- **Círculo del radio de activación** de la alerta seleccionada. El radio se cambia desde el
+  formulario (7.9) y el círculo se redibuja en vivo.
+- Botón flotante **"Nueva alerta"** → modo colocar: se toca el mapa para fijar el punto y se
+  abre el formulario de alerta.
+- **Mover** una alerta desde su tarjeta: el marcador se vuelve arrastrable (ver detalle abajo).
+- **Selector de capas** (alertas, lugares, cobertura de fotos, rutas). *Cobertura y rutas ya
+  tienen su interruptor, pero todavía no se cargan datos.*
+- **Filtros** desplegables: tipo, prioridad y estado.
+- Botón **"Mi posición"** (centra el mapa en la posición actual del admin).
+- Botón **"Ver lista"** (arriba a la derecha y abajo) → Lista de alertas (7.10).
+- Botón **Guardar / Sincronizar** con un punto indicador (ámbar con pendientes, verde sin ellos).
+- **Atribución "© OSM"** visible en el mapa (obligatoria por la licencia de OpenStreetMap).
 
-**Comportamiento:** los cambios se guardan en el backend; se muestran al instante en el
-mapa y se propagan a los dispositivos de los usuarios en su siguiente sincronización.
+**Comportamiento:** guardar, mover o eliminar se aplica al instante en el mapa y queda como
+cambio pendiente; **"Guardar / Sincronizar"** los envía al backend, y desde ahí se propagan a
+los dispositivos de los usuarios en su siguiente sincronización.
 
 **Detalle de la implementación:**
 - **Local primero:** guardar, mover o eliminar una alerta se aplica de inmediato en el repositorio
-  local y queda como **cambio pendiente**. El chip "Cambios pendientes" (arriba) y el punto del
-  botón Guardar / Sincronizar (ámbar con pendientes, verde sin ellos) lo reflejan. "Guardar /
-  Sincronizar" los envía; si falla, siguen pendientes.
+  local y su `id` se agrega al conjunto de **pendientes** (el número del chip son alertas con
+  cambios, no operaciones). "Guardar / Sincronizar" los envía; si falla, siguen pendientes. Si no
+  hay pendientes, avisa "No hay cambios pendientes".
 - **Colocar:** "Nueva alerta" activa el modo colocar (el botón pasa a "Cancelar"); el siguiente
   toque en el mapa fija el punto y abre el formulario de alerta (7.9).
-- **Mover:** el botón "Mover" de la tarjeta (o "Ajustar en el mapa" del formulario) vuelve
-  arrastrable **solo ese marcador**; un aviso inferior ofrece "Listo" y "Cancelar" (cancelar
-  restituye la posición original).
-- **Borrador en vivo:** la alerta en edición se dibuja en el mapa con sus cambios (radio,
-  prioridad, tipo) antes de guardarse.
-- Tocar el mapa vacío deselecciona. Eliminar pide confirmación. El botón Atrás sale primero de
-  los modos temporales y, si hay cambios sin sincronizar, pide confirmar.
+- **Mover:** el botón "Mover" de la tarjeta vuelve arrastrable **solo ese marcador**; un aviso
+  inferior ofrece "Listo" y "Cancelar" (cancelar restituye la posición original). La tarjeta se
+  oculta mientras se mueve.
+- **Borrador en vivo:** mientras el formulario está abierto, la alerta en edición se dibuja en el
+  mapa con sus cambios (radio, prioridad, tipo) antes de guardarse. El ViewModel lo envía al mapa
+  como `borradorJson`.
+- Tocar el mapa vacío deselecciona. Eliminar pide confirmación (en la tarjeta y en el formulario).
+- **Botón Atrás** (del sistema o de la cabecera): sale primero de los modos temporales, en este
+  orden: mover → colocar → formulario abierto → alerta seleccionada. Si no queda ninguno y hay
+  cambios sin sincronizar, pide confirmar antes de salir.
 - Los filtros nunca ocultan la alerta seleccionada ni el borrador.
 - Reglas: radio por defecto **15 m** (slider de 5 a 100 m, de 5 en 5); mensaje obligatorio,
-  máximo 200 caracteres.
-
-**Cómo se dibuja el mapa:**
-- `ui/components/MapaCampus.kt` carga `https://campus.local/index.html` en un `WebView`. Un
-  `WebViewClient.shouldInterceptRequest` atiende `/index.html`, `/maplibre-gl.js`,
-  `/maplibre-gl.css`, `/meta.json` y `/tiles/{z}/{x}/{y}.pbf`; cualquier otro host se bloquea.
-- `map/MbtilesReader.kt` copia el `.mbtiles` desde assets (se vuelve a copiar al actualizar la
-  app), lee `metadata` (zoom y bounds) y entrega cada tile descomprimido, invirtiendo la fila TMS.
-- El estilo oscuro y las capas del MBTiles (`zonas_verdes`, `agua`, `canchas_deportivas`,
-  `parqueaderos`, `cursos_de_agua`, `vias`, `caminos_peatonales`, `edificios`, `campus_contorno`,
-  `puntos_de_interes`) se portaron del visor local `script2.py`.
-- Las alertas son una **capa propia** (marcadores HTML + círculo de radio en GeoJSON) y **no se
-  escriben dentro del MBTiles**. Compose y la página se comunican con `evaluateJavascript`
-  (Kotlin → mapa) y el puente `CampusBridge` (mapa → Kotlin).
-- Requisitos de build: `androidResources { noCompress += "mbtiles" }`, `material-icons-extended`
-  y `lifecycle-viewmodel-compose` / `lifecycle-runtime-compose`.
+  máximo **200 caracteres**.
 
 **Módulos que lo implementan:**
 
 | Archivo | Responsabilidad |
 |---|---|
-| `ui/admin/mapa/EditorMapaScreen.kt` | Pantalla: capas, filtros, tarjeta de alerta, colocar / mover / editar / eliminar, sincronizar |
-| `ui/admin/mapa/EditorMapaViewModel.kt` | Lógica del editor |
-| `ui/admin/mapa/EditorMapaState.kt` | Estado (`EditorMapaUiState`) con el borrador y los modos |
-| `ui/admin/mapa/AlertaFormSheet.kt` | Formulario de alerta (7.9) |
-| `ui/components/MapaCampus.kt` | Mapa base MapLibre en `WebView` y `MapaCampusController` (zoom, centrar) |
-| `map/MbtilesReader.kt` | Lectura del MBTiles vectorial |
-| `data/repository/AlertasRepository.kt` | Contrato y stub en memoria con cola de cambios pendientes |
-| `domain/model/Alerta.kt` | `Alerta`, `TipoAlerta`, `PrioridadAlerta` |
-| `assets/map/editor_mapa.html` | Página MapLibre: estilo, marcadores, radio, arrastre, panel de diagnóstico |
+| `ui/admin/mapa/EditorMapaScreen.kt` | `EditorMapaScreen` (la que usa el NavHost: conecta ViewModel, formulario y navegación), `EditorMapaContent` (solo dibuja el `WebView`) e interfaz `EditorMapaEventos` |
+| `ui/admin/mapa/EditorMapaViewModel.kt` | Estado (`EditorMapaUi`), formulario en edición, validación, pendientes y sincronización (**hoy simulada**) |
+| `ui/admin/mapa/AlertaFormSheet.kt` | Formulario de alerta (vista 7.9), hoja inferior de Material 3 |
+| `domain/model/Alerta.kt` | Modelos `Alerta` y `Lugar` |
+| `app/src/main/assets/editor_mapa.html` | Interfaz del editor (estilos y estructura) |
+| `app/src/main/assets/editor_mapa.js` | Leaflet + OSM, capas, filtros, modos (colocar / mover), borrador y puente con Kotlin |
 
-**Estado y pendientes:**
-- **Verificación en dispositivo:** la interfaz del editor ya se ve, pero el **mapa base aún no se
-  visualiza** en el teléfono de pruebas (en depuración). `editor_mapa.html` muestra en pantalla
-  el avance de la carga y los errores, y la consola del `WebView` se registra en Logcat con el
-  filtro `MapaCampusJS`.
-- **Repositorio de alertas:** es un **stub en memoria** (se pierde al cerrar la app). Falta
-  Retrofit/Ktor + Room con `GET/POST/PUT/DELETE /admin/alerts`.
-- **"Mi posición":** depende de una posición estimada por el PDR que aún no existe; hoy avisa
-  que no hay posición. No se usa GPS.
-- **Capas "Cobertura de fotos" y "Rutas":** el interruptor y la capa existen, pero no hay datos
-  (dataset de fotos, grafo de caminos; decisión abierta 2).
-- **"Lugares":** muestra solo las etiquetas que trae el MBTiles, no `GET /admin/places`.
-- **Atribución:** el control de atribución de MapLibre está oculto; debe mostrarse
-  "© OpenStreetMap contributors" en algún lugar visible antes de publicar.
-- **Accesibilidad:** los marcadores son HTML dentro del `WebView`; TalkBack no los lee uno por
-  uno. Es aceptable para el admin (vidente); las vistas públicas necesitarán un mapa nativo.
-- **Depuración:** `MapaCampus.kt` activa `WebView.setWebContentsDebuggingEnabled(true)`;
-  desactivarlo antes de publicar.
-- "Ver lista" aparece dos veces (arriba a la derecha y abajo) como en el diseño; la vista 17 aún
-  no existe.
+**Puente WebView ↔ Android (`EditorBridge`):** los datos viajan como JSON; la alerta tiene los
+campos `id, lat, lng, mensaje, tipo, prioridad, radio, activa` (tipo: `agua`, `mobiliario`,
+`escalones`, `obra`, `vehiculos`, `otro`; prioridad: `normal` o `alta`).
+
+| Dirección | Función | Descripción |
+|---|---|---|
+| Web → Kotlin | `listo()` | La página cargó; Kotlin responde enviando alertas, lugares y pendientes |
+| Web → Kotlin | `abrirFormulario({id, lat, lng})` | Abre el formulario (`id` nulo = alerta nueva) |
+| Web → Kotlin | `cancelarFormulario()` | El usuario salió del formulario desde el mapa (botón Atrás) |
+| Web → Kotlin | `moverAlerta(id, lat, lng)` | Nueva posición confirmada con "Listo" |
+| Web → Kotlin | `eliminarAlerta(id)` | Eliminación confirmada |
+| Web → Kotlin | `sincronizar()` / `verLista()` / `pedirMiPosicion()` / `salir()` | Acciones de los botones |
+| Kotlin → Web | `cargarAlertas(json)` / `cargarLugares(json)` | Reemplazan los datos del mapa |
+| Kotlin → Web | `setPendientes(n)` | Actualiza el chip y el punto del botón Guardar |
+| Kotlin → Web | `setBorrador(json \| null)` | Dibuja (o quita) el borrador del formulario |
+| Kotlin → Web | `setMiPosicion(lat, lng)` | Dibuja la posición del admin y centra el mapa |
+| Kotlin → Web | `onAtras()` | Lo invoca el `BackHandler`; el JS decide qué cerrar y llama a `salir()` |
+
+**Navegación (`AppNav` en `MainActivity.kt`):**
+```kotlin
+composable("admin/mapa") {
+    EditorMapaScreen(
+        onVolver = { nav.popBackStack() },
+        onVerLista = { /* vista 7.10 aún no existe */ },
+        posicionAdmin = { null },   // luego: la posición del PDR, como Pair(lat, lng)
+    )
+}
+```
+
+**Requisitos:** `editor_mapa.html` y `editor_mapa.js` en la raíz de `assets/`, permiso `INTERNET`,
+y conexión a internet (Leaflet y las teselas se descargan en línea; ver decisión abierta 13). Si
+la página no carga, `EditorMapa` en Logcat muestra los errores del `WebView`.
+
+**Pendiente:** conectar el repositorio local (Room) y la API real (`/admin/alerts`), cargar las
+capas de cobertura y rutas, pasar la posición real del admin en `posicionAdmin`, y completar el
+formulario (dictado por voz, "Escuchar cómo sonará", vigencia y "Ajustar en el mapa").
+
 
 ### 7.9 Formulario de alerta — `ui/admin/mapa/AlertaFormSheet.kt`
 
@@ -919,6 +998,10 @@ mapa y se propagan a los dispositivos de los usuarios en su siguiente sincroniza
 
 Hoja inferior (bottom sheet) o diálogo reutilizable desde el editor de mapa y desde la
 recolección.
+
+**Estado:** implementada en `ui/admin/mapa/AlertaFormSheet.kt` (mensaje, tipo, prioridad, radio,
+estado, validación y eliminar con confirmación). Faltan dictado por voz, "Escuchar cómo sonará",
+vigencia y "Ajustar en el mapa".
 
 **Elementos:**
 - **Campo de mensaje** (texto libre, multilínea) con botón de **dictado por voz**. Texto de
@@ -1005,7 +1088,7 @@ inspeccionarlo o eliminarlo.
 poder eliminarlo por completo.
 
 **Elementos:**
-- **Mapa** con `eafit.mbtiles` donde se dibujan **únicamente** las fotos del video
+- **Mapa**  donde se dibujan **únicamente** las fotos del video
   seleccionado (marcador por foto con flecha de orientación) y la **trayectoria**
   recorrida. Las fotos de otros videos **no se muestran**.
 - **Conmutador "Mostrar otros videos"** (apagado por defecto) para ver el contexto en gris
@@ -1056,8 +1139,10 @@ poder eliminarlo por completo.
 
 ## 8. Decisiones abiertas (por definir)
 
-1. **Formato de `eafit.mbtiles`:** ¿tiles raster (PNG/JPG) o vectoriales (PBF)? Define la
-   librería de render (p. ej. MapLibre) y cómo se estiliza. Se asume coordenadas lat/lon.
+1. **Proveedor y uso de teselas del mapa:** hoy se usa `tile.openstreetmap.org` directamente.
+   El servidor público de OSM tiene una política de uso aceptable que **no está pensada para
+   tráfico intensivo** de una app en producción. Antes de publicar, decidir si se mantiene, si
+   se cambia a un proveedor de teselas con plan/clave propia o si se monta un servidor propio.
    Si el campus tiene interiores donde el mapa no llega, definir cómo se representan.
 2. **Grafo de caminos:** para calcular rutas se necesita un grafo de zonas transitables.
    ¿Lo dibuja el admin en el editor de mapa (nueva herramienta), o se deriva de las
@@ -1069,6 +1154,8 @@ poder eliminarlo por completo.
    incertidumbre) y su impacto en datos móviles y batería.
 5. **Algoritmo de fusión** PDR + visual: filtro de Kalman vs. filtro de partículas.
 6. **Funcionamiento sin conexión:** ¿se permite navegar solo con PDR si se pierde la red?
+   Recordar que el mapa base de OSM necesita internet (solo se ve lo que está en caché); la
+   navegación por voz sí podría continuar sin teselas.
 7. **Privacidad:** las fotos de usuarios públicos enviadas al backend: ¿se almacenan o se
    descartan tras la consulta? ¿se avisa al usuario?
 8. **SDK mínimo/objetivo** y dispositivos soportados (sensores y cámara).
@@ -1081,6 +1168,12 @@ poder eliminarlo por completo.
 12. **Conservación de fotos de escaneo:** hoy `CONSERVAR_FOTOS = true` guarda hasta 20
     escaneos en el teléfono. Definir si en producción se borran siempre tras enviarlas al
     backend (relacionado con la decisión 7, privacidad).
+13. **Dependencias externas del `WebView`:** `index.html` carga Leaflet desde `unpkg.com` y
+    las fuentes desde Google Fonts. Si no hay red, la página del mapa ni siquiera carga.
+    Decidir si se **empaquetan localmente** en `assets/` (recomendado: así solo las teselas
+    dependen de internet).
+14. **GPS en el mapa:** ¿se conserva el botón GPS (requiere `ACCESS_FINE_LOCATION` y atender la
+    geolocalización del `WebView`) o la posición inicial se fija solo manualmente / por fotos?
 
 ---
 
@@ -1096,4 +1189,9 @@ poder eliminarlo por completo.
   `not connected to the recognition service`: revisar que el teléfono tenga un servicio de voz
   activo y proteger la creación del `SpeechRecognizer` con `isRecognitionAvailable`.
 - Reactivar el control de calidad (`CalidadImagen.kt`) cuando el flujo de captura esté estable.
+- Probar el mapa en un **dispositivo físico**: los sensores llegan por `AndroidBridge` y el
+  emulador no los reproduce bien. Si el mapa sale en blanco, revisar conexión a internet y
+  que el `WebView` tenga JavaScript activado.
+- Quitar de `README.md` y de cualquier script/documentación las referencias a
+  `eafit.mbtiles` (ya no se usa).
 - Cualquier cambio de arquitectura debe reflejarse en este archivo y en `README.md`.

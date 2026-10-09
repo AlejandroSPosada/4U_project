@@ -4,22 +4,16 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -27,141 +21,97 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.domain.model.Alerta
-import com.example.myapplication.domain.model.PrioridadAlerta
-import com.example.myapplication.domain.model.TipoAlerta
-import java.util.Locale
 
-/**
- * Formulario de alerta (vista 7.9, versión básica).
- * Pendiente respecto al brief: dictado por voz, "Escuchar cómo sonará" y vigencia (fecha inicio/fin).
- * Cada cambio se propaga de inmediato (onCambio) para que el mapa dibuje el radio en vivo.
- */
+private val TIPOS = listOf(
+    "agua" to "Agua", "mobiliario" to "Mobiliario", "escalones" to "Escalones",
+    "obra" to "Obra", "vehiculos" to "Vehículos", "otro" to "Otro",
+)
+
+/** Vista 7.9 — Formulario de alerta (hoja inferior). Cada cambio se refleja en vivo en el mapa. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlertaFormSheet(
     alerta: Alerta,
     esNueva: Boolean,
-    errorMensaje: String?,
-    onCambio: ((Alerta) -> Alerta) -> Unit,
-    onAjustarEnMapa: () -> Unit,
+    error: String?,
+    onCambio: (Alerta) -> Unit,
     onGuardar: () -> Unit,
     onCancelar: () -> Unit,
     onEliminar: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var confirmarEliminar by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onCancelar, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = onCancelar) {
         Column(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 640.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .navigationBarsPadding(),
+            Modifier.navigationBarsPadding().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                if (esNueva) "Nueva alerta" else "Editar alerta",
-                style = MaterialTheme.typography.titleLarge,
-            )
+            Text(if (esNueva) "Nueva alerta" else "Editar alerta", style = MaterialTheme.typography.titleLarge)
 
             OutlinedTextField(
                 value = alerta.mensaje,
-                onValueChange = { v -> onCambio { it.copy(mensaje = v.take(Alerta.MENSAJE_MAX)) } },
+                onValueChange = { if (it.length <= MAX_MENSAJE) onCambio(alerta.copy(mensaje = it)) },
                 label = { Text("Mensaje") },
-                placeholder = { Text("Ten cuidado, hay bancas cerca, no te vayas a estrellar") },
-                supportingText = {
-                    Text(errorMensaje ?: "Escribe exactamente lo que se le dirá al usuario (${alerta.mensaje.length}/${Alerta.MENSAJE_MAX})")
-                },
-                isError = errorMensaje != null,
+                supportingText = { Text(error ?: "Escribe exactamente lo que se le dirá al usuario (${alerta.mensaje.length}/$MAX_MENSAJE)") },
+                isError = error != null,
                 minLines = 2,
-                maxLines = 4,
                 modifier = Modifier.fillMaxWidth(),
             )
 
             Text("Tipo", style = MaterialTheme.typography.labelLarge)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TipoAlerta.entries.forEach { t ->
-                    FilterChip(
-                        selected = alerta.tipo == t,
-                        onClick = { onCambio { it.copy(tipo = t) } },
-                        label = { Text(t.etiqueta) },
-                    )
+                TIPOS.forEach { (clave, nombre) ->
+                    FilterChip(selected = alerta.tipo == clave, onClick = { onCambio(alerta.copy(tipo = clave)) }, label = { Text(nombre) })
                 }
             }
 
             Text("Prioridad", style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrioridadAlerta.entries.forEach { p ->
-                    FilterChip(
-                        selected = alerta.prioridad == p,
-                        onClick = { onCambio { it.copy(prioridad = p) } },
-                        label = { Text(p.etiqueta) },
-                    )
-                }
+                FilterChip(selected = alerta.prioridad == "normal", onClick = { onCambio(alerta.copy(prioridad = "normal")) }, label = { Text("Normal") })
+                FilterChip(selected = alerta.prioridad == "alta", onClick = { onCambio(alerta.copy(prioridad = "alta")) }, label = { Text("Alta") })
             }
 
-            Text("Radio de activación: ${alerta.radioM} m", style = MaterialTheme.typography.labelLarge)
+            Text("Radio de activación: ${alerta.radio} m", style = MaterialTheme.typography.labelLarge)
             Slider(
-                value = alerta.radioM.toFloat(),
-                onValueChange = { v -> onCambio { it.copy(radioM = (Math.round(v / 5f) * 5).coerceIn(Alerta.RADIO_MIN_M, Alerta.RADIO_MAX_M)) } },
-                valueRange = Alerta.RADIO_MIN_M.toFloat()..Alerta.RADIO_MAX_M.toFloat(),
-                modifier = Modifier.semantics { contentDescription = "Radio de activación en metros" },
+                value = alerta.radio.toFloat(),
+                onValueChange = { onCambio(alerta.copy(radio = (Math.round(it / 5f) * 5).coerceIn(5, 100))) },
+                valueRange = 5f..100f,
+                steps = 18,   // saltos de 5 m
             )
 
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Posición: ${fmt(alerta.latitud)}, ${fmt(alerta.longitud)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                OutlinedButton(onClick = onAjustarEnMapa) {
-                    Icon(Icons.Default.MyLocation, contentDescription = null)
-                    Text("  Ajustar en el mapa")
-                }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text(if (alerta.activa) "Activa" else "Inactiva")
+                Switch(checked = alerta.activa, onCheckedChange = { onCambio(alerta.copy(activa = it)) })
             }
+            Text("Posición: %.5f, %.5f".format(alerta.lat, alerta.lng), style = MaterialTheme.typography.bodySmall)
 
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()) {
-                Text(if (alerta.activa) "Activa" else "Inactiva", style = MaterialTheme.typography.bodyLarge)
-                Switch(
-                    checked = alerta.activa,
-                    onCheckedChange = { v -> onCambio { it.copy(activa = v) } },
-                    modifier = Modifier.semantics { contentDescription = "Alerta activa" },
-                )
-            }
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = onCancelar, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
-                    Text("Cancelar")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                OutlinedButton(onClick = onCancelar, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Text("Cancelar") }
+                if (!esNueva) {
+                    OutlinedButton(onClick = { confirmarEliminar = true }, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Text("Eliminar") }
                 }
-                Button(onClick = onGuardar, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) {
-                    Text("Guardar")
-                }
+                Button(onClick = onGuardar, modifier = Modifier.weight(1f).heightIn(min = 56.dp)) { Text("Guardar") }
             }
-            if (!esNueva) {
-                OutlinedButton(
-                    onClick = onEliminar,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF4D6D)),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null)
-                    Text("  Eliminar alerta")
-                }
-            }
-            Spacer(Modifier.height(16.dp))
         }
     }
-}
 
-private fun fmt(v: Double) = String.format(Locale.US, "%.6f", v)
+    if (confirmarEliminar) {
+        AlertDialog(
+            onDismissRequest = { confirmarEliminar = false },
+            title = { Text("¿Eliminar esta alerta?") },
+            text = { Text("Dejará de avisarse a los usuarios.") },
+            confirmButton = { TextButton(onClick = { confirmarEliminar = false; onEliminar() }) { Text("Eliminar") } },
+            dismissButton = { TextButton(onClick = { confirmarEliminar = false }) { Text("Cancelar") } },
+        )
+    }
+}
