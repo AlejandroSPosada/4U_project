@@ -4,26 +4,12 @@ import shutil
 
 # Lista con todos los archivos y carpetas del proyecto
 ESTRUCTURA = [
-    # Dominio y Modelos
-    "domain/model/Alerta.kt",
-    
-    # Capa de Datos y Repositorios
-    "data/repository/AlertasRepository.kt",
-    
-    # Módulo de Mapas y Lectura MBTiles
-    "map/MbtilesReader.kt",
-    
-    # Componentes de UI Compartidos
-    "ui/components/MapaCampus.kt",
-    
-    # UI y Componentes de Administración del Mapa
-    "ui/admin/mapa/EditorMapaScreen.kt",
-    "ui/admin/mapa/EditorMapaViewModel.kt",
-    "ui/admin/mapa/EditorMapaState.kt",
-    "ui/admin/mapa/AlertaFormSheet.kt",
-    
-    # Activos y Recursos Web
-    "assets/map/editor_mapa.html",
+    "app/src/main/assets/video_detalle.html",
+    "app/src/main/assets/video_detalle.js",
+    "app/src/main/java/com/example/myapplication/ui/admin/videos/VideoDetalleScreen.kt",
+    "app/src/main/java/com/example/myapplication/ui/admin/videos/VideoDetalleViewModel.kt",
+    "app/src/main/java/com/example/myapplication/ui/admin/videos/VideosScreen.kt",
+    "app/src/main/java/com/example/myapplication/ui/admin/videos/VideosViewModel.kt"
 ]
 
 def gestionar_elemento(ruta_str: str, eliminar: bool = False):

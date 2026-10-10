@@ -61,6 +61,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:<tu versión>")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:<tu versión>")  // collectAsStateWithLifecycle
+    implementation("io.coil-kt:coil-compose:2.7.0")
     // Material3 >= 1.1 (ModalBottomSheet)
 
     // Networking

@@ -26,6 +26,7 @@ import com.example.myapplication.ui.ubicacion.EscaneoScreen
 import com.example.myapplication.ui.auth.LoginScreen
 import com.example.myapplication.ui.admin.panel.PanelAdminScreen
 import com.example.myapplication.ui.admin.mapa.EditorMapaScreen
+import com.example.myapplication.ui.admin.imagenes.GaleriaScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -138,7 +139,12 @@ fun AppNav() {
         composable("admin/ubicacion-manual") { /* placeholder */ }
         composable("admin/lugares") { /* placeholder */ }
         composable("admin/mapa") { /* placeholder */ }
-        composable("admin/imagenes") { /* placeholder */ }
+        composable("admin/imagenes") {
+            GaleriaScreen(
+                onVolver = { nav.popBackStack() },
+                onAbrirImagen = { _, _ -> }, // placeholder: aún no existe la vista 7.12
+            )
+        }
         composable("admin/videos") { /* placeholder */ }
         composable("admin/estadisticas") { /* placeholder */ }
         composable("ajustes") { /* placeholder */ }
@@ -151,7 +157,6 @@ fun AppNav() {
                 posicionAdmin = { null }
             )
         }
-        composable("admin/imagenes") { /* placeholder */ }
         composable("admin/videos") { /* placeholder */ }
         composable("admin/estadisticas") { /* placeholder */ }
         composable("ajustes") { /* placeholder */ }

@@ -1034,14 +1034,97 @@ vigencia y "Ajustar en el mapa".
 
 ![alt text](<assets/galeria_de_imagenes.png>)
 
+**Estado:** implementada con datos locales (`assets/`). Pendientes: vista de mapa, filtro por fecha,
+botón "Subir imágenes" y conexión con el backend (ver al final).
+
 **Elementos:**
-- **Cuadrícula** de miniaturas del dataset.
-- **Filtros**: por lugar, **por video**, por fecha, por estado (subida / procesada / error),
-  por calidad.
-- Selección múltiple con acciones en lote (eliminar, reasignar).
-- Contador total y paginación/scroll infinito.
-- Alternar a **vista de mapa** (ver dónde hay fotos y dónde falta cobertura). Con un filtro de video activo, el mapa muestra solo las fotos de ese video.
-- Botón **"Subir imágenes"** (opcional, adicionales).
+- **Encabezado**: contador de imágenes (según los filtros activos) y chip "Página x de y".
+- **Búsqueda** por nombre de archivo, lugar o video, con botón para borrar el texto.
+- **Filtros** (menús desplegables, opción "Todos/Todas" para quitarlos): **lugar**, **video**,
+  **estado** (subida / procesada / error) y **calidad** (alta / normal / baja). Los filtros activos
+  se resaltan. Cambiar un filtro vuelve a la página 1 y limpia la selección.
+- **Cuadrícula** de 2 columnas. Cada tarjeta muestra la miniatura, el nombre del archivo, el lugar
+  ("Sin lugar" si no tiene), el estado con punto de color (azul = subida, verde = procesada,
+  rojo = error) y una estrella si es de alta calidad.
+- **Selección múltiple**: pulsación larga sobre la tarjeta o toque en el círculo de la esquina.
+  Con una selección activa, un toque alterna la foto en vez de abrirla, y el botón Atrás primero
+  cancela la selección.
+- **Barra de acciones en lote** (siempre visible, con el contador de seleccionadas): **Reasignar**
+  (diálogo para escribir el lugar) y **Eliminar** (diálogo de confirmación). Se habilitan solo con
+  al menos una foto seleccionada.
+- **Paginación** de 24 fotos por página (`FOTOS_POR_PAGINA`), con paginador numérico (ej. `1 2 3 … 8`)
+  visible solo si hay más de una página. No hay scroll infinito.
+- **Alternar cuadrícula / mapa**. Hoy la opción Mapa muestra un mensaje provisional con el número de
+  fotos filtradas.
+- Toque en una foto (sin selección activa) → **Detalle de imagen** (vista 7.12).
+- Estados vacíos: indicador de carga, mensaje de error con "Reintentar" y "No hay imágenes con estos
+  filtros" con "Limpiar filtros".
+
+**Accesibilidad:** botones y chips de 48 dp o más; cada tarjeta se lee como un solo elemento
+(archivo, video, lugar, estado, calidad y si está seleccionada); la selección se hace con pulsación
+larga, que TalkBack expone como acción ("Seleccionar"); el encabezado está marcado como título.
+
+**Fuente de datos (provisional, local):** `AssetsVideoRepository` lee los videos empaquetados en
+`app/src/main/assets/videos/<video_id>/`. Se usa la misma estructura que tendrá S3:
+
+```
+videos/
+└── vid_0001/
+    ├── manifest.json
+    ├── photos/0001.png ...
+    └── thumbs/0001.png ...      (si falta una miniatura se usa la foto original)
+```
+
+`manifest.json` (un solo archivo por video):
+
+| Campo | Obligatorio | Descripción |
+|---|---|---|
+| `video_id`, `name`, `created_at` | `name` recomendado | Identificador inmutable del video y nombre visible (renombrable) |
+| `photos[].id`, `file`, `lat`, `lng` | Sí | Id dentro del video, ruta relativa y coordenadas (WGS84) |
+| `photos[].thumb` | No | Ruta relativa de la miniatura |
+| `photos[].heading` | No | Rumbo en grados, 0 = norte, sentido horario |
+| `photos[].captured_at` | No | Fecha/hora de captura |
+| `photos[].lugar`, `estado`, `calidad` | No | Valores por defecto: sin lugar, `procesada`, `normal` |
+
+> El `manifest.json` es solo la semilla local. Cuando exista el backend, la fuente de verdad serán
+> su base de datos (metadatos) y S3 (archivos, bucket privado con URLs prefirmadas de vida corta).
+> Cambiar `AssetsVideoRepository` por un `RemoteVideoRepository` no afecta a las pantallas: `Foto`
+> ya recibe las URLs resueltas.
+
+**Módulos que lo implementan:**
+
+| Archivo | Responsabilidad |
+|---|---|
+| `ui/admin/imagenes/GaleriaScreen.kt` | Pantalla (`GaleriaScreen`), contenido sin estado (`GaleriaContent`), `GaleriaAcciones` y previews |
+| `ui/admin/imagenes/GaleriaViewModel.kt` | Estado (`GaleriaUiState`, `GaleriaFiltros`, `ModoVista`), filtros, búsqueda, selección, paginación y acciones en lote |
+| `data/repository/VideoRepository.kt` | Contrato (`VideoRepository`) e implementación local (`AssetsVideoRepository`) (**TODO:** `RemoteVideoRepository`) |
+| `domain/model/Foto.kt` | `Foto`, `Video`, `EstadoFoto`, `CalidadFoto` |
+
+**Dependencia:** Coil para cargar imágenes (`io.coil-kt:coil-compose:2.7.0`); entiende las URLs
+`file:///android_asset/...` y, más adelante, las URLs prefirmadas de S3.
+
+**Navegación (`AppNav` en `MainActivity.kt`):**
+```kotlin
+composable("admin/imagenes") {
+    GaleriaScreen(
+        onVolver = { nav.popBackStack() },
+        onAbrirImagen = { _, _ -> }, // placeholder: aún no existe la vista 7.12
+    )
+}
+```
+> Cada ruta debe registrarse **una sola vez**: si se repite, la última registrada reemplaza a la
+> anterior (un placeholder vacío puede tapar la pantalla real).
+
+**Pendiente:**
+- **Vista de mapa**: dibujar las fotos filtradas en el mapa Leaflet (se resuelve junto con 7.14);
+  con un filtro de video activo debe mostrar solo las fotos de ese video.
+- **Filtro por fecha**: requiere `captured_at` real en las fotos.
+- **Eliminar y Reasignar** hoy solo modifican la memoria (los assets son de solo lectura) y se
+  pierden al salir de la pantalla; conectar con el backend (`/admin/images`). Reasignar debe usar un
+  selector de lugares reales (vista 7.6) en vez de texto libre.
+- **Navegar al detalle** (7.12) con `videoId` y `fotoId`.
+- Botón **"Subir imágenes"** (opcional).
+- Mover la paleta (`GaleriaColores`) a `ui/theme/CampusColors.kt`.
 
 ### 7.12 Detalle de imagen — `ui/admin/imagenes/DetalleImagenScreen.kt`
 
