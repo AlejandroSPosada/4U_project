@@ -62,16 +62,10 @@
 
     const $ = (id) => document.getElementById(id);
 
-    /** Llama a AndroidBridge.<fn>(...) si existe (en un navegador no existe). */
-    function bridgeCall(fn, ...args) {
-        try {
-            if (window.AndroidBridge) return window.AndroidBridge[fn](...args);
-        } catch (e) {
-            console.warn('AndroidBridge.' + fn + ' failed:', e);
-        }
-    }
+    /** Llama a AndroidBridge.<fn>(...) si existe (en un navegador no existe). Helper común: mapa_base.js. */
+    const bridgeCall = MapaBase.puente('AndroidBridge').call;
 
-    // ── Map ────────────────────────────────────
+    // ── Map ──────────────────────────────────
     function initMap() {
         state.map = L.map('map', {
             center: [19.4326, -99.1332],

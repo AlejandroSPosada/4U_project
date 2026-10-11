@@ -2,14 +2,10 @@
 // Kotlin ⇄ Web: ver `EditorMapaScreen.kt`. Sin puente (navegador) usa datos de demo.
 (function () {
 'use strict';
-// Si Leaflet no cargó (sin internet o sin permiso INTERNET) se avisa en pantalla en vez de dejarla vacía.
-if (typeof L === 'undefined') {
-  document.body.insertAdjacentHTML('beforeend', '<div class="toast" style="bottom:50%;white-space:normal;text-align:center;max-width:80%">No se pudo cargar el mapa. Revisa tu conexión a internet.</div>');
-  return;
-}
-const B = window.EditorBridge || null;
-const $ = (id) => document.getElementById(id);
-const ic = (n) => `<svg class="ic"><use href="#i-${n}"/></svg>`;   // icono del sprite del HTML
+const base = MapaBase.iniciar({ puente: 'EditorBridge' });
+if (!base.leaflet) return;   // sin Leaflet no hay mapa: la base ya avisó y dejó funcionando Atrás
+const { $, ic, toast, confirmar, medir } = MapaBase;
+const call = base.call, B = base.existe();   // B: hay puente (en un navegador no) → si no, datos de demo
 const TIPOS = { agua: '💧', mobiliario: '🪑', escalones: '🪜', obra: '🚧', vehiculos: '🚗', otro: '⚠️' };
 const TIPO_NOMBRE = { agua: 'Agua', mobiliario: 'Mobiliario', escalones: 'Escalones', obra: 'Obra', vehiculos: 'Vehículos', otro: 'Otro' };
 const COLOR = { alta: '#ef4444', normal: '#f59e0b' };
@@ -21,37 +17,13 @@ const S = {
 };
 
 // ── Mapa ───────────────────────────────────────
-const map = L.map('map', { center: [6.2002, -75.5783], zoom: 17, zoomControl: false, attributionControl: false });
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-L.control.attribution({ position: 'bottomleft', prefix: false }).addAttribution('© <a href="https://openstreetmap.org">OSM</a>').addTo(map);
-L.control.zoom({ position: 'bottomleft' }).addTo(map);
+const map = MapaBase.crearMapa();
 const capas = { alertas: L.layerGroup().addTo(map), lugares: L.layerGroup().addTo(map), cobertura: L.layerGroup(), rutas: L.layerGroup() };
 const circulo = L.circle([0, 0], { radius: 15, color: '#ef4444', weight: 2, dashArray: '6 6', fillOpacity: .18 });
 let marcaBorrador = null, marcaPos = null;
 const marcas = new Map();
 
-// ── Medidas de la interfaz ─────────────────────
-// La cabecera y el dock cambian de alto (panel de capas, tarjeta, aviso de mover). Se publican como
-// variables CSS para que los botones laterales y los controles del mapa se acomoden sin taparse.
-function medir() {
-  const r = document.documentElement.style;
-  r.setProperty('--toph', $('top').offsetHeight + 'px');
-  r.setProperty('--dockh', $('dock').offsetHeight + 'px');
-}
-if (window.ResizeObserver) { const ro = new ResizeObserver(medir); ro.observe($('top')); ro.observe($('dock')); }
-window.addEventListener('resize', medir);
-
 // ── Utilidades ─────────────────────────────────
-const call = (fn, ...a) => { if (B && B[fn]) { try { B[fn](...a); } catch (e) { console.warn(fn, e); } return true; } return false; };
-function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.appendChild(e); setTimeout(() => e.remove(), 2200); }
-function confirmar(texto, ok, label = 'Eliminar') {
-  const m = document.createElement('div'); m.className = 'modal';
-  m.innerHTML = '<div role="alertdialog"><p></p><div class="acts"><button class="no">Cancelar</button><button class="del si"></button></div></div>';
-  m.querySelector('p').textContent = texto; m.querySelector('.si').textContent = label;
-  m.querySelector('.no').onclick = () => m.remove();
-  m.querySelector('.si').onclick = () => { m.remove(); ok(); };
-  document.body.appendChild(m); m.querySelector('.no').focus();
-}
 function visible(a) {
   if (a.id === S.sel) return true;   // los filtros nunca ocultan la alerta seleccionada
   const f = S.filtros;
@@ -197,7 +169,6 @@ $('btn-pos').onclick = () => { if (!call('pedirMiPosicion')) { if (marcaPos) map
 const verLista = () => { if (!call('verLista')) toast('Lista de alertas (vista 7.10)'); };
 $('btn-list').onclick = verLista; $('btn-lista-top').onclick = verLista;
 $('btn-sync').onclick = () => { if (!S.pend) { toast('No hay cambios pendientes'); return; } if (!call('sincronizar')) { S.pend = 0; actualizarPend(); toast('Sincronizado'); } };
-$('btn-back').onclick = () => window.onAtras();
 
 // ── API para Kotlin ────────────────────────────
 window.cargarAlertas = (json) => { S.alertas.clear(); JSON.parse(json).forEach((a) => S.alertas.set(a.id, a)); if (S.sel && !S.alertas.has(S.sel)) S.sel = null; pintar(); renderCard(); };
@@ -214,11 +185,6 @@ window.setMiPosicion = (lat, lng) => {
   marcaPos.setLatLng([lat, lng]); map.setView([lat, lng], Math.max(map.getZoom(), 18));
 };
 window.setPendientes = (n) => { S.pend = n; actualizarPend(); };
-// Alto de la barra de estado y de la barra de navegación (en dp = px CSS). Lo envía Kotlin al cargar y al cambiar.
-window.setInsets = (top, bottom) => {
-  const r = document.documentElement.style;
-  r.setProperty('--sat', top + 'px'); r.setProperty('--sab', bottom + 'px'); medir();
-};
 // Botón Atrás: sale primero de los modos temporales; devuelve true si lo consumió.
 window.onAtras = () => {
   if (S.modo === 'mover') { terminarMover(false); return true; }
