@@ -4,12 +4,11 @@ import shutil
 
 # Lista con todos los archivos y carpetas del proyecto
 ESTRUCTURA = [
-    "app/src/main/assets/video_detalle.html",
-    "app/src/main/assets/video_detalle.js",
-    "app/src/main/java/com/example/myapplication/ui/admin/videos/VideoDetalleScreen.kt",
-    "app/src/main/java/com/example/myapplication/ui/admin/videos/VideoDetalleViewModel.kt",
-    "app/src/main/java/com/example/myapplication/ui/admin/videos/VideosScreen.kt",
-    "app/src/main/java/com/example/myapplication/ui/admin/videos/VideosViewModel.kt"
+    "sensors/PdrEngine.kt",
+    "sensors/StepDetector.kt",
+    "sensors/PdrTracker.kt",
+    "map/PuentePdr.kt",
+    "map/MapaPublicoScreen.kt"
 ]
 
 def gestionar_elemento(ruta_str: str, eliminar: bool = False):

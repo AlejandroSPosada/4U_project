@@ -85,7 +85,7 @@ import com.example.myapplication.domain.model.Video
 import java.text.NumberFormat
 
 // Paleta de la maqueta. TODO: moverla a ui/theme/CampusColors.kt cuando se unifique con el resto de vistas admin.
-private object GaleriaColores {
+internal object GaleriaColores  {
     val Fondo = Color(0xFF0A0A1E)
     val Tarjeta = Color(0xFF12122B)
     val Placeholder = Color(0xFF1C1C3C)

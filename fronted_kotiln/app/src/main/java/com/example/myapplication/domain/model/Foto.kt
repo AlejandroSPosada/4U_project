@@ -1,5 +1,11 @@
 package com.example.myapplication.domain.model
 
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
+
 /** Estado de procesamiento de una foto en el dataset. */
 enum class EstadoFoto(val etiqueta: String) {
     SUBIDA("Subida"),
@@ -48,4 +54,16 @@ data class Video(
     val nombre: String,
     val creadoEn: String? = null,
     val fotos: List<Foto> = emptyList(),
-)
+) {
+    /** Longitud de la trayectoria uniendo las fotos en orden (haversine). */
+    val distanciaMetros: Double
+        get() = fotos.zipWithNext { a, b -> distanciaEntre(a, b) }.sum()
+}
+
+private fun distanciaEntre(a: Foto, b: Foto): Double {
+    val radio = 6_371_000.0
+    val dLat = Math.toRadians(b.lat - a.lat)
+    val dLng = Math.toRadians(b.lng - a.lng)
+    val h = sin(dLat / 2).pow(2) + cos(Math.toRadians(a.lat)) * cos(Math.toRadians(b.lat)) * sin(dLng / 2).pow(2)
+    return 2 * radio * asin(sqrt(h))
+}
