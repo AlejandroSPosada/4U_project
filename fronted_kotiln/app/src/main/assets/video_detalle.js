@@ -2,58 +2,21 @@
 // Kotlin ⇄ Web: ver `VideoDetalleScreen.kt`. Sin puente (navegador) usa datos de demo.
 (function () {
 'use strict';
-// Si Leaflet no cargó (sin internet o sin permiso INTERNET) se avisa en pantalla en vez de dejarla vacía.
-if (typeof L === 'undefined') {
-  document.body.insertAdjacentHTML('beforeend', '<div class="toast" style="bottom:50%;white-space:normal;text-align:center;max-width:80%">No se pudo cargar el mapa. Revisa tu conexión a internet.</div>');
-  return;
-}
-const B = window.VideoBridge || null;
-const $ = (id) => document.getElementById(id);
-const ic = (n) => `<svg class="ic"><use href="#i-${n}"/></svg>`;
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const base = MapaBase.iniciar({ puente: 'VideoBridge' });
+if (!base.leaflet) return;   // sin Leaflet no hay mapa: la base ya avisó y dejó funcionando Atrás
+const { $, ic, esc, toast, dialogo, confirmar, medir } = MapaBase;
+const call = base.call, B = base.existe();   // B: hay puente (en un navegador no) → si no, datos de demo
 const CARDINALES = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
 
 const S = { video: null, fotos: [], sel: null };
 
 // ── Mapa ───────────────────────────────────────
-const map = L.map('map', { center: [6.2002, -75.5783], zoom: 17, zoomControl: false, attributionControl: false, maxZoom: 21 });
-// Las teselas OSM llegan hasta el zoom 19; más allá se amplían para poder acercarse a fotos muy juntas.
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 21 }).addTo(map);
-L.control.attribution({ position: 'bottomleft', prefix: false }).addAttribution('© <a href="https://openstreetmap.org">OSM</a>').addTo(map);
-L.control.zoom({ position: 'bottomleft' }).addTo(map);
+// Las teselas OSM llegan al zoom 19; más allá se amplían para poder acercarse a fotos muy juntas.
+const map = MapaBase.crearMapa({ maxZoom: 21 });
 const capas = { ruta: L.layerGroup().addTo(map), fotos: L.layerGroup().addTo(map), otros: L.layerGroup() };
 const marcas = new Map();
 
-// ── Medidas de la interfaz ─────────────────────
-function medir() {
-  const r = document.documentElement.style;
-  r.setProperty('--toph', $('top').offsetHeight + 'px');
-  r.setProperty('--dockh', $('dock').offsetHeight + 'px');
-}
-if (window.ResizeObserver) { const ro = new ResizeObserver(medir); ro.observe($('top')); ro.observe($('dock')); }
-window.addEventListener('resize', medir);
-
 // ── Utilidades ─────────────────────────────────
-const call = (fn, ...a) => { if (B && B[fn]) { try { B[fn](...a); } catch (e) { console.warn(fn, e); } return true; } return false; };
-function toast(t) { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.appendChild(e); setTimeout(() => e.remove(), 2200); }
-
-/** Diálogo propio (el WebView no muestra window.prompt). Con `input` pide texto y valida antes de habilitar el botón. */
-function dialogo(o) {
-  const m = document.createElement('div'); m.className = 'modal';
-  m.innerHTML = '<div role="alertdialog" aria-modal="true"><p class="tx"></p>' + (o.input ? '<input id="m-in" type="text" autocomplete="off" maxlength="40">' : '') +
-    '<div class="acts"><button class="no">Cancelar</button><button class="si ' + (o.peligro ? 'del' : 'pri') + '"></button></div></div>';
-  m.querySelector('.tx').textContent = o.texto;
-  const si = m.querySelector('.si'), inp = m.querySelector('#m-in');
-  si.textContent = o.label;
-  const valido = () => !o.input || o.valida(inp.value.trim());
-  const refrescar = () => { si.disabled = !valido(); };
-  if (inp) { inp.placeholder = o.placeholder || ''; inp.value = o.valor || ''; inp.addEventListener('input', refrescar); }
-  refrescar();
-  m.querySelector('.no').onclick = () => m.remove();
-  si.onclick = () => { if (!valido()) return; const v = inp ? inp.value.trim() : null; m.remove(); o.ok(v); };
-  document.body.appendChild(m); (inp || m.querySelector('.no')).focus();
-}
-const confirmar = (texto, ok, label = 'Eliminar') => dialogo({ texto, label, peligro: true, ok });
 
 function hav(a, b) {
   const R = 6371000, r = (x) => x * Math.PI / 180, dl = r(b.lat - a.lat), dn = r(b.lng - a.lng);
@@ -181,7 +144,6 @@ $('btn-del').onclick = () => {
   });
 };
 map.on('click', () => seleccionar(null));
-$('btn-back').onclick = () => window.onAtras();
 $('chk-otros').addEventListener('change', (e) => { e.target.checked ? capas.otros.addTo(map) : capas.otros.remove(); });
 
 // ── API para Kotlin ────────────────────────────
@@ -197,11 +159,6 @@ window.cargarOtros = (json) => {
   capas.otros.clearLayers();
   JSON.parse(json).forEach((v) => (v.fotos || []).forEach((f) =>
     L.circleMarker([f.lat, f.lng], { radius: 5, color: '#64748b', weight: 1, fillColor: '#64748b', fillOpacity: .6, interactive: false }).addTo(capas.otros)));
-};
-// Alto de la barra de estado y de navegación (en dp = px CSS). Lo envía Kotlin al cargar y al cambiar.
-window.setInsets = (top, bottom) => {
-  const r = document.documentElement.style;
-  r.setProperty('--sat', top + 'px'); r.setProperty('--sab', bottom + 'px'); medir();
 };
 // Botón Atrás: cierra primero diálogo y selección; devuelve true si lo consumió.
 window.onAtras = () => {

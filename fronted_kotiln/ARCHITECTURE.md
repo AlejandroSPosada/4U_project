@@ -347,13 +347,13 @@ com.example.myapplication/
 │   ├── PdrEngine, StepDetector, PdrTracker, OrientationProvider
 │
 ├── camera/                      # CameraX, captura automática (una carpeta por escaneo), calidad de imagen (sin uso por ahora)
-├── map/                         # WebView del mapa Leaflet/OSM, AndroidBridge y datos de capas (usuario, ruta, lugares, alertas). Hoy: MapaPublicoScreen, PuentePdr
+├── map/                         # WebView del mapa Leaflet/OSM, AndroidBridge y datos de capas (usuario, ruta, lugares, alertas). Hoy: MapaPublicoScreen, PuentePdr y MapaWebView (fábrica común de los WebView de mapa, 11.9)
 ├── voice/                       # Wrappers de TextToSpeech y SpeechRecognizer
 └── session/                     # Sesión, token, rol (USER / ADMIN)
 ```
 
 > Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
-> (Leaflet + OpenStreetMap, ver 2.6).
+> (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor y del detalle de video, y la base común `mapa_base.js` (11.9).
 
 > Actualmente en el repo existen `ui/`, `camera/`, `sensors/`, `map/`, `logs/`, `session/`,
 > `data/repository/`, `domain/model/`, `domain/usecase/`, `ApiConfig.kt`, `MyApp.kt` y
@@ -1002,12 +1002,14 @@ los dispositivos de los usuarios en su siguiente sincronización.
 
 | Archivo | Responsabilidad |
 |---|---|
-| `ui/admin/mapa/EditorMapaScreen.kt` | `EditorMapaScreen` (la que usa el NavHost: conecta ViewModel, formulario y navegación), `EditorMapaContent` (solo dibuja el `WebView`) e interfaz `EditorMapaEventos` |
+| `ui/admin/mapa/EditorMapaScreen.kt` | `EditorMapaScreen` (la que usa el NavHost: conecta ViewModel, formulario y navegación), `EditorMapaContent` (solo dibuja el mapa con `MapaWebView`), interfaz `EditorMapaEventos` y el puente `EditorPuente` |
 | `ui/admin/mapa/EditorMapaViewModel.kt` | Estado (`EditorMapaUi`), formulario en edición, validación, pendientes y sincronización (**hoy simulada**) |
 | `ui/admin/mapa/AlertaFormSheet.kt` | Formulario de alerta (vista 7.9), hoja inferior de Material 3 |
 | `domain/model/Alerta.kt` | Modelos `Alerta` y `Lugar` |
 | `app/src/main/assets/editor_mapa.html` | Interfaz del editor (estilos y estructura) |
-| `app/src/main/assets/editor_mapa.js` | Leaflet + OSM, capas, filtros, modos (colocar / mover), borrador y puente con Kotlin |
+| `app/src/main/assets/editor_mapa.js` | Capas, filtros, modos (colocar / mover) y borrador; usa `mapa_base.js` para el puente, `toast`, `confirmar`, medidas y mapa (11.9) |
+| `app/src/main/assets/mapa_base.js` | Base común de las páginas de mapa: puente, `toast`, `dialogo`, medidas, `setInsets`, `onAtras` por defecto y mapa Leaflet (11.9) |
+| `map/MapaWebView.kt` | `MapaWebView`, `MapaWeb` y `PuenteWeb`: la fábrica común del `WebView` de todos los mapas (11.9) |
 
 **Puente WebView ↔ Android (`EditorBridge`):** los datos viajan como JSON; la alerta tiene los
 campos `id, lat, lng, mensaje, tipo, prioridad, radio, activa` (tipo: `agua`, `mobiliario`,
@@ -1289,7 +1291,7 @@ pantallas abiertas (7.13 y 7.14) vuelven a cargar.
 | `ui/admin/videos/VideoDetalleScreen.kt` | `VideoDetalleScreen` (la que usa el NavHost: conecta ViewModel y navegación), `VideoDetalleContent` (solo dibuja el `WebView`) e interfaz `VideoDetalleEventos` |
 | `ui/admin/videos/VideoDetalleViewModel.kt` | Carga el video y los demás, los serializa a JSON para el mapa y delega renombrar / eliminar foto / eliminar video al repositorio |
 | `app/src/main/assets/video_detalle.html` | Interfaz (estilos y estructura): cabecera, tarjeta, tira de miniaturas y barra inferior |
-| `app/src/main/assets/video_detalle.js` | Leaflet + OSM, marcadores con rumbo, trayectoria, selección sincronizada, diálogos y puente con Kotlin |
+| `app/src/main/assets/video_detalle.js` | Leaflet + OSM, marcadores con rumbo, trayectoria, selección sincronizada y diálogos; usa `mapa_base.js` para el puente, `toast`, `dialogo`, medidas y mapa (11.9) |
 | `data/repository/VideoRepository.kt` | Contrato e implementación local (ver arriba) |
 | `domain/model/Foto.kt` | `Video.distanciaMetros` (fórmula de haversine) |
 
@@ -1343,8 +1345,7 @@ foco al abrir.
 - **Galería (7.11)**: refrescarse cuando se eliminan fotos desde aquí (hoy solo las ve al reabrirse).
 - **Navegar al Detalle de imagen (7.12)** con `videoId` y `fotoId`.
 - **Nombre editable directamente en el encabezado** (hoy se edita con el botón "Renombrar").
-- **Extraer una base común del mapa** (`mapa_base.js`) compartida con 7.8, para reutilizarla en
-  el modo Mapa de la galería (7.11) y el minimapa de 7.12.
+- **Reutilizar la base común** (`mapa_base.js` + `MapaWebView`, ya extraídas; ver 11.9) en el modo Mapa de la galería (7.11) y en el minimapa de 7.12.
 
 ---
 
@@ -1480,8 +1481,8 @@ foco al abrir.
 | Sensores y cámara | Implementada | `sensors/OrientationProvider.kt`, `camera/CapturaFoto.kt` | `camera/CalidadImagen.kt` sin uso por ahora |
 | Seguimiento de posición (PDR) | Implementada (⚠ sin probar en dispositivo) | `sensors/PdrEngine.kt`, `sensors/StepDetector.kt`, `sensors/PdrTracker.kt` | Longitud de paso fija; sin corrección visual ni fusión (`domain/fusion/`); sin manejo de `ON_STOP` (ver 11.2) |
 | Mapa Leaflet público | Implementada (⚠ sin probar en dispositivo) | `assets/index.html`, `assets/app.js`, `map/MapaPublicoScreen.kt`, `map/PuentePdr.kt` | Solo dibuja: la posición la calcula `PdrTracker`. Aloja la ruta `admin/ubicacion-manual`. Dependencias externas en línea (decisión 13); botón GPS sin geolocalización (decisión 14) |
-| Mapa del editor de alertas | Implementada | `assets/editor_mapa.html`, `assets/editor_mapa.js` | Puente `EditorBridge` |
-| Mapa del detalle de video | Implementada | `assets/video_detalle.html`, `assets/video_detalle.js` | Puente `VideoBridge`. **TODO:** extraer una base común (`mapa_base.js`) compartida con el editor |
+| Mapa del editor de alertas | Implementada | `assets/editor_mapa.html`, `assets/editor_mapa.js`, `assets/mapa_base.js`, `map/MapaWebView.kt` | Puente `EditorBridge`. Usa la base común (11.9; ⚠ Kotlin sin compilar) |
+| Mapa del detalle de video | Implementada | `assets/video_detalle.html`, `assets/video_detalle.js`, `assets/mapa_base.js`, `map/MapaWebView.kt` | Puente `VideoBridge`. Usa la base común (11.9; ⚠ Kotlin sin compilar) |
 | Repositorios | Mixto | `data/repository/` | `AuthRepository`, `AdminRepository` y `LugaresRepository` son stubs; `VideoRepository` tiene implementación local (`AssetsVideoRepository`) |
 | Modelos de dominio | Implementada | `domain/model/` | `Usuario`, `Rol`, `Sesion`, `ResumenAdmin`, `Alerta`, `Lugar`, `LugarDestino`, `CategoriaLugar`, `Foto`, `Video`, `EstadoFoto`, `CalidadFoto` |
 | Componentes y tema compartidos | Parcial | `ui/theme/CampusColors.kt`, `ui/components/BannerEstado.kt` | `GaleriaColores` (galería y lista de videos) debe moverse a `CampusColors.kt` |
@@ -1873,7 +1874,7 @@ Cuidados:
 
 Cuidados:
 - **`posicionAdmin` hoy es `{ null }`** (11.8): el botón de "mi posición" no hace nada y no avisa. La posición se guarda con `remember` (no sobrevive a rotar la pantalla). ⚠ Deducido del código, no probado: como se envía con `LaunchedEffect(listo, miPosicion)`, volver a pedirla con **las mismas coordenadas** no vuelve a centrar el mapa.
-- **Sin internet no hay salida (verificado en el JS):** `editor_mapa.html` carga Leaflet desde `unpkg.com`. Si falla, `editor_mapa.js` muestra "No se pudo cargar el mapa. Revisa tu conexión a internet." y **termina antes** de definir `window.onAtras`, de asignar el botón Volver y de llamar a `listo()`. Resultado: el `BackHandler` de Kotlin llama a una función que no existe, el botón Volver de la página no hace nada y la app nunca envía datos. Para la base común (11.9): definir `onAtras` (que llame a `salir()`) antes de comprobar Leaflet.
+- **Sin internet:** `editor_mapa.html` carga Leaflet desde `unpkg.com`. Si falla, `MapaBase.iniciar` (11.9) muestra «No se pudo cargar el mapa. Revisa tu conexión a internet.» y **ya dejó definidos** `window.onAtras` (llama a `salir()`), `setInsets` y el botón Volver; `editor_mapa.js` termina antes de llamar a `listo()`. Resultado: Atrás y Volver funcionan, pero la app nunca envía alertas ni lugares. (Antes el JS terminaba antes de definirlos y ambos botones quedaban muertos.) Probado con jsdom, no en dispositivo.
 - **Orden de `window.onAtras()`** (siempre devuelve `true`, y Kotlin ignora el valor): sale de mover → sale de colocar → cancela el borrador (`cancelarFormulario`) → deselecciona → si hay pendientes pide confirmar "Tienes cambios sin sincronizar. ¿Salir de todas formas?" → `salir()`.
 - **`sincronizando` y `error` del ViewModel no llegan al mapa:** `EditorMapaContent` solo recibe `pendientes`; `error` solo se ve en la hoja del formulario. Cuando `sincronizar()` llame a la API real habrá que ampliar el puente para mostrar progreso o fallo.
 - **Registro fuera de `AppLog`:** usa `android.util.Log` con el tag `EditorMapa` (mensajes de la consola JS y errores de carga de recursos), así que **no queda en `files/logs/app.log`**. Un recurso que falla (por ejemplo, teselas sin internet) solo deja un `Log.e`: no hay aviso en pantalla.
@@ -2028,7 +2029,7 @@ Cuidados:
 Cuidados:
 - **Kotlin no navega tras `eliminarVideo()`; lo hace el JS** (verificado): llama a `eliminarVideo`, muestra "Video eliminado" y **900 ms después** llama a `salir()` sin esperar resultado. Si el borrado fallara (futuro `RemoteVideoRepository`, ver el `try/catch` que falta en 11.5), el admin ya habría salido.
 - **No usa `ui.cargando`:** mientras llega el JSON se ve el mapa vacío, sin indicador.
-- **Igual que el editor, sin internet no hay salida:** si Leaflet (`unpkg.com`) no carga, el JS avisa y termina antes de definir `window.onAtras` y de asignar el botón Volver; el `BackHandler` no tiene a qué llamar. El registro va por `Log` con el tag `VideoDetalle`, no por `AppLog`.
+- **Sin internet:** si Leaflet (`unpkg.com`) no carga, `MapaBase.iniciar` (11.9) avisa en pantalla y **ya dejó definidos** `window.onAtras` (llama a `salir()`), `setInsets` y el botón Volver; `video_detalle.js` termina antes de llamar a `listo()`, así que Atrás y Volver funcionan pero la app no envía el video. Probado con jsdom, no en dispositivo. El registro va por `Log` con el tag `VideoDetalle`, no por `AppLog`.
 - **Orden de `window.onAtras()`:** cierra el diálogo abierto → deselecciona la foto → `salir()` (aquí no hay confirmación de pendientes).
 - **Confirmaciones (en el JS):** eliminar el video exige **escribir su nombre** (la sección 10 anota como pendiente una "confirmación por pulsación larga"; hoy es esta). Eliminar una foto es **optimista**: la quita de la lista al instante y, si era la última, ofrece eliminar también el video. El `WebView` no muestra `window.prompt`, por eso hay un diálogo propio (`dialogo()`, `role="alertdialog"`).
 - **Renombrar se valida en el JS, no en el ViewModel:** texto no vacío, distinto del actual y de máximo 40 caracteres; **no** se comprueba que el nombre no exista ya en otro video.
@@ -2037,7 +2038,7 @@ Cuidados:
 - El encuadre del mapa (`fitBounds`) se hace **solo la primera vez** que llega el video; editar (renombrar, eliminar foto) no lo mueve. "Mostrar otros videos" dibuja puntos grises `#64748b` solo con lat/lng.
 - Accesibilidad web: marcadores con `title`, tira de fotos con `aria-label` y `aria-pressed`, tarjeta como región `aria-live`. Las miniaturas que fallan se ocultan (`onerror`).
 - `abrirFoto` → `onAbrirImagen` (placeholder: falta 7.12).
-- **Código copiado entre el editor y el detalle:** la fábrica del `WebView` (tamaño, fondo `#0A0E1A`, ajustes, depuración, consola, errores, `Handler`, `setInsets`, `js()` / `lit()`, `BackHandler`) es casi idéntica en `EditorMapaScreen` y aquí; solo cambian el nombre del puente, el HTML y el tag. Ver 11.9.
+- **Infraestructura compartida:** la fábrica del `WebView` (tamaño, fondo `#0A0E1A`, ajustes, depuración, consola, errores, `setInsets`, `BackHandler`) vive ahora en `map/MapaWebView.kt` (`MapaWebView` y `PuenteWeb`, ver 11.9). Aquí solo quedan `VideoPuente` y los `LaunchedEffect` que empujan `cargarOtros` y `cargarVideo`.
 - El botón "Volver" de `NoEncontrado` es un `Button` estándar de Material: su alto mínimo (40 dp) queda bajo los 48 dp.
 
 **Componentes de `ui/ubicacion/componentes/` (verificados; propios de Escaneo, todos `internal`)**
@@ -2395,14 +2396,62 @@ Verificado en los ViewModels: `DestinoEvento.Confirmado` **sí** lleva el `Lugar
 
 Cada mapa es una página en `assets/` (HTML + JS con Leaflet) con su puente Kotlin: `AndroidBridge`
 (mapa público, 2.6), `EditorBridge` (7.8) y `VideoBridge` (7.14). Los datos viajan como JSON; las
-tablas de funciones están en esas secciones. Pendiente: base común `mapa_base.js`. Funciones y cuidados del `EditorBridge` en 11.5. `VideoBridge` (7.14) en 11.5. Verificado en el editor y en el detalle de video: `env(safe-area-inset-*)` no funciona en `WebView`, así que la app pasa el alto de las barras en dp con `setInsets(top, bottom)`; `AndroidBridge` (mapa público) está documentado en 2.6 y vive en `map/PuentePdr.kt`; `app.js` e `index.html` ya se leyeron (bache 4). **El lado Kotlin también está duplicado:** `EditorMapaScreen` y `VideoDetalleScreen` repiten casi línea por línea la fábrica del `WebView` (y `MapaPublicoScreen` añade una tercera, parecida), así que la base común debería incluir un composable compartido (por ejemplo `MapaWebView(html, puente, nombrePuente, tag)`) además de `mapa_base.js`.
+tablas de funciones están en esas secciones. Funciones y cuidados del `EditorBridge` y de `VideoBridge` en 11.5.
+`env(safe-area-inset-*)` no funciona en `WebView`, así que la app pasa el alto de las barras en dp con
+`setInsets(top, bottom)` (el mapa público no lo usa: su pantalla aplica `systemBarsPadding()`).
 
-**Lo que comparten las páginas de admin (verificado en `editor_mapa.js` y `video_detalle.js`)**, y por tanto lo que iría a `mapa_base.js`:
-- `call(fn, ...args)`: llama al puente si existe y, si no, el JS usa datos de demo (así se prueba en un navegador). Cada llamada va en `try/catch`. ⚠ `app.js` tiene su propia versión (`bridgeCall`), sin datos de demo: también iría a `mapa_base.js`.
-- `toast()`, `dialogo()` / `confirmar()` propios (el `WebView` no muestra `window.prompt`), `medir()` (publica `--toph` y `--dockh` con un `ResizeObserver`) y `setInsets` (publica `--sat` y `--sab`).
-- Aviso si Leaflet no cargó, **con el defecto de que termina antes de definir `onAtras`** (ver el editor, 11.5).
-- Datos del usuario o del repositorio siempre con `textContent` o `esc()`, nunca interpolados en `innerHTML` (excepción: `bindTooltip` del editor).
-- Las tres páginas (`index.html`, `editor_mapa.html`, `video_detalle.html`) cargan Leaflet 1.9.4 desde `unpkg.com` sin `integrity` y las fuentes de Google Fonts, y llevan `user-scalable=no` en el `viewport`.
+> ⚠ **Código entregado el 2026-10-10.** El lado web se probó con jsdom (27 comprobaciones, incluido el caso
+> «Leaflet no carga»); el lado Kotlin **no se compiló** ni se probó en dispositivo. Confirmar y quitar este aviso.
+
+**Infraestructura común (dos piezas):**
+
+| Pieza | Ubicación | Qué hace |
+|---|---|---|
+| `MapaBase` (JS) | `assets/mapa_base.js` | Se carga **después de Leaflet y antes** del script de la página. No hace nada al cargarse. |
+| `MapaWebView` (Kotlin) | `map/MapaWebView.kt` | Una sola fábrica del `WebView` para todas las pantallas de mapa. |
+
+**`MapaBase` (JS)** — `window.MapaBase`:
+- `iniciar({ puente })` → `{ existe(), call(fn, ...args), leaflet }`. Se llama **primero**, antes de comprobar Leaflet, y deja
+  listo lo que Kotlin necesita aunque el mapa no cargue: `window.setInsets`, un `window.onAtras` por defecto (llama a
+  `salir()`), el botón `#btn-back`, las medidas (`--toph` / `--dockh` con `ResizeObserver`; usa los ids `top` y `dock`) y,
+  si no hay Leaflet, el aviso «No se pudo cargar el mapa…». La página termina con `if (!base.leaflet) return;` y después
+  reemplaza `window.onAtras` por el suyo. `call` devuelve `true` si había puente; si no, la página usa datos de demo.
+- `crearMapa({ centro, zoom, maxZoom })` → mapa Leaflet con las teselas de OSM (nativas hasta el zoom 19; `maxZoom` mayor las
+  amplía: el detalle de video usa 21), atribución «© OSM» y control de zoom, ambos abajo a la izquierda.
+- `toast`, `dialogo({ texto, label, peligro, input, valor, placeholder, valida, ok })`, `confirmar(texto, ok, label = 'Eliminar')`,
+  `medir`, `$`, `ic`, `esc` y `puente(nombre)`.
+- `app.js` (mapa público) **solo** usa `MapaBase.puente('AndroidBridge').call` en lugar de su antiguo `bridgeCall`: no tiene
+  `dialogo`, `medir` ni `setInsets`, y su `toast` es otro (`#toast-container`). Por eso carga `mapa_base.js` pero no llama a `iniciar`.
+
+**`MapaWebView` (Kotlin)** — paquete `map`:
+
+| Pieza | Firma | Qué hace / cuidado |
+|---|---|---|
+| `MapaWeb` / `rememberMapaWeb()` | `class MapaWeb` · `listo: Boolean` (estado) · `js(codigo)` | Controlador de una pantalla: `listo` pasa a `true` cuando la página llama a `listo()`; `js` ejecuta JavaScript (hilo principal). Usar `LaunchedEffect(mapa.listo, dato)` para empujar estado. |
+| `literalJs(s)` | `(String) -> String` | Texto → literal de JavaScript (`JSONObject.quote`), para `cargarX(${literalJs(json)})`. |
+| `PuenteWeb(mapa)` | `open class` · `listo()` · `enHiloPrincipal { }` | Base de los puentes: ya trae `listo()`. Cada subclase añade sus `@JavascriptInterface` y los pasa por `enHiloPrincipal` (llegan en un hilo del `WebView`). **Debe ser pública o `internal`, nunca `private`** (el `WebView` la invoca por reflexión). |
+| `MapaWebView` | `(mapa, html, puente, nombrePuente, tag, modifier = fillMaxSize(), pasarInsets = true, manejarAtras = true)` | Crea el `WebView` (tamaño, fondo `#0A0E1A`, JS, DOM storage, depuración solo en builds depurables, consola y errores a Logcat con `tag`), registra el puente, carga `file:///android_asset/<html>`, envía `setInsets` y conecta el `BackHandler` con `window.onAtras()`. `pasarInsets = false` si la página no define `setInsets`. `onRelease` destruye el `WebView`. |
+
+Receta para una pantalla de mapa nueva (como `EditorMapaContent` y `VideoDetalleContent`):
+
+```kotlin
+val mapa = rememberMapaWeb()
+val eventosActuales by rememberUpdatedState(eventos)
+val puente = remember(mapa) { MiPuente(mapa) { eventosActuales } }   // internal class MiPuente(...) : PuenteWeb(mapa)
+MapaWebView(mapa, html = "mi_mapa.html", puente = puente, nombrePuente = "MiBridge", tag = "MiMapa")
+LaunchedEffect(mapa.listo, json) { if (mapa.listo) mapa.js("cargarX(${literalJs(json)})") }
+```
+Y en la página: `<script>` de Leaflet, `mapa_base.js`, el JS de la página; en este, `const base = MapaBase.iniciar({ puente: 'MiBridge' }); if (!base.leaflet) return;`.
+
+Cuidados:
+- **Falta migrar `MapaPublicoScreen`** (⚠ su código no se revisó en este cambio): sigue con su propia fábrica de `WebView`.
+  `MapaWebView` acepta cualquier objeto como `puente` (sirve `PuentePdr`) y `pasarInsets = false`, y el modificador
+  `Modifier.systemBarsPadding()`; los `window.onNative*` se siguen enviando con `evaluateJavascript` desde esa pantalla.
+- Los datos del usuario o del repositorio siempre con `textContent` o `esc()`, nunca interpolados en `innerHTML` (excepción: `bindTooltip` del editor).
+- Las tres páginas (`index.html`, `editor_mapa.html`, `video_detalle.html`) siguen cargando Leaflet 1.9.4 desde `unpkg.com`
+  sin `integrity` y las fuentes de Google Fonts, y llevan `user-scalable=no` en el `viewport` (decisión abierta 13).
+- Un `onAtras` por defecto que llama a `salir()` evita el defecto anterior (sin Leaflet, Atrás y Volver no hacían nada).
+  Aun así, sin Leaflet la página nunca llama a `listo()` y la app no le envía datos.
 
 ### 11.10 Lo que aún no está documentado aquí (⚠)
 
@@ -2425,7 +2474,7 @@ en el mismo archivo), `SessionManager` (11.3), `VideoRepository`/`AssetsVideoRep
 - PDR: longitud de paso variable o calibrada (decisión 16), disparador de fotos por tiempo o distancia
   usando `PdrEstado.distanciaMetros`, recolección (7.4) y navegación (6.5) sobre `PdrTracker`, manejo de
   `ON_STOP`, y corrección visual con fusión (`domain/fusion/`).
-- Extraer `mapa_base.js` y un `MapaWebView` común (ahora hay tres fábricas de `WebView`).
+- `MapaPublicoScreen` (`map/`) **sigue con su propia fábrica de `WebView`**: migrarla a `MapaWebView(…, pasarInsets = false)` (11.9) y comprobar que `PuentePdr` y los `evaluateJavascript` de `onNative*` siguen funcionando. Además, el CSS de las páginas (`.toast`, `.modal`, estilos de los controles de Leaflet, `.ic`) sigue duplicado entre `editor_mapa.html` y `video_detalle.html`: candidato a `mapa_base.css`.
 - Decidir el nombre del producto («Campus Locator» en este documento, «Campus Navi» en `LoginScreen`).
 - Decidir qué hace el orbe de Inicio y si vuelven los dos botones, el micrófono y Ajustes de 6.1 (ver Inicio en 11.5).
 - `domain/usecase/`: las reglas de 11.7 ya están verificadas (bache 1). La sección 4 solo lista `BuscarLugares.kt` ahí; si existen más casos de uso, no se han visto.
