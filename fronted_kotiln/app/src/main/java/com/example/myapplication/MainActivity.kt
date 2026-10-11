@@ -31,6 +31,7 @@ import com.example.myapplication.ui.admin.imagenes.GaleriaScreen
 import com.example.myapplication.ui.admin.videos.VideoDetalleScreen
 import com.example.myapplication.ui.admin.videos.VideosScreen
 import com.example.myapplication.map.MapaPublicoScreen
+import com.example.myapplication.ui.admin.recoleccion.UbicacionManualScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -201,7 +202,11 @@ fun AppNav() {
                     onResultado = { permisosPedidos = true },
                 )
             } else {
-                MapaPublicoScreen()
+                UbicacionManualScreen(
+                    onVolver = { nav.popBackStack() },
+                    onConfirmar = { inicio -> /* pendiente: crear video y abrir 7.4 */ },
+                    onAjustes = { nav.navigate("ajustes") },
+                )
             }
         }
         composable("admin/lugares") { /* placeholder */ }
