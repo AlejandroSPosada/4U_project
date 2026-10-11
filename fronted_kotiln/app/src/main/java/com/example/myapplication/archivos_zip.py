@@ -18,19 +18,9 @@ def comprimir_archivos(estructura, nombre_salida="out.zip"):
 
 # Estructura de archivos proporcionada
 estructura = [
-    # Módulo de administración de mapas
-    "ui/admin/mapa/EditorMapaScreen.kt",
-    "ui/admin/mapa/EditorMapaViewModel.kt",
-    "ui/admin/mapa/EditorMapaState.kt",
-    "ui/admin/mapa/AlertaFormSheet.kt",
-    
-    # Componentes de mapas y visualización
-    "ui/components/MapaCampus.kt",
-    "map/MbtilesReader.kt",
-    
-    # Capa de datos y dominio
-    "data/repository/AlertasRepository.kt",
-    "domain/model/Alerta.kt",
+    "sensors/OrientationProvider.kt",
+    "MainActivity.kt",
+    "ui/inicio/InicioScreen.kt"
 ]
 
 if __name__ == "__main__":

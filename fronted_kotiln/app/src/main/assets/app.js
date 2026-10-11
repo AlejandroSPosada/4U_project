@@ -1,8 +1,9 @@
 // ========================================
 // StepTracker — Core Application Engine
 // ========================================
-// Dead-reckoning: detección de pasos + rumbo de brújula
-// sobre OpenStreetMap con Leaflet.js
+// Mapa Leaflet + panel de estadísticas. NO calcula la posición:
+// pasos, rumbo y posición los calcula Kotlin (sensors/PdrEngine) y llegan
+// por window.onNative*. Lo que el usuario toca se envía por AndroidBridge.
 // ========================================
 
 (function () {
@@ -29,41 +30,25 @@
         elapsedMs: 0,
         timerInterval: null,
 
-        // Steps
+        // Pasos, distancia y velocidad: los entrega Kotlin (onNativePosition)
         steps: 0,
-        stepLength: 0.72,
-        lastStepTime: 0,
-        stepCooldownMs: 280,
-        // true  → pasos por acelerómetro (web o fallback)
-        // false → pasos por el contador de hardware de Android
-        useAccelSteps: true,
-        nativeStepsSeen: 0,
+        distanceM: 0,
+        speedMps: 0,
+        maxSpeedKmh: 0,
 
-        // Acceleration
+        // Acceleration (solo para la gráfica; Kotlin envía la desviación)
         accelGraphData: new Array(100).fill(0),
         lastAccelMag: 0,
         peakAccel: 0,
-        accelBaseline: 9.81,
+        // Solo dibuja la línea roja de la gráfica. Debe coincidir con StepDetector.UMBRAL (Kotlin).
         accelThreshold: 2.2,
-        lastPeakVal: 0,
-        rising: false,
 
-        // Speed
-        speedMps: 0,
-        maxSpeedKmh: 0,
-        speedBuffer: [],
-
-        // Heading
-        heading: 0,            // rumbo usado para dead reckoning
+        // Heading: el rumbo ya llega promediado desde Kotlin; aquí solo se suaviza la flecha
         displayHeading: 0,     // rumbo suavizado para la UI
         targetHeading: 0,
         hasDeviceCompass: false,
         manualHeading: 0,
         headingInitialized: false,
-        headingBuffer: [],
-        // Fused Orientation ya viene suavizado y llega cada ~50 ms.
-        // 6 muestras ≈ 300 ms de promedio: quita picos sin hacer notar el retraso.
-        headingWindowSize: 6,
         lastShownHeadingInt: -1,
         unwrappedHeading: 0,     // ángulo continuo (puede pasar de 360 o ser negativo) solo para el DOM
         lastWrappedHeading: 0,
@@ -76,6 +61,15 @@
     };
 
     const $ = (id) => document.getElementById(id);
+
+    /** Llama a AndroidBridge.<fn>(...) si existe (en un navegador no existe). */
+    function bridgeCall(fn, ...args) {
+        try {
+            if (window.AndroidBridge) return window.AndroidBridge[fn](...args);
+        } catch (e) {
+            console.warn('AndroidBridge.' + fn + ' failed:', e);
+        }
+    }
 
     // ── Map ────────────────────────────────────
     function initMap() {
@@ -111,6 +105,7 @@
         state.currentLat = lat;
         state.currentLng = lng;
         state.positionSet = true;
+        bridgeCall('setPosition', lat, lng);
 
         if (state.userMarker) state.map.removeLayer(state.userMarker);
         if (state.startMarker) state.map.removeLayer(state.startMarker);
@@ -198,6 +193,10 @@
     };
 
     function startTracking() {
+        if (!window.AndroidBridge) {
+            showToast('⚠️ El seguimiento solo funciona dentro de la app', 'error');
+            return;
+        }
         state.isTracking = true;
         state.startTime = Date.now() - state.elapsedMs;
 
@@ -209,9 +208,7 @@
         $('status-text').textContent = 'Rastreando...';
         $('compass-widget').classList.add('tracking');
 
-        if (!state.hasDeviceCompass) {
-            $('heading-control').classList.remove('hidden');
-        }
+        // La rueda manual de rumbo la muestra onNativeBrujula(false) si no hay brújula.
 
         state.timerInterval = setInterval(updateTimer, 1000);
 
@@ -242,13 +239,13 @@
         if (state.isTracking) stopTracking();
 
         state.steps = 0;
+        state.distanceM = 0;
         state.elapsedMs = 0;
         state.startTime = null;
-        state.nativeStepsSeen = 0;
         state.speedMps = 0;
         state.maxSpeedKmh = 0;
         state.peakAccel = 0;
-        state.speedBuffer = [];
+        bridgeCall('reset');
         state.accelGraphData = new Array(100).fill(0);
         $('stat-time').textContent = '00:00';
 
@@ -266,137 +263,58 @@
         showToast('🔄 Reiniciado', 'success');
     };
 
-    // ── Sensors ────────────────────────────────
-    let accelListener = null;
-    let orientListener = null;
-    let orientEventName = 'deviceorientation';
-
-    function startSensors() {
-        state.nativeStepsSeen = 0;
-
-        // En Android, TODOS los sensores vienen del puente nativo.
-        // Registrar además los de la web duplicaba pasos y mezclaba dos
-        // brújulas distintas (la web da un alpha relativo, no el norte real).
-        if (window.AndroidBridge) {
-            try {
-                state.useAccelSteps = false; // se activa solo si Kotlin avisa que no hay contador
-                window.AndroidBridge.startSensors();
-                return;
-            } catch (e) {
-                console.warn('AndroidBridge.startSensors failed:', e);
-                state.useAccelSteps = true;
-            }
-        }
-
-        // Fallback: sensores web (navegador / iOS)
-        state.useAccelSteps = true;
-
-        if (window.DeviceMotionEvent) {
-            if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                DeviceMotionEvent.requestPermission().then(perm => {
-                    if (perm === 'granted') {
-                        accelListener = handleMotion;
-                        window.addEventListener('devicemotion', accelListener, true);
-                    }
-                }).catch(console.warn);
-            } else {
-                accelListener = handleMotion;
-                window.addEventListener('devicemotion', accelListener, true);
-            }
-        }
-
-        if (window.DeviceOrientationEvent) {
-            // 'deviceorientationabsolute' da el norte real en Chrome
-            orientEventName = ('ondeviceorientationabsolute' in window)
-                ? 'deviceorientationabsolute'
-                : 'deviceorientation';
-
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().then(perm => {
-                    if (perm === 'granted') {
-                        orientListener = handleOrientation;
-                        window.addEventListener(orientEventName, orientListener, true);
-                    }
-                }).catch(console.warn);
-            } else {
-                orientListener = handleOrientation;
-                window.addEventListener(orientEventName, orientListener, true);
-            }
-        }
-    }
-
-    function stopSensors() {
-        if (accelListener) {
-            window.removeEventListener('devicemotion', accelListener, true);
-            accelListener = null;
-        }
-        if (orientListener) {
-            window.removeEventListener(orientEventName, orientListener, true);
-            orientListener = null;
-        }
-        if (window.AndroidBridge) {
-            try { window.AndroidBridge.stopSensors(); } catch (e) { }
-        }
-    }
-
-    // ── Accelerometer Processing ───────────────
-    function processAccel(x, y, z) {
-        const magnitude = Math.sqrt(x * x + y * y + z * z);
-        const deviation = Math.abs(magnitude - state.accelBaseline);
-
-        state.accelGraphData.push(deviation);
-        if (state.accelGraphData.length > 100) state.accelGraphData.shift();
-
-        if (deviation > state.peakAccel) state.peakAccel = deviation;
-        state.lastAccelMag = deviation;
-
-        detectStep(deviation, Date.now());
-    }
-
-    function handleMotion(event) {
-        if (!state.isTracking) return;
-        const acc = event.accelerationIncludingGravity || event.acceleration;
-        if (!acc) return;
-        processAccel(acc.x || 0, acc.y || 0, acc.z || 0);
-    }
-
-    function detectStep(accelDeviation, timestamp) {
-        // Si hay contador de hardware, el acelerómetro solo alimenta la gráfica
-        if (!state.useAccelSteps) return;
-
-        if (accelDeviation > state.accelThreshold) {
-            if (!state.rising) {
-                state.rising = true;
-                state.lastPeakVal = accelDeviation;
-            } else if (accelDeviation > state.lastPeakVal) {
-                state.lastPeakVal = accelDeviation;
-            }
-        } else if (state.rising && accelDeviation < state.accelThreshold * 0.6) {
-            state.rising = false;
-            if (timestamp - state.lastStepTime > state.stepCooldownMs) {
-                registerStep(timestamp);
-                state.lastStepTime = timestamp;
-            }
-            state.lastPeakVal = 0;
-        }
-    }
+    // ── Sensores (los lee Kotlin: sensors/PdrTracker) ──
+    // Esta página solo pide arrancar/parar y dibuja lo que llega por window.onNative*.
+    function startSensors() { bridgeCall('startSensors'); }
+    function stopSensors() { bridgeCall('stopSensors'); }
 
     // ── Callbacks desde Android (Kotlin) ───────
-    // `count` son los pasos desde que se llamó a startSensors().
-    window.onNativeStep = function (count) {
-        if (!state.isTracking || state.useAccelSteps) return;
 
-        let delta = count - state.nativeStepsSeen;
-        if (delta < 0) delta = count; // el contador se reinició
-        state.nativeStepsSeen = count;
+    /** Posición calculada por PdrEngine tras cada paso (y al fijar o reiniciar la posición). */
+    window.onNativePosition = function (lat, lng, pasos, distanciaM, velocidadMps) {
+        if (!state.positionSet) return;
 
-        const now = Date.now();
-        delta = Math.min(delta, 50); // protección ante ráfagas anormales
-        for (let i = 0; i < delta; i++) registerStep(now);
+        state.currentLat = lat;
+        state.currentLng = lng;
+        state.steps = pasos;
+        state.distanceM = distanciaM;
+        state.speedMps = velocidadMps;
+
+        const speedKmh = velocidadMps * 3.6;
+        if (speedKmh > state.maxSpeedKmh) state.maxSpeedKmh = speedKmh;
+
+        if (state.userMarker) state.userMarker.setLatLng([lat, lng]);
+
+        // pasos = 0 es la posición inicial o un reinicio: no se agrega punto a la trayectoria
+        if (pasos > 0) {
+            state.trailCoords.push([lat, lng]);
+            if (state.trailLine) state.trailLine.setLatLngs(state.trailCoords);
+        }
+        updateAllStats();
     };
 
+    /** Desviación de la aceleración respecto a la gravedad (m/s²), solo para la gráfica. */
+    window.onNativeAccel = function (desviacion) {
+        if (!state.isTracking) return;
+        state.accelGraphData.push(desviacion);
+        if (state.accelGraphData.length > 100) state.accelGraphData.shift();
+        if (desviacion > state.peakAccel) state.peakAccel = desviacion;
+        state.lastAccelMag = desviacion;
+    };
+
+    /** Rumbo en grados (0–360, norte real), ya promediado por PdrEngine. */
+    window.onNativeHeading = function (degrees) {
+        setTargetHeading(degrees);
+    };
+
+    /** Kotlin avisa si el teléfono tiene sensor de rotación; si no, se usa la rueda manual. */
+    window.onNativeBrujula = function (disponible) {
+        state.hasDeviceCompass = !!disponible;
+        $('heading-control').classList.toggle('hidden', !!disponible || !state.isTracking);
+    };
+
+    /** Los pasos se detectan con el acelerómetro en vez del sensor de hardware. */
     window.onNativeStepUnavailable = function (reason) {
-        state.useAccelSteps = true;
         showToast(
             reason === 'permission_denied'
                 ? '⚠️ Sin permiso de actividad: pasos por acelerómetro'
@@ -405,104 +323,14 @@
         );
     };
 
-    window.onNativeAccel = function (x, y, z) {
-        if (!state.isTracking) return;
-        processAccel(x, y, z);
-    };
-
-    window.onNativeHeading = function (degrees) {
-        if (!state.hasDeviceCompass) {
-            state.hasDeviceCompass = true;
-            $('heading-control').classList.add('hidden');
-        }
-        setTargetHeading(degrees);
-    };
-
-    function registerStep(timestamp) {
-        state.steps++;
-
-        const headingRad = (state.heading * Math.PI) / 180;
-        const dNorth = state.stepLength * Math.cos(headingRad);
-        const dEast = state.stepLength * Math.sin(headingRad);
-
-        const dLat = dNorth / 111320;
-        const dLng = dEast / (111320 * Math.cos((state.currentLat * Math.PI) / 180));
-
-        state.currentLat += dLat;
-        state.currentLng += dLng;
-
-        if (state.userMarker) {
-            state.userMarker.setLatLng([state.currentLat, state.currentLng]);
-        }
-
-        state.trailCoords.push([state.currentLat, state.currentLng]);
-        if (state.trailLine) state.trailLine.setLatLngs(state.trailCoords);
-
-        // Velocidad
-        state.speedBuffer.push(timestamp);
-        const windowMs = 5000;
-        state.speedBuffer = state.speedBuffer.filter(t => timestamp - t < windowMs);
-        if (state.speedBuffer.length > 1) {
-            const dt = (timestamp - state.speedBuffer[0]) / 1000;
-            // dt > 0.5 evita dividir por ~0 cuando llegan varios pasos juntos
-            state.speedMps = dt > 0.5 ? (state.speedBuffer.length * state.stepLength) / dt : state.speedMps;
-        } else {
-            state.speedMps = 0;
-        }
-
-        const speedKmh = state.speedMps * 3.6;
-        if (speedKmh > state.maxSpeedKmh) state.maxSpeedKmh = speedKmh;
-
-        updateAllStats();
-    }
-
-    // ── Compass (fallback web) ─────────────────
-    function handleOrientation(event) {
-        let heading = null;
-
-        if (event.webkitCompassHeading !== undefined) {
-            heading = event.webkitCompassHeading;
-        } else if (event.alpha !== null && event.alpha !== undefined) {
-            heading = 360 - event.alpha;
-        }
-
-        if (heading !== null && !isNaN(heading)) {
-            if (!state.hasDeviceCompass) {
-                state.hasDeviceCompass = true;
-                $('heading-control').classList.add('hidden');
-            }
-            setTargetHeading(heading);
-        }
-    }
-
-    /**
-     * Promedio circular de las últimas N lecturas (maneja el salto 359°→0°).
-     * Se usa tanto para dead reckoning como para la flecha.
-     */
+    /** Guarda el rumbo recibido; la flecha lo sigue con el suavizado de animateHeading(). */
     function setTargetHeading(degrees) {
         if (typeof degrees !== 'number' || isNaN(degrees)) return;
         degrees = ((degrees % 360) + 360) % 360;
 
-        state.headingBuffer.push(degrees);
-        if (state.headingBuffer.length > state.headingWindowSize) {
-            state.headingBuffer.shift();
-        }
-
-        let sinSum = 0, cosSum = 0;
-        for (let i = 0; i < state.headingBuffer.length; i++) {
-            const rad = (state.headingBuffer[i] * Math.PI) / 180;
-            sinSum += Math.sin(rad);
-            cosSum += Math.cos(rad);
-        }
-
-        let avgDeg = (Math.atan2(sinSum, cosSum) * 180) / Math.PI;
-        if (avgDeg < 0) avgDeg += 360;
-
-        state.heading = avgDeg;
-        state.targetHeading = avgDeg;
-
+        state.targetHeading = degrees;
         if (!state.headingInitialized) {
-            state.displayHeading = avgDeg;
+            state.displayHeading = degrees;
             state.headingInitialized = true;
             updateHeadingDisplay();
         }
@@ -581,7 +409,7 @@
 
     // ── UI Updates ─────────────────────────────
     function updateAllStats() {
-        const totalDistM = state.steps * state.stepLength;
+        const totalDistM = state.distanceM;
         const speedKmh = state.speedMps * 3.6;
         const elapsed = state.isTracking && state.startTime
             ? Date.now() - state.startTime
@@ -817,9 +645,8 @@
         function updateHeading(e) {
             const angle = getAngle(e);
             state.manualHeading = angle;
-            // El rumbo manual se aplica directo (sin promedio ni animación)
-            state.headingBuffer = [];
-            state.heading = angle;
+            // El rumbo manual se aplica directo (sin promedio ni animación) y se avisa a Kotlin
+            bridgeCall('setManualHeading', angle);
             state.targetHeading = angle;
             state.displayHeading = angle;
             state.headingInitialized = true;

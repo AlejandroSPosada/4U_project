@@ -22,11 +22,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.myapplication.ui.inicio.InicioScreen
+import com.example.myapplication.ui.destino.SeleccionDestinoScreen
 import com.example.myapplication.ui.ubicacion.EscaneoScreen
 import com.example.myapplication.ui.auth.LoginScreen
 import com.example.myapplication.ui.admin.panel.PanelAdminScreen
 import com.example.myapplication.ui.admin.mapa.EditorMapaScreen
 import com.example.myapplication.ui.admin.imagenes.GaleriaScreen
+import com.example.myapplication.ui.admin.videos.VideoDetalleScreen
+import com.example.myapplication.ui.admin.videos.VideosScreen
+import com.example.myapplication.map.MapaPublicoScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,6 +64,8 @@ object Permisos {
 fun AppNav() {
     val nav = rememberNavController()
 
+    // Regla: cada ruta se registra UNA sola vez. Si se repite, la última reemplaza a la anterior
+    // (un placeholder vacío puede tapar la pantalla real).
     NavHost(navController = nav, startDestination = "inicio") {
 
         composable("inicio") {
@@ -106,6 +112,19 @@ fun AppNav() {
             }
         }
 
+        // 6.4 Selección de destino
+        composable("destino") {
+            SeleccionDestinoScreen(
+                onVolver = { nav.popBackStack() },
+                onDestinoConfirmado = { _ ->
+                    // TODO: guardar el destino elegido y, tras el escaneo 360° (si no hay ubicación
+                    // vigente), abrir NavegacionScreen (6.5). Por ahora solo lanza el escaneo.
+                    nav.navigate("ubicarme")
+                },
+                onAjustes = { nav.navigate("ajustes") },
+            )
+        }
+
         composable("login") {
             LoginScreen(
                 onLoginExitoso = {
@@ -117,7 +136,6 @@ fun AppNav() {
             )
         }
 
-        // Placeholder para que el login no cierre la app al navegar
         composable("admin/panel") {
             PanelAdminScreen(
                 onRecolector = { nav.navigate("admin/ubicacion-manual") },
@@ -135,21 +153,8 @@ fun AppNav() {
             )
         }
 
-        // Placeholders para que los botones no cierren la app
-        composable("admin/ubicacion-manual") { /* placeholder */ }
-        composable("admin/lugares") { /* placeholder */ }
-        composable("admin/mapa") { /* placeholder */ }
-        composable("admin/imagenes") {
-            GaleriaScreen(
-                onVolver = { nav.popBackStack() },
-                onAbrirImagen = { _, _ -> }, // placeholder: aún no existe la vista 7.12
-            )
-        }
-        composable("admin/videos") { /* placeholder */ }
-        composable("admin/estadisticas") { /* placeholder */ }
-        composable("ajustes") { /* placeholder */ }
-        composable("admin/ubicacion-manual") { /* placeholder */ }
-        composable("admin/lugares") { /* placeholder */ }
+        // ── Vistas implementadas ──
+
         composable("admin/mapa") {
             EditorMapaScreen(
                 onVolver = { nav.popBackStack() },
@@ -157,7 +162,49 @@ fun AppNav() {
                 posicionAdmin = { null }
             )
         }
-        composable("admin/videos") { /* placeholder */ }
+
+        composable("admin/imagenes") {
+            GaleriaScreen(
+                onVolver = { nav.popBackStack() },
+                onAbrirImagen = { _, _ -> }, // placeholder: aún no existe la vista 7.12
+            )
+        }
+
+        // 7.13 Lista de videos
+        composable("admin/videos") {
+            VideosScreen(
+                onVolver = { nav.popBackStack() },
+                onAbrirVideo = { id -> nav.navigate("admin/videos/$id") },
+            )
+        }
+
+        // 7.14 Detalle de video
+        composable("admin/videos/{videoId}") { entrada ->
+            val videoId = entrada.arguments?.getString("videoId") ?: return@composable
+            VideoDetalleScreen(
+                videoId = videoId,
+                onVolver = { nav.popBackStack() },
+                onAbrirImagen = { _, _ -> }, // placeholder: aún no existe la vista 7.12
+            )
+        }
+
+        // ── Placeholders para que los botones no cierren la app ──
+        // (navegar a una ruta que no está registrada cierra la app con un error)
+        // 7.3 Ubicación manual inicial: por ahora aloja el mapa con seguimiento por pasos
+        // (index.html + app.js + sensors/PdrTracker). Faltan los botones propios de 7.3.
+        composable("admin/ubicacion-manual") {
+            // ACTIVITY_RECOGNITION es para el contador de pasos; si se niega, el PDR usa el acelerómetro.
+            var permisosPedidos by rememberSaveable { mutableStateOf(false) }
+            if (!permisosPedidos) {
+                PedirPermisos(
+                    permisos = Permisos.INICIALES,
+                    onResultado = { permisosPedidos = true },
+                )
+            } else {
+                MapaPublicoScreen()
+            }
+        }
+        composable("admin/lugares") { /* placeholder */ }
         composable("admin/estadisticas") { /* placeholder */ }
         composable("ajustes") { /* placeholder */ }
     }
