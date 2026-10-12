@@ -4,10 +4,10 @@ import shutil
 
 # Lista con todos los archivos y carpetas del proyecto
 ESTRUCTURA = [
-    "ui/admin/recoleccion/UbicacionManualScreen.kt",
-    "ui/admin/recoleccion/UbicacionManualViewModel.kt",
-    "ui/admin/recoleccion/UbicacionManualState.kt",
-    "domain/model/InicioRecoleccion.kt",
+    "domain/model/FotoRecolectada.kt",
+    "domain/model/SesionRecoleccion.kt",
+    "domain/usecase/DisparadorCaptura.kt",
+    "data/repository/RecoleccionRepository.kt",
 ]
 
 def gestionar_elemento(ruta_str: str, eliminar: bool = False):

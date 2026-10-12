@@ -32,6 +32,9 @@ import com.example.myapplication.ui.admin.videos.VideoDetalleScreen
 import com.example.myapplication.ui.admin.videos.VideosScreen
 import com.example.myapplication.map.MapaPublicoScreen
 import com.example.myapplication.ui.admin.recoleccion.UbicacionManualScreen
+import com.example.myapplication.ui.admin.recoleccion.RecoleccionScreen
+import com.example.myapplication.domain.model.SesionDeRecoleccion
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -189,10 +192,7 @@ fun AppNav() {
             )
         }
 
-        // ── Placeholders para que los botones no cierren la app ──
-        // (navegar a una ruta que no está registrada cierra la app con un error)
-        // 7.3 Ubicación manual inicial: por ahora aloja el mapa con seguimiento por pasos
-        // (index.html + app.js + sensors/PdrTracker). Faltan los botones propios de 7.3.
+        // 7.3 Ubicación manual inicial
         composable("admin/ubicacion-manual") {
             // ACTIVITY_RECOGNITION es para el contador de pasos; si se niega, el PDR usa el acelerómetro.
             var permisosPedidos by rememberSaveable { mutableStateOf(false) }
@@ -204,11 +204,53 @@ fun AppNav() {
             } else {
                 UbicacionManualScreen(
                     onVolver = { nav.popBackStack() },
-                    onConfirmar = { inicio -> /* pendiente: crear video y abrir 7.4 */ },
+                    onConfirmar = { inicio ->
+                        // D1: los datos viajan por un holder en memoria, no por argumentos de ruta.
+                        SesionDeRecoleccion.iniciar(inicio)
+                        // 7.3 se queda en la pila: su ViewModel reactiva «Confirmar» con alReanudar().
+                        nav.navigate("admin/recoleccion")
+                    },
                     onAjustes = { nav.navigate("ajustes") },
                 )
             }
         }
+
+        // 7.4 Recolección en curso
+        composable("admin/recoleccion") {
+            // La cámara es indispensable (como en «ubicarme»). La actividad física ya se pidió en 7.3;
+            // si se negó, el PDR usa el acelerómetro.
+            var camaraLista by rememberSaveable { mutableStateOf(false) }
+
+            if (!camaraLista) {
+                PedirPermisos(
+                    permisos = arrayOf(Permisos.CAMARA),
+                    onResultado = { concedido ->
+                        if (concedido) camaraLista = true
+                        else nav.popBackStack()
+                    },
+                )
+            } else {
+                RecoleccionScreen(
+                    onFinalizado = { resumen ->
+                        SesionDeRecoleccion.finalizar(resumen) // para 7.5; inofensivo si el ViewModel ya lo hizo
+                        nav.navigate("admin/recoleccion/resumen") {
+                            // saca 7.3 y 7.4 de la pila: el video ya terminó
+                            popUpTo("admin/ubicacion-manual") { inclusive = true }
+                        }
+                    },
+                    // Video sin fotos: se borró. Vuelve al panel.
+                    onDescartado = { nav.popBackStack("admin/panel", inclusive = false) },
+                    // Solo con error (p. ej. SIN_INICIO si Android restauró la pila tras matar el proceso).
+                    onVolver = { nav.popBackStack() },
+                    onAjustes = { nav.navigate("ajustes") },
+                )
+            }
+        }
+
+        // ── Placeholders para que los botones no cierren la app ──
+        // (navegar a una ruta que no está registrada cierra la app con un error)
+        // 7.5 Resumen de video: falta ResumenVideoScreen (leerá SesionDeRecoleccion.resumen).
+        composable("admin/recoleccion/resumen") { /* placeholder */ }
         composable("admin/lugares") { /* placeholder */ }
         composable("admin/estadisticas") { /* placeholder */ }
         composable("ajustes") { /* placeholder */ }
