@@ -13,10 +13,15 @@ import kotlin.math.sin
  * Las coordenadas son latitud / longitud (WGS84).
  */
 class PdrEngine(
-    val longitudPasoM: Double = 0.72,
+    val longitudPasoM: Double = LONGITUD_PASO_DEFECTO_M,
     private val ventanaRumbo: Int = 6,
     private val ventanaVelocidadMs: Long = 5_000,
 ) {
+    companion object {
+        /** Longitud de paso genérica, mientras el usuario no calibre la suya (CalibracionPasoRepository). */
+        const val LONGITUD_PASO_DEFECTO_M = 0.72
+    }
+
     var lat: Double? = null
         private set
     var lng: Double? = null

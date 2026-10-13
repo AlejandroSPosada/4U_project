@@ -85,4 +85,5 @@ data class UbicacionManualAcciones(
     val onNombre: (String) -> Unit = {},
     val onCancelar: () -> Unit = {},
     val onConfirmar: () -> Unit = {},
+    val onCalibrar: () -> Unit = {},
 )

@@ -33,6 +33,7 @@ import com.example.myapplication.ui.admin.videos.VideosScreen
 import com.example.myapplication.map.MapaPublicoScreen
 import com.example.myapplication.ui.admin.recoleccion.UbicacionManualScreen
 import com.example.myapplication.ui.admin.recoleccion.RecoleccionScreen
+import com.example.myapplication.ui.admin.calibracion.CalibracionScreen
 import com.example.myapplication.domain.model.SesionDeRecoleccion
 
 
@@ -62,6 +63,17 @@ object Permisos {
             add(Manifest.permission.ACTIVITY_RECOGNITION)
         }
     }.toTypedArray()
+
+    /**
+     * Solo actividad física (contador de pasos), para la calibración de la longitud de paso.
+     * Vacío antes de Android 10: ahí no es un permiso de ejecución y `PedirPermisos` pasa directo.
+     */
+    val ACTIVIDAD: Array<String> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            arrayOf(Manifest.permission.ACTIVITY_RECOGNITION)
+        } else {
+            emptyArray()
+        }
 }
 
 @Composable
@@ -205,13 +217,27 @@ fun AppNav() {
                 UbicacionManualScreen(
                     onVolver = { nav.popBackStack() },
                     onConfirmar = { inicio ->
-                        // D1: los datos viajan por un holder en memoria, no por argumentos de ruta.
                         SesionDeRecoleccion.iniciar(inicio)
-                        // 7.3 se queda en la pila: su ViewModel reactiva «Confirmar» con alReanudar().
                         nav.navigate("admin/recoleccion")
                     },
                     onAjustes = { nav.navigate("ajustes") },
+                    onCalibrar = { nav.navigate("admin/calibracion") },   // ← esta línea
                 )
+            }
+        }
+
+        // 7.3b Calibración de la longitud de paso
+        composable("admin/calibracion") {
+            // ACTIVITY_RECOGNITION es para el contador de pasos; si se niega, el PDR usa el acelerómetro
+            // y la pantalla lo avisa. Antes de Android 10 la lista está vacía y pasa directo.
+            var permisosPedidos by rememberSaveable { mutableStateOf(false) }
+            if (!permisosPedidos) {
+                PedirPermisos(
+                    permisos = Permisos.ACTIVIDAD,
+                    onResultado = { permisosPedidos = true },
+                )
+            } else {
+                CalibracionScreen(onVolver = { nav.popBackStack() })
             }
         }
 

@@ -47,6 +47,7 @@ import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -108,7 +109,9 @@ import com.example.myapplication.map.MapaWebView
 import com.example.myapplication.map.PuenteWeb
 import com.example.myapplication.map.literalJs
 import com.example.myapplication.map.rememberMapaWeb
+import com.example.myapplication.data.repository.CalibracionPasoRepository
 import com.example.myapplication.sensors.EscucharOrientacion
+import com.example.myapplication.sensors.PdrEngine
 import com.example.myapplication.sensors.tieneSensorRotacion
 import com.example.myapplication.ui.destino.componentes.BotonIcono
 import com.example.myapplication.ui.destino.componentes.tarjeta
@@ -119,6 +122,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import java.util.Locale
 
 private val C = CampusColors
 
@@ -142,6 +146,7 @@ fun UbicacionManualScreen(
     onVolver: () -> Unit,
     onConfirmar: (InicioRecoleccion) -> Unit,
     onAjustes: () -> Unit = {},
+    onCalibrar: () -> Unit = {},
     viewModel: UbicacionManualViewModel = viewModel(
         factory = UbicacionManualViewModel.Factory(LocalContext.current.applicationContext),
     ),
@@ -152,6 +157,10 @@ fun UbicacionManualScreen(
     val ajustesActual by rememberUpdatedState(onAjustes)
     val confirmarActual by rememberUpdatedState(onConfirmar)
     val brujulaOk = remember { tieneSensorRotacion(contexto) }
+    // Longitud calibrada (null = valor genérico). Se relee al volver de la calibración porque NavHost
+    // recompone la ruta; D9: el PdrTracker la lee una sola vez al crearse (7.4).
+    val longitudCalibradaM = remember { CalibracionPasoRepository(contexto).guardada() }
+    val calibrarActual by rememberUpdatedState(onCalibrar)
 
     LaunchedEffect(Unit) { viewModel.alAbrir(brujulaOk) }
 
@@ -194,10 +203,11 @@ fun UbicacionManualScreen(
             onNombre = viewModel::alCambiarNombre,
             onCancelar = { volverActual() },
             onConfirmar = viewModel::alConfirmar,
+            onCalibrar = { calibrarActual() },
         )
     }
 
-    UbicacionManualContent(estado = estado, acciones = acciones)
+    UbicacionManualContent(estado = estado, acciones = acciones, longitudCalibradaM = longitudCalibradaM)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════════════
@@ -209,6 +219,7 @@ fun UbicacionManualContent(
     estado: UbicacionManualUiState,
     acciones: UbicacionManualAcciones,
     modifier: Modifier = Modifier,
+    longitudCalibradaM: Double? = null,
 ) {
     val scroll = rememberScrollState()
     // Mientras el dedo está sobre el mapa, la columna no se desplaza (si no, arrastrar el
@@ -241,6 +252,7 @@ fun UbicacionManualContent(
                 TarjetaCoordenadas(estado, acciones, Modifier.weight(1f).fillMaxHeight())
             }
             FilaUltimaPosicion(estado, acciones.onUsarUltima)
+            FilaCalibracion(longitudCalibradaM, acciones.onCalibrar)
             TarjetaNombreVideo(estado, acciones.onNombre)
             Spacer(Modifier.height(4.dp))
         }
@@ -850,6 +862,43 @@ private fun TarjetaNombreVideo(estado: UbicacionManualUiState, onNombre: (String
                     .semantics { contentDescription = "Nombre del video, opcional" },
             )
         }
+    }
+}
+
+// ── Calibración de la longitud de paso (7.3b) ───────────────────────────────────────
+
+@Composable
+private fun FilaCalibracion(longitudCalibradaM: Double?, onClick: () -> Unit) {
+    val forma = RoundedCornerShape(18.dp)
+    val longitud = longitudCalibradaM ?: PdrEngine.LONGITUD_PASO_DEFECTO_M
+    val valor = String.format(Locale("es", "CO"), "%.2f m", longitud)
+    val subtitulo =
+        if (longitudCalibradaM != null) "Longitud de paso en uso: $valor (calibrada)."
+        else "Usando $valor (valor genérico). Calibra para mayor precisión."
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 72.dp)
+            .clip(forma)
+            .background(C.Primario.copy(alpha = 0.10f))
+            .border(1.5.dp, C.Primario, forma)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .semantics(mergeDescendants = true) { contentDescription = "Calibrar mi paso. $subtitulo" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(48.dp).border(1.5.dp, C.Primario, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Outlined.Straighten, contentDescription = null, tint = C.Acento, modifier = Modifier.size(26.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Calibrar mi paso", color = C.Acento, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitulo, color = C.TextoSecundario, fontSize = 13.5.sp, lineHeight = 17.sp)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = C.Acento)
     }
 }
 

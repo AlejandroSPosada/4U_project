@@ -79,7 +79,7 @@ Dos sistemas trabajan en paralelo y se fusionan:
 
 | Sistema | Qué usa | Qué aporta | Limitación |
 |---|---|---|---|
-| **Navegación inercial (PDR)** | Detector de pasos, acelerómetro, giroscopio, rotation vector/magnetómetro, longitud de paso estimada | Posición continua y en tiempo real, sin red | El error se **acumula** con el tiempo |
+| **Navegación inercial (PDR)** | Detector de pasos, acelerómetro, giroscopio, rotation vector/magnetómetro, longitud de paso calibrada por dispositivo (7.3b) | Posición continua y en tiempo real, sin red | El error se **acumula** con el tiempo |
 | **Corrección visual** | Foto automática periódica → backend → embedding → posición | Posición absoluta que **corrige el error acumulado** | Latencia, depende de red y de buena imagen |
 
 **Fusión:** la posición PDR avanza en cada paso. Cuando llega una posición visual con
@@ -91,7 +91,8 @@ cuando la incertidumbre estimada supera un umbral. **Sin intervención del usuar
 > **Estado de implementación (2026-10-10):** el sistema inercial (PDR) ya existe en Kotlin y es el
 > **único** sitio que calcula la posición: `sensors/PdrEngine.kt` (lógica pura),
 > `sensors/StepDetector.kt` (pasos por acelerómetro) y `sensors/PdrTracker.kt` (sensores de Android).
-> La posición sale de **pasos × longitud de paso fija (0,72 m)** en la dirección del rumbo: la
+> La posición sale de **pasos × longitud de paso** en la dirección del rumbo (la longitud es la **calibrada
+> por el admin en 7.3b**, o 0,72 m por defecto si nunca se calibró): la
 > velocidad y la aceleración **no** influyen en ella (la velocidad solo se muestra y la aceleración
 > solo detecta pasos cuando no hay sensor de hardware y dibuja una gráfica). La **corrección visual**
 > y la **fusión** (`domain/fusion/`) todavía no existen. Detalle en 11.2.
@@ -202,7 +203,7 @@ vista de **Recolección en curso** con el botón "Agregar alerta aquí" (ver sec
 | Función | Detalle |
 |---|---|
 | Posición inicial | Toque en el mapa (solo si no se está rastreando) o botón GPS (`navigator.geolocation`). Al abrir, intenta usar el GPS automáticamente |
-| Seguimiento por pasos (PDR) | **Ya no lo calcula la página.** Kotlin (`PdrEngine`) avanza 0,72 m por paso en la dirección del rumbo y envía la posición con `onNativePosition`; la página mueve el marcador, dibuja la trayectoria y calcula las estadísticas de pantalla (cadencia, calorías) |
+| Seguimiento por pasos (PDR) | **Ya no lo calcula la página.** Kotlin (`PdrEngine`) avanza una longitud de paso (la calibrada en 7.3b, o 0,72 m por defecto) por paso en la dirección del rumbo y envía la posición con `onNativePosition`; la página mueve el marcador, dibuja la trayectoria y calcula las estadísticas de pantalla (cadencia, calorías) |
 | Rumbo | El promedio circular de las últimas 6 lecturas lo hace Kotlin (`PdrEngine`); la página solo suaviza la flecha del marcador con un filtro adaptativo. Si Kotlin avisa que no hay brújula (`onNativeBrujula(false)`), aparece una **rueda manual de rumbo** que envía `setManualHeading` |
 | Trayectoria | Polilínea punteada con todos los puntos recorridos; botón de reinicio que vuelve al punto inicial |
 | Panel de estadísticas | Pasos, velocidad, aceleración (con gráfica en vivo), distancia, cadencia, rumbo, calorías y coordenadas |
@@ -327,6 +328,7 @@ com.example.myapplication/
 │   └── admin/
 │       ├── panel/
 │       ├── recoleccion/     # 7.3 ubicación manual y 7.4 recolección en curso (7.5 pendiente)
+│       ├── calibracion/     # 7.3b calibración de la longitud de paso
 │       ├── lugares/
 │       ├── mapa/            # Editor de mapa y alertas
 │       ├── imagenes/
@@ -379,7 +381,7 @@ com.example.myapplication/
 | `ACCESS_NETWORK_STATE` | Indicador y aviso de pérdida de conexión | Normal |
 | `CAMERA` | Escaneo 360°, corrección visual y recolección | Diálogo |
 | `RECORD_AUDIO` | `SpeechRecognizer` (comandos y dictado) | Diálogo |
-| `ACTIVITY_RECOGNITION` | Detector de pasos del PDR (Android 10+) | Diálogo |
+| `ACTIVITY_RECOGNITION` | Detector de pasos del PDR (Android 10+); también lo pide la calibración de la longitud de paso (7.3b) | Diálogo |
 | `VIBRATE` | Vibración al capturar, girar y alertar | Normal |
 | `ACCESS_FINE_LOCATION` | **Opcional.** Solo si se mantiene el botón GPS del mapa web (posición inicial). Requiere también atender los permisos de geolocalización del `WebView` | Diálogo |
 
@@ -393,6 +395,7 @@ almacenamiento externo.
   se muestra aunque se niegue alguno (queda la opción táctil).
 - **Ubicarme:** vuelve a comprobar la cámara (indispensable). Si se niega, regresa a Inicio.
 - Las pantallas de recolección y navegación deberán usar el mismo `PedirPermisos`.
+- **Calibración (7.3b):** la ruta `admin/calibracion` pide solo `Permisos.ACTIVIDAD` (actividad física; lista vacía antes de Android 10). Si se niega, el contador usa el acelerómetro y la pantalla lo avisa.
 - Si se niega el micrófono: solo botones. Si se niega actividad física: el PDR cambia a
   `StepDetector` (acelerómetro) y la página muestra un aviso (`onNativeStepUnavailable`).
 - El Manifest declara `<queries>` para `RecognitionService` y `TTS_SERVICE` (Android 11+), y
@@ -431,6 +434,7 @@ almacenamiento externo.
 | 8 | Login | `ui/auth/LoginScreen.kt` | Admin |
 | 9 | Panel admin | `ui/admin/panel/PanelAdminScreen.kt` | Admin |
 | 10 | Ubicación manual inicial | `ui/admin/recoleccion/UbicacionManualScreen.kt` | Admin |
+| 10b | Calibración de la longitud de paso | `ui/admin/calibracion/CalibracionScreen.kt` | Admin |
 | 11 | Recolección en curso | `ui/admin/recoleccion/RecoleccionScreen.kt` | Admin |
 | 12 | Resumen de video | `ui/admin/recoleccion/ResumenVideoScreen.kt` | Admin |
 | 13 | Lista de lugares | `ui/admin/lugares/LugaresScreen.kt` | Admin |
@@ -855,6 +859,7 @@ composable("admin/panel") {
   fijar hacia dónde mira.
 - Campos de **coordenadas** (x, y / lat, lon) mostrados y editables.
 - Botón **"Usar mi última posición"** (para continuar desde el final del video anterior; crea un video nuevo).
+- Fila **"Calibrar mi paso"** (vista 7.3b): muestra la longitud de paso en uso (calibrada o genérica de 0,72 m) y abre la calibración.
 - Botón **"Confirmar y comenzar"**: crea el nuevo video (ej. `video3`) y empieza la recolección.
 - Campo opcional **nombre del video** (por defecto autonumerado).
 - Botón **Cancelar**.
@@ -862,7 +867,7 @@ composable("admin/panel") {
 
 **Estado de implementación (2026-10-11):** **implementada** en `ui/admin/recoleccion/UbicacionManualScreen.kt`
 (con `UbicacionManualViewModel.kt` y `UbicacionManualState.kt`) y su mapa `assets/ubicacion_manual.html` +
-`ubicacion_manual.js` (⚠ Kotlin **sin compilar** ni probar en dispositivo; el JS pasó `node --check`).
+`ubicacion_manual.js` (compila y se ha abierto en dispositivo, 2026-10-12; el JS pasó `node --check`; ⚠ sin prueba funcional completa).
 Detalle de piezas y cuidados en 11.5 («UbicacionManual»).
 
 - **Mapa** Leaflet/OSM con **marcador arrastrable** (o toque para colocarlo), flecha de rumbo y etiquetas de
@@ -873,6 +878,8 @@ Detalle de piezas y cuidados en 11.5 («UbicacionManual»).
 - **Coordenadas** (lat/lng, 6 decimales) **editables** en un diálogo; acepta coma o punto y valida ±90 / ±180.
 - **«Usar mi última posición»:** copia punto y rumbo de la última foto del video más reciente; **no** confirma sola.
   Deshabilitado si no hay videos anteriores.
+- **«Calibrar mi paso»** (2026-10-12): fila bajo «Usar mi última posición» que muestra la longitud en uso («0,72 m (valor genérico)» o «… (calibrada)»)
+  y navega a `admin/calibracion` (7.3b). La longitud se lee al abrir la pantalla; al volver de la calibración se relee.
 - **Nombre del video** autonumerado (`video_N`, constante `PREFIJO_VIDEO`; máx. 40 caracteres); vacío = el sugerido.
 - **«Confirmar y comenzar»** deshabilitado hasta que haya punto. **No crea el video:** emite
   `UbicacionManualEvento.Confirmado(InicioRecoleccion)` (`domain/model/InicioRecoleccion.kt`).
@@ -881,6 +888,69 @@ Detalle de piezas y cuidados en 11.5 («UbicacionManual»).
 Falta: la **foto de referencia** y el **badge de brújula «N»** del diseño no se hicieron (no hay especificación de la
 foto; Leaflet no rota el mapa). «Confirmar y comenzar» **ya entrega** `InicioRecoleccion` a la vista 7.4 por
 `SesionDeRecoleccion` (11.6, decisión abierta 15) y `AppNav` navega a `admin/recoleccion` (11.8).
+
+---
+
+### 7.3b Calibración de la longitud de paso — `ui/admin/calibracion/CalibracionScreen.kt`
+
+*(Vista nueva sin diseño de referencia: no hay imagen en `assets/`. Se llega desde la fila «Calibrar mi paso» de 7.3.)*
+
+**Propósito:** medir la longitud de paso **real del admin** con **una sola pasada** sobre un tramo de distancia conocida, para que el PDR
+convierta pasos en metros con su paso y no con el valor genérico (0,72 m). Es la respuesta a la decisión abierta 16.
+
+**Flujo (fases `PUNTOS → LISTO → CAMINANDO → RESULTADO → GUARDADA`):**
+1. **Marcar el tramo:** el admin toca el mapa para fijar **A** (inicio) y **B** (fin); ambos se pueden arrastrar. La distancia A→B sale de la
+   fórmula de haversine. «Limpiar puntos» los borra. Recomendado un tramo de **30 m o más** (mínimo 10 m).
+2. **Inicio:** fija la posición del PDR en A, arranca el contador de pasos y anota los pasos de partida.
+3. **Caminar** de A a B **como lo hará al recolectar** (mismo ritmo y forma de llevar el teléfono). Se muestran tramo, pasos y tiempo.
+4. **Fin:** pasos = (`PdrEstado.pasos` al final) − (al inicio); `longitud = distancia / pasos`.
+5. **Resultado:** si es válido muestra la longitud (y, solo como información, cadencia y velocidad); el admin puede **Guardar**, **Repetir** o
+   cancelar. **Restablecer** vuelve al valor genérico de 0,72 m.
+
+**Validación** (orden: tramo → pasos → rango): tramo ≥ 10 m, ≥ 15 pasos y longitud entre 0,40 y 1,20 m. Los umbrales de 10 m y 15 pasos son
+**elección propia** (constantes de `CalibracionPaso`); el rango viene del encargo. Un valor guardado fuera de rango se ignora.
+
+**Qué hace con el resultado:** se guarda en el dispositivo (`SharedPreferences` `campus_calibracion`) y **reemplaza** el valor genérico: al
+crear un `PdrTracker`, la longitud se lee una sola vez, y de ahí en adelante `distanciaMetros = pasos × longitud calibrada` en la
+recolección (7.4: contadores, disparador por distancia, deriva y trayectoria), sin más cambios (11.2).
+
+**Estado de implementación (2026-10-12):** implementada en cinco baches (C1–C4 entregados; C5, integración, hecha salvo lo indicado abajo).
+
+| Módulo | Archivos | Detalle |
+|---|---|---|
+| Dominio | `domain/usecase/CalibracionPaso.kt` (`CalibracionPaso`, `ResultadoCalibracion`, `MotivoInvalido`) | Lógica pura; 11.7 |
+| Almacenamiento | `data/repository/CalibracionPasoRepository.kt` | `SharedPreferences`; 11.6 |
+| PDR | parches a `sensors/PdrEngine.kt` y `sensors/PdrTracker.kt` | `LONGITUD_PASO_DEFECTO_M` y parámetro `longitudPasoM`; 11.2 |
+| Estado y lógica | `ui/admin/calibracion/CalibracionState.kt`, `CalibracionViewModel.kt` | Su propio `PdrTracker`; 11.5 |
+| Mapa A→B | `assets/calibracion_mapa.html`, `assets/calibracion_mapa.js`, `ui/admin/calibracion/componentes/MapaCalibracion.kt` | Puente `CalibracionBridge` (11.5 y 11.9) |
+| Pantalla | `ui/admin/calibracion/CalibracionScreen.kt` | Sin scroll: el mapa ocupa el espacio sobrante (mín. 180 dp) |
+| Pruebas | `test/.../domain/usecase/CalibracionPasoTest.kt` | JUnit4, **no ejecutado en Gradle** |
+| Navegación | `MainActivity.kt` (`Permisos.ACTIVIDAD`, ruta `admin/calibracion`), punto de entrada en `UbicacionManualScreen.kt` | 11.3 y 11.8 |
+
+**Verificado:** `CalibracionPaso.kt` y `PdrEngine.kt` compilan con kotlinc 2.0.21 y pasan 13 comprobaciones (haversine ≈ 33,4 m para
+0,0003° de latitud; `longitud = distancia/pasos`; los cuatro motivos de rechazo; límites 0,40 y 1,20 m válidos; `duracionS = 0` sin
+romper; sin posición no cuenta pasos; `distancia = pasos × longitud inyectada`; valor por defecto 0,72). El proyecto compila con todas las
+piezas y la pantalla se abre en dispositivo desde 7.3. **Error corregido en dispositivo:** el mapa salía en negro porque
+`calibracion_mapa.js` llamaba a `base.crearMapa(...)` (no existe) en vez de `MapaBase.crearMapa(...)` (11.9).
+⚠ **Falta la prueba funcional completa:** calibrar en un tramo de ≥ 30 m, guardar, iniciar una recolección y comprobar que
+`distanciaMetros ≈ pasos × longitud guardada` y que el disparador de 5 m dispara cada ≈ `5 / longitud` pasos.
+
+**Decisiones tomadas:**
+- **Calibración por dispositivo con una sola pasada A→B**, no por cadencia ni por altura: resuelve la decisión abierta 16 (longitud de paso).
+- La longitud se **inyecta en `PdrTracker`** (parámetro del constructor) y se lee **una sola vez, al crearlo**: recalibrar no cambia un tracker ya creado.
+- La calibración usa **su propio `PdrTracker`** y mide por **resta** de `PdrEstado.pasos` (Fin − Inicio), porque `PdrEngine.onPaso` no cuenta pasos sin posición inicial.
+- Valor genérico por defecto **0,72 m** (`PdrEngine.LONGITUD_PASO_DEFECTO_M`). El encargo decía 0,70 m: **sin confirmar**; basta cambiar la constante.
+- Almacén `SharedPreferences` sin cifrar (`campus_calibracion`): `longitud_paso_m`, `pasos`, `distancia_m`, `fecha_ms`. No es un dato sensible y no hay un almacén genérico de preferencias.
+- Pantalla **sin scroll**: un `WebView` dentro de un scroll vertical se pelea con el arrastre del mapa.
+
+**Pendiente / fuera de alcance:**
+- **Probar la pasada completa en dispositivo** (ver arriba) y **ejecutar `CalibracionPasoTest`** en Gradle.
+- **Promediar varias pasadas** (hoy una sola medición, sin historial).
+- **Guardar con qué fuente de pasos se calibró** (`FuentePasos`): calibrar con el acelerómetro y recolectar con el sensor de hardware (o al revés) invalida la longitud sin aviso; hoy solo se avisa en pantalla tras el primer «Inicio».
+- Relación con la unidad «metros / pasos» de Ajustes (6.7).
+- La precisión depende de **marcar bien A y B**: con ~2 m de error total, un tramo de 10 m da hasta ~20 % de error y uno de 30 m, ~7 %.
+- **Sin internet el mapa no carga** y no se pueden marcar A y B: la calibración es inutilizable sin mapa (decisión 13).
+- **No corrige la deriva de la brújula** ni hace fusión (`domain/fusion/`).
 
 ---
 
@@ -939,6 +1009,7 @@ continua** (`manifest.json` actualizado en cada foto) y la pantalla se mantiene 
 - **Almacenamiento propio** (`RecoleccionRepository`), separado de `VideoRepository`: éste es la fuente de verdad (futuro `RemoteVideoRepository`); no se amplió como pedía 11.6. Ver «Pendiente» más abajo.
 - Fotos y manifest en `files/recoleccion/<rec_NNNN>/photos/NNNN.jpg` y `manifest.json` (misma forma que `assets/videos/`); prefijo `rec_` para no chocar con los datos de prueba (`vid_`); fechas en ISO-8601 (`yyyy-MM-dd'T'HH:mm:ssXXX`).
 - Deriva estimada = 4 % de la distancia desde el último ancla (heurística provisional; decisión abierta 16).
+- **Distancia = pasos × longitud de paso calibrada** (7.3b; 0,72 m si no hay calibración): el `PdrTracker` de 7.4 la lee una vez al crearse, así que calibrar **antes** de entrar a 7.4.
 
 **Pendiente / fuera de alcance:**
 - **«Marcar punto de interés»:** el botón se dibuja **deshabilitado** («Próximamente»); depende de 7.6 y 7.7.
@@ -1458,15 +1529,17 @@ foco al abrir.
     público** (el destino elegido, la posición estimada, si hay ubicación vigente): la opción natural es el mismo
     patrón (por ejemplo `SesionDeNavegacion`, único por proceso, con `StateFlow`). Hay que decidirlo antes de 6.3 y
     6.5; al hacerlo, actualizar 11.8.
-16. **Longitud de paso del PDR:** hoy es fija (0,72 m en `PdrEngine`). Opciones: calcularla según la
-    cadencia (a más ritmo, paso más largo) o calibrarla por usuario en una primera sesión (ver 9).
+16. **Longitud de paso del PDR:** **resuelta** con la calibración por dispositivo de 7.3b (una pasada A→B; se guarda y
+    reemplaza el 0,72 m genérico, que queda solo como valor por defecto). **Sigue abierto:** la deriva de la brújula, la deriva
+    estimada de 7.4 (heurística provisional del 4 %, que habrá que reemplazar cuando exista corrección visual) y si conviene
+    promediar varias pasadas o guardar con qué fuente de pasos se calibró (ver 7.3b).
 
 ---
 
 ## 9. Notas para quien implemente
 
-- La **calibración del PDR** (longitud de paso, deriva de la brújula) es crítica: conviene
-  una pantalla/etapa de calibración en la primera sesión del admin.
+- La **calibración de la longitud de paso** ya existe (7.3b): pedirle al admin que calibre en un tramo de 30 m o más **antes de la
+  primera recolección** y que **camine igual** que al calibrar. Falta la calibración de la **deriva de la brújula**.
 - Las capturas deben tener **control de calidad** (blur, exposición) antes de enviarse.
 - Las subidas deben tolerar **mala conexión** (cola local con reintentos).
 - Mantener un **registro de pruebas reales en dispositivo físico**: el emulador no
@@ -1478,7 +1551,7 @@ foco al abrir.
 - Probar el mapa en un **dispositivo físico**: los sensores llegan por `AndroidBridge` y el
   emulador no los reproduce bien. Si el mapa sale en blanco, revisar conexión a internet y
   que el `WebView` tenga JavaScript activado.
-- **PDR:** la posición acumula error (longitud de paso fija, deriva de la brújula) y todavía no hay
+- **PDR:** la posición acumula error (longitud de paso calibrada una sola vez, deriva de la brújula) y todavía no hay
   corrección visual. Probarlo caminando un recorrido conocido en un dispositivo físico antes de
   usarlo para etiquetar fotos (7.4).
 - Los sensores del PDR solo se liberan al salir de la composición (`PdrTracker.liberar()`): no hay
@@ -1495,9 +1568,9 @@ foco al abrir.
 
 ## 10. Estado de implementación
 
-> Resumen de lo que **ya existe en el código** (actualizado el 2026-10-11). Solo se listan vistas
+> Resumen de lo que **ya existe en el código** (actualizado el 2026-10-12). Solo se listan vistas
 > implementadas o parciales; las demás aparecen en las secciones 5 a 7 y siguen pendientes
-> (6.3, 6.5 a 6.7, 7.5 a 7.7, 7.10, 7.12 y 7.15; la 7.3 y la 7.4 ya están implementadas). Cuando una vista avance, se actualiza esta tabla.
+> (6.3, 6.5 a 6.7, 7.5 a 7.7, 7.10, 7.12 y 7.15; la 7.3, la 7.3b y la 7.4 ya están implementadas). Cuando una vista avance, se actualiza esta tabla.
 >
 > **Estado:** *Implementada* = pantalla funcional (puede depender de un stub o de datos locales);
 > *Parcial* = existe solo una parte de lo descrito en su sección.
@@ -1511,7 +1584,8 @@ foco al abrir.
 | 6.4 | Selección de destino — `ui/destino/SeleccionDestinoScreen.kt` | Implementada | **Stub** (`LugaresRepository`) | Backend (`GET /places`) con distancias reales; fotos de lugares (hoy ícono si no hay `imagenUrl`); pasar el destino a 6.5 tras el escaneo; ordenar por popularidad |
 | 7.1 | Login — `ui/auth/LoginScreen.kt` | Implementada | **Stub** (`AuthRepository`) | Reemplazar por Retrofit/Ktor con `ApiConfig.kt` |
 | 7.2 | Panel admin — `ui/admin/panel/PanelAdminScreen.kt` | Implementada | **Stub** (`AdminRepository`) | Reemplazar por la implementación real |
-| 7.3 | Ubicación manual inicial — `ui/admin/recoleccion/UbicacionManualScreen.kt` | Implementada (⚠ Kotlin sin compilar) | Local (`assets/`) | «Confirmar y comenzar» ya entrega `InicioRecoleccion` a 7.4 (`SesionDeRecoleccion`); foto de referencia y badge «N» del diseño sin hacer; el nombre `video_N` choca con los ejemplos `video3` del documento (decisión por tomar) |
+| 7.3 | Ubicación manual inicial — `ui/admin/recoleccion/UbicacionManualScreen.kt` | Implementada (compila y se abre en dispositivo) | Local (`assets/`) | «Calibrar mi paso» abre 7.3b y muestra la longitud en uso; «Confirmar y comenzar» ya entrega `InicioRecoleccion` a 7.4 (`SesionDeRecoleccion`); foto de referencia y badge «N» del diseño sin hacer; el nombre `video_N` choca con los ejemplos `video3` del documento (decisión por tomar) |
+| 7.3b | Calibración de la longitud de paso — `ui/admin/calibracion/CalibracionScreen.kt` | Implementada (compila y se abre en dispositivo; ⚠ pasada completa sin probar) | Local (`SharedPreferences`) | Probar A→B + guardado + recolección con la longitud calibrada; ejecutar `CalibracionPasoTest`; promediar pasadas; guardar la fuente de pasos |
 | 7.4 | Recolección en curso — `ui/admin/recoleccion/RecoleccionScreen.kt` | Implementada | Local (`files/recoleccion/`) | «Marcar punto de interés» (depende de 7.6 y 7.7); foto borrosa y poca luz (control de calidad sin uso); alertas existentes y persistencia de las nuevas (sin `AlertasRepository`); retomar tras matar el proceso; subida al backend; vista 7.5; ver lo recolectado en Galería/Videos (repositorio compuesto); brújula «N» y satélite del diseño |
 | 7.8 | Editor de mapa y alertas — `ui/admin/mapa/EditorMapaScreen.kt` | Implementada | Local; sincronización **simulada** | Capas de cobertura y rutas sin datos; repositorio local (Room) y API real (`/admin/alerts`); posición real del admin |
 | 7.9 | Formulario de alerta — `ui/admin/mapa/AlertaFormSheet.kt` | Implementada | Local | Dictado por voz, "Escuchar cómo sonará", vigencia y "Ajustar en el mapa" |
@@ -1529,15 +1603,17 @@ foco al abrir.
 | Registro de eventos | Implementada | `MyApp.kt`, `logs/AppLog.kt` | Logcat y archivo; captura de crashes |
 | Configuración del backend | Implementada | `ApiConfig.kt` | URL base |
 | Sensores y cámara | Implementada | `sensors/OrientationProvider.kt`, `camera/CapturaFoto.kt` | `camera/CalidadImagen.kt` sin uso por ahora |
-| Seguimiento de posición (PDR) | Implementada (⚠ sin probar en dispositivo) | `sensors/PdrEngine.kt`, `sensors/StepDetector.kt`, `sensors/PdrTracker.kt` | Longitud de paso fija; sin corrección visual ni fusión (`domain/fusion/`); sin manejo de `ON_STOP` propio (la recolección lo pausa desde su ViewModel, ver 11.2) |
+| Seguimiento de posición (PDR) | Implementada (⚠ sin probar en dispositivo) | `sensors/PdrEngine.kt`, `sensors/StepDetector.kt`, `sensors/PdrTracker.kt` | Longitud de paso calibrable (7.3b; 0,72 m por defecto, se lee una vez al crear el tracker); sin corrección visual ni fusión (`domain/fusion/`); sin manejo de `ON_STOP` propio (la recolección lo pausa desde su ViewModel, ver 11.2) |
 | Mapa Leaflet público | Implementada (⚠ sin probar en dispositivo) | `assets/index.html`, `assets/app.js`, `map/MapaPublicoScreen.kt`, `map/PuentePdr.kt` | Solo dibuja: la posición la calcula `PdrTracker`. Aloja la ruta `admin/ubicacion-manual`. Dependencias externas en línea (decisión 13); botón GPS sin geolocalización (decisión 14) |
 | Mapa del editor de alertas | Implementada | `assets/editor_mapa.html`, `assets/editor_mapa.js`, `assets/mapa_base.js`, `map/MapaWebView.kt` | Puente `EditorBridge`. Usa la base común (11.9; ⚠ Kotlin sin compilar) |
 | Mapa del detalle de video | Implementada | `assets/video_detalle.html`, `assets/video_detalle.js`, `assets/mapa_base.js`, `map/MapaWebView.kt` | Puente `VideoBridge`. Usa la base común (11.9; ⚠ Kotlin sin compilar) |
 | Mapa de la ubicación manual | Implementada (⚠ Kotlin sin compilar) | `assets/ubicacion_manual.html`, `assets/ubicacion_manual.js`, `ui/admin/recoleccion/UbicacionManualScreen.kt` | Puente `UbicacionBridge` (11.5). Usa `MapaWebView` (11.9) con `pasarInsets = false` y `manejarAtras = false`; **no** usa `MapaBase.iniciar` (⚠ no se revisó `mapa_base.js`) |
 | Mapa en vivo de la recolección | Implementada | `assets/recoleccion_mapa.html`, `assets/recoleccion_mapa.js`, `ui/admin/recoleccion/componentes/MapaRecoleccion.kt` | Puente `RecoleccionBridge` (11.5). Usa `MapaBase.iniciar`/`crearMapa` y `MapaWebView` con `pasarInsets = false` y `manejarAtras = false` (11.9); teselas de OSM en línea (decisión 13) |
 | Captura automática y deriva | Implementada | `domain/usecase/DisparadorCaptura.kt` | Lógica pura (`DisparadorCaptura`, `ModoCaptura`, `Deriva`); testeable sin emulador, aún sin pruebas. Deriva provisional (decisión 16) |
+| Calibración de la longitud de paso | Implementada (⚠ lógica verificada con kotlinc; resto sin probar a fondo) | `domain/usecase/CalibracionPaso.kt`, `data/repository/CalibracionPasoRepository.kt`, `ui/admin/calibracion/` | Ver 7.3b y 11.5 a 11.7. `sensors` ahora depende de `data.repository` |
+| Mapa de la calibración | Implementada | `assets/calibracion_mapa.html`, `assets/calibracion_mapa.js`, `ui/admin/calibracion/componentes/MapaCalibracion.kt` | Puente `CalibracionBridge` (11.5). Usa `MapaBase.iniciar` y `MapaBase.crearMapa` (11.9) y `MapaWebView` con `pasarInsets = false` y `manejarAtras = false`; teselas de OSM en línea (decisión 13) |
 | Almacenamiento de la recolección | Implementada | `data/repository/RecoleccionRepository.kt`, `domain/model/SesionRecoleccion.kt`, `domain/model/FotoRecolectada.kt` | `files/recoleccion/<rec_NNNN>/`; separado de `VideoRepository` (11.6): lo recolectado aún no se ve en Galería/Videos |
-| Repositorios | Mixto | `data/repository/` | `AuthRepository`, `AdminRepository` y `LugaresRepository` son stubs; `VideoRepository` tiene implementación local (`AssetsVideoRepository`); `RecoleccionRepository` tiene `RecoleccionRepositoryLocal` (`files/recoleccion/`) |
+| Repositorios | Mixto | `data/repository/` | `AuthRepository`, `AdminRepository` y `LugaresRepository` son stubs; `VideoRepository` tiene implementación local (`AssetsVideoRepository`); `RecoleccionRepository` tiene `RecoleccionRepositoryLocal` (`files/recoleccion/`); `CalibracionPasoRepository` guarda la longitud de paso en `SharedPreferences` (`campus_calibracion`) |
 | Modelos de dominio | Implementada | `domain/model/` | `Usuario`, `Rol`, `Sesion`, `ResumenAdmin`, `Alerta`, `Lugar`, `LugarDestino`, `CategoriaLugar`, `Foto`, `Video`, `EstadoFoto`, `CalidadFoto`, `InicioRecoleccion`, `FotoRecolectada`, `DatosFoto`, `ResumenRecoleccion`, `SesionDeRecoleccion` |
 | Componentes y tema compartidos | Parcial | `ui/theme/CampusColors.kt`, `ui/components/BannerEstado.kt` | `GaleriaColores` (galería y lista de videos) debe moverse a `CampusColors.kt` |
 | Carga de imágenes | Implementada | Coil (`io.coil-kt:coil-compose:2.7.0`) | Lee `file:///android_asset/...` y, más adelante, URLs prefirmadas de S3 |
@@ -1616,14 +1692,14 @@ a través de `map/MapaPublicoScreen.kt`; la recolección (7.4, ya lo usa desde `
 
 | Pieza | Firma | Qué hace / cuidado |
 |---|---|---|
-| `PdrEngine` | `PdrEngine(longitudPasoM = 0.72, ventanaRumbo = 6, ventanaVelocidadMs = 5000)` | Lógica pura, sin Android (se puede probar con tests unitarios). Propiedades de lectura: `lat`, `lng` (`Double?`), `rumbo`, `pasos`, `distanciaMetros`, `velocidadMps`. |
+| `PdrEngine` | `PdrEngine(longitudPasoM = LONGITUD_PASO_DEFECTO_M, ventanaRumbo = 6, ventanaVelocidadMs = 5000)` · `companion { const val LONGITUD_PASO_DEFECTO_M = 0.72 }` | Lógica pura, sin Android (se puede probar con tests unitarios). Propiedades de lectura: `lat`, `lng` (`Double?`), `rumbo`, `pasos`, `distanciaMetros`, `velocidadMps`. |
 | `PdrEngine.fijarPosicion` | `(lat, lng)` | Fija el punto de partida y la posición actual. **No** reinicia `pasos`. |
 | `PdrEngine.reiniciar` | `()` | Pasos y velocidad a 0 y vuelve al punto de partida. |
 | `PdrEngine.onRumboSensor` | `(grados: Float)` | Promedio circular de las últimas 6 lecturas (359° y 1° dan 0°, no 180°). |
 | `PdrEngine.fijarRumboManual` | `(grados: Float)` | Rumbo directo, sin promedio (rueda manual). |
 | `PdrEngine.onPaso` | `(tMs: Long): Boolean` | Avanza `longitudPasoM` hacia `rumbo`; devuelve `false` si aún no hay posición inicial. Velocidad: pasos de los últimos 5 s (n − 1 intervalos). |
 | `StepDetector` | `procesar(x, y, z, tMs, detectar = true): Boolean` · `ultimaDesviacion` · `reiniciar()` | Detector por acelerómetro (respaldo). Constantes: `UMBRAL` = 2,2 m/s² sobre la gravedad, `PAUSA_MS` = 280 ms entre pasos, `GRAVEDAD` = 9,81. Con `detectar = false` solo actualiza la desviación. |
-| `PdrTracker` | `PdrTracker(context)` | Une los sensores de Android con `PdrEngine`. Todo en el **hilo principal**. |
+| `PdrTracker` | `PdrTracker(context, longitudPasoM: Double = CalibracionPasoRepository(context).longitudPasoM())` | Une los sensores de Android con `PdrEngine`. Todo en el **hilo principal**. La longitud de paso (calibrada en 7.3b, o 0,72 m) se lee **una sola vez al crearlo**: recalibrar no cambia un tracker ya vivo. ⚠ `sensors` depende ahora de `data.repository` (alternativa: que la pantalla inyecte la longitud). |
 | `PdrTracker` (control) | `fijarPosicion(lat, lng)` · `fijarRumboManual(grados)` · `reiniciar()` · `iniciar()` · `detener()` · `liberar()` | Orden típico: `fijarPosicion` → `iniciar` → `detener` / `liberar` al salir. |
 | `PdrTracker.estado` | `StateFlow<PdrEstado>` | `lat`, `lng`, `rumboGrados`, `pasos`, `distanciaMetros`, `velocidadMps`, `activo`, `fuentePasos` (`FuentePasos`: `NINGUNA`, `HARDWARE`, `ACELEROMETRO_SIN_PERMISO`, `ACELEROMETRO_SIN_SENSOR`). |
 | `PdrTracker.eventos` | `SharedFlow<PdrEvento>` | Avisos de una sola vez, en cada `iniciar()`: `Brujula(disponible)` y `PasosPorAcelerometro(motivo)` (`permission_denied` / `no_sensor`). |
@@ -1640,8 +1716,8 @@ val e by tracker.estado.collectAsStateWithLifecycle()   // e.lat, e.lng, e.rumbo
 ```
 
 Cuidados:
-- **La posición no depende de la velocidad ni de la aceleración:** es `pasos × 0,72 m` en dirección del
-  rumbo. La velocidad solo es informativa y el acelerómetro solo detecta pasos (si no hay sensor de
+- **La posición no depende de la velocidad ni de la aceleración:** es `pasos × longitud de paso` (la calibrada en 7.3b, o 0,72 m
+  por defecto) en dirección del rumbo. La velocidad solo es informativa y el acelerómetro solo detecta pasos (si no hay sensor de
   hardware) y alimenta la gráfica.
 - **Pasos:** `TYPE_STEP_DETECTOR` si existe y hay permiso `ACTIVITY_RECOGNITION` (Android 10+); si no,
   `StepDetector`. El acelerómetro corre siempre mientras el rastreo está activo (gráfica), aunque los
@@ -1658,6 +1734,9 @@ Cuidados:
 - `rumboGrados` vale 0 hasta la primera lectura: filtrar por `activo` antes de mostrarlo.
 - Los sensores no siguen el ciclo de vida: solo se liberan en `liberar()` (⚠ siguen activos en
   segundo plano). `RecoleccionViewModel` lo resuelve para 7.4: la pausa llama a `tracker.detener()` y la pantalla pausa sola en `ON_STOP` (ver «Flujo de captura de la recolección»).
+- **Longitud de paso (7.3b):** `RecoleccionViewModel` y `MapaPublicoScreen` crean `PdrTracker(app)` sin argumentos y recogen la longitud calibrada
+  sin cambios. `distanciaMetros` es `pasos × longitud`, así que el disparador por distancia de 7.4 dispara cada ≈ `metros / longitud` pasos.
+  La calibración usa **su propio** `PdrTracker` (`CalibracionViewModel`): si otra pantalla dejara uno sin liberar, habría dos escuchando sensores.
 - ⚠ `app.js` repite el umbral de 2,2 (`accelThreshold`) solo para dibujar la línea de la gráfica: debe
   coincidir con `StepDetector.UMBRAL`.
 
@@ -1765,6 +1844,7 @@ Comportamiento:
 - **Reloj:** tiempo de grabación sin contar pausas (`elapsedRealtime`). Cada 30 s revisa la batería (aviso con ≤ 15 % y sin cargar) y el almacenamiento (aviso con < 200 MB; pausa sola con < 50 MB).
 - **Finalizar:** con 0 fotos el video se **borra** (`repo.descartar`) y se emite `Descartado`; si no, `repo.finalizar` y `Finalizado(resumen)`.
 - **Trayectoria:** un punto cada 3 pasos (`trayectoriaJson`).
+- **Distancia:** `pasos × longitud de paso` del `PdrTracker` (calibrada en 7.3b, leída una vez al crearlo en `alAbrir`; 0,72 m si nunca se calibró).
 
 Cuidados:
 - Una foto que se está guardando en el instante del re-anclaje puede quedar con la coordenada vieja.
@@ -1795,7 +1875,7 @@ Cuidados:
 
 | Pieza | Ubicación | Cómo se usa | Cuidado |
 |---|---|---|---|
-| `Permisos` | `MainActivity.kt` (`object`) | `Permisos.CAMARA`, `Permisos.MICROFONO`, `Permisos.INICIALES: Array<String>` | Verificado. `INICIALES` = cámara + micrófono + `ACTIVITY_RECOGNITION` (esta última **solo desde Android 10**; en versiones anteriores no se pide). Se piden en un solo diálogo al abrir Inicio, una vez por entrada de navegación (bandera `rememberSaveable`), y Inicio se muestra aunque se niegue alguno. |
+| `Permisos` | `MainActivity.kt` (`object`) | `Permisos.CAMARA`, `Permisos.MICROFONO`, `Permisos.INICIALES: Array<String>`, `Permisos.ACTIVIDAD: Array<String>` | Verificado. `INICIALES` = cámara + micrófono + `ACTIVITY_RECOGNITION` (esta última **solo desde Android 10**; en versiones anteriores no se pide). Se piden en un solo diálogo al abrir Inicio, una vez por entrada de navegación (bandera `rememberSaveable`), y Inicio se muestra aunque se niegue alguno. `ACTIVIDAD` = solo `ACTIVITY_RECOGNITION` desde Android 10 (lista **vacía** antes: `PedirPermisos` llama entonces a `onResultado(true)` sin diálogo); la usa la ruta `admin/calibracion`. |
 | `PedirPermisos(permisos: Array<String>, onResultado: (todosConcedidos: Boolean) -> Unit)` | `MainActivity.kt` | Se pone en la **ruta**, antes de la pantalla: si ya están concedidos llama a `onResultado(true)` sin mostrar nada (ver la ruta `ubicarme`). | Verificado. Al entrar comprueba `checkSelfPermission` y lanza el diálogo **solo con los que faltan**; el resultado es `true` si todos **los pedidos** se concedieron. Se llama desde un `LaunchedEffect(Unit)`, es decir, **después** de la primera composición (no dibujar nada que dependa del resultado antes). No explica por qué se pide ni abre Ajustes si el permiso quedó negado de forma permanente: en ese caso el diálogo ni aparece y `onResultado(false)` llega al instante. En `ubicarme`, si se niega la cámara la ruta hace `popBackStack()` **sin mostrar ningún mensaje**. En la ruta `inicio` el resultado se **ignora** (se marca `permisosPedidos = true` sea cual sea) y, mientras sale el diálogo, no se dibuja nada. |
 | Ayudas de Inicio (`permisosNecesarios`, `permisosFaltantes`, `BannerPermisos`, `abrirAjustesApp`) | `ui/inicio/InicioScreen.kt` | — | Verificado. Son `private`: **no** se pueden reutilizar. Candidato a extraer a `ui/components/`. `permisosNecesarios()` **repite** la lista de `Permisos.INICIALES` y la pantalla pide los permisos por su cuenta además de la ruta (⚠ ver Inicio en 11.5). |
 | Comprobación de cámara en Escaneo | `EscaneoScreen.kt` | `checkSelfPermission(CAMERA)` y, si falta, `RequestPermission` | **Duplica** lo que ya hace `PedirPermisos` en la ruta `ubicarme`; sirve de red de seguridad. Si se niega muestra "Necesito permiso de cámara" sin opción de reintento. |
@@ -1869,7 +1949,8 @@ pinta sus colores a mano. Un tema propio sería el sitio natural para unificar l
 | `CategoriaLugar.icono()` | ídem | `internal` | Ícono de cada categoría (el dominio no conoce Compose). Verificado: es un `when` **exhaustivo, sin `else`**, así que una categoría nueva no compila hasta que se le asigne ícono. Tabla abajo. |
 | `AlertaFormSheet` | `ui/admin/mapa/AlertaFormSheet.kt` (`public`) | `(alerta: Alerta, esNueva: Boolean, error: String?, onCambio: (Alerta) -> Unit, onGuardar, onCancelar, onEliminar)` | Hoja inferior (`ModalBottomSheet`) para crear o editar una alerta (vista 7.9). Detalle abajo. |
 | `MapaPublicoScreen` | `map/MapaPublicoScreen.kt` (`public`) | `MapaPublicoScreen(modifier: Modifier = Modifier)` | Mapa público (`index.html` + `app.js`) en un `WebView` con seguimiento por pasos. Crea su propio `PdrTracker`, registra el puente `AndroidBridge` (`PuentePdr`) y empuja la posición, el rumbo y los avisos a la página (tabla en 2.6). Aplica `systemBarsPadding()` (el mapa no maneja *insets*). Libera sensores y `WebView` al salir. Hoy lo aloja `admin/ubicacion-manual` (11.8). |
-| `UbicacionManualScreen` / `UbicacionManualContent` | `ui/admin/recoleccion/UbicacionManualScreen.kt` (`public`) | `UbicacionManualScreen(onVolver, onConfirmar: (InicioRecoleccion) -> Unit, onAjustes = {}, viewModel = viewModel(factory = …))` · `UbicacionManualContent(estado, acciones, modifier)` | Vista 7.3 completa (detalle abajo, «UbicacionManual»). Sustituye a `MapaPublicoScreen` en la ruta `admin/ubicacion-manual`. |
+| `CalibracionScreen` / `CalibracionContent` | `ui/admin/calibracion/CalibracionScreen.kt` (`public`) | `CalibracionScreen(onVolver, modifier, vm = viewModel())` · `CalibracionContent(ui, acciones, modifier)` | Vista 7.3b completa (detalle abajo, «CalibracionScreen y CalibracionBridge»). **No navega.** |
+| `UbicacionManualScreen` / `UbicacionManualContent` | `ui/admin/recoleccion/UbicacionManualScreen.kt` (`public`) | `UbicacionManualScreen(onVolver, onConfirmar: (InicioRecoleccion) -> Unit, onAjustes = {}, onCalibrar = {}, viewModel = viewModel(factory = …))` · `UbicacionManualContent(estado, acciones, modifier, longitudCalibradaM: Double? = null)` | Vista 7.3 completa (detalle abajo, «UbicacionManual»). Sustituye a `MapaPublicoScreen` en la ruta `admin/ubicacion-manual`. |
 | `EditorMapaScreen` / `EditorMapaContent` | `ui/admin/mapa/EditorMapaScreen.kt` (`public`) | `EditorMapaContent(alertasJson, lugaresJson, pendientes, borradorJson, eventos, modifier, miPosicion)` | Mapa web de alertas dentro de un `WebView` (vista 7.8). Detalle abajo. |
 | `FilaCategorias`, `CampoBusqueda`, `EncabezadoLista`, `FilaLugar`, `EstadoVacio`, `BotonVolver` | `ui/destino/componentes/ListaLugares.kt` | `FilaCategorias(seleccionada: CategoriaLugar?, onElegir: (CategoriaLugar?) -> Unit)` · `CampoBusqueda(texto: String, onCambio: (String) -> Unit)` · `EncabezadoLista(orden: OrdenLugares, onCambiarOrden: () -> Unit)` · `FilaLugar(lugar: LugarDestino, onClick: () -> Unit)` · `EstadoVacio(mensaje: String?, accion: String, onAccion: () -> Unit)` · `BotonVolver(onClick: () -> Unit)` | Verificado contra el código (bache 2). Propios de Destino salvo `EstadoVacio` y `BotonVolver`, que son genéricos. Todos públicos; `ChipCategoria` es privado. Detalle abajo. |
 | `EncabezadoPregunta`, `TarjetaOpciones` | `ui/destino/componentes/PanelesVoz.kt` | `EncabezadoPregunta()` · `TarjetaOpciones(opciones: List<LugarDestino>, onElegir: (LugarDestino) -> Unit)` | Verificadas contra el código (bache 2): las firmas coinciden con las llamadas de `SeleccionDestinoScreen`. `TarjetaOpciones` muestra las coincidencias cuando hay varias (11.5, Destino). Detalle abajo. |
@@ -2136,7 +2217,7 @@ Cuidados:
 | `UbicacionManualViewModel` | `ViewModel(videos: VideoRepository, lugares: LugaresRepository)`; `Factory(appContext)` crea `AssetsVideoRepository` y `LugaresRepositoryStub` (**espera el contexto de la aplicación**). Estado en `ui: StateFlow<UbicacionManualUiState>`. Eventos por `Channel(BUFFERED)` + `receiveAsFlow()` (un solo colector; no se pierden). |
 | `UbicacionManualUiState` | `lugares`, `punto: PuntoMapa?` (`null` hasta tocar el mapa), `rumbo` (0…360), `brujulaDisponible`, `usandoBrujula`, `cargandoUltima`, `ultimaPosicion: UltimaPosicion?`, `ultimaAplicada`, `nombreVideo`, `nombreSugerido`, `edicion: EdicionCoordenada?`, `centrarSolicitud: Int`, `confirmando`. Calculadas: `puedeConfirmar` (hay punto y no está confirmando), `latitudTexto`, `longitudTexto` (6 decimales, siempre con punto). |
 | `UbicacionManualEvento` | Solo `Confirmado(inicio: InicioRecoleccion)`. **No navega.** |
-| `UbicacionManualAcciones` | `data class` con 13 lambdas (`{}` por defecto): `onVolver`, `onAjustes`, `onPuntoCambiado(lat, lng)`, `onRumbo`, `onAlternarBrujula`, `onEditarCoordenada`, `onTextoEdicion`, `onAceptarEdicion`, `onCancelarEdicion`, `onUsarUltima`, `onNombre`, `onCancelar`, `onConfirmar`. |
+| `UbicacionManualAcciones` | `data class` con 14 lambdas (`{}` por defecto): `onVolver`, `onAjustes`, `onPuntoCambiado(lat, lng)`, `onRumbo`, `onAlternarBrujula`, `onEditarCoordenada`, `onTextoEdicion`, `onAceptarEdicion`, `onCancelarEdicion`, `onUsarUltima`, `onNombre`, `onCancelar`, `onConfirmar`, `onCalibrar`. |
 | `InicioRecoleccion` | `domain/model/InicioRecoleccion.kt`: `lat`, `lng`, `rumbo` (0…360), `nombreVideo` (recortado, nunca vacío) y `continuaVideoAnterior`. Es lo que debe recibir la vista 7.4. |
 | Acciones del ViewModel | `alAbrir(brujulaDisponible)` (idempotente) · `alPausar()` (ON_STOP: apaga la brújula) · `alReanudar()` (ON_RESUME: reactiva «Confirmar») · `alMoverPunto(lat, lng)` · `alUsarUltimaPosicion()` · `alElegirRumbo(grados)` · `alAlternarBrujula()` · `alLeerBrujula(acimut)` · `alEditarCoordenada(campo)` · `alCambiarTextoEdicion` · `alAceptarEdicion()` · `alCancelarEdicion()` · `alCambiarNombre` · `alConfirmar()`. |
 | Lógica pura (`internal`, sin Android) | `Rumbo` (`normalizar`, `diferencia`, `suavizar` —promedio exponencial **circular**—, `cardinal`, `nombreCardinal`), `parsearCoordenada(texto, limite)`, `siguienteNombre(videos)` y `calcularUltimaPosicion(videos)`. Se pueden probar sin emulador. |
@@ -2153,6 +2234,7 @@ Comportamiento:
 - **Última posición:** el «último» video es el de mayor `creadoEn` (ISO-8601 ordena como texto; sin fecha, el último de la lista) y la última foto, la de mayor `capturadaEn`. Si `obtenerVideos()` falla, la fila queda deshabilitada y la vista sigue siendo usable.
 - **Nombre autonumerado:** `video_(N+1)`, con N = mayor número entre los videos llamados `video3` / `video_3`…; si ninguno cumple el patrón, la cantidad de videos. Salta nombres ya usados.
 - **Confirmar:** `confirmando` evita un doble toque; `alReanudar()` lo libera al volver a la pantalla (p. ej. desde 7.4).
+- **Calibrar mi paso (7.3b):** `FilaCalibracion` (privada) va entre «Usar mi última posición» y el nombre del video. La pantalla lee `CalibracionPasoRepository(contexto).guardada()` con `remember` (`null` = valor genérico; se relee al volver porque `NavHost` recompone la ruta) y se la pasa al contenido; no está en el `UiState` ni en el ViewModel. Tocar la fila llama a `onCalibrar`, que la ruta conecta con `navigate("admin/calibracion")` (11.8).
 - **Scroll vs. mapa:** el JS avisa `gesto(true/false)` en `touchstart` / `touchend` y la pantalla deshabilita `verticalScroll` mientras haya un dedo sobre el mapa. ⚠ Deducido, no probado: el aviso llega con un pequeño retraso.
 - **Diseño adaptable:** la tarjeta de Orientación pone dial y botón lado a lado solo si `screenWidthDp >= 380` y `fontScale <= 1,15`; si no, los apila. (No usa `BoxWithConstraints`: no admite medidas intrínsecas dentro del `Row`.)
 - **Reutiliza** `BotonIcono` y `Modifier.tarjeta` de `ui/destino/componentes/Comun.kt` (`internal`, mismo módulo). Por la regla 4 de 11, conviene moverlos a `ui/components/` cuando se toque.
@@ -2197,6 +2279,30 @@ Comportamiento y cuidados:
 - «Marcar punto de interés» está **deshabilitado**. El aviso temporal (`ui.aviso`) es una tarjeta propia que se descarta al tocarla; no usa `BannerEstado`. `ColorFinalizar` y `ColorAviso` son propios porque `CampusColors.Peligro` es morado (11.4).
 - Reutiliza `BotonIcono` y `Modifier.tarjeta` de `ui/destino/componentes/Comun.kt` (`internal`): regla 4 de 11, conviene moverlos a `ui/components/`.
 - Con fuente grande, los cuatro contadores en fila pueden apretarse. Sin brújula «N» ni giro del mapa.
+
+**`CalibracionScreen` y `CalibracionBridge` (vista 7.3b; `ui/admin/calibracion/` y `assets/calibracion_mapa.*`; entregado el 2026-10-12, compila y se abre en dispositivo, ⚠ pasada completa sin probar)**
+
+| Pieza | Detalle |
+|---|---|
+| `CalibracionViewModel(app)` | `AndroidViewModel` **sin `Factory`**. Crea su **propio** `PdrTracker` y un `CalibracionPasoRepository`. Salida: `ui: StateFlow<CalibracionUiState>`. Fases `FaseCalibracion`: `PUNTOS → LISTO → CAMINANDO → RESULTADO → GUARDADA` |
+| Entradas del ViewModel | `alTocarMapa(lat, lng)` (1.º toque = A, 2.º = B; con ambos puestos se ignora: se arrastran; solo en `PUNTOS`/`LISTO`) · `alMoverPunto(ExtremoTramo, lat, lng)` · `alLimpiarPuntos()` · `alIniciar()` (fija la posición en A, `tracker.iniciar()`, anota `pasosInicio`, reloj de 500 ms) · `alFinalizar()` (lee `pasos − pasosInicio` **antes** de `detener()`, calcula con `CalibracionPaso.calcular` → `RESULTADO`) · `alCancelarMedicion()` · `alRepetir()` · `alGuardar()` (solo con `Valido` en `RESULTADO`) · `alRestablecer()` (vuelve a 0,72 m; no actúa en `CAMINANDO`) · `alIrASegundoPlano()` (ON_STOP: detiene el tracker y, si `CAMINANDO`, cancela con aviso) · `descartarAviso()` |
+| `CalibracionUiState` | `fase`, `puntoA` / `puntoB` (`PuntoTramo(lat, lng)?`), `distanciaM`, `pasos`, `segundos`, `resultado`, `longitudActualM`, `calibrada`, `fuentePasos`, `aviso` (`AvisoCalibracion`, p. ej. `VALOR_RESTABLECIDO`, `CANCELADA_SEGUNDO_PLANO`). Calculadas: `puedeIniciar`, `hayPuntos`, `mapaBloqueado` (fuera de `PUNTOS`/`LISTO`), `pasosPorAcelerometro`. `ExtremoTramo`: `A`, `B` |
+| `CalibracionScreen` | `(onVolver, modifier, vm: CalibracionViewModel = viewModel())`. **No navega**; la ruta pide `Permisos.ACTIVIDAD` antes de mostrarla (11.8). ON_STOP → `alIrASegundoPlano()`; Atrás durante la medición la cancela, si no → `onVolver`; `keepScreenOn` solo mientras `CAMINANDO` |
+| `CalibracionContent` / `CalibracionAcciones` | Contenido sin lógica y `data class` de 11 lambdas (`{}` por defecto); 2 `@Preview` |
+| `CalibracionMapaContent` | `(puntoA, puntoB, bloqueado, eventos: CalibracionMapaEventos, modifier)`. Solo dibuja el `WebView` (`MapaWebView` con `pasarInsets = false` y `manejarAtras = false`) y empuja el estado con `LaunchedEffect(mapa.listo, …)`. No conoce el ViewModel |
+
+**Puente `CalibracionBridge`, web → app** (clase `CalibracionPuente : PuenteWeb`, `internal`; todo pasa al hilo principal): `listo()` (heredado) · `toque(lat, lng)` · `puntoMovido(extremo "A"|"B", lat, lng)` (solo al soltar el pin).
+**App → web** (solo tras `listo()`): `setCentro(lat, lng, zoom)` (solo si aún no hay A) · `setPuntos(texto)` con `{"a": {lat, lng} | null, "b": …}` (**texto** JSON con `literalJs`) · `setBloqueado(bool)`.
+
+Comportamiento y cuidados:
+- El estado vive en el ViewModel; el JS **ignora `setPuntos` mientras se arrastra un pin** (patrón de 7.3) y encuadra el tramo al tener A y B por primera vez. Abrir `calibracion_mapa.html` en un navegador de escritorio activa un **modo demo**.
+- **Usa `MapaBase.iniciar` y `MapaBase.crearMapa`** (11.9). ⚠ **No** `base.crearMapa`: ese error dejaba el mapa negro y sin aviso (Logcat: `base.crearMapa is not a function`). La página lleva ocultos `#top`, `#dock` y `#btn-back`.
+- **Sin scroll:** el mapa ocupa el espacio sobrante (mín. 180 dp); con fuente muy grande en un teléfono pequeño el mapa se encoge y el resto puede recortarse. Usa el zoom nativo de Leaflet (abajo a la izquierda), no los botones +/− de Compose; el centro inicial es **aproximado** (EAFIT), no `CampusMapa.CENTRO`.
+- **Sin internet** Leaflet (`unpkg.com`) no carga, el mapa nunca llama a `listo()` y **no se pueden marcar A y B**: la calibración es inutilizable sin mapa (decisión 13).
+- El aviso de acelerómetro solo aparece tras el primer «Inicio» (la fuente de pasos se conoce al llamar a `iniciar()`).
+- Una sola medición, sin promedio ni historial; se mide en línea recta A→B, sin compararla con la trayectoria del PDR.
+- **Colores:** `CampusColors`, salvo `#FF4D7D` (Fin) y `#F59E0B` (avisos) propios, como en 7.4, porque `CampusColors.Peligro` es morado (11.4).
+- Reutiliza `BotonIcono` y `Modifier.tarjeta` de `ui/destino/componentes/Comun.kt` (`internal`): regla 4 de 11, conviene moverlos a `ui/components/`. Los textos están fijos en español dentro del composable (sin recursos de strings).
 
 **Componentes de `ui/ubicacion/componentes/` (verificados; propios de Escaneo, todos `internal`)**
 
@@ -2359,6 +2465,7 @@ con Retrofit/Ktor y `ApiConfig.kt`. Los ViewModels de hoy crean el stub directam
 | `AdminRepository` | `suspend obtenerResumen(): ResumenAdmin` (lanza `IOException`, solo documentado en el KDoc) | Stub (`AdminRepositoryStub`, 600 ms) | `PanelAdminViewModel` (por `Factory`). Detalle abajo |
 | `VideoRepository` | `suspend obtenerVideos(): List<Video>` (cada `Video` ya trae sus `fotos`) · `suspend renombrarVideo(videoId, nombre)` · `suspend eliminarVideo(videoId)` · `suspend eliminarFoto(videoId, fotoId)` · `cambios(): Flow<Int>` | Local (`AssetsVideoRepository(context)`) | Galería, Lista y Detalle de video |
 | `RecoleccionRepository` | `crearVideo(inicio): String` · `carpetaFotos(videoId): File` · `registrarFoto(videoId, archivo, DatosFoto): FotoRecolectada` · `desplazarFotos(videoId, desdeIndice, dLat, dLng)` · `fotos(videoId)` · `finalizar(videoId, duracionS, distanciaM, pasos): ResumenRecoleccion` · `descartar(videoId)` · `buscarEnCurso(): String?` · `contarPendientes(): Int` · `marcarSubida(videoId, fotoIds)` · `espacioLibreBytes(): Long` | Local (`RecoleccionRepositoryLocal(context)`, `data/repository/RecoleccionRepository.kt`) | `RecoleccionViewModel` (lo crea directamente). Detalle abajo |
+| `CalibracionPasoRepository` | `guardada(): Double?` · `longitudPasoM(): Double` (la calibrada, o `PdrEngine.LONGITUD_PASO_DEFECTO_M`) · `guardar(Valido, ahoraMs = ahora)` · `restablecer()` (borra todo el archivo) | Local (`CalibracionPasoRepository(context)`, `data/repository/CalibracionPasoRepository.kt`; **sin interfaz**) | `PdrTracker` (valor por defecto del parámetro), `CalibracionViewModel` y `UbicacionManualScreen`. Detalle abajo |
 | `LugaresRepository` | `suspend obtenerLugares(): List<LugarDestino>` (lanza `IOException`, solo documentado en el KDoc) | Stub (`LugaresRepositoryStub`, 300 ms; devuelve `LUGARES_DE_PRUEBA`, 6 lugares) | `SeleccionDestinoViewModel` (lo crea directamente); futuras 6.3 y 7.6/7.7 |
 | `EscaneoBackend` | `suspend analizar(fotos: List<File>)` → `Unit` (lanza `IOException`). Vive en `ui/ubicacion/EscaneoBackend.kt`, **no** en `data/repository/` | Stub (`EscaneoBackendStub`, 2,5 s) | `EscaneoViewModel` (lo instancia directamente). Detalle en 11.2 |
 | `BackendHealth` | `suspend estaEnLinea(): Boolean`. Vive en `ui/inicio/InicioViewModel.kt`, **no** en `data/repository/` | Stub (`BackendHealthStub`, siempre `true`) | `InicioViewModel` (lo fija en una propiedad). Detalle en 11.5 |
@@ -2415,6 +2522,13 @@ con Retrofit/Ktor y `ApiConfig.kt`. Los ViewModels de hoy crean el stub directam
 - **`registrarFoto`** recibe el JPG que dejó `tomarFoto` (`tmp_<n>.jpg`), lo renombra a `NNNN.jpg` y actualiza el manifest en cada foto (se guarda de forma continua). `desplazarFotos` mueve de forma uniforme las fotos desde un índice (re-anclaje). `finalizar` marca el video como `finalizado` y devuelve el `ResumenRecoleccion`; `descartar` borra la carpeta. `buscarEnCurso`, `contarPendientes` y `marcarSubida` son para retomar y para la subida futura (**aún sin usar**). `espacioLibreBytes` alimenta el aviso de almacenamiento.
 - Usa `org.json` (disponible en Android; en pruebas unitarias JVM hace falta la dependencia).
 - **`SesionDeRecoleccion`** (`object`): `inicio: StateFlow<InicioRecoleccion?>` · `resumen: StateFlow<ResumenRecoleccion?>` · `iniciar(inicio)` (la llama 7.3 vía `AppNav`) · `consumirInicio()` (la llama 7.4; **devuelve y borra**) · `finalizar(resumen)` (la llama `AppNav` al terminar; la leerá 7.5) · `limpiar()`. Vive en memoria: se pierde si Android mata el proceso (7.4 muestra entonces `SIN_INICIO`).
+
+**`CalibracionPasoRepository` en detalle** (entregado el 2026-10-12; la lógica pura de `CalibracionPaso` se verificó con kotlinc; el repositorio depende de Android y no se probó por separado)
+
+- **Almacén:** `SharedPreferences` `campus_calibracion` (sin cifrar; no es un dato sensible). Claves: `longitud_paso_m`, `pasos`, `distancia_m`, `fecha_ms`. No hay un almacén genérico de preferencias (`SessionManager` es solo de sesión).
+- `longitudPasoM()` es lo que lee `PdrTracker` al crearse; un valor guardado **fuera de 0,40–1,20 m se ignora** y se usa el genérico. `restablecer()` borra todo el archivo. `guardar` solo acepta un `ResultadoCalibracion.Valido`.
+- **No guarda con qué `FuentePasos` se calibró** (hardware o acelerómetro): cambiar de fuente invalida la longitud sin aviso.
+- Sin interfaz ni `Remote…`: la calibración es **por dispositivo** y no se sincroniza con el backend.
 
 **Modelos de `Foto.kt` (verificado)**
 
@@ -2502,6 +2616,7 @@ Qué casos **no** ejercitan estos datos de prueba:
 | `BuscarLugares.mejores(consulta, lugares)` | `domain/usecase/BuscarLugares.kt` | Devuelve 0 (nada se parece), 1 (claro) o 2–3 lugares (empate: hay que pedir que elija). | **Verificado contra el código.** Normaliza (minúsculas, sin tildes, solo letras y números) y quita muletillas (lista fija: «quiero», «ir», «a», «al», «la», «el», «los», «las», «de», «del», «un», «una», «llevame», «llevarme», «lleves», «vamos», «hacia», «hasta», «para», «por», «favor», «me», «en», «donde», «esta», «necesito», «busco», «buscar»); si solo hay muletillas, las conserva. El puntaje de un lugar es el mejor entre su nombre y cada alias: si el texto limpio es **igual** al nombre o alias limpio → 1,0; si no, promedio sobre las palabras **dichas** de su mejor coincidencia en el candidato (igual 1,0; prefijo de 3 letras o más 0,9; parecida por Levenshtein con similitud ≥0,75 → ×0,9), y × 0,95 si el candidato es un nombre (los alias no se penalizan). Umbral 0,70; empate dentro de 0,04 del mejor; máximo 3 (los demás se descartan por orden de la lista). |
 | `BuscarLugares.filtrar(lugares, texto)` | ídem | Filtro del buscador de una lista. | **Verificado.** Cada palabra escrita debe estar **contenida** (no solo al inicio) en alguna palabra del nombre, de un alias o de `categoria.etiqueta` (**singular**; no usa `etiquetaPlural`). Texto vacío → lista completa. No quita muletillas. |
 | `InterpretarRespuesta.interpretar(texto)` | ídem | Devuelve `Respuesta.SI`, `NO` o `NINGUNA`. | **Verificado.** Compara **palabras completas** tras normalizar. Sí: «si», «claro», «correcto», «dale», «ok», «okay», «vale», «confirmo», «afirmativo», «exacto», «listo», «vamos», «adelante». No: «no», «nop», «nope», «cancela», «cancelar», «negativo», «incorrecto», «otro», «equivocado». Solo sí → `SI`; solo no → `NO`; ambas o ninguna → `NINGUNA` (p. ej. «está bien» o «de acuerdo» dan `NINGUNA`). `Respuesta` vive en el mismo archivo. Sirve para cualquier confirmación por voz. ⚠ `VoiceController.listen` entrega hasta 3 hipótesis **unidas en un solo texto**: si el reconocimiento duda entre "sí" y "no", el texto trae ambas y el resultado es `NINGUNA` (se debe volver a preguntar, no asumir). |
+| `CalibracionPaso` | `domain/usecase/CalibracionPaso.kt` (`object`) | `calcular(distanciaM, pasos, duracionS): ResultadoCalibracion` y `distanciaEntre(lat1, lng1, lat2, lng2)` (haversine, R = 6 371 000 m; igual que `map.distance` de Leaflet). Constantes `MIN_PASO_M` 0,40 · `MAX_PASO_M` 1,20 · `MIN_PASOS` 15 · `MIN_DISTANCIA_M` 10 · `DISTANCIA_RECOMENDADA_M` 30. | **Verificado con kotlinc 2.0.21** (13 comprobaciones). `ResultadoCalibracion`: `Valido(longitudPasoM, pasos, distanciaM, duracionS, cadenciaPpm, velocidadMps)` o `Invalido(motivo, longitudPasoM?)`; `MotivoInvalido`: `TRAMO_CORTO`, `POCOS_PASOS`, `PASO_MUY_CORTO`, `PASO_MUY_LARGO` (orden de comprobación: tramo → pasos → rango). Con `duracionS = 0`, cadencia y velocidad valen 0. Los umbrales de 10 m y 15 pasos son elección propia. Test JUnit4 `CalibracionPasoTest` (**no ejecutado en Gradle**) |
 | `DisparadorCaptura` y `ModoCaptura` | `domain/usecase/DisparadorCaptura.kt` | Decide cuándo tomar la siguiente foto de la recolección (cada N metros o N segundos). Ver 11.2, «Flujo de captura de la recolección». | Sin estado de Android: se puede probar con pruebas unitarias (todavía no hay). Llamar a `alCapturar` **solo si la foto se guardó** |
 | `Deriva.estimar(distanciaDesdeAnclaM)` | ídem | `EstimacionDeriva(derivaM, precisionM, nivel)` con `NivelCalidad` `ALTA` (< 15 m), `MEDIA` (< 30 m) o `BAJA`. | Heurística **provisional**: 4 % de la distancia desde el último ancla (decisión 16) |
 
@@ -2529,7 +2644,8 @@ Uso verificado en `SeleccionDestinoViewModel` (11.5): `BuscarLugares.mejores(tex
 | `destino` | `SeleccionDestinoScreen` | — | `onDestinoConfirmado(LugarDestino)` (hoy **descarta** el destino y abre `ubicarme`), `onAjustes` → `ajustes`, `onVolver` |
 | `login` | `LoginScreen` | — | `onLoginExitoso` → `admin/panel` (quita `login` de la pila), `onVolver` |
 | `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila) |
-| `admin/ubicacion-manual` | `UbicacionManualScreen` (7.3) | — | `onVolver` (flecha y «Cancelar») → `popBackStack()`, `onAjustes` → `ajustes`, `onConfirmar(InicioRecoleccion)` → `SesionDeRecoleccion.iniciar(inicio)` y `navigate("admin/recoleccion")` (7.3 queda en la pila: su ViewModel reactiva «Confirmar» con `alReanudar()`). Pide `Permisos.INICIALES` antes de mostrar la pantalla y descarta el resultado |
+| `admin/ubicacion-manual` | `UbicacionManualScreen` (7.3) | — | `onVolver` (flecha y «Cancelar») → `popBackStack()`, `onAjustes` → `ajustes`, `onCalibrar` → `navigate("admin/calibracion")`, `onConfirmar(InicioRecoleccion)` → `SesionDeRecoleccion.iniciar(inicio)` y `navigate("admin/recoleccion")` (7.3 queda en la pila: su ViewModel reactiva «Confirmar» con `alReanudar()`). Pide `Permisos.INICIALES` antes de mostrar la pantalla y descarta el resultado |
+| `admin/calibracion` | `CalibracionScreen` (7.3b) | — | Pide `Permisos.ACTIVIDAD` antes de mostrar la pantalla y **descarta el resultado** (si se niega, el PDR usa el acelerómetro y la pantalla lo avisa; antes de Android 10 la lista está vacía y pasa directo). `onVolver` → `popBackStack()`. Se llega desde la fila «Calibrar mi paso» de 7.3. No devuelve datos: el resultado se guarda en `CalibracionPasoRepository` (11.6) y lo recoge cada `PdrTracker` al crearse |
 | `admin/recoleccion` | `RecoleccionScreen` (7.4) | `InicioRecoleccion` por `SesionDeRecoleccion` (no por la ruta) | Pide **solo la cámara** antes de mostrar la pantalla (como `ubicarme`; si se niega, `popBackStack()`). `onFinalizado(resumen)` → `SesionDeRecoleccion.finalizar(resumen)` y `navigate("admin/recoleccion/resumen") { popUpTo("admin/ubicacion-manual") { inclusive = true } }` (saca 7.3 y 7.4 de la pila); `onDescartado` (video sin fotos) → `popBackStack("admin/panel", inclusive = false)`; `onVolver` (solo con error, p. ej. `SIN_INICIO`) → `popBackStack()`; `onAjustes` → `ajustes` |
 | `admin/recoleccion/resumen` | Placeholder (7.5, falta `ResumenVideoScreen`) | `SesionDeRecoleccion.resumen` | Pantalla en blanco: solo se sale con Atrás |
 | `admin/mapa` | `EditorMapaScreen` | `posicionAdmin: () -> Pair<Double, Double>?` (hoy `{ null }`) | `onVolver`, `onVerLista` (hoy vacío; el comentario dice «vista 17», que corresponde a la lista de alertas 7.10) |
@@ -2554,7 +2670,7 @@ registrada** cierra la app con un error.
   pantalla admin lo comprueba por su cuenta. Ojo con la restauración tras matar el proceso: `MyApp`
   ya habrá borrado la sesión (11.3) y Android puede restaurar la pila en una pantalla admin.
 - **Permisos en la ruta:** `inicio` pide los iniciales y `ubicarme` la cámara antes de mostrar la
-  pantalla (ver 11.3). `admin/recoleccion` pide solo la cámara; la ruta de navegación (6.5) deberá hacer lo mismo.
+  pantalla (ver 11.3). `admin/recoleccion` pide solo la cámara; la ruta de navegación (6.5) deberá hacer lo mismo. `admin/calibracion` pide solo `Permisos.ACTIVIDAD`.
   `admin/ubicacion-manual` ya pide `Permisos.INICIALES` y descarta el resultado (la 7.3 en sí no necesita
   ninguno: la brújula usa el sensor de rotación; el de actividad física lo usa la 7.4 para el PDR (se pide en la ruta de 7.3), que
   sin él usa el acelerómetro, 11.2).
@@ -2572,7 +2688,7 @@ Verificado en los ViewModels: `DestinoEvento.Confirmado` **sí** lleva el `Lugar
 ### 11.9 Puentes WebView ↔ Android
 
 Cada mapa es una página en `assets/` (HTML + JS con Leaflet) con su puente Kotlin: `AndroidBridge`
-(mapa público, 2.6), `EditorBridge` (7.8), `VideoBridge` (7.14), `UbicacionBridge` (7.3) y `RecoleccionBridge` (7.4); los dos últimos, en 11.5. Los datos viajan como JSON; las
+(mapa público, 2.6), `EditorBridge` (7.8), `VideoBridge` (7.14), `UbicacionBridge` (7.3), `RecoleccionBridge` (7.4) y `CalibracionBridge` (7.3b); los tres últimos, en 11.5. Los datos viajan como JSON; las
 tablas de funciones están en esas secciones. Funciones y cuidados del `EditorBridge` y de `VideoBridge` en 11.5.
 `env(safe-area-inset-*)` no funciona en `WebView`, así que la app pasa el alto de las barras en dp con
 `setInsets(top, bottom)` (el mapa público no lo usa: su pantalla aplica `systemBarsPadding()`).
@@ -2593,6 +2709,7 @@ tablas de funciones están en esas secciones. Funciones y cuidados del `EditorBr
   `salir()`), el botón `#btn-back`, las medidas (`--toph` / `--dockh` con `ResizeObserver`; usa los ids `top` y `dock`) y,
   si no hay Leaflet, el aviso «No se pudo cargar el mapa…». La página termina con `if (!base.leaflet) return;` y después
   reemplaza `window.onAtras` por el suyo. `call` devuelve `true` si había puente; si no, la página usa datos de demo.
+- ⚠ **`crearMapa` no es parte del objeto que devuelve `iniciar`:** se llama `MapaBase.crearMapa(...)`. Solo `base.existe`, `base.call` y `base.leaflet` cuelgan de `base`; `toast`, `dialogo`, `confirmar`, `medir`, `$`, `ic`, `esc` y `puente` también son de `MapaBase`. Escribir `base.crearMapa(...)` lanza `TypeError` y deja el mapa **negro y sin aviso** (pasó en `calibracion_mapa.js`, corregido el 2026-10-12). ⚠ **Revisar que `recoleccion_mapa.js` use `MapaBase.crearMapa`** (se escribió con el mismo supuesto).
 - `crearMapa({ centro, zoom, maxZoom })` → mapa Leaflet con las teselas de OSM (nativas hasta el zoom 19; `maxZoom` mayor las
   amplía: el detalle de video usa 21), atribución «© OSM» y control de zoom, ambos abajo a la izquierda.
 - `toast`, `dialogo({ texto, label, peligro, input, valor, placeholder, valida, ok })`, `confirmar(texto, ok, label = 'Eliminar')`,
@@ -2630,6 +2747,7 @@ Cuidados:
 - Un `onAtras` por defecto que llama a `salir()` evita el defecto anterior (sin Leaflet, Atrás y Volver no hacían nada).
   Aun así, sin Leaflet la página nunca llama a `listo()` y la app no le envía datos.
 - `RecoleccionBridge` (7.4) es una página **embebida** en una tarjeta de Compose: usa `MapaBase.iniciar` y `crearMapa`, pero con `pasarInsets = false` y `manejarAtras = false` (Atrás lo maneja la pantalla); lleva ocultos `#top`, `#dock` y `#btn-back` por si `MapaBase.iniciar` no tolera que falten (11.5).
+- `CalibracionBridge` (7.3b) es igual de embebido que `RecoleccionBridge` (`pasarInsets = false`, `manejarAtras = false`, mismos elementos ocultos); marca A y B con toques y pines arrastrables y usa el zoom nativo de Leaflet (11.5).
 
 ### 11.10 Lo que aún no está documentado aquí (⚠)
 
@@ -2643,15 +2761,16 @@ en el mismo archivo), `SessionManager` (11.3), `VideoRepository`/`AssetsVideoRep
 `EscaneoViewModel.kt` (flujo de captura, antes de 11.3), `FeedbackCaptura.kt` y `AppLog.kt` (11.2) y
 `AlertaFormSheet.kt` (11.5), `EscaneoState.kt`, `EscaneoConfig.kt` (con `EscaneoColores`),
 `EscaneoBackend.kt` y `EscaneoScreen.kt` (flujo de captura, antes de 11.3; equivalencias de color en
-11.4) `EditorMapaViewModel.kt`, `EditorMapaScreen.kt`, `editor_mapa.html` y `editor_mapa.js` (con `EditorBridge`), `PanelAdminViewModel.kt` y `PanelAdminScreen.kt`, `GaleriaViewModel.kt` y `GaleriaScreen.kt` (con `GaleriaColores`), `VideosScreen.kt`, `VideoDetalleViewModel.kt` y `VideoDetalleScreen.kt`, `video_detalle.html` y `video_detalle.js` (con `VideoBridge`) (11.5), y `CampusColors.kt` (11.4). **Tanda 11 (2026-10-11, vista 7.4):** archivos **nuevos** `FotoRecolectada.kt`, `SesionRecoleccion.kt`, `DisparadorCaptura.kt`, `RecoleccionRepository.kt`, `RecoleccionState.kt`, `RecoleccionViewModel.kt`, `RecoleccionScreen.kt`, `componentes/PanelesRecoleccion.kt`, `componentes/MapaRecoleccion.kt` (con `RecoleccionPuente`), `recoleccion_mapa.html` y `recoleccion_mapa.js`, y los cambios de `AppNav` en `MainActivity.kt` (7.4, 11.2, 11.5, 11.6, 11.7, 11.8 y 11.9; compilan y funcionan según quien los escribió; ⚠ documentados a partir de lo entregado, **sin releerlos contra el código final**: si se retocaron al compilar, confirmar firmas y nombres). **Tanda 10 (2026-10-11):** archivos **nuevos** `UbicacionManualScreen.kt`, `UbicacionManualViewModel.kt`, `UbicacionManualState.kt`, `InicioRecoleccion.kt`, `ubicacion_manual.html` y `ubicacion_manual.js` (11.5, 11.6, 11.8 y 11.9; ⚠ Kotlin sin compilar, escritos sin ver `MainActivity.kt`, `MapaWebView.kt` ni `mapa_base.js`: los supuestos están en 11.5). **Tanda 9 (bache 4):** `app.js` e `index.html` (estructura e ids), `OrientationProvider.kt` y `MainActivity.kt` (releídos), y los archivos nuevos `PdrEngine.kt`, `StepDetector.kt`, `PdrTracker.kt`, `PuentePdr.kt` y `MapaPublicoScreen.kt` (2.3, 2.6, 11.2, 11.5, 11.8 y 11.9; ⚠ los nuevos sin probar en dispositivo). **Tanda 8 (bache 3):** `LugaresRepository.kt` (con `LUGARES_DE_PRUEBA`), `AdminRepository.kt`, `ResumenAdmin.kt` y `Usuario.kt` (con `Rol` y `Sesion`) (11.5, 11.6 y 11.7). **Tanda 7 (bache 2):** `PanelesVoz.kt`, `ListaLugares.kt` y `Comun.kt` de `ui/destino/componentes/` (11.5 y 11.6). **Tanda 6 (bache 1):** `BuscarLugares.kt` (con `InterpretarRespuesta` y `Respuesta`), `LugarDestino.kt` (con `CategoriaLugar`) y `SeleccionDestinoState.kt` completo (`OrdenLugares`, `ErrorDestino`, `DestinoEvento`) (11.5, 11.6 y 11.7). **Tanda 5:** `MainActivity.kt` (releído: confirma 11.3 y 11.8 y añade notas), `SeleccionDestinoScreen.kt`, `DestinoUiState` (de `SeleccionDestinoState.kt`, pegado por la persona) y `LoginScreen.kt` (11.5). **Tanda 4:** `VideosViewModel.kt`, `LoginViewModel.kt`, `InicioViewModel.kt` (con `BackendHealth`), `InicioScreen.kt` y `SeleccionDestinoViewModel.kt` (11.5; ajustes en 11.1, 11.2, 11.3, 11.4, 11.6 a 11.8).
+11.4) `EditorMapaViewModel.kt`, `EditorMapaScreen.kt`, `editor_mapa.html` y `editor_mapa.js` (con `EditorBridge`), `PanelAdminViewModel.kt` y `PanelAdminScreen.kt`, `GaleriaViewModel.kt` y `GaleriaScreen.kt` (con `GaleriaColores`), `VideosScreen.kt`, `VideoDetalleViewModel.kt` y `VideoDetalleScreen.kt`, `video_detalle.html` y `video_detalle.js` (con `VideoBridge`) (11.5), y `CampusColors.kt` (11.4). **Tanda 12 (2026-10-12, vista 7.3b y cambios en 7.3):** archivos **nuevos** `CalibracionPaso.kt`, `CalibracionPasoRepository.kt`, `CalibracionState.kt`, `CalibracionViewModel.kt`, `CalibracionScreen.kt`, `componentes/MapaCalibracion.kt` (con `CalibracionPuente`), `calibracion_mapa.html`, `calibracion_mapa.js` y `CalibracionPasoTest.kt`; **parches** a `PdrEngine.kt` y `PdrTracker.kt` (longitud de paso inyectable); y, **releídos en esta tanda**, `MainActivity.kt` (`Permisos.ACTIVIDAD`, ruta `admin/calibracion`, `onCalibrar`) y `UbicacionManualScreen.kt` (fila «Calibrar mi paso», `onCalibrar`, `longitudCalibradaM`) (7.3, 7.3b, 11.2, 11.3, 11.5 a 11.9; el proyecto compila con ellos y la pantalla se abre en dispositivo; ⚠ la pasada completa de calibración sigue sin probar). **Tras compilar el proyecto entero, el aviso «Kotlin sin compilar» de las tandas anteriores ya no aplica a lo que forma parte del build** (cada entrada con ⚠ sigue pendiente de prueba **en dispositivo**). **Tanda 11 (2026-10-11, vista 7.4):** archivos **nuevos** `FotoRecolectada.kt`, `SesionRecoleccion.kt`, `DisparadorCaptura.kt`, `RecoleccionRepository.kt`, `RecoleccionState.kt`, `RecoleccionViewModel.kt`, `RecoleccionScreen.kt`, `componentes/PanelesRecoleccion.kt`, `componentes/MapaRecoleccion.kt` (con `RecoleccionPuente`), `recoleccion_mapa.html` y `recoleccion_mapa.js`, y los cambios de `AppNav` en `MainActivity.kt` (7.4, 11.2, 11.5, 11.6, 11.7, 11.8 y 11.9; compilan y funcionan según quien los escribió; ⚠ documentados a partir de lo entregado, **sin releerlos contra el código final**: si se retocaron al compilar, confirmar firmas y nombres). **Tanda 10 (2026-10-11):** archivos **nuevos** `UbicacionManualScreen.kt`, `UbicacionManualViewModel.kt`, `UbicacionManualState.kt`, `InicioRecoleccion.kt`, `ubicacion_manual.html` y `ubicacion_manual.js` (11.5, 11.6, 11.8 y 11.9; ⚠ Kotlin sin compilar, escritos sin ver `MainActivity.kt`, `MapaWebView.kt` ni `mapa_base.js`: los supuestos están en 11.5). **Tanda 9 (bache 4):** `app.js` e `index.html` (estructura e ids), `OrientationProvider.kt` y `MainActivity.kt` (releídos), y los archivos nuevos `PdrEngine.kt`, `StepDetector.kt`, `PdrTracker.kt`, `PuentePdr.kt` y `MapaPublicoScreen.kt` (2.3, 2.6, 11.2, 11.5, 11.8 y 11.9; ⚠ los nuevos sin probar en dispositivo). **Tanda 8 (bache 3):** `LugaresRepository.kt` (con `LUGARES_DE_PRUEBA`), `AdminRepository.kt`, `ResumenAdmin.kt` y `Usuario.kt` (con `Rol` y `Sesion`) (11.5, 11.6 y 11.7). **Tanda 7 (bache 2):** `PanelesVoz.kt`, `ListaLugares.kt` y `Comun.kt` de `ui/destino/componentes/` (11.5 y 11.6). **Tanda 6 (bache 1):** `BuscarLugares.kt` (con `InterpretarRespuesta` y `Respuesta`), `LugarDestino.kt` (con `CategoriaLugar`) y `SeleccionDestinoState.kt` completo (`OrdenLugares`, `ErrorDestino`, `DestinoEvento`) (11.5, 11.6 y 11.7). **Tanda 5:** `MainActivity.kt` (releído: confirma 11.3 y 11.8 y añade notas), `SeleccionDestinoScreen.kt`, `DestinoUiState` (de `SeleccionDestinoState.kt`, pegado por la persona) y `LoginScreen.kt` (11.5). **Tanda 4:** `VideosViewModel.kt`, `LoginViewModel.kt`, `InicioViewModel.kt` (con `BackendHealth`), `InicioScreen.kt` y `SeleccionDestinoViewModel.kt` (11.5; ajustes en 11.1, 11.2, 11.3, 11.4, 11.6 a 11.8).
 
 **Pendiente:**
 - Vista 7.3 (`UbicacionManualScreen`): **probarla en dispositivo**; confirmar los supuestos de 11.5; decidir el nombre `video_N` frente a `video3` de este documento; fijar `CampusMapa.CENTRO`; decidir si se hace la foto de referencia del diseño; mover `BotonIcono` y `Modifier.tarjeta` a `ui/components/`; **retirar `MapaPublicoScreen` de la ruta** (queda como referencia del PDR) y quitar el botón GPS que ya no se usa en esa vista.
+- Vista 7.3b (`CalibracionScreen`): **probar la pasada completa en dispositivo** (A→B, guardar, recolectar con la longitud calibrada); **ejecutar `CalibracionPasoTest`** en Gradle; confirmar si el valor genérico debe ser 0,70 m (el encargo) o 0,72 m (el código); sustituir el centro aproximado del mapa por `CampusMapa.CENTRO`; revisar `recoleccion_mapa.js` por el mismo error `base.crearMapa` (11.9); mover `BotonIcono` y `Modifier.tarjeta` a `ui/components/`.
 - Vista 7.4 (`RecoleccionScreen`): ver «Pendiente / fuera de alcance» en 7.4. Además: **`ResumenVideoScreen` (7.5)**, un `VideoRepository` compuesto con parser de manifest compartido (11.6), `AlertasRepository` (alertas existentes y persistencia de las nuevas), «Marcar punto de interés» (7.6 y 7.7), control de calidad de imagen, retomar tras matar el proceso, y pruebas unitarias de `DisparadorCaptura` y `Deriva`.
 - `ui/admin/`: `mapa/AlertasScreen.kt` (7.10) y la vista 7.12 **todavía no existen**.
 - Mapa público y PDR (bache 4, hecho): `app.js`, `index.html`, `PuentePdr.kt` y `MapaPublicoScreen.kt` ya
   documentados. Falta **probarlos en dispositivo** y quitar los ⚠ de 2.6, 10 y 11.2.
-- PDR: longitud de paso variable o calibrada (decisión 16; la deriva de 7.4 usa una heurística provisional que
+- PDR: la longitud de paso ya es calibrable (7.3b, decisión 16 resuelta); falta calibrar la deriva de la brújula (la deriva de 7.4 usa una heurística provisional que
   habrá que reemplazar), navegación (6.5) sobre `PdrTracker`, manejo de `ON_STOP` en `PdrTracker` (hoy lo resuelve
   el ViewModel de la recolección) y corrección visual con fusión (`domain/fusion/`).
 - `MapaPublicoScreen` (`map/`) **sigue con su propia fábrica de `WebView`**: migrarla a `MapaWebView(…, pasarInsets = false)` (11.9) y comprobar que `PuentePdr` y los `evaluateJavascript` de `onNative*` siguen funcionando. Además, el CSS de las páginas (`.toast`, `.modal`, estilos de los controles de Leaflet, `.ic`) sigue duplicado entre `editor_mapa.html` y `video_detalle.html`: candidato a `mapa_base.css`.
