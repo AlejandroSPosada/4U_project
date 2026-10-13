@@ -11,6 +11,7 @@ import android.hardware.SensorManager
 import android.os.Build
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import com.example.myapplication.data.repository.CalibracionPasoRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -55,12 +56,18 @@ sealed interface PdrEvento {
  * si no, detección por acelerómetro ([StepDetector]).
  * Rumbo: `TYPE_ROTATION_VECTOR`, corregido a norte real con la declinación magnética de la
  * posición actual.
+ *
+ * Longitud de paso: por defecto la calibrada del usuario (si existe) o la genérica de
+ * [PdrEngine]; se lee **una vez, al crear** el tracker. Recalibrar no afecta a uno ya creado.
  */
-class PdrTracker(context: Context) {
+class PdrTracker(
+    context: Context,
+    longitudPasoM: Double = CalibracionPasoRepository(context).longitudPasoM(),
+) {
 
     private val app = context.applicationContext
     private val sm = app.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    private val engine = PdrEngine()
+    private val engine = PdrEngine(longitudPasoM = longitudPasoM)
     private val detector = StepDetector()
 
     private val _estado = MutableStateFlow(PdrEstado())
