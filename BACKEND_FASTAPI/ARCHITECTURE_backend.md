@@ -4,9 +4,12 @@ Plan y catálogo de **`BACKEND_FASTAPI/`**: la API REST que usa la app Android. 
 `FRONTED_KOTLIN/ARCHITECTURE.md` (qué pide la app: sección 3, modelos y repositorios: 11.6) y a
 `INFRASTRUCTURA_TERRAFORM/ARCHITECTURE.md` (dónde corre y qué variables de entorno inyecta: 4.1).
 
-> **Estado (2026-10-14): existen las fases B0 y B1 (sin ejecutar contra AWS).** Este documento es el **diseño** que parte de
-> contratos ya fijados en los otros dos. Todo lo marcado con ⚠ es una **propuesta o supuesto sin verificar**.
-> La sección 12 es el catálogo del código: hoy está vacía y se llena **en el mismo cambio** que cada archivo.
+> **Estado (2026-10-14): B0 y B1 están escritas solo en parte y sin ejecutar contra AWS.** El `BACKEND_FASTAPI.zip`
+> revisado trae 6 de los archivos del catálogo (`Dockerfile`, `app/config.py`, `app/main.py`, `app/db/engine.py`,
+> `alembic/versions/0001_inicial.py`, `scripts/migrar.sh`) y **le faltan 7** que ese código importa o copia (12.2): con lo
+> que hay, la imagen no se construiría y `/health` no arrancaría. Este documento es el **diseño** que parte de contratos
+> ya fijados en los otros dos. Todo lo marcado con ⚠ es una **propuesta o supuesto sin verificar**.
+> La sección 12 es el catálogo del código: se llena **en el mismo cambio** que cada archivo.
 >
 > **Para quien continúe (persona o IA):** la idea es que este archivo baste para no tener que pedir de nuevo los
 > archivos de la app ni los `.tf`. Lo que el backend toma de ellos está en las secciones 3 (infra) y 4 (app).
@@ -223,16 +226,16 @@ filtro por zona (usar la posición PDR cuando viene) mejora la precisión de `/l
 
 ## 10. Plan de implementación por fases
 
-| Fase | Contenido | Aceptación |
-|---|---|---|
-| **B0. Esqueleto** | `main.py`, `config.py`, `/health`, `Dockerfile` X86_64 | La imagen sube a ECR y `GET /health` responde 200 por el ALB (cierra infra 12.13, pasos 1–4) |
-| **B1. Datos** | Modelos + Alembic 0001 (con `vector`) | Se conecta con TLS desde dentro de la VPC y `CREATE EXTENSION vector` funciona (infra 12.1) |
-| **B2. Auth** | `/auth/login`, JWT, `crear_admin.py`, guarda de roles | La app (con `RemoteAuthRepository`) inicia sesión y un `USER` no pasa a `/admin/*` |
-| **B3. Lectura pública** | `/places`, `/alerts` con datos reales | `LugaresRepository` y alertas de la app dejan de usar stubs |
-| **B4. Recolección** | `/collect/*`, S3, cliente de embedding | Un video de la app llega completo (fotos + vectores) |
-| **B5. Localización** | `/localize` (sección 7) | Con un dataset real, 5 fotos devuelven una posición plausible |
-| **B6. Admin** | `/admin/videos|images|places|alerts|stats` | Galería, Videos, Editor y Panel sin stubs; eliminar video limpia BD y S3 |
-| **B7. Endurecer** | Límites, tasa, pruebas, limpieza de huérfanos | Pruebas en CI; sin huérfanos tras un borrado fallido |
+| Fase | Contenido | Aceptación | Estado (2026-10-14) |
+|---|---|---|---|
+| **B0. Esqueleto** | `main.py`, `config.py`, `/health`, `Dockerfile` X86_64 | La imagen sube a ECR y `GET /health` responde 200 por el ALB (cierra infra 12.13, pasos 1–4) | **Parcial.** Escritos `Dockerfile`, `config.py`, `main.py`; faltan `pyproject.toml` y `services/secrets.py` (12.2). Sin construir ni subir |
+| **B1. Datos** | Modelos + Alembic 0001 (con `vector`) | Se conecta con TLS desde dentro de la VPC y `CREATE EXTENSION vector` funciona (infra 12.1) | **Parcial.** Escritos `engine.py`, `0001_inicial.py`, `migrar.sh`; faltan `alembic.ini`, `alembic/env.py`, `models.py`, `session.py`, `secrets.py` (12.2). Sin ejecutar |
+| **B2. Auth** | `/auth/login`, JWT, `crear_admin.py`, guarda de roles | La app (con `RemoteAuthRepository`) inicia sesión y un `USER` no pasa a `/admin/*` | Sin empezar |
+| **B3. Lectura pública** | `/places`, `/alerts` con datos reales | `LugaresRepository` y alertas de la app dejan de usar stubs | Sin empezar |
+| **B4. Recolección** | `/collect/*`, S3, cliente de embedding | Un video de la app llega completo (fotos + vectores) | Sin empezar |
+| **B5. Localización** | `/localize` (sección 7) | Con un dataset real, 5 fotos devuelven una posición plausible | Sin empezar |
+| **B6. Admin** | `/admin/videos|images|places|alerts|stats` | Galería, Videos, Editor y Panel sin stubs; eliminar video limpia BD y S3 | Sin empezar |
+| **B7. Endurecer** | Límites, tasa, pruebas, limpieza de huérfanos | Pruebas en CI; sin huérfanos tras un borrado fallido | Sin empezar |
 
 Orden recomendado: B0 → B1 primero (desbloquean la infra), y B2 antes de cualquier ruta admin. La fase 5 de infra
 (CI/CD) no debe empezar hasta terminar B0.
@@ -241,7 +244,7 @@ Orden recomendado: B0 → B1 primero (desbloquean la infra), y B2 antes de cualq
 
 ## 11. Decisiones abiertas (⚠ por confirmar)
 
-1. **Modelo de embedding** (`vits14` 384 / `vitb14` 768) y dimensión de la columna: fijar antes de recolectar; cambiarlo reindexa todo.
+1. **Modelo de embedding** (`vits14` 384 / `vitb14` 768) y dimensión de la columna: fijar antes de recolectar; cambiarlo reindexa todo. La migración `0001` ya fija `EMBEDDING_DIM = 768` (`vitb14`).
 2. **Id de video:** ¿el backend acepta el `rec_NNNN` que genera la app o asigna uno propio?
 3. **Heading en `/localize`:** confirmar que la app enviará un `heading` por foto (hoy `EscaneoBackend` no lo hace).
 4. **Sincronización de alertas:** lote `{upserts, borrados}` o llamadas sueltas.
@@ -249,27 +252,44 @@ Orden recomendado: B0 → B1 primero (desbloquean la infra), y B2 antes de cualq
 6. **Autorización de rutas públicas:** ¿exigir un token anónimo o una clave de app para frenar abusos?
 7. **Grafo de caminos / `GET /route`:** ¿se calcula en el servidor o en el dispositivo? (app decisión 2).
 8. **Papelera y auditoría de borrados** (app decisión 10): borrado definitivo inmediato hoy; ¿registro de quién y cuándo?
-9. **Dónde corren las migraciones** en CI (tarea ECS aparte vs. otra vía dentro de la VPC).
+9. **Dónde corren las migraciones** en CI (tarea ECS aparte vs. otra vía dentro de la VPC). Hoy: `scripts/migrar.sh` las lanza a mano como tarea ECS (⚠ sin probar); falta decidir si CI hace lo mismo.
 10. **HTTPS:** hasta que infra resuelva la fase 4, la API solo habla HTTP y Android (API 28+) la bloquea: sirve para `curl`, no para el teléfono.
 
 ---
 
 ## 12. Catálogo del código existente
 
-> Archivos de B0/B1. Nada se ha ejecutado aún contra AWS, solo se comprobó la sintaxis. Lo no verificado lleva ⚠.
+> Revisado el 2026-10-14 sobre `BACKEND_FASTAPI.zip`: se leyó el código completo de los archivos presentes y se comprobó
+> la sintaxis (`py_compile`, `bash -n`). **Nada se ha ejecutado** contra AWS ni con Python (no se instalaron
+> dependencias). Lo no verificado lleva ⚠.
+
+### 12.1 Archivos presentes
 
 | Archivo | Qué expone | Lo usan | Cuidados |
 |---|---|---|---|
-| `Dockerfile` | Imagen `python:3.12-slim`, usuario no root, uvicorn en `0.0.0.0:8000` | CI / ECS | Construir con `--platform linux/amd64`; sin HEALTHCHECK propio (lo hace el ALB) |
-| `pyproject.toml` | Dependencias con rangos; el Dockerfile las extrae con `tomllib` | Dockerfile | ⚠ Sin lock ni versiones exactas |
-| `app/config.py` | `Settings` / `get_settings()` con las variables de la sección 3 (+ `LOCAL_DATABASE_URL`, solo local) | Todo | Todo tiene valor por defecto para que `/health` responda aunque falte algo; `LOCAL_DATABASE_URL` se rechaza en prod |
-| `app/main.py` | App FastAPI, `GET /health` (superficial), `GET /health/ready` (BD + embedding, no lo usa el ALB), error `{detail, codigo}` | ALB | `/docs` desactivado en prod; códigos `http_<status>` ⚠ propuestos |
-| `app/services/secrets.py` | `get_secret_string/json(arn)` con caché de 5 min, `invalidate(arn)` | `db/engine.py` | ⚠ El secreto de RDS se asume JSON con `username` y `password` |
-| `app/db/engine.py` | `get_engine()`: conexión nueva = lee el secreto, `sslmode=require`, reintento tras invalidar | `db/session.py`, Alembic, `/health/ready` | RDS rota la contraseña sola; por eso no se fija al crear el motor |
-| `app/db/session.py`, `app/deps.py` | `get_sessionmaker()`, dependencia `get_db` | Routers (B2+) | Auth y roles llegan en B2 |
-| `app/db/models.py` | Modelos de la sección 6; `EMBEDDING_DIM = 768` | Alembic | ⚠ Dimensión asumida (`vitb14`); cambiarla exige migración nueva |
-| `alembic/` (`env.py`, `0001_inicial.py`) | `CREATE EXTENSION vector` + 6 tablas + índice HNSW coseno | `scripts/migrar.sh` | Solo modo online; la 0001 tiene la dimensión fija a propósito |
-| `scripts/migrar.sh` | Lanza `alembic upgrade head` como tarea ECS con la definición, subredes y SG del backend | Operador / CI | ⚠ Sin probar contra AWS; supone el clúster `campus-locator-dev-cluster` |
+| `Dockerfile` | Imagen `python:3.12-slim`, `WORKDIR /srv`, usuario no root (`appuser`, uid 10001), `uvicorn app.main:app` en `0.0.0.0:8000` con `--proxy-headers --forwarded-allow-ips "*"`. Copia `pyproject.toml`, `alembic.ini`, `alembic/` y `app/` (no `scripts/`) | CI / ECS / `migrar.sh` | Construir con `docker buildx build --platform linux/amd64`; sin HEALTHCHECK propio (lo hace el ALB). Las dependencias salen de `[project].dependencies` con `tomllib` (rangos, sin lock). `"*"` en `--forwarded-allow-ips` solo es aceptable porque el SG deja pasar únicamente al ALB. ⚠ **Los `COPY` de `pyproject.toml` y `alembic.ini` fallarían: no están en el zip** |
+| `app/config.py` | `Settings` (pydantic-settings, `extra="ignore"`) y `get_settings()` con caché. Campos de la sección 3 con valor por defecto (`app_env="dev"`, `aws_region="us-east-1"`, `database_port=5432` como `int`, `database_name="campus"`, el resto `""`), más `local_database_url` y la propiedad `is_prod` | Todo | Es el único archivo que lee el entorno. `LOCAL_DATABASE_URL` no se valida aquí: se rechaza en prod dentro de `engine.py`. `jwt_secret_arn` y los `s3_*` aún no los usa nadie |
+| `app/main.py` | App FastAPI (`Campus Locator API`, `0.1.0`); `GET /health` → `{"status":"ok"}` (superficial); `GET /health/ready` (`SELECT 1` en la BD y `GET {EMBEDDING_SERVICE_URL}/health` con timeout de 3 s; responde 200, o 503 con `{status, database, embedding}`); manejador de `HTTPException` → `{detail, codigo: "http_<status>"}` | ALB (`/health`), operador (`/health/ready`) | Sin routers todavía. `/docs` y `/openapi.json` se desactivan en prod; `/redoc` siempre. Solo se maneja `HTTPException`: los **422 de validación** conservan el formato de FastAPI (`detail` como lista, sin `codigo`); ⚠ decidir si se unifican. `/health/ready` da 503 mientras `EMBEDDING_SERVICE_URL` esté vacío (`"sin configurar"`), también en dev con el embedding apagado. Importa `get_engine` al cargar el módulo: un fallo de importación en `app.db.engine` (p. ej. falta `services/secrets.py`) tumba también `/health` |
+| `app/db/engine.py` | `get_engine()` (con caché). En AWS cada conexión **nueva** lee el secreto (`secrets.get_secret_json`), conecta con `psycopg` (`sslmode=require`, `connect_timeout=10`) y, si hay `OperationalError`, invalida la caché del secreto y reintenta una vez. Pool de 5 + 5 de desborde, `pool_pre_ping`, `pool_recycle=1800`. Con `LOCAL_DATABASE_URL` (solo fuera de prod) usa esa URL | `/health/ready`; Alembic y `session.py` cuando existan | Lanza `RuntimeError` si faltan `DATABASE_HOST` o `DATABASE_SECRET_ARN`. El reintento atrapa **cualquier** `OperationalError`: con la BD inalcanzable cada conexión espera hasta 2 × 10 s. Hasta 10 conexiones por tarea: ⚠ contrastarlo con el límite de conexiones de RDS al subir réplicas. Espera del secreto `username` y `password` (⚠ sin confirmar). Usa `psycopg` (v3) y `app.services.secrets` (no incluido) |
+| `alembic/versions/0001_inicial.py` | `CREATE EXTENSION IF NOT EXISTS vector`, 6 tablas (`usuarios`, `videos`, `lugares`, `fotos`, `alertas`, `consultas`) e índice HNSW coseno (`m=16`, `ef_construction=64`) sobre `fotos.embedding`. `downgrade` borra tablas e índice y deja la extensión | `alembic upgrade head` (`migrar.sh`) | Autocontenida: no importa `models.py` y fija a propósito `EMBEDDING_DIM = 768`, categorías y tipos de alerta. Coincide con la sección 6, salvo: `fotos.embedding` **admite nulo**; ids acotados (`videos.id` 64, `fotos.id` 16, `videos.nombre` 40); y la BD aplica `CHECK` de `rumbo` (0 ≤ x < 360), estado, calidad, categoría, tipo, prioridad y `radio` 5–100. Sin índices en `fotos.lugar_id` ni `alertas.activa` (⚠ valorar al medir). Requiere `pgvector` y SQLAlchemy ≥ 2.0 (`sa.Uuid`) |
+| `scripts/migrar.sh` | Lanza `alembic upgrade head` como tarea ECS Fargate única: toma subredes, SG y definición de tarea del servicio `backend` (el primero del clúster cuyo ARN contiene `backend`), sobrescribe el comando, espera a que termine y sale con error si `exitCode` ≠ 0 | Operador / CI | `AWS_REGION` (por defecto `us-east-1`) y `CLUSTER` (`campus-locator-dev-cluster`). `assignPublicIp=ENABLED` va fijo: vale en dev (subredes públicas); en prod con subredes privadas hay que cambiarlo. Necesita la imagen ya en ECR y credenciales de AWS CLI. ⚠ Sin probar. Deducido del código: lee la configuración del servicio, así que debería funcionar con `encendido=false` (0 tareas). Si la tarea no llega a arrancar, informa `exitCode=None`: ver el motivo con `describe-tasks`. Logs en `/ecs/campus-locator-dev-backend` |
+| `README.md` | **Copia idéntica de este documento** (mismo contenido, 24 341 bytes) | — | ⚠ No es un README: falta el «cómo ejecutar» (construir, migrar, probar en local) o quitarlo para no mantener dos copias. El zip también trae una copia de `ARCHITECTURE_backend.md` |
+
+### 12.2 Archivos del catálogo que no estaban en el zip
+
+| Archivo | Para qué | Quién lo necesita |
+|---|---|---|
+| `pyproject.toml` | Dependencias. Las que el código presente ya importa: `fastapi`, `uvicorn`, `pydantic-settings`, `sqlalchemy` (≥ 2.0), `psycopg` (v3, con binarios), `httpx`, `alembic`, `pgvector`; y `boto3` si `secrets.py` usa el SDK (⚠ supuesto) | `Dockerfile` (`COPY`) |
+| `alembic.ini` | Configuración de Alembic | `Dockerfile` (`COPY`), `migrar.sh` |
+| `alembic/env.py` | Entorno de Alembic, solo modo online, con `get_engine()` | `migrar.sh`: sin él `alembic upgrade head` no corre |
+| `app/services/secrets.py` | `get_secret_string/json(arn)` con caché de 5 min e `invalidate(arn)`; `engine.py` usa `get_secret_json(arn)` → dict con `username` y `password` e `invalidate(arn)` | `db/engine.py` y, por su importación, `main.py` |
+| `app/db/models.py` (con `EMBEDDING_DIM = 768`), `app/db/session.py`, `app/deps.py` | Modelos de la sección 6, `get_sessionmaker()` y dependencia `get_db` | Routers de B2 en adelante (no bloquean B0 ni la migración) |
+
+### 12.3 Para cerrar B0 y B1
+
+1. Añadir `pyproject.toml`, `alembic.ini` y `app/services/secrets.py`: sin ellos la imagen no se construye y `/health` no arranca.
+2. Construir con `--platform linux/amd64`, subir a ECR, encender y probar `GET /health` por el ALB (aceptación de B0, infra 12.13, pasos 1–4).
+3. Añadir `alembic/env.py` y correr `scripts/migrar.sh` (aceptación de B1, infra 12.1).
 
 Plantilla por módulo: **ruta** · **responsabilidad** · **entradas/salidas (tipos o JSON)** · **variables de entorno que lee** · **qué tabla toca** · **qué consume de otros módulos** · **cómo probarlo**.
 
