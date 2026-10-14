@@ -80,9 +80,15 @@ variable "health_check_grace_seconds" {
 }
 
 variable "service_discovery_namespace_id" {
-  description = "Namespace de Cloud Map. null = no se registra un nombre interno"
+  description = "Namespace de Cloud Map. Solo se usa si enable_service_discovery = true"
   type        = string
   default     = null
+}
+
+variable "enable_service_discovery" {
+  description = "Registrar el servicio en Cloud Map. Booleano aparte porque namespace_id no se conoce al planificar y no sirve para decidir un count"
+  type        = bool
+  default     = false
 }
 
 variable "attach_task_policy" {

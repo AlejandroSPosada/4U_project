@@ -20,7 +20,7 @@ variable "engine_major_version" {
 variable "engine_version" {
   description = "Versión completa; debe pertenecer a engine_major_version"
   type        = string
-  default     = "16.4"
+  default     = "16.15"
 }
 
 variable "instance_class" {

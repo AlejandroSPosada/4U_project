@@ -4,8 +4,9 @@ Plan de la infraestructura de **Campus Locator** con **Terraform**. Complementa 
 app Android (`FRONTED_KOTLIN/`), que describe qué hace el sistema y qué endpoints necesita (sección 3 de ese
 documento). Este documento describe **dónde corre cada pieza, cómo se conectan y cómo se crea todo con código**.
 
-> **Estado (2026-10-12):** el código de las **fases 0 a 3 para `dev`** está escrito (sección 11) pero **no se ha
-> validado con `terraform validate` ni se ha aplicado nunca**: el entorno donde se escribió no tenía Terraform.
+> **Estado (2026-10-13):** las **fases 0 a 3 para `dev` están aplicadas en AWS** (`bootstrap/` y `envs/dev/`: 65
+> recursos, con `encendido=false`, o sea backend y embedding creados pero con 0 tareas). Falta construir y subir las
+> imágenes, habilitar `pgvector` y comprobar el arranque real de los servicios (12.1, 12.2, 12.13).
 > Las fases 4 a 8 siguen sin hacerse. Los supuestos marcados con ⚠ son decisiones o datos por confirmar; el plan
 > asume **AWS** porque `FRONTED_KOTLIN/ARCHITECTURE.md` ya habla de S3 con URLs prefirmadas.
 >
@@ -277,10 +278,10 @@ Cada fase termina con un criterio de aceptación comprobable.
 
 | Fase | Contenido | Aceptación | Estado |
 |---|---|---|---|
-| **0. Bootstrap** | `bootstrap/`: bucket del state, rol OIDC de GitHub. Proyecto movido fuera de Google Drive | `terraform init` en `envs/dev` usa el state remoto | Código escrito, **sin ejecutar** |
-| **1. Red y almacenamiento** | `network`, `ecr`, `storage` (+ alarma de Budgets) | `terraform plan` limpio; buckets privados verificados | Código escrito, **sin validar** |
-| **2. Datos** | `database` (RDS + `pgvector`), `secrets` | Se conecta desde dentro de la VPC y `CREATE EXTENSION vector` funciona | Código escrito, **sin validar**; el `CREATE EXTENSION` no lo hace Terraform (12.1) |
-| **3. Cómputo** | `ecs_cluster`, `ecs_service` × 2, `alb` | `GET /health` del backend responde por el ALB; el embedding responde solo desde el backend | Código escrito, **sin validar**; falta que existan los `Dockerfile` y las imágenes |
+| **0. Bootstrap** | `bootstrap/`: bucket del state, rol OIDC de GitHub. Proyecto movido fuera de Google Drive | `terraform init` en `envs/dev` usa el state remoto | **Hecha** (2026-10-13): `apply` de `bootstrap/` e `init` de `envs/dev` con el state remoto. El proyecto sigue en OneDrive (12.12) |
+| **1. Red y almacenamiento** | `network`, `ecr`, `storage` (+ alarma de Budgets) | `terraform plan` limpio; buckets privados verificados | **Aplicada** (2026-10-13): plan limpio y `apply` completo; falta verificar a mano que los buckets sean privados |
+| **2. Datos** | `database` (RDS + `pgvector`), `secrets` | Se conecta desde dentro de la VPC y `CREATE EXTENSION vector` funciona | **Aplicada** (RDS PostgreSQL 16.15 creada); falta la conexión desde la VPC y el `CREATE EXTENSION`, que no lo hace Terraform (12.1) |
+| **3. Cómputo** | `ecs_cluster`, `ecs_service` × 2, `alb` | `GET /health` del backend responde por el ALB; el embedding responde solo desde el backend | **Aplicada con 0 tareas** (`encendido=false`); faltan los `Dockerfile` y las imágenes. `/health` por el ALB sin comprobar |
 | **4. Borde HTTPS** | `dns_cert` (o CloudFront si no hay dominio, ⚠ 9.3) | La app Android en un teléfono real llama a `https://…` | Pendiente. El `alb` ya acepta `certificate_arn` |
 | **5. CI/CD** | Los cinco workflows de la sección 7 | Un cambio en `BACKEND_FASTAPI/` llega a `dev` sin intervención manual | Pendiente (el rol OIDC ya está en `bootstrap/`) |
 | **6. Observabilidad** | `observability`: logs, alarmas (5xx, CPU, espacio de RDS, tareas caídas), dashboard | Una alarma de prueba llega al correo | Pendiente (los log groups ya los crea `ecs_service`) |
@@ -348,8 +349,10 @@ Cada una trae una recomendación para poder avanzar.
 
 ## 11. Catálogo del código existente
 
-> Escrito el 2026-10-12 a partir del código tal como se creó. **Nunca se ejecutó `terraform validate`, `plan` ni
-> `apply`**; los comportamientos descritos son los que el código pretende, no los observados.
+> Escrito el 2026-10-12 y corregido el 2026-10-13 tras el primer `validate`, `plan` y `apply` de `dev` (65 recursos
+> creados, con `encendido=false`). Lo que **ya se observó**: que el código valida, planifica y se aplica. Lo que
+> **no** se ha observado: el arranque de los servicios ECS, `/health` por el ALB, la conexión a RDS, `pgvector` y los
+> scripts de apagado; esos comportamientos son los que el código pretende.
 > Convención de todos los módulos: `main.tf` + `variables.tf` + `outputs.tf`, sin lógica de ambiente.
 
 ### 11.1 Cómo se ejecuta
@@ -371,6 +374,14 @@ terraform apply
 ```
 
 - Requiere Terraform **>= 1.10** (el state usa `use_lockfile`) y credenciales de AWS. Subir `.terraform.lock.hcl` a Git.
+- En **Windows PowerShell 5.1** `&&` no es un separador válido: ejecutar `terraform init` y `terraform apply` en líneas
+  separadas (o encadenar con `;`). Cada comando se ejecuta **dentro de su carpeta** (`bootstrap/` o `envs/dev/`): en la
+  raíz del repositorio `terraform output` no encuentra nada.
+- Como todavía no hay imágenes en ECR, el primer `apply` de `dev` se hizo con los servicios apagados:
+  `terraform apply -var "encendido=false"`.
+- Valores usados en `bootstrap/` (2026-10-13): `state_bucket_name = "4uproject-eafit-tfstate"` y
+  `github_repo = "AlejandroSPosada/4U_project"`. Región de la infraestructura: `us-east-1` (la AWS CLI local está en
+  `us-east-2`; ver 12.11).
 - `.gitignore` excluye `.terraform/`, `*.tfstate*`, `*.tfplan`, `*.auto.tfvars` y `bootstrap/terraform.tfvars`;
   `terraform.tfvars` de `envs/dev` **sí** se sube (no lleva secretos).
 - Proveedores: `hashicorp/aws ~> 5.80` (bootstrap y dev) y `hashicorp/random ~> 3.6` (el módulo `secrets` lo declara
@@ -393,15 +404,19 @@ terraform apply
 | `network` | `name`, `region`, `vpc_cidr` (`10.20.0.0/16`), `az_count` (2; validación ≥ 2), `enable_nat_gateway` (`false`) | VPC con DNS; `az_count` subredes **públicas** (`cidrsubnet(vpc, 8, i)`) y **privadas** (`cidrsubnet(vpc, 8, i+10)`); IGW; una tabla de rutas pública y una **única** privada; NAT + EIP **solo si** `enable_nat_gateway` (uno solo, en la primera subred pública); endpoint de S3 (gateway, gratis) en ambas tablas | `vpc_id`, `vpc_cidr`, `public_subnet_ids`, `private_subnet_ids` |
 | `ecr` | `name`, `repositories` (`["backend","embedding"]`), `keep_images` (10), `force_delete` (`false`) | Repositorios **`<name>/<servicio>`** (etiquetas mutables, escaneo al subir, SSE AES256) y política que conserva las últimas `keep_images` imágenes | `repository_urls` (mapa servicio → URL), `repository_arns` |
 | `storage` | `name`, `account_id`, `create_scans_bucket` (`true`), `scans_expire_days` (1), `force_destroy` (`false`) | Bucket **`<name>-dataset-<cuenta>`** y, opcional, **`<name>-scans-<cuenta>`**. Ambos: sin acceso público, SSE-S3, `BucketOwnerEnforced`, política que exige TLS. Escaneos: expiran a `scans_expire_days` y abortan multiparte a 1 día. Dataset: aborta multiparte a 7 días. **Sin versionado** | `dataset_bucket`, `dataset_bucket_arn`, `scans_bucket` (`""` si no existe), `scans_bucket_arn` (`""`), `bucket_arns` |
-| `database` | `name`, `vpc_id`, `subnet_ids`, `engine_major_version` (`16`), `engine_version` (`16.4` ⚠ 12.4), `instance_class` (`db.t4g.micro`), `allocated_storage_gb` (20), `max_allocated_storage_gb` (100), `db_name` (`campus`), `master_username` (`campus_admin`), `multi_az` (`false`), `backup_retention_days` (7), `deletion_protection` (`false`) | Grupo de subredes, **security group sin reglas de entrada**, grupo de parámetros (`rds.force_ssl = 1`), instancia PostgreSQL gp3 cifrada, no pública, con `manage_master_user_password = true`. Con `deletion_protection = true` toma copia final; sin ella, no. `apply_immediately` = lo contrario de `deletion_protection` | `host`, `port`, `name`, `secret_arn`, `security_group_id` |
+| `database` | `name`, `vpc_id`, `subnet_ids`, `engine_major_version` (`16`), `engine_version` (`16.15`, ver 12.4), `instance_class` (`db.t4g.micro`), `allocated_storage_gb` (20), `max_allocated_storage_gb` (100), `db_name` (`campus`), `master_username` (`campus_admin`), `multi_az` (`false`), `backup_retention_days` (7), `deletion_protection` (`false`) | Grupo de subredes, **security group sin reglas de entrada**, grupo de parámetros (`rds.force_ssl = 1`), instancia PostgreSQL gp3 cifrada, no pública, con `manage_master_user_password = true`. Con `deletion_protection = true` toma copia final; sin ella, no. `apply_immediately` = lo contrario de `deletion_protection` | `host`, `port`, `name`, `secret_arn`, `security_group_id` |
 | `secrets` | `name`, `recovery_window_in_days` (7) | `random_password` de 64 caracteres (sin símbolos) y el secreto **`<name>/jwt-secret`** con ese valor | `jwt_secret_arn` |
 | `ecs_cluster` | `name`, `vpc_id`, `namespace` (`campus.internal`), `container_insights` (`false`) | Clúster **`<name>-cluster`** y espacio de nombres DNS privado de Cloud Map | `cluster_arn`, `cluster_name`, `namespace_id`, `namespace_name` |
 | `alb` | `name`, `vpc_id`, `vpc_cidr`, `public_subnet_ids`, `target_port` (8000), `health_check_path` (`/health`), `certificate_arn` (`null`), `idle_timeout` (60), `deletion_protection` (`false`) | SG (entrada 80 desde internet, 443 solo con certificado; **salida solo hacia el CIDR de la VPC**), ALB público **`<name>-alb`**, target group **`<name>-backend`** (tipo `ip`, health 200 cada 30 s, 2 sanos / 3 no sanos). **Sin certificado:** el puerto 80 reenvía al backend. **Con certificado:** 80 redirige (301) a 443 y 443 reenvía (política TLS 1.3/1.2 `ELBSecurityPolicy-TLS13-1-2-2021-06`) | `dns_name`, `zone_id`, `security_group_id`, `target_group_arn`, `https_enabled` |
-| `ecs_service` | `name`, `service_name`, `cluster_arn`, `vpc_id`, `subnet_ids`, `assign_public_ip` (`false`), `image`, `container_port`, `cpu` (512), `memory` (1024), `cpu_architecture` (`X86_64`), `desired_count` (1), `environment` (mapa, `{}`), `ingress_security_group_ids` (`[]`), `target_group_arn` (`null`), `health_check_grace_seconds` (60), `service_discovery_namespace_id` (`null`), `attach_task_policy` (`false`), `task_policy_json` (`null`), `log_retention_days` (7) | Log group `/ecs/<name>-<servicio>`; **rol de ejecución** (`-exec`, política `AmazonECSTaskExecutionRolePolicy`) y **rol de tarea** (`-task`, con política en línea solo si `attach_task_policy`); SG (entrada TCP al puerto del contenedor solo desde los SG indicados, salida abierta); definición de tarea Fargate `awsvpc` con **un** contenedor llamado como `service_name` y logs `awslogs`; registro en Cloud Map (A, TTL 10 s, `MULTIVALUE`) si hay `service_discovery_namespace_id`; servicio ECS con disyuntor de despliegue (reversión automática), `load_balancer` solo si hay `target_group_arn` y `ignore_changes = [task_definition]` | `security_group_id`, `service_name`, `task_role_arn`, `execution_role_arn`, `log_group_name` |
+| `ecs_service` | `name`, `service_name`, `cluster_arn`, `vpc_id`, `subnet_ids`, `assign_public_ip` (`false`), `image`, `container_port`, `cpu` (512), `memory` (1024), `cpu_architecture` (`X86_64`), `desired_count` (1), `environment` (mapa, `{}`), `ingress_security_group_ids` (`[]`), `target_group_arn` (`null`), `health_check_grace_seconds` (60), `enable_service_discovery` (`false`), `service_discovery_namespace_id` (`null`; solo se usa si `enable_service_discovery = true`), `attach_task_policy` (`false`), `task_policy_json` (`null`), `log_retention_days` (7) | Log group `/ecs/<name>-<servicio>`; **rol de ejecución** (`-exec`, política `AmazonECSTaskExecutionRolePolicy`) y **rol de tarea** (`-task`, con política en línea solo si `attach_task_policy`); SG (entrada TCP al puerto del contenedor solo desde los SG indicados, salida abierta); definición de tarea Fargate `awsvpc` con **un** contenedor llamado como `service_name` y logs `awslogs`; registro en Cloud Map (A, TTL 10 s, `MULTIVALUE`) solo si `enable_service_discovery = true`; servicio ECS con disyuntor de despliegue (reversión automática), `load_balancer` solo si hay `target_group_arn` y `ignore_changes = [task_definition]` | `security_group_id`, `service_name`, `task_role_arn`, `execution_role_arn`, `log_group_name` |
 
 Cuidados de los módulos:
 - **Límite de nombres del ALB y del target group: 32 caracteres.** Con `campus-locator-<env>` hoy caben (`campus-locator-prod-backend` = 27), pero un prefijo más largo rompe el `apply`.
 - `attach_task_policy` es un booleano aparte (en vez de comprobar si `task_policy_json` es `null`) porque ese JSON sale de un `data` y su nulidad no se conoce al planificar.
+- **Nunca decidir un `count` o `for_each` comparando con `null` un valor que sale de otro recurso** (`namespace_id`, ids,
+  ARNs): no se conoce al planificar y `plan` falla con `Invalid count argument`. Por eso `aws_service_discovery_service`
+  usa el booleano `enable_service_discovery` y no `service_discovery_namespace_id != null` (fallo hallado y corregido
+  el 2026-10-13). Es el mismo patrón que `attach_task_policy`.
 - `ingress_security_group_ids` se recorre con `count`, no con `for_each`, por la misma razón (los ids no se conocen al planificar). Cambiar el **orden** de la lista recrea reglas.
 - El contenedor **no define** `healthCheck` propio y **no inyecta secretos** como variables: el backend lee los secretos con el SDK usando su rol de tarea.
 - El rol de ejecución solo tira imágenes y escribe logs; los permisos de la app van en el rol de tarea.
@@ -427,7 +442,7 @@ Cuidados de los módulos:
 - **Subredes de las tareas:** públicas si `enable_nat_gateway = false` (con `assign_public_ip = true`, necesario para tirar imágenes de ECR sin NAT) y privadas si hay NAT. Los SG siguen cerrados: nada llega a las tareas salvo lo de abajo.
 - `ecr` con `force_delete = true`, `storage` con `force_destroy = true` y `secrets` con `recovery_window_in_days = 0` **solo en dev** (para poder destruir y recrear).
 - **Backend:** 512 CPU / 1024 MB, entrada solo desde el SG del ALB, registrado en el target group. Imagen `<url ECR backend>:<image_tag>`.
-- **Embedding:** 2048 CPU / 4096 MB (modelo `dinov2_vitb14`), entrada solo desde el SG del backend, registrado en Cloud Map (nombre `embedding.campus.internal`), **sin** rol de tarea con permisos. Imagen `<url ECR embedding>:<image_tag>`.
+- **Embedding:** 2048 CPU / 4096 MB (modelo `dinov2_vitb14`), entrada solo desde el SG del backend, registrado en Cloud Map (`enable_service_discovery = true`; nombre `embedding.campus.internal`), **sin** rol de tarea con permisos. Imagen `<url ECR embedding>:<image_tag>`.
 - **Base de datos:** una regla de entrada TCP `backend → puerto de RDS` (`aws_vpc_security_group_ingress_rule.db_from_backend`).
 - **Permisos del rol de tarea del backend** (`data.aws_iam_policy_document.backend_task`): `s3:GetObject/PutObject/DeleteObject` sobre los objetos de los buckets, `s3:ListBucket` sobre los buckets, y `secretsmanager:GetSecretValue` sobre el secreto del JWT y el de la base. Nada más (los logs los escribe el rol de ejecución).
 - **Presupuesto:** `aws_budgets_budget` mensual con avisos al 80 % (real) y 100 % (previsto) por correo, solo si `budget_alert_email != ""`.
@@ -447,7 +462,7 @@ Cuidados de los módulos:
 
 **Salidas de `envs/dev`:** `api_base_url` (`http(s)://<dns del ALB>`; **es HTTP mientras no haya certificado**, ⚠ 12.5), `ecr_repository_urls`, `ecs_cluster_name`, `dataset_bucket`, `scans_bucket`, `database_host`, `database_secret_arn`.
 
-**`backend.tf`:** state en S3, clave `envs/dev/terraform.tfstate`, región `us-east-1`, cifrado y `use_lockfile`. El bucket vale `campus-locator-tfstate-CAMBIAR`: **hay que reemplazarlo** por el que imprime `bootstrap/` antes del primer `init`.
+**`backend.tf`:** state en S3, clave `envs/dev/terraform.tfstate`, región `us-east-1`, cifrado y `use_lockfile`. El bucket vale `4uproject-eafit-tfstate`: **hay que reemplazarlo** por el que imprime `bootstrap/` antes del primer `init`.
 
 ### 11.5 Interruptor de apagado
 
@@ -484,15 +499,27 @@ tiene `ignore_changes = [task_definition]`, **subir una imagen nueva `latest` no
 debe registrar una definición nueva y actualizar el servicio (sección 7). Para el primer arranque basta forzar un
 despliegue (`aws ecs update-service --force-new-deployment`).
 
-### 12.3 Sin validar
-Ejecutar `terraform fmt -recursive`, `validate` y `plan` antes de cualquier `apply`, y revisar el plan completo.
-Un error de tipos ya se corrigió en `storage` al revisar a mano (un condicional entre objetos distintos); puede haber más.
+**Estado actual:** el primer `apply` se hizo con `-var "encendido=false"`, así que los servicios están en 0 tareas y no
+hay bucle de fallos. Encender (`terraform apply -var "encendido=true"`) solo después de subir las imágenes.
 
-### 12.4 ⚠ Versión de PostgreSQL
-`engine_version = "16.4"` es un valor puesto de memoria: AWS retira versiones menores con el tiempo y puede que ya
-no se acepte. Comprobar con
-`aws rds describe-db-engine-versions --engine postgres --engine-version 16 --query 'DBEngineVersions[].EngineVersion'`
-y ajustar la variable. `pgvector` exige PostgreSQL 15.2 o superior en RDS.
+### 12.3 Validación y primer apply (hecho el 2026-10-13)
+`terraform fmt`, `validate`, `plan` y `apply` se ejecutaron en `envs/dev` (y `apply` en `bootstrap/`): **65 recursos
+creados**. Errores hallados y corregidos por el camino:
+1. `Invalid count argument` en `modules/ecs_service` (el `count` dependía de `namespace_id`, desconocido al planificar):
+   se añadió `enable_service_discovery` (ver cuidados en 11.3). Antes de la corrección el plan contaba 64 recursos;
+   con ella, 65.
+2. `engine_version = "16.4"` no existía en RDS (12.4).
+3. Antes, ya se había corregido a mano un error de tipos en `storage` (un condicional entre objetos distintos).
+
+Siguen sin observarse en ejecución: las tareas ECS, `/health` por el ALB, la conexión a RDS y los scripts de apagado.
+Cualquier cambio futuro en un `.tf` vuelve a pedir `fmt`, `validate` y `plan` antes del `apply`.
+
+### 12.4 Versión de PostgreSQL (resuelto)
+`16.4` no existía en RDS. Consulta del 2026-10-13
+(`aws rds describe-db-engine-versions --engine postgres --engine-version 16 --query "DBEngineVersions[].EngineVersion"`,
+hecha en `us-east-2`): 16.9, 16.10, 16.11, 16.12, 16.13, 16.14 y 16.15. Se fijó `engine_version = "16.15"` y el
+`apply` la aceptó. AWS retira versiones menores con el tiempo: si un `apply` futuro la rechaza, repetir la consulta
+con el mismo `--region` que la infraestructura. `pgvector` exige PostgreSQL 15.2 o superior en RDS.
 
 ### 12.5 ⚠ HTTPS (decisión 9.3)
 Sin `certificate_arn` el ALB solo habla HTTP y la app Android (API 28+) lo bloquea: sirve para probar con `curl`,
@@ -554,3 +581,28 @@ de solo despliegue de imágenes), ahí sí cabe el módulo.
   justifican si el proyecto sigue más allá de la universidad. Confirmarlo y, si se descarta, tacharlo de 12.9.
 - **Apagado automático:** hoy el interruptor es manual. Programar el apagado (EventBridge Scheduler + una acción de ECS)
   evitaría cobros por olvido; no está hecho.
+
+### 12.11 Región
+La AWS CLI local está en `us-east-2`, pero el código usa `us-east-1` (variable `region` por defecto en `bootstrap/` y
+`envs/dev/`, y `backend.tf`). Todo lo creado el 2026-10-13 (state, VPC, RDS, ALB, ECR, ECS) está en `us-east-1`. Al
+comprobar cosas con la CLI, pasar `--region us-east-1`. Si se prefiere otra región hay que cambiarla en las variables
+y en `backend.tf` y recrear la infraestructura (decisión 9.2).
+
+### 12.12 Proyecto dentro de OneDrive
+El repositorio está en una carpeta de OneDrive (`...\OneDrive\Documentos\...\4U_project`). Igual que con Google Drive
+(sección 1), `.terraform/` pesa cientos de MB y OneDrive puede bloquear o sincronizar archivos temporales. La primera
+ejecución funcionó; si aparecen errores de permisos, mover el proyecto a una carpeta local (por ejemplo `C:\dev`).
+`bootstrap/terraform.tfstate` (state local, ignorado por Git) debe conservarse aparte: si se pierde, el bucket del
+state y el rol de GitHub quedan huérfanos.
+
+### 12.13 Siguientes pasos inmediatos
+1. Crear los `Dockerfile` de `BACKEND_FASTAPI/` y `SERVICE_EMBEDDING/` según 4.1, 4.2 y 11.6 (puertos 8000 y 8001,
+   `GET /health`, pesos del modelo dentro de la imagen, arquitectura `X86_64`).
+2. Construir y subir las imágenes a los repositorios de ECR (`ecr_repository_urls` en las salidas de `envs/dev`).
+3. Encender: `terraform apply -var "encendido=true"` y forzar el primer despliegue si hace falta (12.2).
+4. Comprobar `GET /health` por la URL de `api_base_url` (HTTP, solo con `curl`).
+5. Habilitar `pgvector` con la primera migración de Alembic (12.1).
+6. Resolver HTTPS (fase 4, 12.5) antes de probar con la app en un teléfono.
+
+**Costo con todo apagado:** siguen cobrando el ALB (~20 USD/mes) y RDS (~14 USD/mes, estimaciones de 12.6). Si el
+proyecto se pausa varios días, detener RDS o ejecutar `terraform destroy` en `envs/dev`.
