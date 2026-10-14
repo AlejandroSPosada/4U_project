@@ -4,7 +4,7 @@ Plan y catálogo de **`BACKEND_FASTAPI/`**: la API REST que usa la app Android. 
 `FRONTED_KOTLIN/ARCHITECTURE.md` (qué pide la app: sección 3, modelos y repositorios: 11.6) y a
 `INFRASTRUCTURA_TERRAFORM/ARCHITECTURE.md` (dónde corre y qué variables de entorno inyecta: 4.1).
 
-> **Estado (2026-10-14): `BACKEND_FASTAPI/` aún no tiene código.** Este documento es el **diseño** que parte de
+> **Estado (2026-10-14): existen las fases B0 y B1 (sin ejecutar contra AWS).** Este documento es el **diseño** que parte de
 > contratos ya fijados en los otros dos. Todo lo marcado con ⚠ es una **propuesta o supuesto sin verificar**.
 > La sección 12 es el catálogo del código: hoy está vacía y se llena **en el mismo cambio** que cada archivo.
 >
@@ -256,12 +256,20 @@ Orden recomendado: B0 → B1 primero (desbloquean la infra), y B2 antes de cualq
 
 ## 12. Catálogo del código existente
 
-> **Vacío: aún no hay archivos.** Al crear cada módulo, añadir aquí **en el mismo cambio** su entrada con el formato
-> de abajo (firma o contrato, quién lo usa, cuidados). Lo no verificado contra el código lleva ⚠.
+> Archivos de B0/B1. Nada se ha ejecutado aún contra AWS, solo se comprobó la sintaxis. Lo no verificado lleva ⚠.
 
 | Archivo | Qué expone | Lo usan | Cuidados |
 |---|---|---|---|
-| *(ninguno todavía)* | | | |
+| `Dockerfile` | Imagen `python:3.12-slim`, usuario no root, uvicorn en `0.0.0.0:8000` | CI / ECS | Construir con `--platform linux/amd64`; sin HEALTHCHECK propio (lo hace el ALB) |
+| `pyproject.toml` | Dependencias con rangos; el Dockerfile las extrae con `tomllib` | Dockerfile | ⚠ Sin lock ni versiones exactas |
+| `app/config.py` | `Settings` / `get_settings()` con las variables de la sección 3 (+ `LOCAL_DATABASE_URL`, solo local) | Todo | Todo tiene valor por defecto para que `/health` responda aunque falte algo; `LOCAL_DATABASE_URL` se rechaza en prod |
+| `app/main.py` | App FastAPI, `GET /health` (superficial), `GET /health/ready` (BD + embedding, no lo usa el ALB), error `{detail, codigo}` | ALB | `/docs` desactivado en prod; códigos `http_<status>` ⚠ propuestos |
+| `app/services/secrets.py` | `get_secret_string/json(arn)` con caché de 5 min, `invalidate(arn)` | `db/engine.py` | ⚠ El secreto de RDS se asume JSON con `username` y `password` |
+| `app/db/engine.py` | `get_engine()`: conexión nueva = lee el secreto, `sslmode=require`, reintento tras invalidar | `db/session.py`, Alembic, `/health/ready` | RDS rota la contraseña sola; por eso no se fija al crear el motor |
+| `app/db/session.py`, `app/deps.py` | `get_sessionmaker()`, dependencia `get_db` | Routers (B2+) | Auth y roles llegan en B2 |
+| `app/db/models.py` | Modelos de la sección 6; `EMBEDDING_DIM = 768` | Alembic | ⚠ Dimensión asumida (`vitb14`); cambiarla exige migración nueva |
+| `alembic/` (`env.py`, `0001_inicial.py`) | `CREATE EXTENSION vector` + 6 tablas + índice HNSW coseno | `scripts/migrar.sh` | Solo modo online; la 0001 tiene la dimensión fija a propósito |
+| `scripts/migrar.sh` | Lanza `alembic upgrade head` como tarea ECS con la definición, subredes y SG del backend | Operador / CI | ⚠ Sin probar contra AWS; supone el clúster `campus-locator-dev-cluster` |
 
 Plantilla por módulo: **ruta** · **responsabilidad** · **entradas/salidas (tipos o JSON)** · **variables de entorno que lee** · **qué tabla toca** · **qué consume de otros módulos** · **cómo probarlo**.
 
