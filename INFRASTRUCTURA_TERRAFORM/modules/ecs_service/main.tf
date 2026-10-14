@@ -114,7 +114,7 @@ resource "aws_ecs_task_definition" "this" {
 }
 
 resource "aws_service_discovery_service" "this" {
-  count = var.service_discovery_namespace_id != null ? 1 : 0
+  count = var.enable_service_discovery ? 1 : 0
   name  = var.service_name
 
   dns_config {
