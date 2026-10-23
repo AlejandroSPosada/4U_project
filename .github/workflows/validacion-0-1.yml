@@ -1,0 +1,53 @@
+# Creado por INFRASTRUCTURA_TERRAFORM/project/src/ops/validate01.py (validacion-0-1 20261023-234350).
+# Solo existe en la rama temporal validacion-0-1-*: nunca llega a main y el validador la borra al terminar.
+name: validacion-0-1
+on:
+  pull_request:
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: sub del token OIDC (solo el claim, nunca el token)
+        continue-on-error: true
+        run: |
+          TOKEN="$(curl -sSf -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')"
+          python3 -c 'import base64,json,sys; p=sys.argv[1].split(".")[1]; p+="="*(-len(p)%4); print("oidc-sub=" + json.loads(base64.urlsafe_b64decode(p))["sub"])' "$TOKEN"
+      - name: credenciales (gha-terraform-plan)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROL_TERRAFORM_PLAN_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: false
+      - name: identidad
+        run: aws sts get-caller-identity
+  sin-terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - name: credenciales (gha-terraform sin entorno, debe fallar)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROL_TERRAFORM_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          retry-max-attempts: 1
+  sin-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: credenciales (gha-deploy desde un PR, debe fallar)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROL_DEPLOY_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          retry-max-attempts: 1
+  dev-desde-pr:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: credenciales (gha-terraform con entorno dev, no debe llegar a ejecutarse)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROL_TERRAFORM_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          retry-max-attempts: 1
