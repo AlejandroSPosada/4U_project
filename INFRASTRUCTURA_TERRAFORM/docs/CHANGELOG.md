@@ -46,9 +46,8 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   `validate` de `envs/dev` y una prueba con proveedor simulado (`tofu test`) que renderiza las cinco definiciones de
   tarea; TFLint 0.65.0 con el *ruleset* de AWS 0.50.0 en `envs/dev` y `modules/computo`, sin avisos; `servidor.py`
   probado en local (puertos, `app.cli`, SIGTERM); `validate13.py` con ruff y su ruta de credenciales inválidas
-  (código 3). Pendiente: `plan`/`apply` en CI, `plan` vacío después y `validate13.py` en `dev`.
-- **Pendiente:** cerrar INF-1.3 (fila de PLAN §3). Copiar `ECR_BACKEND`, `ECR_EMBEDDING` y `ECS_CLUSTER` a las
-  variables del repositorio (§5.9). Ya resuelto de 0.8.0: la carpeta se llama `SERVICE_EMBEDDING`.
+  (código 3). En `dev`: `apply` por `infra.yml` (30 recursos), `plan` vacío después (`-detailed-exitcode` = 0) y `validate13.py` con código 0 sobre `a0f2dc5` (C5 aceptaba solo `t`; `'SSL=' || ssl` da `true`: corregido en ese commit).
+- **Pendiente:** ninguno del lote (INF-1.3 «Hecho»). Ya resuelto de 0.8.0: la carpeta se llama `SERVICE_EMBEDDING`.
 
 ---
 

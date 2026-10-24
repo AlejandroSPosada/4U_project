@@ -4,7 +4,7 @@
 |---|---|
 | Versión del documento | **0.10.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
-| Estado | Diseño propuesto. **INF-0.1, INF-0.2, INF-1.1 e INF-1.2 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos); **INF-1.3 con código** (cómputo, imagen de prueba y `validate13.py`), pendiente de aplicar y validar; el resto, sin código todavía |
+| Estado | Diseño propuesto. **INF-0.1 a INF-1.3 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |

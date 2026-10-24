@@ -126,7 +126,7 @@ imagen de prueba, C1a, C2 y C6 fallan con `falta la imagen de prueba en …`.
    `plan`):
    ```bash
    cd INFRASTRUCTURA_TERRAFORM/project
-   terraform -chdir=envs/dev plan -input=false -lock-timeout=60s -detailed-exitcode -no-color | tail -1
+   terraform -chdir=envs/dev plan -input=false -lock-timeout=60s -detailed-exitcode -no-color | grep -E '^(No changes|Plan:)'
    echo "codigo=${PIPESTATUS[0]}"
    ```
    Esperado: `No changes. Your infrastructure matches the configuration.` y `codigo=0`.
