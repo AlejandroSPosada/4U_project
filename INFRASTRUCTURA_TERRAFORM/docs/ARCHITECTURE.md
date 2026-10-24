@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.5.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.5.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
 | Estado | Diseño propuesto. **INF-0.1, INF-0.2 e INF-1.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
@@ -946,7 +946,7 @@ declaran `permissions_boundary` (output `limite_roles_arn`) y uno sin él falla 
 | R8 | La URL de la API cambia si se recrea la HTTP API, y `ApiConfig.kt` queda desactualizado | Baja | Medio | `prevent_destroy` en la API; dominio propio en Fase 6 |
 | R9 | Cuotas por defecto de una cuenta nueva (vCPU de Fargate, etc.) | Baja | Medio | El sistema usa 1,5 vCPU; solicitar aumento si un `apply` falla por cuota |
 | R10 | `/v1/localize` es público: abuso que dispara costos | Baja | Medio | *Throttling*; alarma de 5xx; en `prod`, WAF o clave de app |
-| R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y chocan con nombres de §5.1 (bucket del dataset, quizá el *namespace* de Cloud Map o una VPC con `Name = campus-locator-dev-vpc`, que haría fallar C2a de `validate11.py`) | Alta | Medio | Antes del `apply` de INF-1.1, comprobar que no hay otra VPC con ese `Name`; inventario y limpieza del resto antes de INF-1.2 (PLAN §3, nota de INF-1.2; CHANGELOG 0.3.0) |
+| R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y pueden chocar con nombres de §5.1 (sobre todo el *namespace* de Cloud Map `campus-locator.local`, con INF-1.3) | Alta | Medio | Revisado el 2026-10-24: no había otra VPC `campus-locator-dev-vpc` (C2a de INF-1.1) ni nada que choque con INF-1.2 (el bucket del dataset ya no existe; sin instancias, *snapshots*, grupos de parámetros ni de subredes de RDS; sin colas; `campus-locator-dev/jwt-secret` está en borrado programado y su nombre no choca). Antes de INF-1.3, inventariar y limpiar el resto: clúster y servicios de ECS, ECR `campus-locator-dev/*`, *namespace* de Cloud Map, *target group*, *log groups* `/ecs/…`, roles `campus-locator-dev-backend-*` y `-embedding-*` y los buckets `campus-locator-dev-scans-648617469176` y `4uproject-eafit-tfstate` (CHANGELOG 0.3.0) |
 | R12 | El repositorio es público: los logs de Actions y los comentarios del `plan` los puede leer cualquiera | Alta | Bajo | Terraform oculta los valores `sensitive` (contraseñas, secretos) en el `plan` y en los logs; ningún paso imprime el estado ni credenciales; todo output con un dato sensible se declara `sensitive`; los PR desde *forks* no ejecutan el `plan`. Lo que queda visible (IDs, ARN, URL) no da acceso por sí solo |
 
 ---

@@ -20,6 +20,20 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.5.1] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; inventario de los restos del intento anterior (R11) antes de INF-1.2.
+- **Qué cambió:** R11 y la nota de INF-1.2 en PLAN §3 recogen el inventario: la nota decía que el bucket
+  `campus-locator-dev-dataset-648617469176` existía y ya no existe. Nada choca con INF-1.2; lo que queda por revisar
+  afecta a INF-1.3 (Cloud Map, ECS, ECR, roles) y a costos.
+- **Contratos tocados (§5):** ninguno.
+- **Cómo se verificó:** `s3 ls`, `rds describe-db-instances`, `describe-db-snapshots`, `describe-db-parameter-groups`,
+  `describe-db-subnet-groups`, `sqs list-queues --queue-name-prefix campus-locator` y
+  `secretsmanager list-secrets --include-planned-deletion` con el perfil de administración, 2026-10-24.
+- **Pendiente:** inventario y limpieza de lo que lista R11 antes de INF-1.3.
+
+---
+
 ## [0.5.0] — 2026-10-24
 
 - **Lote que la motivó:** INF-1.1 (red y grupos de seguridad).
