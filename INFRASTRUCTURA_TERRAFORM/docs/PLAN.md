@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.4.1**.
+Alineado con `ARCHITECTURE.md` **v0.5.0**.
 
 ---
 
@@ -105,12 +105,15 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 
 #### INF-1.1 — Red y grupos de seguridad
 - **Objetivo:** la red de ARCHITECTURE §3.2 y los grupos de §5.7.
-- **Entregables:** módulo `red`.
+- **Entregables:** módulo `red` (§3.2, §5.1, §5.7; entradas y salidas en §5.12); en `envs/dev`, `local.prefijo`, las
+  variables `cidr_vpc`, `az_computo` y `az_secundaria` (§5.3) y los outputs `subredes_tareas` y `sg_migrate` (§5.2);
+  `src/ops/validate11.py`.
 - **Criterios de cierre:**
   - C1. `plan` vacío tras el `apply`.
-  - C2. VPC, subredes, rutas y endpoint de S3 coinciden con §3.2 y §5.1.
-  - C3. Las reglas de los cinco grupos de seguridad coinciden con §5.7.
+  - C2. VPC, subredes, rutas y endpoint de S3 coinciden con §3.2 y §5.1, nombres y etiquetas incluidos.
+  - C3. Las reglas de los cinco grupos de seguridad coinciden con §5.7 y el grupo `default` de la VPC no tiene reglas.
   - C4. Ninguna regla entrante tiene origen `0.0.0.0/0` ni `::/0`.
+  - C5. Los outputs `subredes_tareas` y `sg_migrate` existen y apuntan a `publica-a` y a `campus-locator-dev-api`.
 - **Historias:** habilita HU-01, HU-10, HU-13.
 
 #### INF-1.2 — Datos y secretos
@@ -187,7 +190,7 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 |---|---|---|---|---|---|---|
 | INF-0.1 | 0 | Hecho | [0-1](./validation/validation-0-1.md) | `b20a62f` 2026-10-24 | 0.3.0 | `sub` inmutable de OIDC (`github_ids`); proveedor OIDC importado de un intento anterior |
 | INF-0.2 | 0 | Hecho | [0-2](./validation/validation-0-2.md) | `c677aeb` 2026-10-24 | 0.4.0 | Primer `apply` de `envs/dev` hecho por `infra.yml`; C3b toma el bloqueo él mismo (`terraform console` ya no lo toma desde Terraform 1.15) |
-| INF-1.1 | 1 | Pendiente | [1-1](./validation/validation-1-1.md) | — | — | |
+| INF-1.1 | 1 | En curso | [1-1](./validation/validation-1-1.md) | — | — | Código escrito; faltan el `apply` desde `main` y `validate11.py` en `dev` |
 | INF-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | Antes: el bucket `campus-locator-dev-dataset-648617469176` ya existe (intento anterior, ARCHITECTURE R11) |
 | INF-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | |
 | INF-1.4 | 1 | Pendiente | [1-4](./validation/validation-1-4.md) | — | — | |

@@ -10,8 +10,19 @@ data "aws_caller_identity" "actual" {}
 # tflint-ignore: terraform_unused_declarations
 data "aws_default_tags" "actuales" {}
 
-module "red" { # INF-1.1
+locals {
+  # Prefijo de nombres de §5.1 (campus-locator-dev).
+  prefijo = "${var.proyecto}-${var.entorno}"
+}
+
+module "red" {
   source = "../../modules/red"
+
+  prefijo       = local.prefijo
+  region        = var.region
+  cidr_vpc      = var.cidr_vpc
+  az_computo    = var.az_computo
+  az_secundaria = var.az_secundaria
 }
 
 module "datos" { # INF-1.2

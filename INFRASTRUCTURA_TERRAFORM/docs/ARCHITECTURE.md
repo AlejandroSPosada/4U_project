@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.4.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-23 |
-| Estado | Diseño propuesto. **INF-0.1 e INF-0.2 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`); el resto, sin código todavía |
+| Versión del documento | **0.5.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-24 |
+| Estado | Diseño propuesto. **INF-0.1 e INF-0.2 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`); **INF-1.1 (red) escrito, pendiente de aplicar y validar**; el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -109,6 +109,13 @@ Detalle funcional de cada flujo: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §4.
   tráfico entrante desde internet.
 - RDS vive en las subredes privadas (sin ruta a internet y sin IP pública).
 - *Gateway endpoint* de S3 (gratuito) asociado a la tabla de rutas pública: el tráfico a S3 no sale por internet.
+- Dos tablas de rutas propias: `-publica` (ruta `local`, `0.0.0.0/0` → Internet Gateway y la del endpoint de S3) para
+  las dos subredes públicas y `-privada` (solo `local`) para las dos privadas. La tabla principal de la VPC no la usa
+  ninguna subred.
+- Las subredes no asignan IP pública por sí solas (`map_public_ip_on_launch = false`): la IP pública de cada tarea la
+  pide ECS con `assignPublicIp = ENABLED` (INF-1.3 y el `run-task` de §5.9).
+- El grupo `default` de la VPC queda **sin reglas** (Terraform lo adopta con `aws_default_security_group`): lo que se
+  cree sin un grupo explícito no tiene tráfico, en vez de quedar abierto entre sí (§5.7).
 
 ### 3.3 Borde HTTPS: API Gateway HTTP API + VPC Link + Cloud Map
 
@@ -306,7 +313,7 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
 |---|---|
 | **INF-0.1 Bootstrap** | Recursos que deben existir antes de cualquier `plan` remoto. El bucket de estado tiene `prevent_destroy` y solo admite TLS. El rol `gha-terraform-plan` (PR) solo puede leer, incluidos los secretos de `dev`, que ya están en el estado; el rol `gha-terraform` (aplicar, con aprobación) tiene permisos amplios pero acotados a la cuenta y región, y todo rol que crea lleva el *permissions boundary* `campus-locator-limite-roles`; el rol `gha-deploy` solo puede publicar imágenes, registrar definiciones de tarea, actualizar los servicios y lanzar `migrate` (§5.8). `bootstrap/configurar_github.py` crea con `gh` las variables del repositorio y el **entorno `dev` de GitHub**: aprobación manual y despliegue solo desde `main` (§3.9) |
 | **INF-0.2 Esqueleto** | `envs/dev` con *backend*, proveedor (`default_tags`, `allowed_account_ids`) y los seis módulos, vacíos, ya compuestos en `main.tf`; `data "aws_caller_identity"` (output `cuenta_id`) obliga a configurar el proveedor sin recursos y `data "aws_default_tags"` deja en el estado las etiquetas efectivas. `infra.yml` con `plan` en PR y `apply` aprobado en `main` (§3.9). A partir de aquí todo cambio de infraestructura entra por PR |
-| **INF-1.1 Red** | VPC, subredes, rutas, endpoint de S3 y los cinco grupos de seguridad de §5.7. Los grupos se crean aquí (no en cada módulo) para que las reglas cruzadas no generen ciclos |
+| **INF-1.1 Red** | Módulo `red`: VPC, cuatro subredes (las /24 número 0, 1, 10 y 11 de `cidr_vpc`), Internet Gateway, tablas `-publica` y `-privada`, endpoint de S3 en la pública, los cinco grupos de seguridad de §5.7 y el `default` sin reglas. Los grupos se crean aquí (no en cada módulo) y sin reglas en línea: cada regla es un `aws_vpc_security_group_ingress_rule` o `egress_rule`, así las referencias cruzadas no generan ciclos. Entrega a `envs/dev` los IDs que usan INF-1.2 a INF-1.4 (§5.12) y crea los outputs `subredes_tareas` y `sg_migrate` |
 | **INF-1.2 Datos y secretos** | RDS en `us-east-1a`; bucket con notificación a `ingesta` (la política de la cola autoriza solo a ese bucket); colas y DLQ; secretos. La **notificación** del bucket (`aws_s3_bucket_notification`) se crea después de la política de la cola, porque S3 valida el destino al guardarla |
 | **INF-1.3 Cómputo** | Repositorios ECR (etiquetas inmutables, escaneo básico, conservar 5), clúster, espacio de nombres privado `campus-locator.local`, roles, definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza), la tarea de validación y servicios con `desired_count = 0` hasta el primer despliegue |
 | **INF-1.4 Borde** | HTTP API, VPC Link en las subredes públicas, integración con el servicio Cloud Map `api`, rutas `ANY /{proxy+}` y `POST /v1/auth/login`, throttling y access logs. Expone `api_base_url` |
@@ -329,6 +336,8 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
   `campus-locator`.
 - Etiquetas obligatorias (`default_tags`): `Proyecto = campus-locator`, `Entorno = dev`, `GestionadoPor = terraform`,
   `Carpeta = INFRASTRUCTURA_TERRAFORM`.
+- Los recursos de red (VPC, subredes, Internet Gateway, tablas, endpoint y grupos) llevan además `Name` = su nombre
+  del inventario; las reglas de los grupos solo llevan las cuatro de `default_tags`.
 
 Inventario de nombres:
 
@@ -336,7 +345,10 @@ Inventario de nombres:
 |---|---|
 | VPC | `campus-locator-dev-vpc` (`10.20.0.0/16`) |
 | Subredes | `campus-locator-dev-publica-a` `10.20.0.0/24` (us-east-1a) · `campus-locator-dev-publica-b` `10.20.1.0/24` (us-east-1b) · `campus-locator-dev-privada-a` `10.20.10.0/24` · `campus-locator-dev-privada-b` `10.20.11.0/24` |
-| Grupos de seguridad | `campus-locator-dev-vpclink`, `-api`, `-worker`, `-embedding`, `-rds` |
+| Internet Gateway | `campus-locator-dev-igw` |
+| Tablas de rutas | `campus-locator-dev-publica` (las dos públicas) · `campus-locator-dev-privada` (las dos privadas) |
+| Endpoint de S3 (*gateway*) | `campus-locator-dev-s3` |
+| Grupos de seguridad | `campus-locator-dev-vpclink`, `-api`, `-worker`, `-embedding`, `-rds`; el `default` de la VPC lleva `Name = campus-locator-dev-default` |
 | HTTP API / VPC Link | `campus-locator-dev-api` / `campus-locator-dev-vpclink` |
 | Clúster ECS | `campus-locator-dev` |
 | Servicios ECS | `api`, `worker`, `embedding` |
@@ -385,22 +397,24 @@ Inventario de nombres:
 | `bootstrap: limite_roles_arn` | ARN de `campus-locator-limite-roles` | `envs/dev`: `permissions_boundary` de todos sus roles (INF-1.3) |
 
 Ningún servicio lee outputs en tiempo de ejecución: todo lo que necesitan llega por variables de entorno (§5.4).
-Los outputs aparecen con el lote que crea su recurso: `api_base_url` con INF-1.4, `sns_alertas_arn` con INF-3.1 y el
-resto con INF-1.1 a INF-1.3. Desde INF-0.2, `envs/dev` tiene además el output `cuenta_id` (de un
+Los outputs aparecen con el lote que crea su recurso: `api_base_url` con INF-1.4, `sns_alertas_arn` con INF-3.1,
+`subredes_tareas` y `sg_migrate` con INF-1.1 y el resto con INF-1.2 e INF-1.3. Desde INF-0.2, `envs/dev` tiene además el output `cuenta_id` (de un
 `data "aws_caller_identity"`, que obliga a evaluar el proveedor y su `allowed_account_ids` aunque no haya recursos).
 
 ### 5.3 Variables de entrada
 
 `bootstrap/terraform.tfvars` y `envs/dev/terraform.tfvars` (columna «Dónde»). Los dos archivos se versionan: no
 contienen secretos. Cada variable de `envs/dev` se declara con el lote que la usa (INF-0.2: `aws_account_id`, `region`,
-`proyecto` y `entorno`).
+`proyecto` y `entorno`; INF-1.1: `cidr_vpc`, `az_computo` y `az_secundaria`).
 
 | Variable | Dónde | Valor en `dev` | Notas |
 |---|---|---|---|
 | `aws_account_id` | ambos | `"648617469176"` | Va a `allowed_account_ids` |
 | `region` | ambos | `"us-east-1"` | |
 | `proyecto` / `entorno` | ambos | `"campus-locator"` / `"dev"` | Forman el prefijo de §5.1 |
-| `az_computo` | `envs/dev` | `"us-east-1a"` | Zona única de tareas y RDS |
+| `cidr_vpc` | `envs/dev` | `"10.20.0.0/16"` | Debe ser una /16 (lo valida el módulo `red`): las subredes son sus /24 número 0, 1, 10 y 11 (§5.1) |
+| `az_computo` | `envs/dev` | `"us-east-1a"` | Zona única de tareas y RDS; aloja `publica-a` y `privada-a` |
+| `az_secundaria` | `envs/dev` | `"us-east-1b"` | Solo para `publica-b` y `privada-b`: el grupo de subredes de RDS exige dos zonas (ADR-INF-03) |
 | `github_repo` | `bootstrap` | `"AlejandroSPosada/4U_project"` | Con las mayúsculas exactas de GitHub. Lo usan los *trust policies* de OIDC; `bootstrap` lo expone como output `github_repo` |
 | `github_ids` | `bootstrap` | `{ propietario = 142058005, repositorio = 1362957467 }` | IDs inmutables del `sub` de OIDC (§5.8): el repositorio se creó después del 2026-07-15. `null` = formato clásico |
 | `correo_alertas` | ambos | *(el de `bootstrap/terraform.tfvars`)* | Presupuesto (`bootstrap`) y topic de alarmas (`envs/dev`) |
@@ -494,6 +508,15 @@ quiere mover a variable de entorno, se añade primero a esta tabla.
 
 `migrate` y la tarea de validación (§5.11) usan el grupo `-api`.
 
+- «todo» = todos los protocolos y puertos hacia `0.0.0.0/0` (la VPC no tiene IPv6).
+- El grupo `default` de la VPC no tiene reglas (§3.2) y ningún recurso lo usa: todo recurso con interfaz en la VPC
+  declara uno de estos cinco grupos.
+- Todas las reglas de estos grupos viven en el módulo `red` (§5.12): otro módulo no crea grupos ni les añade reglas.
+  Cambiar una regla es editar este cuadro, `modules/red/main.tf` y `REGLAS_ESPERADAS` de `validate11.py` en el mismo
+  cambio.
+- La descripción de un grupo es fija (cambiarla obliga a recrearlo, y con él todo lo que lo usa) y AWS solo admite
+  ASCII en ella y en la de las reglas: sin tildes ni `§`.
+
 | Nombre DNS (Cloud Map, privado) | Registro | Puerto | Para qué |
 |---|---|---|---|
 | `api.campus-locator.local` | SRV (+A) | 8000 | Integración de API Gateway |
@@ -580,7 +603,8 @@ commit.
 `AWS_REGION`, `AWS_ROL_DEPLOY_ARN`, `AWS_ROL_TERRAFORM_PLAN_ARN`, `AWS_ROL_TERRAFORM_ARN`, `ECR_BACKEND`,
 `ECR_EMBEDDING`, `ECS_CLUSTER`,
 `SUBREDES_TAREAS`, `SG_MIGRATE`. Se copian de los outputs de §5.2 tras cada `apply` que los cambie. No se guardan
-llaves de AWS en GitHub.
+llaves de AWS en GitHub. Formato: `SUBREDES_TAREAS` = IDs de subred separados por comas, sin espacios (hoy solo
+`publica-a`); `SG_MIGRATE` = un ID de grupo. Los dos existen desde INF-1.1; `ECR_*` y `ECS_CLUSTER`, desde INF-1.3.
 
 ### 5.10 Parámetros operativos
 
@@ -709,24 +733,27 @@ tabla basta para escribir uno nuevo sin leer el código. Si cambian, la tabla se
 
 | Elemento | Qué hace |
 |---|---|
-| `Validador(lote=, validacion=, descripcion=, comprobaciones=[…], grupos={…})` | Ciclo de vida del validador. `grupos` son alias de `--solo` (p. ej. `{"C4": ["C4a", "C4b", "C4c"]}`). `v.correr(cuerpo)` lee los argumentos, rechaza un entorno que no sea `dev`, ejecuta `cuerpo(v)`, limpia, escribe el informe y devuelve el código; captura cualquier excepción como código 3 |
+| `Validador(lote=, validacion=, descripcion=, comprobaciones=[…], grupos={…})` (solo con nombre) | Ciclo de vida del validador. `comprobaciones` es la lista de IDs en orden (`["C1", "C2a", …]`; `--solo` rechaza cualquier otro); `grupos` son alias de `--solo` (p. ej. `{"C4": ["C4a", "C4b", "C4c"]}`). `v.correr(cuerpo)` lee los argumentos, rechaza un entorno que no sea `dev`, ejecuta `cuerpo(v)`, limpia, escribe el informe y devuelve el código; captura cualquier excepción como código 3 |
 | `v.precondicion(id, fn)` → `bool` | Ejecuta `fn()`, que devuelve el texto del detalle. `Bloqueo` (o `Falla`) → código 2; `ErrorConfiguracion` o `ErrorGh` 401/403 → 3 |
 | `v.precondicion_no_evaluada(id, motivo)`, `v.precondiciones_cumplidas()` | Marca las que dependen de una que falló; ¿pasaron todas? |
-| `v.comprobacion(id, fn)` | `omitida` si `--solo` la excluye; `Falla` → 1; `ErrorConfiguracion`, `ErrorGh` 401/403 o error imprevisto → 3. Mide `duracion_ms` |
+| `v.comprobacion(id, fn)` | `fn()` devuelve el detalle, como en `precondicion`. `omitida` si `--solo` la excluye; `Falla` → 1; `ErrorConfiguracion`, `ErrorGh` 401/403 o error imprevisto → 3. Mide `duracion_ms` |
 | `v.incluida(id)`, `v.alguna_incluida(*ids)` | Para no crear datos de prueba que ninguna comprobación incluida usará |
 | `v.manual(id, instruccion)` | Comprobación manual (estado `manual`) |
 | `v.al_limpiar(descripcion, fn)` | Registra una limpieza; se ejecutan en orden inverso al terminar, también si algo falló, salvo con `--sin-limpieza` |
 | `v.sello` | `AAAAMMDD-HHMMSS` (UTC) del inicio, para nombrar los datos `validacion-…` |
 | `Falla`, `Bloqueo`, `ErrorConfiguracion`; `ErrorGh` (hereda de `Falla`; `.http`, `.sin_permiso`, `.resultado`) | Excepciones que deciden el código |
-| `ejecutar(comando, entrada=, timeout=)` → `Resultado(codigo, salida, error, texto)` | Ejecuta un programa desde `project/` sin imprimir nada; si no está instalado → `ErrorConfiguracion` |
+| `ejecutar(comando, entrada=, timeout=300)` → `Resultado` | `comando` es una lista. Ejecuta un programa desde `project/` sin imprimir nada, con el entorno de `_entorno_proceso()` (`TF_IN_AUTOMATION`, `TF_INPUT=0`, `NO_COLOR`, sin paginadores de `gh` ni de `aws`); si no está instalado → `ErrorConfiguracion`. `Resultado` es un *dataclass* `(codigo, salida, error)` con la propiedad `texto` (salida y error juntos) |
 | `gh(*args)` → `str`; `gh_api(ruta, metodo=, cuerpo=, paginar=, jq=)` | CLI `gh`; `gh_api` devuelve el JSON (o el texto de `jq`) y lanza `ErrorGh` si falla |
 | `terraform_outputs(directorio)` → `dict`; `terraform_state_pull(directorio)` → `dict` | `terraform -chdir=…`; sin `init` o sin credenciales → `ErrorConfiguracion`. El estado nunca se imprime |
-| `sesion_aws()`; `comprobar_cuenta(sesion)` | boto3 en `us-east-1` con `AWS_PROFILE`; se niega a seguir si la cuenta no es `648617469176` |
+| `sesion_aws()`; `comprobar_cuenta(sesion)` → ARN | boto3 en `us-east-1` con `AWS_PROFILE`; `comprobar_cuenta` devuelve el ARN de quien llama y se niega a seguir si la cuenta no es `648617469176` |
 | `errores_aws(accion)` (bloque `with`), `error_aws(exc, accion)`, `codigo_error_aws(exc)` | Traducen errores de boto3: permisos o credenciales → `ErrorConfiguracion`; el resto → `Falla` |
 | `avisar(mensaje)`, `resumir(texto, limite)`, `commit_actual()` | Progreso a stderr (stdout queda para `[PASA] …`); recorte de mensajes; commit con `-dirty` |
-| `CUENTA`, `REGION`, `PROYECTO`, `DIR_INFORMES` | Constantes |
+| `CUENTA`, `REGION`, `PROYECTO`, `DIR_INFORMES` | Constantes (`PROYECTO` y `DIR_INFORMES` son rutas: `project/` y `project/.validacion/`) |
+| `PATRON_CREDENCIALES_TERRAFORM`, `PATRON_SIN_INIT` | Expresiones regulares que reconocen en la salida de Terraform un fallo de credenciales (→ código 3) o una copia sin `init` |
 
-Forma de un validador (`validate01.py` la sigue): `main()` crea el `Validador` y llama a `correr(cuerpo)`. `cuerpo(v)`
+Forma de un validador (`validate01.py` la sigue; `validate11.py` es el ejemplo más corto, de solo lectura): `import comun`
+(el script se ejecuta como `python src/ops/validate<fase><n>.py`), `main()` crea el `Validador` y devuelve
+`correr(cuerpo)`, y el módulo termina con `sys.exit(main())`. `cuerpo(v)`
 evalúa primero las precondiciones de credenciales (código 3), luego las de otros lotes (código 2), sin seguir si alguna
 falla; limpia restos `validacion-…` de ejecuciones anteriores; registra con `al_limpiar` lo que cree, en cuanto lo crea,
 y ejecuta las comprobaciones en el orden del documento de validación.
@@ -751,10 +778,12 @@ Lo que un lote necesita saber para añadir infraestructura sin leer el código e
 
 | Nombre | Qué es |
 |---|---|
-| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno` | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos). No hay todavía un `local` con el prefijo de §5.1: el primer lote que lo necesite lo define en `main.tf` y lo añade a esta tabla |
+| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno`; `var.cidr_vpc`, `var.az_computo`, `var.az_secundaria` (INF-1.1) | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos) |
+| `local.prefijo` | `"${var.proyecto}-${var.entorno}"` = `campus-locator-dev`, sin guion final: el prefijo de §5.1. Está en `main.tf` (INF-1.1); los módulos lo reciben como variable `prefijo` |
 | `data.aws_caller_identity.actual` | Cuenta de las credenciales (`.account_id`); alimenta el output `cuenta_id` |
 | `data.aws_default_tags.actuales` | Etiquetas efectivas del proveedor; nada lo referencia (lleva `# tflint-ignore: terraform_unused_declarations`) porque solo sirve para que los validadores lean las etiquetas del estado |
-| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`, hoy sin argumentos. Su lote (§4) les añade entradas y salidas |
+| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); los otros cinco, todavía sin argumentos: su lote (§4) les añade entradas y salidas |
+| Outputs de `envs/dev` | `cuenta_id` (INF-0.2); `subredes_tareas` = `[module.red.subred_tareas]` y `sg_migrate` = `module.red.grupos_seguridad["api"]` (INF-1.1) |
 | Última línea de `main.tf`: `# validacion-0-2 <AAAAMMDD-HHMMSS>` | La escribe y sustituye `validate02.py` (C2 la fusiona en `main`). No se borra ni hace falta moverla: el validador quita la anterior y añade la nueva al final |
 
 **Módulos (`modules/<nombre>/`)**
@@ -764,6 +793,40 @@ Lo que un lote necesita saber para añadir infraestructura sin leer el código e
   otro: `main.tf` de `envs/dev` pasa los outputs de uno como entradas de otro.
 - Las cuatro etiquetas de §5.1 las pone el proveedor (`default_tags`): los recursos no las repiten; solo añaden las
   propias (`Name` u otras de su lote).
+
+**Módulo `red` (INF-1.1)** — lo que los lotes siguientes necesitan para usarlo sin leer su código.
+
+| Entrada | Tipo | Valor que le pasa `envs/dev` |
+|---|---|---|
+| `prefijo` | `string` | `local.prefijo` |
+| `region` | `string` | `var.region` (forma `com.amazonaws.<region>.s3`) |
+| `cidr_vpc` | `string`; si no es una /16, falla la validación de la variable | `var.cidr_vpc` |
+| `az_computo`, `az_secundaria` | `string` | `var.az_computo`, `var.az_secundaria` |
+
+| Salida | Valor | La usa |
+|---|---|---|
+| `vpc_id` | ID de `campus-locator-dev-vpc` | quien necesite la VPC (p. ej. el *namespace* privado de Cloud Map, INF-1.3) |
+| `subred_tareas` | ID de `publica-a` (`string`) | `computo` (servicios y tareas de Fargate, INF-1.3); output `subredes_tareas` |
+| `subredes_publicas` | `[publica-a, publica-b]` (IDs, en ese orden) | `borde` (VPC Link, INF-1.4) |
+| `subredes_privadas` | `[privada-a, privada-b]` (IDs, en ese orden) | `datos` (grupo de subredes de RDS, INF-1.2) |
+| `grupos_seguridad` | mapa `{ vpclink, api, worker, embedding, rds }` → ID | `datos` (`rds`), `computo` (`api`, `worker`, `embedding`), `borde` (`vpclink`); output `sg_migrate` (`api`) |
+
+Ejemplo de cómo lo consume un lote posterior (INF-1.2), en `envs/dev/main.tf`:
+```hcl
+module "datos" {
+  source = "../../modules/datos"
+
+  subredes_privadas = module.red.subredes_privadas
+  sg_rds            = module.red.grupos_seguridad["rds"]
+}
+```
+Por dentro (para leer un `plan`): `aws_vpc.principal`, `aws_subnet.subredes["publica-a"|"publica-b"|"privada-a"|"privada-b"]`,
+`aws_internet_gateway.principal`, `aws_route_table.publica` y `.privada`, `aws_route.publica_internet`,
+`aws_route_table_association.subredes[…]`, `aws_vpc_endpoint.s3`, `aws_default_security_group.default`,
+`aws_security_group.grupos["vpclink"|"api"|"worker"|"embedding"|"rds"]` y las reglas
+`aws_vpc_security_group_ingress_rule.entradas[…]`, `aws_vpc_security_group_egress_rule.vpclink_a_api` y
+`aws_vpc_security_group_egress_rule.salida_libre[…]`: 29 recursos. Las tablas no llevan bloques `route` en línea (una
+ruta nueva es un `aws_route`) y los grupos tampoco llevan reglas en línea (§5.7).
 
 **Proveedores y lock**
 - `envs/dev/.terraform.lock.hcl` fija hoy `hashicorp/aws` 6.70.0 con *hashes* de `linux_amd64`, `windows_amd64`,
@@ -793,6 +856,13 @@ permitido (toma el bloqueo unos segundos); `apply` va por `infra.yml` (§3.9).
 con SIGINT para que suelten el bloqueo, y toma del bloqueo creando el `.tflock` con escritura condicional, porque desde
 Terraform 1.15 `terraform console` ya no lo toma. Si otro validador las necesita, se mueven a `comun.py` y se añaden a
 la tabla de §5.11.
+
+`validate11.py` tiene su propia `terraform_plan()`: lanza `terraform` en otra sesión de procesos (otro grupo en
+Windows) con la salida en archivos temporales y, con Ctrl+C, le reenvía la interrupción (SIGINT; CTRL_BREAK en Windows)
+y espera hasta 120 s a que suelte el bloqueo, ignorando mientras más Ctrl+C, SIGTERM y SIGHUP. `comun.ejecutar` lo
+mataría al instante; y con tuberías, si Python muriera, terraform recibiría SIGPIPE antes de soltar el bloqueo. Usa
+`comun._entorno_proceso()` para tener el mismo entorno que `ejecutar`. Con esta ya hay dos variantes de la misma idea:
+el próximo validador que lance un `plan` las une en `comun.py` (y actualiza §5.11).
 
 ---
 
@@ -865,7 +935,7 @@ declaran `permissions_boundary` (output `limite_roles_arn`) y uno sin él falla 
 | ID | Riesgo | Prob. | Impacto | Mitigación |
 |---|---|---|---|---|
 | R1 | El gasto supera 100 USD/mes | Media | Alto | Presupuesto con avisos, horario, tamaños mínimos, conservar 5 imágenes en ECR, revisar *Cost Explorer* al cerrar cada lote |
-| R2 | Tareas con IP pública expuestas | Baja | Alto | Grupos de seguridad sin entrada desde internet; `embedding` sin permisos de AWS; imágenes base mínimas con escaneo de ECR |
+| R2 | Tareas con IP pública expuestas | Baja | Alto | Grupos de seguridad sin entrada desde internet; `embedding` sin permisos de AWS; imágenes base mínimas con escaneo de ECR; grupo `default` sin reglas; `validate11.py` C4 comprueba que ninguna regla entrante de la VPC admite `0.0.0.0/0` ni `::/0` |
 | R3 | Caída de `us-east-1a` | Baja | Alto | Aceptado en `dev`; Multi-AZ en `prod` (Fase 6) |
 | R4 | `db.t4g.micro` (1 GiB) se queda corto: índice HNSW en memoria, conexiones, créditos de CPU | Media | Medio | Alarma de créditos; el índice cabe holgado hasta ~50 000 vectores de 768 dimensiones; subir a `db.t4g.small` (~23 USD/mes) si hace falta |
 | R5 | Contraseña de la base y demás secretos en el estado de Terraform | Media | Medio | Bucket de estado privado, cifrado, versionado y solo TLS. Lo leen el administrador, `gha-terraform` y `gha-terraform-plan`; este último desde cualquier PR del repositorio, que solo abre quien tiene escritura. Aceptado en `dev`; se revisa en INF-6.1 |
@@ -874,7 +944,7 @@ declaran `permissions_boundary` (output `limite_roles_arn`) y uno sin él falla 
 | R8 | La URL de la API cambia si se recrea la HTTP API, y `ApiConfig.kt` queda desactualizado | Baja | Medio | `prevent_destroy` en la API; dominio propio en Fase 6 |
 | R9 | Cuotas por defecto de una cuenta nueva (vCPU de Fargate, etc.) | Baja | Medio | El sistema usa 1,5 vCPU; solicitar aumento si un `apply` falla por cuota |
 | R10 | `/v1/localize` es público: abuso que dispara costos | Baja | Medio | *Throttling*; alarma de 5xx; en `prod`, WAF o clave de app |
-| R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y chocan con nombres de §5.1 (bucket del dataset, quizá el *namespace* de Cloud Map) | Alta | Medio | Inventario y limpieza antes de INF-1.2 (PLAN §3, nota de INF-1.2; CHANGELOG 0.3.0) |
+| R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y chocan con nombres de §5.1 (bucket del dataset, quizá el *namespace* de Cloud Map o una VPC con `Name = campus-locator-dev-vpc`, que haría fallar C2a de `validate11.py`) | Alta | Medio | Antes del `apply` de INF-1.1, comprobar que no hay otra VPC con ese `Name`; inventario y limpieza del resto antes de INF-1.2 (PLAN §3, nota de INF-1.2; CHANGELOG 0.3.0) |
 | R12 | El repositorio es público: los logs de Actions y los comentarios del `plan` los puede leer cualquiera | Alta | Bajo | Terraform oculta los valores `sensitive` (contraseñas, secretos) en el `plan` y en los logs; ningún paso imprime el estado ni credenciales; todo output con un dato sensible se declara `sensitive`; los PR desde *forks* no ejecutan el `plan`. Lo que queda visible (IDs, ARN, URL) no da acceso por sí solo |
 
 ---

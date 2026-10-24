@@ -20,6 +20,47 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.5.0] — 2026-10-24
+
+- **Lote que la motivó:** INF-1.1 (red y grupos de seguridad).
+- **Qué cambió:**
+  - Módulo `red`: VPC, cuatro subredes calculadas desde `cidr_vpc` (las /24 número 0, 1, 10 y 11), Internet Gateway,
+    tablas propias `-publica` y `-privada` (la principal queda sin usar), endpoint de S3 en la pública y los cinco
+    grupos de §5.7 sin reglas en línea (cada regla es un `aws_vpc_security_group_*_rule`).
+  - Decisión nueva: el grupo `default` de la VPC se adopta con `aws_default_security_group` y queda sin reglas
+    (endurece R2: lo que se cree sin grupo explícito no tiene tráfico).
+  - `envs/dev`: `local.prefijo`, variables `cidr_vpc`, `az_computo` y `az_secundaria` (§5.3) y outputs
+    `subredes_tareas` y `sg_migrate` (§5.2 ya decía que aparecen con el lote que crea su recurso).
+  - §5.12 documenta las entradas, salidas y recursos del módulo `red`, para que INF-1.2 a INF-1.4 lo usen sin leer su
+    código; §5.11 completa la API de `comun.py` (qué recibe `Validador`, `Resultado`, `comprobar_cuenta`, patrones de
+    Terraform), leída de sus firmas.
+  - Corrige contradicciones: INF-0.2 C4 deja a cada lote comprobar las etiquetas de lo que crea y `validation-1-1` no
+    lo hacía (nuevo C2e, que también comprueba `Name`); `validation-1-1` listaba P1 antes que P2 aunque §5.11 pide
+    evaluar primero las credenciales (ahora P2 va primero). Además: C3 incluye el `default` sin reglas (C3b), nuevo C5
+    para los dos outputs, y P1 hace `init -lockfile=readonly` para no tocar el lock versionado.
+- **Contratos tocados (§5):** §5.1 (nombres del IGW, las tablas y el endpoint; `Name` del `default`; etiqueta `Name` en
+  los recursos de red), §5.2 (cuándo aparecen `subredes_tareas` y `sg_migrate`), §5.3 (`cidr_vpc` y `az_secundaria`
+  nuevas; `az_computo` ya se usa), §5.7 (`default` sin reglas; las reglas solo viven en `red`; solo ASCII en las
+  descripciones), §5.9 (formato de `SUBREDES_TAREAS` y `SG_MIGRATE`), §5.11 y §5.12 (documentación de lo existente).
+- **Cómo se verificó:** Pendiente: `validate11.py --entorno dev` con código 0 sobre un commit de `main` (se completa al
+  cerrar el lote). Antes de entregar, con OpenTofu 1.13.2 y el proveedor aws 6.70.0 (en el entorno
+  de pruebas no hay Terraform): `fmt -check`, `validate` y TFLint 0.65 + *ruleset* aws 0.50 limpios en `envs/dev` y
+  `modules/red`; `tofu test` del módulo con proveedor simulado (CIDR, zonas, asociaciones, ruta al IGW, endpoint, las
+  nueve reglas con sus referencias, outputs, `default` sin reglas y rechazo de una CIDR que no es /16). El validador,
+  contra EC2/S3/STS simulados (moto) y un `terraform` simulado en 21 escenarios: red correcta; `plan` con cambios, sin
+  credenciales o con el bloqueo ocupado; regla abierta a internet; `default` con reglas; privada con ruta al IGW; NAT;
+  endpoint también en la privada; sin DNS; zona equivocada; falta una etiqueta; falta una regla; output equivocado; dos
+  VPC con el mismo nombre; sin estado de `dev`; `init` fallido; perfil inexistente; `--solo`; `--solo` inválido;
+  salida normal. Y tres interrupciones durante el `plan`: un Ctrl+C, dos Ctrl+C más un SIGTERM, y el validador muerto
+  con SIGKILL; en las tres terraform termina y suelta el bloqueo. Revisión independiente del módulo y del validador:
+  sin hallazgos de seguridad. Se corrigió lo que encontró en el validador: Ctrl+C en Windows (ahora CTRL_BREAK a un
+  grupo de procesos propio), señales repetidas durante la espera, salida a tuberías que daba SIGPIPE si Python moría,
+  código de P1 (un fallo local de `init` es 3, no 2) y endpoints borrados que EC2 sigue listando.
+- **Pendiente:** lo de 0.3.0 (la limpieza de R11 sigue antes de INF-1.2). `validate02.py` y `validate11.py` tienen dos
+  variantes del `plan` interrumpible con SIGINT (§5.12): unirlas en `comun.py` con el próximo validador que lo necesite.
+
+---
+
 ## [0.4.1] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; que el próximo lote (INF-1.1) pueda trabajar sin leer el código de INF-0.2.
