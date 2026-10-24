@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.6.0**.
+Alineado con `ARCHITECTURE.md` **v0.7.0**.
 
 ---
 
@@ -42,7 +42,7 @@ Alineado con `ARCHITECTURE.md` **v0.6.0**.
 | 0 — Cimientos | Cuenta, estado remoto, CI y control de gasto. En la app, además, el prototipo ya construido con datos locales | Un PR de Terraform produce un `plan` automático y hay presupuesto con avisos |
 | 1 — Plataforma mínima en línea | La app llega por HTTPS a un backend real con base de datos | `GET /v1/health` responde desde la URL pública y el admin inicia sesión con un JWT real |
 | 2 — Dataset | Un recorrido grabado en la app termina indexado | Las fotos de un video subido quedan `procesada` con su vector en pgvector |
-| 3 — Ubicarse | Una vuelta de 360° devuelve una posición útil | `POST /v1/localize` responde con posición y confianza en un punto conocido del campus |
+| 3 — Ubicarse | Una vuelta de 360° devuelve una posición útil | `POST /v1/localize` responde con posición y confianza en un punto conocido del campus, en menos de 1 s en el servidor con la GPU encendida |
 | 4 — Administración completa | El admin gestiona dataset, lugares y alertas contra el backend | Las vistas de admin dejan de usar datos locales o *stubs* |
 | 5 — Navegación guiada (diferida) | Guía por voz hasta un destino, con corrección visual | — |
 | 6 — Endurecimiento y producción (diferida) | Entorno `prod` confiable | — |
@@ -55,9 +55,9 @@ Alineado con `ARCHITECTURE.md` **v0.6.0**.
 | INF-0.2 | Esqueleto de `envs/dev` y CI de Terraform | INF-0.1 | INF-0.1 | [`validation-0-2`](./validation/validation-0-2.md) |
 | INF-1.1 | Red y grupos de seguridad | INF-0.2 | INF-0.2 | [`validation-1-1`](./validation/validation-1-1.md) |
 | INF-1.2 | Datos y secretos | INF-1.1 | INF-1.1 | [`validation-1-2`](./validation/validation-1-2.md) |
-| INF-1.3 | Cómputo (ECR, ECS, Cloud Map, IAM de tareas) | INF-1.2 | INF-1.2 | [`validation-1-3`](./validation/validation-1-3.md) |
+| INF-1.3 | Cómputo (ECR, ECS, Cloud Map, IAM de tareas, GPU de `embedding`) | INF-1.2 | INF-1.2 | [`validation-1-3`](./validation/validation-1-3.md) |
 | INF-1.4 | Borde HTTPS (API Gateway) | INF-1.3 | INF-1.3 | [`validation-1-4`](./validation/validation-1-4.md) |
-| INF-2.1 | Escalado del `worker` y horario de `dev` | INF-1.3 | INF-1.3 | [`validation-2-1`](./validation/validation-2-1.md) |
+| INF-2.1 | Encendido de la GPU y escalado del `worker` | INF-1.3, INF-1.4 | INF-1.3, INF-1.4 | [`validation-2-1`](./validation/validation-2-1.md) |
 | INF-3.1 | Observabilidad y alarmas | INF-1.4 | INF-1.4, INF-2.1 | [`validation-3-1`](./validation/validation-3-1.md) |
 | INF-6.1 | Entorno `prod` y optimizaciones (diferido) | Fases 1–4 cerradas | — | — |
 
@@ -133,10 +133,17 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 - **Historias:** habilita HU-13, HU-14, HU-23.
 
 #### INF-1.3 — Cómputo
-- **Objetivo:** clúster, repositorios, roles y servicios listos para recibir imágenes.
+- **Objetivo:** clúster, repositorios, roles y servicios listos para recibir imágenes, con `embedding` en GPU
+  (ADR-INF-13).
 - **Entregables:** módulo `computo` (§3.4, §5.1, §5.7, §5.8; sus roles con `permissions_boundary` = output
-  `limite_roles_arn` de `bootstrap`), incluida la tarea de validación; imagen de prueba
-  `bootstrap` (`project/pruebas/imagen-prueba/`, §5.11) publicada en los dos repositorios; outputs de §5.2.
+  `limite_roles_arn` de `bootstrap`), incluida la tarea de validación y la capacidad GPU de `embedding` (plantilla de
+  lanzamiento, grupo de autoescalado 0–1, proveedor de capacidad, rol y perfil de instancia
+  `campus-locator-dev-ec2-gpu`); el grupo `campus-locator-dev-gpu-host` en el módulo `red` (§5.7); la variable
+  `gpu_tipo_instancia` (§5.3); imagen de prueba `bootstrap` (`project/pruebas/imagen-prueba/`, §5.11) publicada en los dos repositorios; outputs de §5.2.
+- **Requiere decidir antes:** (1) cupo de instancias G bajo demanda ≥ 4 vCPU (Service Quotas `L-DB2E81BA`; el aumento
+  puede tardar días, R9); (2) si `gha-terraform` y el *boundary* permiten crear perfiles de instancia `campus-locator-*`
+  y pasar el rol de instancia a EC2: se comprueba leyendo `bootstrap/permisos.tf` y, si no, se amplía `bootstrap` (lo
+  aplica el administrador).
 - **Criterios de cierre:**
   - C1. Con la imagen de prueba, el servicio `api` queda estable y se registra en Cloud Map con SRV.
   - C2. `embedding.campus-locator.local` resuelve desde la tarea de validación.
@@ -145,6 +152,8 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
     y apuntan a recursos reales.
   - C5. Desde la tarea de validación (§5.11), la base acepta conexión con TLS y
     `CREATE EXTENSION IF NOT EXISTS vector` funciona.
+  - C6. Con `embedding` en 1, el proveedor de capacidad lanza una `g4dn.xlarge`, la tarea reserva 1 GPU y queda
+    estable; con `embedding` en 0, la instancia termina.
 - **Historias:** HU-20.
 
 #### INF-1.4 — Borde HTTPS
@@ -156,14 +165,19 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
   - C3. Los *access logs* aparecen en `/campus-locator/dev/apigw`.
 - **Historias:** HU-09, HU-10.
 
-#### INF-2.1 — Escalado del `worker` y horario de `dev`
-- **Objetivo:** pagar `embedding` y `worker` solo cuando se usan.
-- **Entregables:** acciones programadas y política por pasos (§3.4, §5.10).
+#### INF-2.1 — Encendido de la GPU y escalado del `worker`
+- **Objetivo:** pagar la GPU de `embedding` solo mientras se usa, y `worker` solo cuando hay trabajo (ADR-INF-13).
+- **Entregables:** `src/ops/gpu.py` (`encender`, `apagar`, `estado`); filtro de métricas `campus-locator-dev-localize`,
+  alarma `campus-locator-dev-embedding-inactivo` y política `campus-locator-dev-embedding-apagar`; acción programada
+  `campus-locator-dev-embedding-apagar-noche`; política por pasos de `worker` condicionada a `embedding` encendido;
+  variable `apagado_gpu` (§3.4, §5.1, §5.3, §5.10).
 - **Criterios de cierre:**
-  - C1. Las acciones programadas existen con la zona y las horas de §5.3; a la hora de apagar `embedding` queda en 0 y a
-    la de encender vuelve a 1.
-  - C2. Con mensajes de prueba en `ingesta`, `worker` sube a 1 y vuelve a 0 a los ~15 min de vaciarse la cola.
-  - C3. Fuera del horario, `worker` no arranca aunque haya mensajes.
+  - C1. `gpu.py encender` deja `embedding` sano en ≤ 15 min; `gpu.py apagar` lo deja en 0 y la instancia termina.
+  - C2. Sin peticiones a `/v1/localize` ni mensajes en las colas durante `apagado_gpu.inactividad_min`, `embedding` se
+    apaga solo; la acción de las 22:00 existe con la zona y la hora de §5.3.
+  - C3. Con mensajes de prueba en `ingesta` y `embedding` encendido, `worker` sube a 1 y vuelve a 0 a los ~15 min de
+    vaciarse la cola.
+  - C4. Con `embedding` apagado, `worker` no arranca aunque haya mensajes.
 - **Historias:** HU-21.
 
 #### INF-3.1 — Observabilidad y alarmas
@@ -178,9 +192,9 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 - **Historias:** HU-22.
 
 #### INF-6.1 — Entorno `prod` y optimizaciones (diferido)
-- **Alcance previsto:** `envs/prod`, RDS Multi-AZ, *interface endpoints* o NAT con tareas en subredes privadas,
-  dominio propio con certificado de ACM, WAF en la API, Graviton (ARM64) si las imágenes lo permiten, rotación de la
-  contraseña de la base, ejecución de los validadores en CI.
+- **Alcance previsto:** `envs/prod`, RDS Multi-AZ, *interface endpoints* o NAT con tareas en subredes privadas, dominio
+  propio con certificado de ACM, WAF en la API, Graviton (ARM64) para `api` y `worker` si las imágenes lo permiten,
+  *warm pool* o Spot para la GPU, rotación de la contraseña de la base, ejecución de los validadores en CI.
 - **Requiere decidir antes:** presupuesto de `prod`, dominio, decisión abierta 1 del frontend (proveedor de teselas).
 - **Historias:** HU-20, HU-21, HU-22.
 
@@ -197,9 +211,9 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 | INF-0.2 | 0 | Hecho | [0-2](./validation/validation-0-2.md) | `fad2b6b` 2026-10-24 | 0.4.0 | Primer `apply` de `envs/dev` hecho por `infra.yml`; C3b toma el bloqueo él mismo (`terraform console` ya no lo toma desde Terraform 1.15) |
 | INF-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `4c04040` 2026-10-24 | 0.5.0 | `apply` de la red por `infra.yml` (29 recursos); antes hubo que cancelar una ejecución de `main` de un commit sobrescrito que esperaba aprobación y retenía la fila |
 | INF-1.2 | 1 | Hecho | [1-2](./validation/validation-1-2.md) | `e5ee713` 2026-10-24 | 0.6.0 | `apply` por `infra.yml` (24 recursos, PostgreSQL 17.9); el «plan vacío» destapó una diferencia perpetua en `rds.force_ssl` (es el valor por defecto en PostgreSQL 17), corregida con `apply_method = "pending-reboot"` |
-| INF-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | |
+| INF-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | `embedding` en GPU desde 0.7.0 (ADR-INF-13): antes, cupo de instancias G y permisos de perfiles de instancia en `bootstrap` |
 | INF-1.4 | 1 | Pendiente | [1-4](./validation/validation-1-4.md) | — | — | |
-| INF-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | |
+| INF-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | Rediseñado en 0.7.0: encendido manual de la GPU y apagado automático en lugar de horario fijo |
 | INF-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | |
 | INF-6.1 | 6 | Diferido | — | — | — | |
 

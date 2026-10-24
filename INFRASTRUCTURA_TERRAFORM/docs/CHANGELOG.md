@@ -20,6 +20,49 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.7.0] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; decisión del equipo antes de INF-1.3: `POST /v1/localize` debe responder en menos
+  de 1 s.
+- **Qué cambió:**
+  - Nueva ADR-INF-13: `embedding` corre en GPU, en ECS sobre EC2 (proveedor de capacidad con un grupo de autoescalado
+    de 0 a 1 `g4dn.xlarge` bajo demanda), apagado por defecto; se enciende a mano (`src/ops/gpu.py`, INF-2.1) y se
+    apaga solo tras 45 min sin peticiones a `/v1/localize` ni mensajes en las colas, y a las 22:00. Reemplaza a
+    ADR-INF-06 (CPU) y modifica ADR-INF-05 y ADR-INF-11. Motivo: con 1 vCPU, 5 fotos tardan ~5,5 s a 224 px y ~47 s
+    a 518 px (más que los 30 s de API Gateway); una T4 las procesa en decenas de milisegundos. Como prueban 1–3
+    personas a ratos, una GPU con horario fijo pasaría casi todo el tiempo ociosa: se paga solo lo encendido.
+  - §2 (diagrama y objetivo de latencia: p95 ≤ 1 s en el servidor), §3.2 (la instancia GPU en `publica-a`; la tarea
+    de `embedding` sin IP pública), §3.4 (cómputo, encendido y apagado, `worker` solo con `embedding` encendido), §3.7,
+    §3.8, §3.10 (≈ 59 USD/mes con 40 h de GPU; ≈ 124 con 160 h), §4, riesgos R1 (también: la cuenta se comparte con
+    trend-analyzer), R6 y R9, y nuevos R13 (la GPU no se apaga) y R14 (sin capacidad `g4dn.xlarge`).
+  - PLAN: el objetivo de la Fase 3 incluye el segundo; INF-1.3 añade la capacidad GPU, su criterio C6 y dos cosas que
+    decidir antes (cupo de instancias G y permisos de perfiles de instancia en `bootstrap`); INF-2.1 pasa de horario
+    fijo a encendido manual con apagado automático y depende también de INF-1.4 (la métrica de uso sale de los
+    *access logs*); INF-3.1 cambia la alarma de CPU de `embedding` por «encendido más de 10 h»; INF-6.1 añade
+    *warm pool* o Spot para la GPU. `validation-1-3` (P4, C2, C6a–C6b), `validation-2-1` (reescrito) y
+    `validation-3-1` (P2, C1a) siguen esos criterios.
+- **Contratos tocados (§5):** §5.1 (capacidad GPU, rol y perfil `campus-locator-dev-ec2-gpu`, grupo `-gpu-host`,
+  alarmas `embedding-inactivo` y `embedding-encendida`, política `embedding-apagar`, filtro `localize` y acción
+  `embedding-apagar-noche`; desaparecen las cuatro acciones de horario y la alarma `embedding-cpu`), §5.3
+  (`horario_encendido` → `apagado_gpu`; nueva `gpu_tipo_instancia`), §5.4 (`TORCH_NUM_THREADS = 3`, nueva
+  `EMBEDDING_DEVICE = cuda`; la imagen trae CUDA y los pesos del modelo), §5.7 (grupo `-gpu-host`), §5.8 (rol de
+  instancia con el *boundary*), §5.9 (despliegue de `embedding` con una sola GPU), §5.10 (encendido, escalado de
+  `worker`, alarma y latencia objetivo). Es incompatible para `SERVICE_EMBEDDING` (imagen y variable nuevas) y cambia
+  el objetivo de latencia del backend: sube la menor.
+- **Cómo se verificó:** precios de lista consultados el 2026-10-24 (`g4dn.xlarge` bajo demanda 0,526 USD/h; en Spot
+  desde ~0,32 USD/h, descartado por los cortes y porque con pocas horas ahorra poco). Tiempos de CPU medidos con un
+  ViT-B/14 en numpy (pesos aleatorios: el tiempo no depende de ellos) en un núcleo de un Xeon de 2,1 GHz con AVX-512;
+  los de GPU son estimaciones que confirma EMB-3.1. Sin código: nada se ha aplicado.
+- **Pendiente:**
+  - Pedir el cupo de instancias G (≥ 4 vCPU, `L-DB2E81BA`) antes de INF-1.3, y leer `bootstrap/permisos.tf` al
+    empezarlo.
+  - Lotes en otras carpetas: `SERVICE_EMBEDDING` (imagen con CUDA y pesos dentro, `EMBEDDING_DEVICE`, las 5 fotos en
+    un lote), `BACKEND_FASTAPI` (objetivo p95 ≤ 1 s, tiempo de espera hacia `embedding`, qué hace `worker` si
+    `embedding` se apaga) y `FRONTEND_KOTLIN` (reducir las fotos antes de subirlas; mensaje para el `503` mientras la
+    GPU arranca).
+
+---
+
 ## [0.6.0] — 2026-10-24
 
 - **Lote que la motivó:** INF-1.2 (datos y secretos).
