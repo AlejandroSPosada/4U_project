@@ -20,6 +20,55 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.4.0] — 2026-10-24
+
+- **Lote que la motivó:** INF-0.2 (esqueleto de `envs/dev` y CI de Terraform).
+- **Qué cambió:**
+  - `envs/dev`: *backend* S3 con `use_lockfile` y también `allowed_account_ids`; proveedor `aws ~> 6.70` con
+    `allowed_account_ids` y `default_tags`; `data "aws_caller_identity"` (output `cuenta_id`) y
+    `data "aws_default_tags"` (deja en el estado las etiquetas efectivas, que comprueba el validador); los seis módulos,
+    vacíos, ya compuestos en `main.tf`; `.terraform.lock.hcl` versionado.
+  - `infra.yml`: Terraform fijado a la versión del equipo (1.16.6, para que `fmt` y `plan` den lo mismo en
+    local y en CI), TFLint con `project/.tflint.hcl`, acciones fijadas
+    por SHA, `plan` comentado en el PR (un comentario que se actualiza), PR desde *forks* sin `plan`, concurrencia (un
+    `plan` por PR; los `apply` de `main` en fila) y disparo también por cambios en el propio `infra.yml` (§3.9).
+  - §5.3: cada variable de `envs/dev` se declara con el lote que la usa.
+  - `validation-0-2`: nueva P6 (copia local con `init`), P5 avisa si la versión local no es la de CI, C1–C2 se
+    hacen por la API de GitHub (sin `gh pr merge` ni `gh run watch`, que tocan o dependen de la copia local), C4b lee
+    las etiquetas efectivas de `data.aws_default_tags`, y la limpieza cancela los `apply` de ejecuciones anteriores que
+    quedaron esperando aprobación. Corrige una contradicción: C3b usaba `terraform console` para retener el bloqueo,
+    pero desde Terraform 1.15 `console` ya no lo toma; ahora el validador crea su propio `.tflock` (escritura
+    condicional, como Terraform) y lo borra solo si sigue siendo suyo. C2a ya no fusiona si `main` avanzó o tiene otra
+    ejecución activa, para no aprobar cambios ajenos, y la limpieza de restos ignora PR de *forks* o de otros autores. Su §5 describe además la preparación (lock de
+    proveedores, comprobaciones locales y aprobación del primer `apply`), que antes solo se mencionaba.
+  - Nuevo riesgo R12: repositorio público, logs y comentarios del `plan` visibles.
+- **Contratos tocados (§5):** §5.3 (aclaración, sin cambio de nombres). Los workflows (§3.9) amplían su disparador de
+  forma compatible.
+- **Cómo se verificó:** antes de entregar, con OpenTofu 1.13.2 y el proveedor aws 6.70.0 (no había Terraform en el
+  entorno de pruebas): `fmt -check`, `validate` y TFLint 0.65 + *ruleset* aws 0.50 limpios en `envs/dev`, `modules/` y
+  `bootstrap/`; actionlint + shellcheck limpios en `infra.yml`; el script del comentario probado con node; el
+  validador, de principio a fin contra S3/STS/IAM simulados (moto, con escrituras condicionales) para P1–P6 y C3–C4, y
+  contra un `gh` simulado en 12 escenarios para C1–C2 (restos anteriores, plan con cambios o fallido, `main` protegida,
+  sin permiso de aprobación, `apply` fallido, *scopes* que faltan, variables distintas, sin estado, bloqueo ajeno,
+  cuenta equivocada, `--solo C2`, dos ejecuciones seguidas). Revisión independiente de `infra.yml`, `envs/dev` y el
+  validador contra el código de Terraform 1.16.6: encontró el cambio de `console` y los riesgos de C2a y de la limpieza
+  de restos (corregidos y probados de nuevo en los escenarios «main avanzó», «main ocupada», «padre distinto», PR de
+  *fork* y C3b interrumpida). Pendiente: `validate02.py --entorno dev` con código 0 en `main`.
+- **Pendiente:** lo mismo que en 0.3.0.
+
+---
+
+## [0.3.1] — 2026-10-23
+
+- **Lote que la motivó:** ninguno; preparar INF-0.2 sin que nadie tenga que leer el código de `project/`.
+- **Qué cambió:** §5.11 documenta la API de `project/src/ops/comun.py` (clase `Validador`, excepciones y ayudas de
+  `gh`, Terraform y AWS) y la forma de un validador de esta carpeta.
+- **Contratos tocados (§5):** ninguno nuevo; §5.11 describe ayudas que ya existían desde INF-0.1.
+- **Cómo se verificó:** la tabla se escribió desde el código de `comun.py` que validó INF-0.1 (`b20a62f`).
+- **Pendiente:** lo mismo que en 0.3.0.
+
+---
+
 ## [0.3.0] — 2026-10-23
 
 - **Lote que la motivó:** INF-0.1 (bootstrap de la cuenta), al construirlo, revisarlo y aplicarlo.

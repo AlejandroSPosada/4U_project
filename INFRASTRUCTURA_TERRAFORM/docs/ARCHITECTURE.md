@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.3.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.4.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-23 |
-| Estado | Diseño propuesto. **INF-0.1 aplicado** (bootstrap de la cuenta); el resto, sin código todavía |
+| Estado | Diseño propuesto. **INF-0.1 aplicado** (bootstrap de la cuenta); **INF-0.2 escrito** (esqueleto de `envs/dev` y `infra.yml`), pendiente de validar; el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -221,17 +221,26 @@ Un clúster `campus-locator-dev` con tres servicios y una tarea suelta. Todas la
   repositorio (§5.9) y el entorno `dev` de GitHub los crea `bootstrap/configurar_github.py` con `gh`; en un
   repositorio personal solo puede hacerlo su dueño.
 - **`project/envs/dev/`** usa *backend* S3 con **bloqueo nativo** (`use_lockfile = true`, Terraform ≥ 1.10), sin
-  DynamoDB
-  (ADR-INF-08).
-- Workflows en `.github/workflows/` (raíz del monorepo). Solo se disparan con cambios en `project/`: editar `docs/` no
-  despliega nada.
+  DynamoDB (ADR-INF-08), y con `allowed_account_ids`: `init` falla con credenciales de otra cuenta. Su
+  `.terraform.lock.hcl` se versiona y CI lo usa con `init -lockfile=readonly`.
+- Workflows en `.github/workflows/` (raíz del monorepo). Solo se disparan con cambios en `project/` (y cada uno, además,
+  con cambios en su propio archivo): editar `docs/` no despliega nada.
+- **`infra.yml`** (INF-0.2): Terraform fijado en `TF_VERSION` (la misma versión que usa el equipo en local, hoy
+  1.16.6, para que `fmt -check` y `plan` den lo mismo en local y en CI); TFLint con
+  `project/.tflint.hcl` (preset `recommended` y *ruleset* de AWS) en todos los directorios de `project/`; acciones de
+  terceros fijadas por SHA; `GITHUB_TOKEN` sin permisos salvo los de cada job. Un PR desde un *fork* no ejecuta el
+  `plan` (no recibe token OIDC). El `plan` de un PR es un solo comentario que se actualiza en cada ejecución; un `plan`
+  nuevo del mismo PR cancela el anterior, y los `apply` de `main` van en fila sin interrumpirse (si se acumulan varios
+  pendientes, GitHub deja solo el más reciente, que aplica el árbol completo de `main`). En `main`, el job
+  `apply (main)` hace `plan` y `apply` de ese mismo plan tras la aprobación; quien aprueba revisa antes el `plan` del
+  PR (un *push* directo a `main` no tiene `plan` previo).
 - **Entorno `dev` de GitHub** (se crea en INF-0.1): *required reviewers* (aprobación manual) y *deployment branches*
   limitado a `main`. Así, un job de un PR que declare `environment: dev` no llega a arrancar y nunca obtiene un token
   con `sub = …:environment:dev`.
 
 | Workflow | Disparador | Qué hace |
 |---|---|---|
-| `infra.yml` | cambios en `INFRASTRUCTURA_TERRAFORM/project/**` | En PR (rol `gha-terraform-plan`): `fmt -check`, `validate`, `tflint`, `plan` (comentado en el PR). En `main` (rol `gha-terraform`): `apply`, con aprobación manual del entorno de GitHub `dev` |
+| `infra.yml` | cambios en `INFRASTRUCTURA_TERRAFORM/project/**` o en `infra.yml` | En PR, job `plan (PR)` (rol `gha-terraform-plan`): `fmt -check`, `tflint`, `validate`, `plan` (comentado en el PR). En `main`, job `apply (main)` (rol `gha-terraform`): `plan` + `apply`, con aprobación manual del entorno de GitHub `dev` |
 | `backend.yml` | cambios en `BACKEND_FASTAPI/project/**` | En PR: lint y pruebas. En `main`: imagen → ECR → `migrate` → `api` y `worker` (§5.9) |
 | `embedding.yml` | cambios en `SERVICE_EMBEDDING/project/**` | En PR: lint y pruebas. En `main`: imagen → ECR → `embedding` (§5.9) |
 | `frontend.yml` | cambios en `FRONTEND_KOTLIN/project/**` | Compila y corre pruebas unitarias. No toca AWS |
@@ -273,8 +282,9 @@ INFRASTRUCTURA_TERRAFORM/
     ├── bootstrap/               Estado local → migrado al bucket. Bucket de estado, OIDC, roles de CI, boundary, presupuesto;
     │                            configurar_github.py (variables y entorno dev de GitHub)
     ├── envs/
-    │   └── dev/                 backend.tf, providers.tf, main.tf, variables.tf, terraform.tfvars, outputs.tf
-    ├── modules/
+    │   └── dev/                 backend.tf, providers.tf, main.tf, variables.tf, terraform.tfvars, outputs.tf,
+    │                            .terraform.lock.hcl (versionado)
+    ├── modules/                 cada módulo: main.tf, versions.tf (y variables.tf/outputs.tf cuando su lote los añade)
     │   ├── red/                 VPC, subredes, IGW, rutas, endpoint de S3, grupos de seguridad
     │   ├── datos/               RDS (+ grupo de parámetros), bucket del dataset, colas SQS, notificación S3→SQS
     │   ├── secretos/            random_password y los tres secretos
@@ -285,6 +295,7 @@ INFRASTRUCTURA_TERRAFORM/
     │   └── imagen-prueba/       Dockerfile y servidor mínimo de la imagen `bootstrap` (§5.11)
     ├── src/
     │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes INF-x.y (§5.11)
+    ├── .tflint.hcl              configuración de TFLint para infra.yml
     └── pyproject.toml           dependencias de los validadores (grupo `ops`: boto3, httpx)
 ```
 
@@ -294,7 +305,7 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
 | Lote | Cómo funciona |
 |---|---|
 | **INF-0.1 Bootstrap** | Recursos que deben existir antes de cualquier `plan` remoto. El bucket de estado tiene `prevent_destroy` y solo admite TLS. El rol `gha-terraform-plan` (PR) solo puede leer, incluidos los secretos de `dev`, que ya están en el estado; el rol `gha-terraform` (aplicar, con aprobación) tiene permisos amplios pero acotados a la cuenta y región, y todo rol que crea lleva el *permissions boundary* `campus-locator-limite-roles`; el rol `gha-deploy` solo puede publicar imágenes, registrar definiciones de tarea, actualizar los servicios y lanzar `migrate` (§5.8). `bootstrap/configurar_github.py` crea con `gh` las variables del repositorio y el **entorno `dev` de GitHub**: aprobación manual y despliegue solo desde `main` (§3.9) |
-| **INF-0.2 Esqueleto** | `envs/dev` con *backend*, proveedor (`default_tags`, `allowed_account_ids`) y módulos vacíos; `infra.yml` con `plan` en PR y `apply` aprobado en `main`. A partir de aquí todo cambio de infraestructura entra por PR |
+| **INF-0.2 Esqueleto** | `envs/dev` con *backend*, proveedor (`default_tags`, `allowed_account_ids`) y los seis módulos, vacíos, ya compuestos en `main.tf`; `data "aws_caller_identity"` (output `cuenta_id`) obliga a configurar el proveedor sin recursos y `data "aws_default_tags"` deja en el estado las etiquetas efectivas. `infra.yml` con `plan` en PR y `apply` aprobado en `main` (§3.9). A partir de aquí todo cambio de infraestructura entra por PR |
 | **INF-1.1 Red** | VPC, subredes, rutas, endpoint de S3 y los cinco grupos de seguridad de §5.7. Los grupos se crean aquí (no en cada módulo) para que las reglas cruzadas no generen ciclos |
 | **INF-1.2 Datos y secretos** | RDS en `us-east-1a`; bucket con notificación a `ingesta` (la política de la cola autoriza solo a ese bucket); colas y DLQ; secretos. La **notificación** del bucket (`aws_s3_bucket_notification`) se crea después de la política de la cola, porque S3 valida el destino al guardarla |
 | **INF-1.3 Cómputo** | Repositorios ECR (etiquetas inmutables, escaneo básico, conservar 5), clúster, espacio de nombres privado `campus-locator.local`, roles, definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza), la tarea de validación y servicios con `desired_count = 0` hasta el primer despliegue |
@@ -381,7 +392,8 @@ resto con INF-1.1 a INF-1.3. Desde INF-0.2, `envs/dev` tiene además el output `
 ### 5.3 Variables de entrada
 
 `bootstrap/terraform.tfvars` y `envs/dev/terraform.tfvars` (columna «Dónde»). Los dos archivos se versionan: no
-contienen secretos.
+contienen secretos. Cada variable de `envs/dev` se declara con el lote que la usa (INF-0.2: `aws_account_id`, `region`,
+`proyecto` y `entorno`).
 
 | Variable | Dónde | Valor en `dev` | Notas |
 |---|---|---|---|
@@ -678,6 +690,33 @@ falla porque faltan credenciales, herramientas o variables da **3**, no 2: el 2 
 - Leer las variables o configurar el entorno de un repositorio personal exige la cuenta de `gh` de su dueño (en una
   organización, un admin).
 
+**Ayudas comunes (`project/src/ops/comun.py`).** Todo validador de esta carpeta las usa en vez de reimplementarlas; esta
+tabla basta para escribir uno nuevo sin leer el código. Si cambian, la tabla se actualiza en el mismo cambio.
+
+| Elemento | Qué hace |
+|---|---|
+| `Validador(lote=, validacion=, descripcion=, comprobaciones=[…], grupos={…})` | Ciclo de vida del validador. `grupos` son alias de `--solo` (p. ej. `{"C4": ["C4a", "C4b", "C4c"]}`). `v.correr(cuerpo)` lee los argumentos, rechaza un entorno que no sea `dev`, ejecuta `cuerpo(v)`, limpia, escribe el informe y devuelve el código; captura cualquier excepción como código 3 |
+| `v.precondicion(id, fn)` → `bool` | Ejecuta `fn()`, que devuelve el texto del detalle. `Bloqueo` (o `Falla`) → código 2; `ErrorConfiguracion` o `ErrorGh` 401/403 → 3 |
+| `v.precondicion_no_evaluada(id, motivo)`, `v.precondiciones_cumplidas()` | Marca las que dependen de una que falló; ¿pasaron todas? |
+| `v.comprobacion(id, fn)` | `omitida` si `--solo` la excluye; `Falla` → 1; `ErrorConfiguracion`, `ErrorGh` 401/403 o error imprevisto → 3. Mide `duracion_ms` |
+| `v.incluida(id)`, `v.alguna_incluida(*ids)` | Para no crear datos de prueba que ninguna comprobación incluida usará |
+| `v.manual(id, instruccion)` | Comprobación manual (estado `manual`) |
+| `v.al_limpiar(descripcion, fn)` | Registra una limpieza; se ejecutan en orden inverso al terminar, también si algo falló, salvo con `--sin-limpieza` |
+| `v.sello` | `AAAAMMDD-HHMMSS` (UTC) del inicio, para nombrar los datos `validacion-…` |
+| `Falla`, `Bloqueo`, `ErrorConfiguracion`; `ErrorGh` (hereda de `Falla`; `.http`, `.sin_permiso`, `.resultado`) | Excepciones que deciden el código |
+| `ejecutar(comando, entrada=, timeout=)` → `Resultado(codigo, salida, error, texto)` | Ejecuta un programa desde `project/` sin imprimir nada; si no está instalado → `ErrorConfiguracion` |
+| `gh(*args)` → `str`; `gh_api(ruta, metodo=, cuerpo=, paginar=, jq=)` | CLI `gh`; `gh_api` devuelve el JSON (o el texto de `jq`) y lanza `ErrorGh` si falla |
+| `terraform_outputs(directorio)` → `dict`; `terraform_state_pull(directorio)` → `dict` | `terraform -chdir=…`; sin `init` o sin credenciales → `ErrorConfiguracion`. El estado nunca se imprime |
+| `sesion_aws()`; `comprobar_cuenta(sesion)` | boto3 en `us-east-1` con `AWS_PROFILE`; se niega a seguir si la cuenta no es `648617469176` |
+| `errores_aws(accion)` (bloque `with`), `error_aws(exc, accion)`, `codigo_error_aws(exc)` | Traducen errores de boto3: permisos o credenciales → `ErrorConfiguracion`; el resto → `Falla` |
+| `avisar(mensaje)`, `resumir(texto, limite)`, `commit_actual()` | Progreso a stderr (stdout queda para `[PASA] …`); recorte de mensajes; commit con `-dirty` |
+| `CUENTA`, `REGION`, `PROYECTO`, `DIR_INFORMES` | Constantes |
+
+Forma de un validador (`validate01.py` la sigue): `main()` crea el `Validador` y llama a `correr(cuerpo)`. `cuerpo(v)`
+evalúa primero las precondiciones de credenciales (código 3), luego las de otros lotes (código 2), sin seguir si alguna
+falla; limpia restos `validacion-…` de ejecuciones anteriores; registra con `al_limpiar` lo que cree, en cuanto lo crea,
+y ejecuta las comprobaciones en el orden del documento de validación.
+
 ---
 
 ## 6. Decisiones de diseño (ADR)
@@ -759,6 +798,7 @@ declaran `permissions_boundary` (output `limite_roles_arn`) y uno sin él falla 
 | R9 | Cuotas por defecto de una cuenta nueva (vCPU de Fargate, etc.) | Baja | Medio | El sistema usa 1,5 vCPU; solicitar aumento si un `apply` falla por cuota |
 | R10 | `/v1/localize` es público: abuso que dispara costos | Baja | Medio | *Throttling*; alarma de 5xx; en `prod`, WAF o clave de app |
 | R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y chocan con nombres de §5.1 (bucket del dataset, quizá el *namespace* de Cloud Map) | Alta | Medio | Inventario y limpieza antes de INF-1.2 (PLAN §3, nota de INF-1.2; CHANGELOG 0.3.0) |
+| R12 | El repositorio es público: los logs de Actions y los comentarios del `plan` los puede leer cualquiera | Alta | Bajo | Terraform oculta los valores `sensitive` (contraseñas, secretos) en el `plan` y en los logs; ningún paso imprime el estado ni credenciales; todo output con un dato sensible se declara `sensitive`; los PR desde *forks* no ejecutan el `plan`. Lo que queda visible (IDs, ARN, URL) no da acceso por sí solo |
 
 ---
 
