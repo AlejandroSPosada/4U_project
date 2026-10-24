@@ -69,24 +69,29 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   §5.5 (política «solo TLS»), §5.6 (`purga` y DLQ sin política; `s3:TestEvent`), §5.10 (ventanas de RDS), §5.11 (forma
   de un validador que crea datos) y §5.12 (módulos `datos` y `secretos`; cómo añadir un proveedor al lock). §3.5 y
   §3.6 añaden cómo destruir con un *snapshot* final previo y cómo recrear un secreto en su plazo de recuperación.
-- **Cómo se verificó:** pendiente la ejecución de `validate12.py --entorno dev` tras el `apply` (PLAN §3). Antes de
-  entregar, sin Terraform ni acceso a AWS en el entorno de pruebas: con OpenTofu 1.11.1, aws 6.70.0 y random 3.9.1,
-  `fmt -check`, `validate` y TFLint 0.65 + *ruleset* aws 0.50 limpios en `envs/dev`, `modules/datos` y
-  `modules/secretos`; `tofu test` de `envs/dev` con proveedores simulados (sin ciclo entre `datos` y `secretos`); y un
-  `tofu apply` completo de `envs/dev` contra AWS simulado (moto 5.2.4: 53 recursos, 29 de la red y 24 de este lote). El
-  validador, con el `comun.py` real, contra ese estado en 35 escenarios: camino feliz; restos y `s3:TestEvent`; mensajes
-  ajenos (vuelven con una sola recepción); cola con 12 mensajes (no la lee); `worker` en marcha; notificación sin
-  sufijo, sin prefijo o ausente; RDS pública; regla `0.0.0.0/0`; `rds.force_ssl = 0`; PostgreSQL 17.0 y 17.10; sin
-  protección contra borrado; JWT de 32 bytes; `port` como texto; secreto ausente; ningún valor de secreto en la salida;
-  CORS; ciclo de vida que expira; política con `Allow` o ausente; visibilidad equivocada; política de `ingesta` sin
-  condición; `purga` con política; etiqueta ausente; sin la red (código 2); perfil inexistente y `--solo` inválido
-  (código 3); alias `--solo C5`; `--sin-limpieza` y la ejecución siguiente. Lo que moto no reproduce (sin TLS no se
-  puede subir con la política «solo TLS»; etiquetas al crear el bucket; versión menor) se ajustó en el estado simulado.
-  Revisión independiente del Terraform y del validador: sin defectos de exposición en Terraform; sus hallazgos sobre el
-  validador están corregidos (ver arriba) y los de destrucción quedan documentados en §3.5 y §3.6.
-- **Pendiente:** el «plan vacío» de INF-1.2 es un paso manual de la preparación (`validation-1-2` §5, paso 6), no una
-  comprobación del validador: el próximo validador que lance un `plan` une las dos variantes de `validate02.py` y
-  `validate11.py` en `comun.py` (§5.12). Inventario y limpieza de lo que lista R11 antes de INF-1.3.
+- **Cómo se verificó:** `validate12.py --entorno dev` con código 0 sobre `e5ee713` (2026-10-24 18:32–18:34 UTC): pasan
+  P1–P2, C1–C2 (evento en 1 s), C3a–C3b, C4 (PostgreSQL 17.9), C5a–C5d y C6 (11 recursos). El `apply` lo hizo
+  `infra.yml` (`Resources: 24 added`) tras la aprobación del entorno `dev`; el `plan` siguiente dio la diferencia de
+  `rds.force_ssl` descrita arriba y, corregida, `infra.yml` aplicó sin cambios. Lock: `aws` 6.70.0 (sin cambios) y
+  `random` 3.9.1. Antes de entregar, sin Terraform ni acceso a AWS en el entorno de pruebas: con OpenTofu 1.11.1, aws
+  6.70.0 y random 3.9.1, `fmt -check`, `validate` y TFLint 0.65 + *ruleset* aws 0.50 limpios en `envs/dev`,
+  `modules/datos` y `modules/secretos`; `tofu test` de `envs/dev` con proveedores simulados (sin ciclo entre `datos` y
+  `secretos`); y un `tofu apply` completo de `envs/dev` contra AWS simulado (moto 5.2.4: 53 recursos, 29 de la red y 24
+  de este lote). El validador, con el `comun.py` real, contra ese estado en 35 escenarios: camino feliz; restos y
+  `s3:TestEvent`; mensajes ajenos (vuelven con una sola recepción); cola con 12 mensajes (no la lee); `worker` en
+  marcha; notificación sin sufijo, sin prefijo o ausente; RDS pública; regla `0.0.0.0/0`; `rds.force_ssl = 0`;
+  PostgreSQL 17.0 y 17.10; sin protección contra borrado; JWT de 32 bytes; `port` como texto; secreto ausente; ningún
+  valor de secreto en la salida; CORS; ciclo de vida que expira; política con `Allow` o ausente; visibilidad equivocada;
+  política de `ingesta` sin condición; `purga` con política; etiqueta ausente; sin la red (código 2); perfil inexistente
+  y `--solo` inválido (código 3); alias `--solo C5`; `--sin-limpieza` y la ejecución siguiente. Lo que moto no reproduce
+  (sin TLS no se puede subir con la política «solo TLS»; etiquetas al crear el bucket; versión menor) se ajustó en el
+  estado simulado. Revisión independiente del Terraform y del validador: sin defectos de exposición en Terraform; sus
+  hallazgos sobre el validador están corregidos (ver arriba) y los de destrucción quedan documentados en §3.5 y §3.6.
+- **Pendiente:** P2 muestra que los validadores se ejecutan con credenciales del usuario raíz (`…:root`), contra la
+  higiene de §3.1 (raíz sin llaves de acceso; un administrador con MFA): crear ese usuario o rol, pasar a él el perfil y
+  borrar las llaves del raíz. El «plan vacío» de INF-1.2 es un paso manual de la preparación (`validation-1-2` §5, paso
+  6), no una comprobación del validador: el próximo validador que lance un `plan` une las dos variantes de
+  `validate02.py` y `validate11.py` en `comun.py` (§5.12). Inventario y limpieza de lo que lista R11 antes de INF-1.3.
 
 ---
 

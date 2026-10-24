@@ -196,7 +196,7 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 | INF-0.1 | 0 | Hecho | [0-1](./validation/validation-0-1.md) | `fbe68f8` 2026-10-24 | 0.3.0 | `sub` inmutable de OIDC (`github_ids`); proveedor OIDC importado de un intento anterior |
 | INF-0.2 | 0 | Hecho | [0-2](./validation/validation-0-2.md) | `fad2b6b` 2026-10-24 | 0.4.0 | Primer `apply` de `envs/dev` hecho por `infra.yml`; C3b toma el bloqueo él mismo (`terraform console` ya no lo toma desde Terraform 1.15) |
 | INF-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `4c04040` 2026-10-24 | 0.5.0 | `apply` de la red por `infra.yml` (29 recursos); antes hubo que cancelar una ejecución de `main` de un commit sobrescrito que esperaba aprobación y retenía la fila |
-| INF-1.2 | 1 | En curso | [1-2](./validation/validation-1-2.md) | — | — | Código y validador escritos; falta el `apply` y la validación en `dev`. Inventario del 2026-10-24 sin choques: el bucket del dataset ya no existe; sin RDS ni colas; `campus-locator-dev/jwt-secret` en borrado programado, otro nombre (ARCHITECTURE R11) |
+| INF-1.2 | 1 | Hecho | [1-2](./validation/validation-1-2.md) | `e5ee713` 2026-10-24 | 0.6.0 | `apply` por `infra.yml` (24 recursos, PostgreSQL 17.9); el «plan vacío» destapó una diferencia perpetua en `rds.force_ssl` (es el valor por defecto en PostgreSQL 17), corregida con `apply_method = "pending-reboot"` |
 | INF-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | |
 | INF-1.4 | 1 | Pendiente | [1-4](./validation/validation-1-4.md) | — | — | |
 | INF-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | |

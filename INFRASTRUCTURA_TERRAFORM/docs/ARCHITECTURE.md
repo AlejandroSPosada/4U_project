@@ -4,7 +4,7 @@
 |---|---|
 | Versión del documento | **0.6.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
-| Estado | Diseño propuesto. **INF-0.1, INF-0.2 e INF-1.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad); **INF-1.2 escrito** (datos y secretos), pendiente de aplicar y validar; el resto, sin código todavía |
+| Estado | Diseño propuesto. **INF-0.1, INF-0.2, INF-1.1 e INF-1.2 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -412,16 +412,16 @@ Inventario de nombres:
 
 Ningún servicio lee outputs en tiempo de ejecución: todo lo que necesitan llega por variables de entorno (§5.4).
 Los outputs aparecen con el lote que crea su recurso: `api_base_url` con INF-1.4, `sns_alertas_arn` con INF-3.1,
-`subredes_tareas` y `sg_migrate` con INF-1.1, `bucket_dataset`, las cuatro `sqs_*_url`, `rds_endpoint` y `secretos` con INF-1.2 y el resto
-con INF-1.3. Desde INF-0.2, `envs/dev` tiene además el output `cuenta_id` (de un
+`subredes_tareas` y `sg_migrate` con INF-1.1, `bucket_dataset`, las cuatro `sqs_*_url`, `rds_endpoint` y `secretos`
+con INF-1.2 y el resto con INF-1.3. Desde INF-0.2, `envs/dev` tiene además el output `cuenta_id` (de un
 `data "aws_caller_identity"`, que obliga a evaluar el proveedor y su `allowed_account_ids` aunque no haya recursos).
 
 ### 5.3 Variables de entrada
 
 `bootstrap/terraform.tfvars` y `envs/dev/terraform.tfvars` (columna «Dónde»). Los dos archivos se versionan: no
 contienen secretos. Cada variable de `envs/dev` se declara con el lote que la usa (INF-0.2: `aws_account_id`, `region`,
-`proyecto` y `entorno`; INF-1.1: `cidr_vpc`, `az_computo` y `az_secundaria`; INF-1.2: `rds_clase`, `rds_gb`, `rds_gb_max`
-y `pg_version`).
+`proyecto` y `entorno`; INF-1.1: `cidr_vpc`, `az_computo` y `az_secundaria`; INF-1.2: `rds_clase`, `rds_gb`,
+`rds_gb_max` y `pg_version`).
 
 | Variable | Dónde | Valor en `dev` | Notas |
 |---|---|---|---|
