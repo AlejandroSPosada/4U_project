@@ -20,6 +20,31 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.5.0] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; sin cupo de GPU, `embedding` corre en Fargate con 2 vCPU y con DINOv2 ViT-S/14
+  (`INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` 0.9.0, ADR-INF-14; `SERVICE_EMBEDDING/docs/ARCHITECTURE.md` 0.5.0,
+  ADR-EMB-11). El encendido bajo demanda de 0.4.0 no cambia.
+- **Qué cambió:**
+  - §3, §4.5, §5.3: «GPU» pasa a «`embedding`»; el script de infra es `embedding.py`.
+  - §4.10: se esperan ≤ 800 ms de embeddings para 5 fotos (antes ≤ 500 ms en GPU); el límite duro sigue en 5 s.
+  - §5.11: los validadores esperan hasta 10 min (antes 15) a que `embedding` quede listo.
+  - R2: la mitigación es el modelo pequeño en 2 vCPU y las palancas de embeddings §4.4.
+  - PLAN: BE-3.2 C3 sin «GPU». Validaciones 2-2, 2-3, 2-4, 3-2 y 4-1: encendido de ~3 min; 3-2 C3 comprueba
+    `cpu = "2048"` y `memory = "4096"` para `embedding`.
+- **Contratos tocados (§5):**
+  - §5.7: `embeddings.vector` pasa a **`vector(384)`** y el índice parcial a `embeddings_hnsw_dinov2_vits14_pp_v1`
+    sobre `version_vector = 'dinov2-vits14/pp-v1'`.
+  - §5.10: `EMBEDDING_VERSION_VECTOR` = **`dinov2-vits14/pp-v1`**; nota de `EMBEDDING_TIMEOUT_S`.
+  - §5.3 y §5.5: `version_vector` de los ejemplos.
+  - No hay vectores guardados todavía, así que no hace falta re-indexar. Cambio incompatible con 0.4.0 en el esquema;
+    mientras la versión sea `0.x`, sube la menor.
+- **Cómo se verificó:** revisión cruzada con embeddings 0.5.0 (§5.2–§5.4) e infra 0.9.0 (§3.4, §5.10, §5.11).
+- **Pendiente:** si el código de BE-1.1 ya trae `EMBEDDING_VERSION_VECTOR` o `EMBEDDING_TIMEOUT_S` en `config.py`,
+  alinearlos (`dinov2-vits14/pp-v1` y 5 s). La primera migración (BE-1.2) debe crear `vector(384)`.
+
+---
+
 ## [0.4.0] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; el equipo pide que `POST /v1/localize` responda en menos de 1 s, y la

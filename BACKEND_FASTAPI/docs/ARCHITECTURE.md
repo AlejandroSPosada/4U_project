@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.4.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.5.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
 | Estado | En construcción: hay código desde BE-1.1 (`project/`); lo de lotes posteriores es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -72,10 +72,10 @@ Los tres salen de **la misma imagen** con distinto comando (§5.9).
 ## 3. Arquitectura en AWS (vista del backend)
 
 - Corre en ECS Fargate, `X86_64`, como servicios `api` y `worker` y tarea suelta `migrate` (tamaños y escalado:
-  infra §3.4). El servicio de embeddings, en cambio, corre en una GPU sobre EC2 (infra ADR-INF-13).
+  infra §3.4). El servicio de embeddings también, con 2 vCPU (infra ADR-INF-14).
 - `api` recibe tráfico solo desde API Gateway por VPC Link en el puerto `8000`. Detrás de API Gateway: máximo 30 s
   por petición y 10 MB de cuerpo; por eso las fotos del dataset no pasan por la API (ADR-BE-04).
-- `embedding` está **apagado por defecto** en `dev`: se enciende a mano (`gpu.py encender` de infra) y se apaga solo
+- `embedding` está **apagado por defecto** en `dev`: se enciende a mano (`embedding.py encender` de infra) y se apaga solo
   tras 45 min sin uso y a las 22:00 (infra §3.4 y §5.10). Apagado, `/v1/localize` responde
   `503 EMBEDDING_NO_DISPONIBLE` y los mensajes de ingesta esperan en la cola.
 - `worker` escala de 0 a 1 según la profundidad de las colas, **solo con `embedding` encendido** (infra §5.10).
@@ -191,7 +191,7 @@ La app graba sin conexión y sube al terminar (vista 7.5 de la app). Secuencia:
 
 **Paso a `subida`.** Una foto pasa de `pendiente_subida` a `subida` cuando el `worker` recibe su evento de S3 (antes
 de procesarla) o cuando `complete` comprueba con `HEAD` que el objeto ya está en S3; lo que ocurra primero. Así el
-conteo es correcto aunque el `worker` esté apagado (con la GPU de `embedding` apagada).
+conteo es correcto aunque el `worker` esté apagado (con `embedding` apagado).
 
 **Limpieza de datos de prueba.** `python -m app.cli limpiar-validacion` (§5.9) borra de forma definitiva —filas de
 `videos`, `imagenes` y `embeddings`, y sus objetos de `dataset/` y `thumbs/`— los videos cuyo `nombre` y `ref_cliente`
@@ -281,8 +281,8 @@ Algoritmo v1 (ADR-BE-08), con los parámetros de §5.10:
 10. Registra un evento anónimo en `eventos_localizacion` (sin fotos, sin identificadores del dispositivo).
 
 Sin vecinos por encima del umbral (o dataset vacío) la respuesta es `200` con `resultado = "sin_coincidencias"`.
-Presupuesto de tiempo: embedding ≤ `EMBEDDING_TIMEOUT_S` (5 s, límite duro; en la GPU de `dev` se esperan ≤ 500 ms
-para 5 fotos, embeddings §5.7), búsquedas < 100 ms; objetivo p95 en el servidor ≤ 1 s con `embedding` encendido
+Presupuesto de tiempo: embedding ≤ `EMBEDDING_TIMEOUT_S` (5 s, límite duro; en `dev` se esperan ≤ 800 ms para 5
+fotos, embeddings §5.7), búsquedas < 100 ms; objetivo p95 en el servidor ≤ 1 s con `embedding` encendido
 (infra §5.10).
 
 ### 4.11 BE-4.1 — Administración de videos e imágenes, y purga
@@ -363,7 +363,7 @@ para 5 fotos, embeddings §5.7), búsquedas < 100 ms; objetivo p95 en el servido
 #### `GET /v1/health/ready`
 `200` → `{"estado": "ok", "db": "ok" | "no_configurada", "embedding": "ok" | "no_disponible"}`. `no_configurada` solo
 se ve en BE-1.1, antes de que exista la conexión a la base (BE-1.2). `503 BASE_NO_DISPONIBLE` si la base no
-responde. Que `embedding` esté apagado (la GPU se enciende a mano, infra §3.4) **no** produce `503`.
+responde. Que `embedding` esté apagado (se enciende a mano, infra §3.4) **no** produce `503`.
 - `embedding = ok` si `GET {EMBEDDING_URL}/health/ready` responde `200` dentro de `EMBEDDING_CONNECT_TIMEOUT_S`;
   cualquier otro resultado (apagado, el nombre DNS sin registros, error o lentitud) es `no_disponible`.
 
@@ -410,7 +410,7 @@ Errores: `401 CREDENCIALES_INVALIDAS` (correo inexistente, contraseña incorrect
   ],
   "fotos_usadas": 5,
   "fotos_con_coincidencia": 4,
-  "version_vector": "dinov2-vitb14/pp-v1",
+  "version_vector": "dinov2-vits14/pp-v1",
   "latencia_ms": 640
 }
 ```
@@ -616,7 +616,7 @@ de `/v1/localize`). Parámetro `k` en la URL: entero de 1 a 50, por defecto 5.
 `200`:
 ```json
 {
-  "version_vector": "dinov2-vitb14/pp-v1",
+  "version_vector": "dinov2-vits14/pp-v1",
   "k": 5,
   "vecinos": [
     { "imagen_id": "…", "video_id": "…", "lat": 6.2003, "lng": -75.5788, "rumbo": 182.0,
@@ -755,16 +755,16 @@ PostgreSQL. Todas las fechas son `timestamptz`.
 | Columna | Tipo | Reglas |
 |---|---|---|
 | `imagen_id` | `uuid` | FK `imagenes` (`ON DELETE CASCADE`) |
-| `version_vector` | `text` | p. ej. `dinov2-vitb14/pp-v1` (definido por embeddings, §5.3 de su documento) |
-| `vector` | `vector(768)` | normalizado L2 |
+| `version_vector` | `text` | p. ej. `dinov2-vits14/pp-v1` (definido por embeddings, §5.3 de su documento) |
+| `vector` | `vector(384)` | normalizado L2 |
 | `creado_en` | `timestamptz` | |
 | PK | (`imagen_id`, `version_vector`) | |
 
 Índice por versión activa (parcial):
 ```sql
-CREATE INDEX embeddings_hnsw_dinov2_vitb14_pp_v1 ON embeddings
+CREATE INDEX embeddings_hnsw_dinov2_vits14_pp_v1 ON embeddings
   USING hnsw (vector vector_cosine_ops) WITH (m = 16, ef_construction = 64)
-  WHERE version_vector = 'dinov2-vitb14/pp-v1';
+  WHERE version_vector = 'dinov2-vits14/pp-v1';
 ```
 Toda consulta vectorial filtra por la misma `version_vector` para usar el índice. El valor se escribe **como literal**
 en
@@ -860,8 +860,8 @@ para arrancar: cada lote exige las suyas al usarlas (por ejemplo, `DB_*` desde B
 | Parámetro (`config.py`) | Valor inicial | Notas |
 |---|---|---|
 | `JWT_TTL_MIN` | 720 (12 h) | |
-| `EMBEDDING_VERSION_VECTOR` | `dinov2-vitb14/pp-v1` | Debe coincidir con `GET /v1/info` de embeddings. Se comprueba en la primera llamada tras cada arranque del servicio y cada 10 min (no al arrancar `api`, porque embeddings puede estar apagado); si no coincide, no se usa el servicio y `/v1/health/ready` lo informa |
-| `EMBEDDING_TIMEOUT_S` / `EMBEDDING_CONNECT_TIMEOUT_S` | 5 / 3 | Un reintento solo si la conexión fue rechazada. 5 s sobra en la GPU de `dev` (embeddings §5.7); en `local`, con embeddings en CPU, se sube con la variable del mismo nombre (p. ej. a 30) |
+| `EMBEDDING_VERSION_VECTOR` | `dinov2-vits14/pp-v1` | Debe coincidir con `GET /v1/info` de embeddings. Se comprueba en la primera llamada tras cada arranque del servicio y cada 10 min (no al arrancar `api`, porque embeddings puede estar apagado); si no coincide, no se usa el servicio y `/v1/health/ready` lo informa |
+| `EMBEDDING_TIMEOUT_S` / `EMBEDDING_CONNECT_TIMEOUT_S` | 5 / 3 | Un reintento solo si la conexión fue rechazada. 5 s deja margen sobre los ≤ 800 ms esperados para 5 fotos en `dev` (embeddings §5.7); si hace falta, se sube con la variable del mismo nombre |
 | `LOC_MAX_FOTOS` / `LOC_MAX_BYTES_FOTO` | 5 / 1 572 864 (1,5 MB) | |
 | `LOC_TOP_K` / `LOC_EF_SEARCH` | 10 / 64 | Por foto |
 | `LOC_SIM_MIN` / `LOC_SIM_ALTA` | 0,55 / 0,80 | **Iniciales: se calibran en BE-3.2 con el conjunto de evaluación de EMB-3.2** |
@@ -926,7 +926,7 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
   (`campus-locator-dev-validacion`, `psql -tAc "<consulta>"`) y leen su log. Solo consultas `SELECT`: lo que se escribe
   pasa por la API o por los comandos de §5.9.
 - La comprobación de disco de BE-3.2 usa ECS Exec sobre la tarea de `api` (infra §3.4).
-- Los que necesitan `embedding` (ingesta, localización) lo encienden si está apagado, esperan hasta 15 min a
+- Los que necesitan `embedding` (ingesta, localización) lo encienden si está apagado, esperan hasta 10 min a
   `"embedding": "ok"` en `/v1/health/ready` y al terminar lo dejan como lo encontraron (infra §5.11). Como a las 22:00
   (hora de Bogotá) se apaga solo, cada uno declara la hora límite para empezar.
 - Los mensajes y objetos se comprueban con las APIs de SQS y S3; los logs, con CloudWatch Logs.
@@ -1008,7 +1008,7 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 | ID | Riesgo | Prob. | Impacto | Mitigación |
 |---|---|---|---|---|
 | R1 | La precisión de ubicación no alcanza (dataset escaso, cambios de luz, lugares parecidos) | Alta | Alto | Conjunto de evaluación (EMB-3.2), calibrar umbrales, confianza honesta (`baja` → repetir), cobertura visible en el panel |
-| R2 | `/v1/localize` supera 1 s en el servidor | Media | Medio | `embedding` en GPU (infra ADR-INF-13); medir en EMB-3.1 y BE-3.2; fotos de 1024 px; palancas de embeddings §4.5 |
+| R2 | `/v1/localize` supera 1 s en el servidor | Media | Medio | Modelo pequeño (ViT-S/14) en 2 vCPU (infra ADR-INF-14); medir en EMB-3.1 y BE-3.2; fotos de 1024 px; palancas de embeddings §4.4 |
 | R3 | La ingesta retrasa la localización (un solo servicio de embeddings, que no interrumpe un lote en curso) | Media | Medio | Prioridad `alta` para localización (embeddings §5.2); lotes de 4 imágenes reducidas en el `worker` |
 | R4 | Una URL PUT permite subir archivos enormes | Baja | Bajo | URL de 15 min ligada a una clave; el `worker` rechaza > 4 MB y la purga los borra |
 | R5 | Rumbos de fuentes distintas (magnético vs. verdadero) | Alta | Medio | ADR-BE-12; lote del frontend para convertir en el escaneo |

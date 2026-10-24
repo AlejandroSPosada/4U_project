@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.3.1**. Este archivo contiene además el **catálogo único de historias de usuario**
+Alineado con `ARCHITECTURE.md` **v0.3.2**. Este archivo contiene además el **catálogo único de historias de usuario**
 del proyecto (§5), que los planes de las otras carpetas referencian.
 
 ---

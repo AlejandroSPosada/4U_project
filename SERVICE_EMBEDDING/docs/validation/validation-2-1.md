@@ -18,7 +18,7 @@ Si alguna no se cumple, el script termina con código 2 y el lote queda `Bloquea
 |---|---|---|
 | P1 | Docker disponible y puerto 8080 libre | `docker info` con código 0; una conexión a `localhost:8080` es rechazada |
 | P2 | `EMBEDDING_IMAGEN` definida y de plataforma `linux/amd64` (infra §5.9) | `docker pull` (si es de ECR, tras `aws ecr get-login-password` con `AWS_PROFILE`) y `docker image inspect --format '{{.Os}}/{{.Architecture}}'` = `linux/amd64`. Sin variable: código 3 (§5.11) |
-| P3 | `EMB-1.1` en «Hecho»: la imagen arranca, queda lista y publica su `version_vector` | `docker run -d --name validacion-emb21 -p 8080:8080 -e TORCH_NUM_THREADS=1 $EMBEDDING_IMAGEN`; `GET http://localhost:8080/health/ready` = 200 `{"estado": "listo"}` antes de 180 s; `GET /v1/info` → `version_vector = dinov2-vitb14/pp-v1` y `lote_max = 8` |
+| P3 | `EMB-1.1` en «Hecho»: la imagen arranca, queda lista y publica su `version_vector` | `docker run -d --name validacion-emb21 -p 8080:8080 -e TORCH_NUM_THREADS=1 $EMBEDDING_IMAGEN`; `GET http://localhost:8080/health/ready` = 200 `{"estado": "listo"}` antes de 180 s; `GET /v1/info` → `version_vector = dinov2-vits14/pp-v1` y `lote_max = 8` |
 
 ## 2. Comprobaciones automáticas
 
@@ -27,7 +27,7 @@ Todas las peticiones van a `POST http://localhost:8080/v1/embed` en `multipart/f
 
 | ID | Qué hace el script | Pasa si |
 |---|---|---|
-| C1 | Envía sola cada una de las cinco imágenes de `project/tests/golden/` (`image/jpeg` o `image/png` según el archivo) y compara la respuesta con su vector esperado del mismo directorio | Las cinco responden `200` con `version_vector = dinov2-vitb14/pp-v1`, `dim = 768` y 768 componentes, y la diferencia máxima por componente es ≤ 1e-5 |
+| C1 | Envía sola cada una de las cinco imágenes de `project/tests/golden/` (`image/jpeg` o `image/png` según el archivo) y compara la respuesta con su vector esperado del mismo directorio | Las cinco responden `200` con `version_vector = dinov2-vits14/pp-v1`, `dim = 384` y 384 componentes, y la diferencia máxima por componente es ≤ 1e-5 |
 | C2 | Una petición con 8 partes (las 5 doradas y 3 sintéticas JPEG de 640 × 480 con semilla fija) y cada una de esas 8 imágenes sola | Para las 8, `vectores[i]` del lote y el vector de la imagen enviada sola difieren ≤ 1e-5 por componente |
 | C3 | Una petición con 4 partes válidas salvo la tercera: `image/jpeg` con bytes no decodificables (JPEG truncado) | `400`, `error.codigo = IMAGEN_INVALIDA` y `error.detalle.indice = 2` |
 | C4 | Envía a la vez 4 peticiones `baja` de 8 imágenes sintéticas (33 imágenes con la `alta`, por debajo de `COLA_MAX_IMAGENES` = 40 aunque cuente el lote en curso) y, 1 s después, una con `X-Prioridad: alta` y 1 imagen. Para cada petición calcula su salida de la cola = instante de envío + `tiempos_ms.cola` | (a) al menos 2 `baja` salen de la cola después del envío de la `alta` (seguían esperando); (b) la `alta` sale antes que todas ellas; (c) su `tiempos_ms.cola` ≤ `tiempos_ms.inferencia` de la `baja` en curso + 500 ms (solo espera ese lote, §4.3) |

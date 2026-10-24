@@ -16,9 +16,9 @@ Si alguna no se cumple, el script termina con código 2 y el lote queda `Bloquea
 
 | ID | Qué debe cumplirse | Cómo lo comprueba el script |
 |---|---|---|
-| P1 | `EMB-2.1` en «Hecho»: vectores `dinov2-vitb14/pp-v1` estables (§5.3, §5.4) | Fila EMB-2.1 de `docs/PLAN.md` §3 en `Hecho` |
-| P2 | `BE-2.2` y `FE-2.1` en «Hecho»: un dataset **real** del campus indexado con la misma `version_vector` | Con `VALIDACION_API_URL` y `VALIDACION_ADMIN_*` (backend §5.11): `POST /v1/auth/login`; `GET /v1/admin/videos` → al menos un video `procesado` cuyo nombre no empieza por `validacion-`; `GET /v1/admin/images?estado=procesada&por_pagina=1` y `GET /v1/admin/images/{id}` → `vector.version_vector = dinov2-vitb14/pp-v1` |
-| P2b | `BE-2.4` en «Hecho»: el endpoint de vecinos responde | `POST /v1/admin/diagnostico/vecinos?k=5` con la primera imagen de `project/tests/golden/` → `200` con `version_vector = dinov2-vitb14/pp-v1` y `vecinos` no vacío (backend §5.5) |
+| P1 | `EMB-2.1` en «Hecho»: vectores `dinov2-vits14/pp-v1` estables (§5.3, §5.4) | Fila EMB-2.1 de `docs/PLAN.md` §3 en `Hecho` |
+| P2 | `BE-2.2` y `FE-2.1` en «Hecho»: un dataset **real** del campus indexado con la misma `version_vector` | Con `VALIDACION_API_URL` y `VALIDACION_ADMIN_*` (backend §5.11): `POST /v1/auth/login`; `GET /v1/admin/videos` → al menos un video `procesado` cuyo nombre no empieza por `validacion-`; `GET /v1/admin/images?estado=procesada&por_pagina=1` y `GET /v1/admin/images/{id}` → `vector.version_vector = dinov2-vits14/pp-v1` |
+| P2b | `BE-2.4` en «Hecho»: el endpoint de vecinos responde | `POST /v1/admin/diagnostico/vecinos?k=5` con la primera imagen de `project/tests/golden/` → `200` con `version_vector = dinov2-vits14/pp-v1` y `vecinos` no vacío (backend §5.5) |
 | P3 | Conjunto de fotos de consulta subido a `evaluacion/` (infra §5.5) | `s3api list-objects-v2 --bucket campus-locator-dev-dataset-648617469176 --prefix evaluacion/ --delimiter /` → al menos un `evaluacion/<version_conjunto>/`; `s3api head-object` de su `puntos.json` |
 | P4 | `AWS_PROFILE` de la cuenta `648617469176` con lectura de `evaluacion/` | `sts get-caller-identity` → `Account`. Sin variable, con credenciales inválidas o sin permiso de lectura: código 3 (§5.11) |
 
@@ -27,7 +27,7 @@ Si alguna no se cumple, el script termina con código 2 y el lote queda `Bloquea
 | ID | Qué hace el script | Pasa si |
 |---|---|---|
 | C1 | Para el `<version_conjunto>` que cita el informe de C2: `s3api get-object` de `evaluacion/<version_conjunto>/puntos.json` (formato de §5.9) y `s3api list-objects-v2` de `evaluacion/<version_conjunto>/fotos/`; con `GET /v1/admin/images?estado=procesada` (todas las páginas) calcula la distancia de cada punto a la imagen del dataset más cercana | ≥ 50 entradas en `fotos` repartidas en ≥ 10 puntos a ≤ 30 m del dataset, y ≥ 1 punto con ≥ 3 fotos a > 150 m de toda imagen; cada `archivo` existe en el bucket y cada `punto` está en `puntos`; cada punto tiene una coordenada WGS84 válida (convenciones de backend §5.1) |
-| C2 | Toma el informe más reciente de `evaluacion/*/informes/dinov2-vitb14_pp-v1-<AAAAMMDD>.json` que genera `project/tools/evaluacion/` (formato de §5.9) | Cita `<version_conjunto>` y `version_vector = dinov2-vitb14/pp-v1`; `recall_1_15m` y `recall_5_15m` en [0, 1], con el primero ≤ el segundo; `fotos` igual al número de fotos de puntos con dataset que cuenta C1; `similitud.mismo_lugar` y `similitud.otro_lugar` con p10 ≤ p50 ≤ p90; `recomendado` con los cuatro valores presentes |
+| C2 | Toma el informe más reciente de `evaluacion/*/informes/dinov2-vits14_pp-v1-<AAAAMMDD>.json` que genera `project/tools/evaluacion/` (formato de §5.9) | Cita `<version_conjunto>` y `version_vector = dinov2-vits14/pp-v1`; `recall_1_15m` y `recall_5_15m` en [0, 1], con el primero ≤ el segundo; `fotos` igual al número de fotos de puntos con dataset que cuenta C1; `similitud.mismo_lugar` y `similitud.otro_lugar` con p10 ≤ p50 ≤ p90; `recomendado` con los cuatro valores presentes |
 
 ## 3. Comprobaciones manuales
 

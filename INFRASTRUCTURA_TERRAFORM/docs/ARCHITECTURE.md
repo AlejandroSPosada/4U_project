@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.8.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.9.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
 | Estado | Diseño propuesto. **INF-0.1, INF-0.2, INF-1.1 e INF-1.2 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
@@ -62,10 +62,10 @@ Cómo se cambia una interfaz:
      │ evento ObjectCreated (dataset/*.jpg)   ┌─ VPC 10.20.0.0/16 ── cómputo en us-east-1a ───────────────┐
      ▼                                        │  Cloud Map  api.campus-locator.local (SRV :8000)          │
  SQS campus-locator-dev-ingesta ─────────────►│                                                           │
- SQS campus-locator-dev-purga   ─────────────►│  ECS cluster campus-locator-dev (Fargate + EC2 GPU)       │
+ SQS campus-locator-dev-purga   ─────────────►│  ECS Fargate (cluster campus-locator-dev)                 │
      ▲                                        │   ├─ api       FastAPI      ──HTTP──┐                     │
      └── la api encola purgas y re-procesados │   ├─ worker    ingesta y purga ─────┼─► embedding :8080   │
-                                              │   └─ embedding DINOv2 ViT-B/14 (GPU)◄┘  (A record,        │
+                                              │   └─ embedding DINOv2 ViT-S/14 (CPU)◄┘  (A record,        │
                                               │                                        Cloud Map)         │
                                               │        │                                                  │
                                               │        ▼  :5432 (subred privada)                          │
@@ -114,10 +114,6 @@ Detalle funcional de cada flujo: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §4.
   ninguna subred.
 - Las subredes no asignan IP pública por sí solas (`map_public_ip_on_launch = false`): la IP pública de cada tarea la
   pide ECS con `assignPublicIp = ENABLED` (INF-1.3 y el `run-task` de §5.9).
-- La instancia con GPU de `embedding` (§3.4) vive en `publica-a` con IP pública (la pide su plantilla de lanzamiento)
-  y el grupo `campus-locator-dev-gpu-host`, sin reglas entrantes. La tarea de `embedding` (`awsvpc` sobre EC2) tiene su
-  propia interfaz con el grupo `-embedding` y **sin** IP pública: el agente de ECS baja la imagen y envía los logs
-  desde la instancia, y la tarea no necesita salir a internet.
 - El grupo `default` de la VPC queda **sin reglas** (Terraform lo adopta con `aws_default_security_group`): lo que se
   cree sin un grupo explícito no tiene tráfico, en vez de quedar abierto entre sí (§5.7).
 
@@ -139,40 +135,32 @@ Detalle funcional de cada flujo: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §4.
   (`BACKEND_FASTAPI/docs/ARCHITECTURE.md`, ADR-BE-03).
 - *Access logs* de la API a CloudWatch.
 
-### 3.4 Cómputo: ECS sobre Fargate y una GPU en EC2
+### 3.4 Cómputo: ECS sobre Fargate
 
-Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas. Todo es `X86_64` / Linux y usa `awsvpc`. `api`,
-`worker`, `migrate` y `validacion` corren en Fargate; `embedding`, en una instancia EC2 con GPU que el clúster crea y
-destruye solo (ADR-INF-13).
+Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas, todo en Fargate. Todas las tareas son
+`X86_64` / Linux (ADR-INF-14) y usan `awsvpc`.
 
 | Servicio / tarea | Imagen | Proceso | Tamaño | Réplicas | Descubrimiento |
 |---|---|---|---|---|---|
 | `api` | `campus-locator/backend` | servidor HTTP (FastAPI) en `:8000` | 0,25 vCPU / 0,5 GB | 1 fija | Cloud Map SRV `api.campus-locator.local` |
 | `worker` | `campus-locator/backend` (otro comando) | consumidor de `ingesta` y `purga` | 0,25 vCPU / 0,5 GB | 0–1 según la cola, solo con `embedding` encendido | ninguno |
-| `embedding` | `campus-locator/embedding` (con CUDA) | DINOv2 en GPU en `:8080` | 1 GPU T4, 3 vCPU / 12 GB, en una `g4dn.xlarge` | 0 por defecto; 1 al encenderlo a mano | Cloud Map A `embedding.campus-locator.local` |
+| `embedding` | `campus-locator/embedding` | DINOv2 ViT-S/14 en CPU en `:8080` | 2 vCPU / 4 GB | 0 por defecto; 1 al encenderlo a mano | Cloud Map A `embedding.campus-locator.local` |
 | `migrate` (tarea suelta) | `campus-locator/backend` (otro comando) | migraciones Alembic + admin inicial | 0,25 vCPU / 0,5 GB | la lanza CI con `run-task` | ninguno |
 | `validacion` (tarea suelta) | pública `postgres:17-alpine` | `psql` y `nslookup` para los validadores (§5.11) | 0,25 vCPU / 0,5 GB | la lanzan los validadores con `run-task` | ninguno |
 
 - Los comandos exactos de cada proceso los define `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.9 y
   `SERVICE_EMBEDDING/docs/ARCHITECTURE.md` §5.5; esta carpeta solo los referencia en la definición de tarea.
-- **GPU de `embedding`** (ADR-INF-13): proveedor de capacidad `campus-locator-dev-gpu` sobre el grupo de autoescalado
-  `campus-locator-dev-embedding-gpu` (0–2 instancias `g4dn.xlarge`, AMI de ECS optimizada para GPU, en `publica-a`).
-  Con `embedding` en 1, ECS lanza la instancia (escalado gestionado) y coloca la tarea, que reserva la GPU; en 0, la
-  instancia termina. La segunda instancia solo existe mientras una tarea suelta que pide GPU (validadores y medición
-  de embeddings) coincide con el servicio encendido. La imagen lleva dentro los pesos del modelo, porque la tarea no sale a internet (§3.2).
-- **Encendido y apagado de `embedding`** (ADR-INF-11, ADR-INF-13): apagado por defecto. Se enciende a mano antes de
-  probar (`src/ops/gpu.py encender`, INF-2.1; tarda 5–10 min en estar sano) y se apaga con `gpu.py apagar` o solo: tras
+- **Encendido y apagado de `embedding`** (ADR-INF-11, ADR-INF-14): apagado por defecto. Se enciende a mano antes de
+  probar (`src/ops/embedding.py encender`, INF-2.1; tarda 2–3 min en estar sano) y se apaga con `embedding.py apagar` o solo: tras
   45 min sin peticiones a `POST /v1/localize` ni mensajes en `ingesta` o `purga`, y a las 22:00 (hora de Bogotá) si
   sigue encendido. Con `embedding` apagado, `api` sigue respondiendo (`/v1/health`, login, lugares, alertas) pero
   `/v1/localize` devuelve `503 EMBEDDING_NO_DISPONIBLE`.
 - **`worker` escala por cola**: sube a 1 con `ApproximateNumberOfMessagesVisible ≥ 1` en `ingesta` o `purga` **y**
-  `embedding` encendido; 15 minutos sin mensajes visibles ni en vuelo → 0. `gpu.py apagar` y la acción de las 22:00
-  también lo dejan en 0 (capacidad máxima 0 hasta el siguiente `gpu.py encender`), aunque queden mensajes. Con
-  `embedding` apagado los mensajes esperan en la cola (retención de 4 días): la ingesta avanza cuando se enciende la
-  GPU.
+  `embedding` encendido; 15 minutos sin mensajes visibles ni en vuelo → 0. `embedding.py apagar` y la acción de las 22:00
+  también lo dejan en 0 (capacidad máxima 0 hasta el siguiente `embedding.py encender`), aunque queden mensajes. Con
+  `embedding` apagado los mensajes esperan en la cola (retención de 4 días): la ingesta avanza cuando se enciende
+  `embedding`.
 - *Health checks* de contenedor (§5.7) y *deployment circuit breaker* con *rollback* activado en los tres servicios.
-  `embedding` se despliega con `minimumHealthyPercent = 0`: con una sola GPU, la tarea vieja se detiene antes de que
-  arranque la nueva.
 - **ECS Exec** (`enable_execute_command`) solo en `api`, para depurar en `dev` (y para la comprobación de disco de
   BE-3.2). Quien lo use necesita el *Session Manager plugin* de la CLI de AWS. `worker` y `embedding` no lo tienen.
 - **Terraform crea los servicios, CI cambia la imagen**: los servicios ignoran cambios en `task_definition` y
@@ -224,8 +212,6 @@ destruye solo (ADR-INF-13).
 - Un **rol de ejecución** común (descargar de ECR, escribir logs, leer los tres secretos).
 - Un **rol de tarea** por proceso con el mínimo necesario (§5.8). `embedding` no tiene permisos sobre ningún servicio
   de AWS.
-- Un **rol de instancia** para la máquina con GPU (`campus-locator-dev-ec2-gpu`): solo lo que necesita el agente de
-  ECS (§5.8).
 - Tres roles para GitHub Actions por **OIDC** (sin llaves de larga duración): uno de solo lectura para el `plan` de los
   PR, otro para aplicar Terraform y otro para desplegar imágenes. El *trust policy* solo acepta el repositorio y las
   ramas/entornos indicados en §5.8.
@@ -288,28 +274,27 @@ destruye solo (ADR-INF-13).
 ### 3.10 Costos estimados (`dev`, `us-east-1`, precios de lista)
 
 Tarifas usadas: Fargate Linux/x86 0,04048 USD por vCPU·h y 0,004445 USD por GB·h; IPv4 pública 0,005 USD/h;
-RDS `db.t4g.micro` 0,016 USD/h; `g4dn.xlarge` bajo demanda 0,526 USD/h (consultado el 2026-10-24); `gp3` 0,08 USD por
-GB·mes; mes de 730 h. Ninguna cifra cuenta con capa gratuita. Las dos columnas suponen 40 h y 160 h de GPU encendida
-al mes (uso de prueba de 1–3 personas y uso intensivo).
+RDS `db.t4g.micro` 0,016 USD/h; mes de 730 h. Ninguna cifra cuenta con capa gratuita. Las dos columnas suponen 40 h
+y 160 h de `embedding` encendido al mes (uso de prueba de 1–3 personas y uso intensivo).
 
-| Concepto | Supuesto | USD/mes, GPU 40 h | USD/mes, GPU 160 h |
+| Concepto | Supuesto | USD/mes, `embedding` 40 h | USD/mes, `embedding` 160 h |
 |---|---|---|---|
 | `api` (0,25 vCPU / 0,5 GB) | siempre encendida | 9,0 | 9,0 |
-| `embedding` en `g4dn.xlarge` + 60 GB `gp3` | solo mientras está encendida | 21,3 | 85,2 |
-| `worker` (0,25 vCPU / 0,5 GB) | solo con la GPU encendida y mensajes en cola | 0,2 | 0,7 |
-| IPv4 públicas | `api` siempre; `worker`, `migrate` y la instancia GPU mientras corren | 4,0 | 4,8 |
+| `embedding` (2 vCPU / 4 GB) | solo mientras está encendido | 4,0 | 15,8 |
+| `worker` (0,25 vCPU / 0,5 GB) | solo con `embedding` encendido y mensajes en cola | 0,2 | 0,7 |
+| IPv4 públicas | `api` siempre; `embedding`, `worker` y `migrate` mientras corren | 3,9 | 4,6 |
 | RDS `db.t4g.micro` + 20 GB `gp3` | una zona | 14,0 | 14,0 |
 | Secrets Manager | 3 secretos | 1,2 | 1,2 |
 | CloudWatch (logs ~2 GB, ~8 alarmas, 1 filtro de métricas) | | 2,3 | 2,3 |
-| ECR (~40 GB: la imagen de embeddings con CUDA pesa varios GB) | conservar 5 por repo | 4,0 | 4,0 |
+| ECR (~10 GB entre versiones) | conservar 5 por repo | 1,0 | 1,0 |
 | Cloud Map, API Gateway, S3, SQS, transferencia | tráfico de desarrollo | ~3,0 | ~3,0 |
-| **Total aproximado** | | **≈ 59** | **≈ 124** |
+| **Total aproximado** | | **≈ 39** | **≈ 52** |
 
 Cargos que pueden aparecer y no están en la tabla: créditos de CPU de RDS (los `t4g` corren en modo *unlimited* y
 cobran si la media de 24 h supera la línea base), almacenamiento de copias por encima del tamaño de la base, y
-cualquier recurso creado a mano fuera de Terraform, y horas de GPU si el apagado automático falla (cada hora encendida
-cuesta ~0,53 USD; R13). El presupuesto (§3.8) avisa antes de pasar de 100 USD: con más de ~120 h de GPU al mes se
-pasa.
+cualquier recurso creado a mano fuera de Terraform, y horas de `embedding` si el apagado automático falla (cada hora
+encendida cuesta ~0,10 USD; R13). El presupuesto (§3.8) avisa antes de pasar de 100 USD; con `embedding` encendido
+todo el mes se pasaría por poco (~110 USD).
 
 ---
 
@@ -332,13 +317,13 @@ INFRASTRUCTURA_TERRAFORM/
     │   ├── red/                 VPC, subredes, IGW, rutas, endpoint de S3, grupos de seguridad
     │   ├── datos/               RDS (+ grupo de parámetros), bucket del dataset, colas SQS, notificación S3→SQS
     │   ├── secretos/            random_password y los tres secretos
-    │   ├── computo/             ECR, clúster, Cloud Map, roles, definiciones de tarea (incluida la de validación), servicios, capacidad GPU, autoescalado
+    │   ├── computo/             ECR, clúster, Cloud Map, roles, definiciones de tarea (incluida la de validación), servicios, autoescalado
     │   ├── borde/               HTTP API, VPC Link, integración con Cloud Map, rutas, throttling, access logs
     │   └── observabilidad/      log groups, topic SNS, alarmas, regla de EventBridge
     ├── pruebas/
     │   └── imagen-prueba/       Dockerfile y servidor mínimo de la imagen `bootstrap` (§5.11)
     ├── src/
-    │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes INF-x.y (§5.11); gpu.py (INF-2.1)
+    │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes INF-x.y (§5.11); embedding.py (INF-2.1)
     ├── .tflint.hcl              configuración de TFLint para infra.yml
     └── pyproject.toml           dependencias de los validadores (grupo `ops`: boto3, httpx)
 ```
@@ -352,9 +337,9 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
 | **INF-0.2 Esqueleto** | `envs/dev` con *backend*, proveedor (`default_tags`, `allowed_account_ids`) y los seis módulos, vacíos, ya compuestos en `main.tf`; `data "aws_caller_identity"` (output `cuenta_id`) obliga a configurar el proveedor sin recursos y `data "aws_default_tags"` deja en el estado las etiquetas efectivas. `infra.yml` con `plan` en PR y `apply` aprobado en `main` (§3.9). A partir de aquí todo cambio de infraestructura entra por PR |
 | **INF-1.1 Red** | Módulo `red`: VPC, cuatro subredes (las /24 número 0, 1, 10 y 11 de `cidr_vpc`), Internet Gateway, tablas `-publica` y `-privada`, endpoint de S3 en la pública, los cinco grupos de seguridad de §5.7 y el `default` sin reglas. Los grupos se crean aquí (no en cada módulo) y sin reglas en línea: cada regla es un `aws_vpc_security_group_ingress_rule` o `egress_rule`, así las referencias cruzadas no generan ciclos. Entrega a `envs/dev` los IDs que usan INF-1.2 a INF-1.4 (§5.12) y crea los outputs `subredes_tareas` y `sg_migrate` |
 | **INF-1.2 Datos y secretos** | Módulo `datos`: RDS en `us-east-1a` (grupo de subredes con las dos privadas y grupo de parámetros con `rds.force_ssl`); bucket con cifrado, *Block Public Access*, propiedad, ciclo de vida, política «solo TLS» y notificación a `ingesta` (la política de la cola autoriza solo a ese bucket); colas y DLQ. Módulo `secretos`: `random_password`, `random_bytes` y los tres secretos. Los dos módulos se usan entre sí a través de `envs/dev` (la contraseña va de `secretos` a RDS y el endpoint de RDS vuelve al secreto `db`) sin ciclo, porque Terraform resuelve las dependencias recurso por recurso. La **notificación** del bucket (`aws_s3_bucket_notification`) se crea después de la política de la cola, porque S3 valida el destino al guardarla. Entradas, salidas y recursos en §5.12 |
-| **INF-1.3 Cómputo** | Repositorios ECR (etiquetas inmutables, escaneo básico, conservar 5), clúster, espacio de nombres privado `campus-locator.local`, roles, definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza), la tarea de validación, la capacidad GPU de `embedding` (plantilla de lanzamiento, grupo de autoescalado 0–2, proveedor de capacidad, rol y perfil de instancia; ADR-INF-13) y servicios con `desired_count = 0` hasta el primer despliegue |
+| **INF-1.3 Cómputo** | Repositorios ECR (etiquetas inmutables, escaneo básico, conservar 5), clúster, espacio de nombres privado `campus-locator.local`, roles, definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza), la tarea de validación y servicios con `desired_count = 0` hasta el primer despliegue |
 | **INF-1.4 Borde** | HTTP API, VPC Link en las subredes públicas, integración con el servicio Cloud Map `api`, rutas `ANY /{proxy+}` y `POST /v1/auth/login`, throttling y access logs. Expone `api_base_url` |
-| **INF-2.1 Encendido de la GPU y escalado** | `src/ops/gpu.py` (`encender`, `apagar`, `estado`); apagado automático de `embedding` por inactividad (filtro de métricas sobre los *access logs* de `/v1/localize` y profundidad de las colas) y acción programada de las 22:00 (zona `America/Bogota`); política de escalado por pasos de `worker` sobre las colas, condicionada a que `embedding` esté encendido; `gpu.py apagar` y la acción de las 22:00 también dejan `worker` en 0 |
+| **INF-2.1 Encendido de `embedding` y escalado** | `src/ops/embedding.py` (`encender`, `apagar`, `estado`); apagado automático de `embedding` por inactividad (filtro de métricas sobre los *access logs* de `/v1/localize` y profundidad de las colas) y acción programada de las 22:00 (zona `America/Bogota`); política de escalado por pasos de `worker` sobre las colas, condicionada a que `embedding` esté encendido; `embedding.py apagar` y la acción de las 22:00 también dejan `worker` en 0 |
 | **INF-3.1 Observabilidad** | Topic SNS, suscripción por correo (hay que confirmarla desde el correo que envía SNS), alarmas de §5.10 y regla de EventBridge de §3.8. Expone `sns_alertas_arn` |
 | **INF-6.1 Producción** (diferido) | Ver PLAN, Fase 6 |
 
@@ -385,10 +370,9 @@ Inventario de nombres:
 | Internet Gateway | `campus-locator-dev-igw` |
 | Tablas de rutas | `campus-locator-dev-publica` (las dos públicas) · `campus-locator-dev-privada` (las dos privadas) |
 | Endpoint de S3 (*gateway*) | `campus-locator-dev-s3` |
-| Grupos de seguridad | `campus-locator-dev-vpclink`, `-api`, `-worker`, `-embedding`, `-rds`, `-gpu-host` (INF-1.3); el `default` de la VPC lleva `Name = campus-locator-dev-default` |
+| Grupos de seguridad | `campus-locator-dev-vpclink`, `-api`, `-worker`, `-embedding`, `-rds`; el `default` de la VPC lleva `Name = campus-locator-dev-default` |
 | HTTP API / VPC Link | `campus-locator-dev-api` / `campus-locator-dev-vpclink` |
 | Clúster ECS | `campus-locator-dev` |
-| Capacidad GPU (INF-1.3) | proveedor de capacidad `campus-locator-dev-gpu`; grupo de autoescalado y plantilla de lanzamiento `campus-locator-dev-embedding-gpu`; perfil de instancia `campus-locator-dev-ec2-gpu` |
 | Servicios ECS | `api`, `worker`, `embedding` |
 | Familias de definición de tarea | `campus-locator-dev-api`, `campus-locator-dev-worker`, `campus-locator-dev-embedding`, `campus-locator-dev-migrate`, `campus-locator-dev-validacion` (§5.11) |
 | Contenedor dentro de cada tarea | `app` (todas las tareas tienen un solo contenedor con ese nombre) |
@@ -402,7 +386,7 @@ Inventario de nombres:
 | Secretos | `campus-locator/dev/db`, `campus-locator/dev/jwt`, `campus-locator/dev/admin-inicial` |
 | Log groups | `/campus-locator/dev/api`, `/campus-locator/dev/worker`, `/campus-locator/dev/embedding`, `/campus-locator/dev/migrate`, `/campus-locator/dev/validacion`, `/campus-locator/dev/apigw` |
 | Streams de log de las tareas | `awslogs-stream-prefix` = nombre del proceso (`api`, `worker`, `embedding`, `migrate`, `validacion`); cada tarea escribe en `<proceso>/app/<id-de-la-tarea>` (p. ej. `embedding/app/0f3c9a…`). Una tarea suelta lanzada con la definición de `embedding` escribe en `/campus-locator/dev/embedding` con el mismo formato |
-| Roles IAM | `campus-locator-dev-ecs-ejecucion`, `campus-locator-dev-tarea-api`, `campus-locator-dev-tarea-worker`, `campus-locator-dev-tarea-embedding`, `campus-locator-dev-tarea-migrate`, `campus-locator-dev-ec2-gpu` (instancia GPU), `campus-locator-gha-terraform-plan`, `campus-locator-gha-terraform`, `campus-locator-gha-deploy` |
+| Roles IAM | `campus-locator-dev-ecs-ejecucion`, `campus-locator-dev-tarea-api`, `campus-locator-dev-tarea-worker`, `campus-locator-dev-tarea-embedding`, `campus-locator-dev-tarea-migrate`, `campus-locator-gha-terraform-plan`, `campus-locator-gha-terraform`, `campus-locator-gha-deploy` |
 | *Permissions boundary* | `campus-locator-limite-roles` (política gestionada; obligatoria en los roles `campus-locator-*` que crea `envs/dev`, §5.8) |
 | Presupuesto | `campus-locator-mensual` |
 | Alarmas de CloudWatch (INF-3.1) | `campus-locator-dev-api-5xx`, `campus-locator-dev-ingesta-dlq`, `campus-locator-dev-purga-dlq`, `campus-locator-dev-embedding-encendida`, `campus-locator-dev-rds-almacenamiento`, `campus-locator-dev-rds-creditos-cpu` |
@@ -460,8 +444,7 @@ contienen secretos. Cada variable de `envs/dev` se declara con el lote que la us
 | `github_ids` | `bootstrap` | `{ propietario = 142058005, repositorio = 1362957467 }` | IDs inmutables del `sub` de OIDC (§5.8): el repositorio se creó después del 2026-07-15. `null` = formato clásico |
 | `correo_alertas` | ambos | *(el de `bootstrap/terraform.tfvars`)* | Presupuesto (`bootstrap`) y topic de alarmas (`envs/dev`) |
 | `presupuesto_usd` | `bootstrap` | `100` | |
-| `apagado_gpu` | `envs/dev` | `{ zona = "America/Bogota", noche = "cron(0 22 * * ? *)", inactividad_min = 45 }` | Apagado automático de `embedding` (INF-2.1); `noche = null` quita el apagado nocturno |
-| `gpu_tipo_instancia` | `envs/dev` | `"g4dn.xlarge"` | Instancia de `embedding` (INF-1.3): GPU NVIDIA y dentro del cupo de instancias G (R9) |
+| `apagado_embedding` | `envs/dev` | `{ zona = "America/Bogota", noche = "cron(0 22 * * ? *)", inactividad_min = 45 }` | Apagado automático de `embedding` (INF-2.1); `noche = null` quita el apagado nocturno |
 | `imagen_inicial_tag` | `envs/dev` | `"bootstrap"` | Solo en la primera creación |
 | `rds_clase` / `rds_gb` / `rds_gb_max` | `envs/dev` | `"db.t4g.micro"` / `20` / `50` | `rds_gb_max` debe ser mayor que `rds_gb` (lo valida el módulo `datos`) |
 | `pg_version` | `envs/dev` | `"17"` | Solo la versión mayor (lo valida el módulo `datos`): RDS elige la menor por defecto (≥ 17.1, pgvector 0.8.x) y la actualiza. Forma también la familia (`postgres17`) y el nombre del grupo de parámetros |
@@ -502,11 +485,7 @@ app) y contraseña aleatoria; se consulta en la consola para el primer inicio de
 | `SQS_URL_INGESTA` | ✓ | ✓ | | | URL de `campus-locator-dev-ingesta` |
 | `SQS_URL_PURGA` | ✓ | ✓ | | | URL de `campus-locator-dev-purga` |
 | `EMBEDDING_URL` | ✓ | ✓ | | | `http://embedding.campus-locator.local:8080` |
-| `TORCH_NUM_THREADS` | | | | ✓ | `3` (= vCPU de la tarea; preprocesado en CPU) |
-| `EMBEDDING_DEVICE` | | | | ✓ | `cuda` |
-
-Desde 0.7.0, `embedding` corre en GPU (ADR-INF-13): su imagen parte de una base con CUDA, trae dentro los pesos del
-modelo (la tarea no sale a internet, §3.2) y usa el dispositivo de `EMBEDDING_DEVICE`.
+| `TORCH_NUM_THREADS` | | | | ✓ | `2` (= vCPU de la tarea) |
 
 Parámetros de comportamiento (tiempo de vida del JWT, umbrales de localización, tamaños de lote, etc.) **no** los
 inyecta Terraform: tienen valor por defecto en el código y están en el §5 de cada servicio. Si un parámetro se
@@ -560,10 +539,8 @@ quiere mover a variable de entorno, se añade primero a esta tabla.
 | `campus-locator-dev-worker` | — | todo |
 | `campus-locator-dev-embedding` | `8080/tcp` desde `-api` y `-worker` | todo (solo lo usa para logs y ECR) |
 | `campus-locator-dev-rds` | `5432/tcp` desde `-api` y `-worker` | — |
-| `campus-locator-dev-gpu-host` (INF-1.3) | — | todo (ECR, CloudWatch y el agente de ECS) |
 
-`migrate` y la tarea de validación (§5.11) usan el grupo `-api`. La instancia GPU usa `-gpu-host`; la tarea de
-`embedding` que corre en ella, `-embedding`.
+`migrate` y la tarea de validación (§5.11) usan el grupo `-api`.
 
 - «todo» = todos los protocolos y puertos hacia `0.0.0.0/0` (la VPC no tiene IPv6).
 - El grupo `default` de la VPC no tiene reglas (§3.2) y ningún recurso lo usa: todo recurso con interfaz en la VPC
@@ -600,13 +577,12 @@ quiere mover a variable de entorno, se añade primero a esta tabla.
 | | `sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:ChangeMessageVisibility`, `sqs:GetQueueAttributes` | colas `ingesta` y `purga` |
 | `campus-locator-dev-tarea-migrate` | ninguno sobre AWS (la base usa usuario y contraseña); también lo usa la tarea de validación | — |
 | `campus-locator-dev-tarea-embedding` | ninguno sobre AWS | — |
-| `campus-locator-dev-ec2-gpu` (rol de instancia, con perfil del mismo nombre) | `AmazonEC2ContainerServiceforEC2Role` (agente de ECS: registrar la instancia y recibir tareas) | — |
 | `campus-locator-gha-deploy` | `ecr:GetAuthorizationToken`; `ecr:*Layer*`, `ecr:PutImage`, `ecr:BatchGetImage` sobre los dos repositorios; `ecs:RegisterTaskDefinition`, `ecs:DescribeTaskDefinition`, `ecs:UpdateService`, `ecs:DescribeServices`, `ecs:RunTask`, `ecs:DescribeTasks` sobre el clúster; `iam:PassRole` sobre los roles de ejecución y de tarea; `logs:GetLogEvents` sobre `/campus-locator/dev/migrate` | |
 | `campus-locator-gha-terraform-plan` | `ReadOnlyAccess`; lectura del bucket de estado y escritura solo del archivo de bloqueo `dev/terraform.tfstate.tflock` | |
 | | `secretsmanager:GetSecretValue` (el `plan` refresca `aws_secretsmanager_secret_version`; esos valores ya están en el estado, R5) | secretos `campus-locator/dev/*` |
 | `campus-locator-gha-terraform` | `PowerUserAccess` + IAM limitado a roles y políticas con prefijo `campus-locator-`; crear un rol o cambiar sus políticas exige el boundary `campus-locator-limite-roles`; lectura y escritura del bucket de estado | |
 | | Denegado: salir de la región (salvo servicios globales), tocar los roles `campus-locator-gha-*`, quitar o editar el boundary, `sts:AssumeRole`, cambiar la configuración del bucket de estado, borrar versiones del estado y escribir `bootstrap/*` | |
-| `campus-locator-limite-roles` (*permissions boundary*) | Techo de todo rol que crea `envs/dev`: todo menos `iam:*`, `organizations:*`, `account:*` y `sts:AssumeRole`, con las mismas denegaciones de región y del bucket de estado que `gha-terraform`. Los roles `ecs-ejecucion`, `tarea-*` y `ec2-gpu` de esta tabla lo llevan como `permissions_boundary` (ADR-INF-12) | |
+| `campus-locator-limite-roles` (*permissions boundary*) | Techo de todo rol que crea `envs/dev`: todo menos `iam:*`, `organizations:*`, `account:*` y `sts:AssumeRole`, con las mismas denegaciones de región y del bucket de estado que `gha-terraform`. Los roles `ecs-ejecucion` y `tarea-*` de esta tabla lo llevan como `permissions_boundary` (ADR-INF-12) | |
 
 *Trust policy* de los roles de GitHub (proveedor `token.actions.githubusercontent.com`, `aud = sts.amazonaws.com`).
 `<sub_repo>` es el segmento del repositorio en el *claim* `sub`: GitHub usa el formato inmutable
@@ -621,8 +597,7 @@ quiere mover a variable de entorno, se añade primero a esta tabla.
 ### 5.9 Contrato de despliegue (CI/CD)
 
 **Imágenes**
-- Plataforma `linux/amd64` (la de `embedding`, sobre una base con CUDA y con los pesos del modelo dentro). Etiqueta =
-  SHA completo del commit (`${GITHUB_SHA}`); etiquetas inmutables, sin `latest`.
+- Plataforma `linux/amd64`. Etiqueta = SHA completo del commit (`${GITHUB_SHA}`); etiquetas inmutables, sin `latest`.
 - Cada servicio aporta su `Dockerfile` en `<CARPETA>/project/Dockerfile`; el contexto de construcción es
   `<CARPETA>/project/`. `src/ops/` y `tests/` quedan fuera de la imagen (`.dockerignore`), salvo lo que cada servicio
   declare en su §5. El proceso por defecto de la imagen del backend es
@@ -639,8 +614,7 @@ quiere mover a variable de entorno, se añade primero a esta tabla.
 
 **Secuencia de `embedding.yml` (en `main`)**: pruebas → imagen → nueva revisión de `campus-locator-dev-embedding` →
 `update-service` → `wait services-stable` (solo si `embedding` está encendido; apagado, queda en 0 y toma la revisión
-nueva al encenderse). Con una sola GPU, el despliegue detiene la tarea vieja antes de arrancar la nueva: unos minutos
-sin `/v1/localize`.
+nueva al encenderse).
 
 **Primer despliegue**: el primer `backend.yml` además pone `desired_count = 1` en `api`; `embedding` se enciende a mano
 (§3.4) y `worker` escala solo.
@@ -671,9 +645,9 @@ llaves de AWS en GitHub. Formato: `SUBREDES_TAREAS` = IDs de subred separados po
 | Parámetro | Valor en `dev` |
 |---|---|
 | Tamaños de tarea | §3.4 |
-| Encendido de `embedding` | Apagado por defecto; a mano con `gpu.py encender`; se apaga tras 45 min sin peticiones a `POST /v1/localize` ni mensajes en `ingesta` o `purga`, y a las 22:00 `America/Bogota` |
+| Encendido de `embedding` | Apagado por defecto; a mano con `embedding.py encender`; se apaga tras 45 min sin peticiones a `POST /v1/localize` ni mensajes en `ingesta` o `purga`, y a las 22:00 `America/Bogota` |
 | Latencia objetivo de `POST /v1/localize` | p95 de `integrationLatency` (*access logs*) ≤ 1000 ms con `embedding` encendido |
-| Escalado de `worker` | sube a 1 con ≥ 1 mensaje visible en `ingesta` o `purga` y `embedding` encendido; baja a 0 tras 15 min en 0, y también con `gpu.py apagar` o a las 22:00 |
+| Escalado de `worker` | sube a 1 con ≥ 1 mensaje visible en `ingesta` o `purga` y `embedding` encendido; baja a 0 tras 15 min en 0, y también con `embedding.py apagar` o a las 22:00 |
 | Throttling API Gateway | general: 20 req/s, ráfaga 40 · `POST /v1/auth/login`: 2 req/s, ráfaga 5 |
 | Formato de los *access logs* | JSON por línea: `requestId`, `ip`, `requestTime`, `httpMethod`, `routeKey`, `path`, `status`, `responseLength`, `integrationLatency`, `integrationStatus` (`requestId` es el encabezado `apigw-requestid` de la respuesta) |
 | Retención de logs | 14 días (todos los log groups) |
@@ -762,14 +736,13 @@ falla porque faltan credenciales, herramientas o variables da **3**, no 2: el 2 
 - Nunca imprime secretos, tokens ni URLs prefirmadas.
 - Es idempotente: se puede repetir sin preparar nada a mano.
 - Si un lote cambia sus criterios en el PLAN, su documento y su script se actualizan en el mismo cambio.
-- **`embedding` en `dev`** (ADR-INF-13): un validador que necesita el servicio `embedding` en marcha (ingesta,
-  localización) lo enciende si está apagado —lo mismo que `gpu.py encender`— y espera hasta 15 min a que esté sano; al
-  terminar, también si algo falló, lo deja como lo encontró: lo apaga (como `gpu.py apagar`) solo si lo encendió él.
+- **`embedding` en `dev`** (ADR-INF-14): un validador que necesita el servicio `embedding` en marcha (ingesta,
+  localización) lo enciende si está apagado —lo mismo que `embedding.py encender`— y espera hasta 10 min a que esté sano; al
+  terminar, también si algo falló, lo deja como lo encontró: lo apaga (como `embedding.py apagar`) solo si lo encendió él.
   Como a las 22:00 (`America/Bogota`) se apaga solo, cada validación declara la hora límite para empezar. El apagado
   por inactividad llega tras 45 min sin peticiones a `/v1/localize` ni mensajes en las colas: un validador que pase
-  más tiempo sin usarlos vuelve a comprobar que `embedding` sigue encendido. Una tarea suelta que pide GPU
-  (validadores de embeddings) no necesita el servicio: reserva su propia GPU y, si el servicio tiene la suya, el grupo
-  de autoescalado lanza una segunda instancia (§3.4).
+  más tiempo sin usarlos vuelve a comprobar que `embedding` sigue encendido. Las tareas sueltas con la
+  definición de `embedding` (validadores de embeddings) no necesitan el servicio: corren en Fargate por su cuenta.
 - Por ahora se ejecutan desde la máquina de quien cierra el lote, con sus propias credenciales de AWS; ejecutarlos en CI
   es parte de INF-6.1.
 
@@ -1012,10 +985,10 @@ claro. La HTTP API da HTTPS gestionado, *throttling* y cobro por petición. *Con
 **ADR-INF-05 — ECS Fargate para los tres procesos (aceptada).**
 Lambda no encaja con un modelo de PyTorch de cientos de MB (arranque en frío de varios segundos por petición) ni con
 un consumidor de colas que llama a ese modelo. EC2 exige administrar máquinas. Fargate permite apagar por horario y
-escalar a 0 el `worker`. *Desde 0.7.0*, `embedding` corre en ECS sobre EC2 con GPU (ADR-INF-13); `api`, `worker` y las
-tareas sueltas siguen en Fargate.
+escalar a 0 el `worker`. *En 0.7.0 y 0.8.0* se planeó `embedding` sobre EC2 con GPU
+(ADR-INF-13); desde 0.9.0 los tres procesos vuelven a Fargate (ADR-INF-14).
 
-**ADR-INF-06 — Embeddings en CPU y arquitectura x86_64 (reemplazada por ADR-INF-13 en 0.7.0).**
+**ADR-INF-06 — Embeddings en CPU y arquitectura x86_64 (reemplazada por ADR-INF-13 en 0.7.0 y por ADR-INF-14 en 0.9.0).**
 Una GPU (`g4dn.xlarge`) supera el presupuesto por sí sola. ViT-B/14 en 1 vCPU da latencias de segundos para 5 fotos,
 aceptable para `/v1/localize` (se mide en EMB-3.1). Graviton (ARM64) ahorraría ~20 % de Fargate, pero exige
 construir imágenes multiplataforma y validar las ruedas de PyTorch; se deja como optimización (PLAN, INF-6.1).
@@ -1037,7 +1010,7 @@ una tarea en Terraform crea una revisión con la imagen inicial: el workflow del
 **ADR-INF-10 — Ingesta por eventos S3 → SQS, sin SNS intermedio (aceptada).**
 Un solo consumidor; SNS solo añadiría un salto. La DLQ conserva los fallos 14 días para re-procesarlos.
 
-**ADR-INF-11 — Horario de encendido en `dev` y presupuesto con avisos (aceptada; modificada por ADR-INF-13).**
+**ADR-INF-11 — Horario de encendido en `dev` y presupuesto con avisos (aceptada; modificada por ADR-INF-13 y ADR-INF-14).**
 `embedding` es el mayor costo variable. Apagarlo de noche ahorra ~13 USD/mes. *Consecuencia:* `/v1/localize` no
 funciona fuera de horario; la app debe mostrar el error del backend (`FRONTEND_KOTLIN`, PLAN). *Desde 0.7.0*,
 `embedding` no tiene horario de encendido: está apagado por defecto y se enciende a mano; del horario queda el apagado
@@ -1051,7 +1024,7 @@ no se puede quitar ni editar, y `gha-terraform` no puede asumir roles. *Consecue
 declaran `permissions_boundary` (output `limite_roles_arn`) y uno sin él falla con `AccessDenied` en
 `iam:CreateRole`; los roles `campus-locator-*` ajenos a este diseño quedan fuera del modelo y deben borrarse (R11).
 
-**ADR-INF-13 — `embedding` en GPU (EC2 `g4dn.xlarge`), apagado por defecto (aceptada; reemplaza a ADR-INF-06).**
+**ADR-INF-13 — `embedding` en GPU (EC2 `g4dn.xlarge`), apagado por defecto (descartada en 0.9.0 antes de aplicarse: la cuenta tiene cupo 0 de instancias G; la reemplaza ADR-INF-14).**
 El equipo pide que `POST /v1/localize` responda en menos de 1 s. Medición de referencia (ViT-B/14 en fp32, un núcleo
 de un Xeon de 2,1 GHz): ~1,1 s por foto a 224 px y ~9,3 s a 518 px, así que 5 fotos en 1 vCPU tardan ~5,5 s o ~47 s
 (más que los 30 s de API Gateway); una T4 las procesa en decenas de milisegundos. En `dev` prueban 1–3 personas a
@@ -1066,26 +1039,38 @@ GPU); Graviton deja de aplicar a `embedding`. La latencia real se mide en EMB-3.
 segunda instancia, solo para tareas sueltas con GPU (validadores y medición de embeddings) mientras el servicio está
 encendido; eso pide un cupo de 8 vCPU (R9).
 
+**ADR-INF-14 — `embedding` en Fargate (2 vCPU) con DINOv2 ViT-S/14, apagado por defecto (aceptada; reemplaza a ADR-INF-13
+y ADR-INF-06).**
+La cuenta tiene cupo 0 de instancias G y el aumento puede tardar días, más de lo que el equipo puede esperar.
+*Decisión:* `embedding` vuelve a Fargate (`X86_64`) con 2 vCPU / 4 GB y el modelo pasa a DINOv2 ViT-S/14 (22 M
+parámetros, vectores de 384; `SERVICE_EMBEDDING` ADR-EMB-11), que hace unas 4 veces menos cómputo por foto que
+ViT-B/14. Se mantiene el encendido de ADR-INF-13: apagado por defecto, a mano con `src/ops/embedding.py encender` y
+apagado solo tras 45 min sin uso y a las 22:00 (§3.4). Estimación sin medir: 5 fotos en 0,5–1,5 s con 2 vCPU, a partir
+de la medición de referencia de ADR-INF-13 y la proporción de cómputo. *Consecuencias:* ~0,10 USD por hora encendida
+(§3.10); arranque de 2–3 min (R6); sin cupos especiales ni instancias que administrar; el objetivo de p95 ≤ 1 s en el
+servidor no está garantizado: se mide en EMB-3.1 y BE-3.2 y, si no se cumple, las palancas son ONNX Runtime (mejor
+antes de indexar el dataset real, porque cambia los vectores) o 4 vCPU (embeddings §4.4); Graviton sigue como
+optimización (INF-6.1).
+
 ---
 
 ## 7. Riesgos
 
 | ID | Riesgo | Prob. | Impacto | Mitigación |
 |---|---|---|---|---|
-| R1 | El gasto supera 100 USD/mes | Media | Alto | Presupuesto con avisos, GPU apagada por defecto y con apagado automático (ADR-INF-13), tamaños mínimos, conservar 5 imágenes en ECR, revisar *Cost Explorer* al cerrar cada lote. La cuenta y el presupuesto se comparten con otro proyecto del equipo (trend-analyzer, recursos `ta-*`) |
+| R1 | El gasto supera 100 USD/mes | Media | Alto | Presupuesto con avisos, `embedding` apagado por defecto y con apagado automático (ADR-INF-14), tamaños mínimos, conservar 5 imágenes en ECR, revisar *Cost Explorer* al cerrar cada lote. La cuenta y el presupuesto se comparten con otro proyecto del equipo (trend-analyzer, recursos `ta-*`) |
 | R2 | Tareas con IP pública expuestas | Baja | Alto | Grupos de seguridad sin entrada desde internet; `embedding` sin permisos de AWS; imágenes base mínimas con escaneo de ECR; grupo `default` sin reglas; `validate11.py` C4 comprueba que ninguna regla entrante de la VPC admite `0.0.0.0/0` ni `::/0` |
 | R3 | Caída de `us-east-1a` | Baja | Alto | Aceptado en `dev`; Multi-AZ en `prod` (Fase 6) |
 | R4 | `db.t4g.micro` (1 GiB) se queda corto: índice HNSW en memoria, conexiones, créditos de CPU | Media | Medio | Alarma de créditos; el índice cabe holgado hasta ~50 000 vectores de 768 dimensiones; subir a `db.t4g.small` (~23 USD/mes) si hace falta |
 | R5 | Contraseña de la base y demás secretos en el estado de Terraform | Media | Medio | Bucket de estado privado, cifrado, versionado y solo TLS. Lo leen el administrador, `gha-terraform` y `gha-terraform-plan`; este último desde cualquier PR del repositorio, que solo abre quien tiene escritura. Aceptado en `dev`; se revisa en INF-6.1 |
-| R6 | La GPU arranca bajo demanda y la imagen con CUDA pesa varios GB: 5–10 min desde `gpu.py encender` hasta `embedding` sano | Alta | Bajo | Encender antes de probar (`gpu.py estado` dice cuándo está lista); *start period* de 180 s; caché de la imagen en la instancia mientras vive; `worker` solo sube con `embedding` encendido; *warm pool* del grupo de autoescalado si molesta (INF-6.1) |
+| R6 | Imagen de embeddings de ~1,8 GB: 2–3 min desde `embedding.py encender` hasta `embedding` sano | Alta | Bajo | Encender antes de probar (`embedding.py estado` dice cuándo está listo); *start period* de 180 s; `worker` solo sube con `embedding` encendido |
 | R7 | Límite de 30 s y 10 MB de API Gateway | Media | Medio | Fotos del dataset directo a S3; `/v1/localize` limitado a 5 fotos de ≤ 1,5 MB (contrato del backend) |
 | R8 | La URL de la API cambia si se recrea la HTTP API, y `ApiConfig.kt` queda desactualizado | Baja | Medio | `prevent_destroy` en la API; dominio propio en Fase 6 |
-| R9 | Cuotas por defecto de una cuenta nueva: vCPU de Fargate y, sobre todo, cupo 0 de instancias G (GPU) | Media | Alto | Pedir ≥ 8 vCPU de «Running On-Demand G and VT instances» (Service Quotas `L-DB2E81BA`) antes de INF-1.3, porque el aumento puede tardar días: 4 para el servicio y 4 para una tarea suelta de validación a la vez (con solo 4, esas tareas esperan a que el servicio esté apagado); Fargate usa ~0,5 vCPU |
+| R9 | Cuotas por defecto de una cuenta nueva (vCPU de Fargate, etc.) | Baja | Medio | El sistema usa ~2,5 vCPU con todo encendido; solicitar aumento si un `apply` falla por cuota. Sin GPU desde 0.9.0: el cupo de instancias G de la cuenta es 0 (ADR-INF-14) |
 | R10 | `/v1/localize` es público: abuso que dispara costos | Baja | Medio | *Throttling*; alarma de 5xx; en `prod`, WAF o clave de app |
 | R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y pueden chocar con nombres de §5.1 (sobre todo el *namespace* de Cloud Map `campus-locator.local`, con INF-1.3) | Alta | Medio | Revisado el 2026-10-24: no había otra VPC `campus-locator-dev-vpc` (C2a de INF-1.1) ni nada que choque con INF-1.2 (el bucket del dataset ya no existe; sin instancias, *snapshots*, grupos de parámetros ni de subredes de RDS; sin colas; `campus-locator-dev/jwt-secret` está en borrado programado y su nombre no choca). Antes de INF-1.3, inventariar y limpiar el resto: clúster y servicios de ECS, ECR `campus-locator-dev/*`, *namespace* de Cloud Map, *target group*, *log groups* `/ecs/…`, roles `campus-locator-dev-backend-*` y `-embedding-*` y los buckets `campus-locator-dev-scans-648617469176` y `4uproject-eafit-tfstate` (CHANGELOG 0.3.0) |
 | R12 | El repositorio es público: los logs de Actions y los comentarios del `plan` los puede leer cualquiera | Alta | Bajo | Terraform oculta los valores `sensitive` (contraseñas, secretos) en el `plan` y en los logs; ningún paso imprime el estado ni credenciales; todo output con un dato sensible se declara `sensitive`; los PR desde *forks* no ejecutan el `plan`. Lo que queda visible (IDs, ARN, URL) no da acceso por sí solo |
-| R13 | El apagado automático de la GPU falla y queda encendida (~13 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas) y presupuesto con avisos |
-| R14 | Sin capacidad `g4dn.xlarge` en `us-east-1a` al encender | Baja | Medio | Reintentar más tarde; `gpu_tipo_instancia` admite otra instancia G; usar `us-east-1b` exige revisar ADR-INF-03 |
+| R13 | El apagado automático de `embedding` falla y queda encendido (~2,5 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas) y presupuesto con avisos |
 
 ---
 

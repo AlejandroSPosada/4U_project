@@ -20,6 +20,36 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.9.0] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; decisión del equipo antes de INF-1.3. La cuenta tiene cupo 0 de instancias G
+  (`L-DB2E81BA` = 0) y no hay tiempo de esperar el aumento.
+- **Qué cambió:**
+  - Nueva ADR-INF-14: `embedding` vuelve a Fargate con **2 vCPU / 4 GB** y el modelo pasa a **DINOv2 ViT-S/14**
+    (vectores de 384; `SERVICE_EMBEDDING` ADR-EMB-11). Se conserva el encendido de 0.7.0: apagado por defecto, a mano y
+    con apagado automático tras 45 min sin uso y a las 22:00. ADR-INF-13 queda descartada sin haberse aplicado;
+    ADR-INF-05, ADR-INF-06 y ADR-INF-11 lo anotan.
+  - Desaparece todo lo de la GPU: proveedor de capacidad, grupo de autoescalado, plantilla de lanzamiento, rol y perfil
+    de instancia `campus-locator-dev-ec2-gpu`, grupo de seguridad `-gpu-host`, variable `gpu_tipo_instancia`,
+    `EMBEDDING_DEVICE`, el despliegue con `minimumHealthyPercent = 0` y los riesgos R14 y el cupo de R9.
+  - `src/ops/gpu.py` pasa a llamarse **`src/ops/embedding.py`** (`encender`, `apagar`, `estado`) y la variable
+    `apagado_gpu`, **`apagado_embedding`**. INF-2.1 pasa a «Encendido de `embedding` y escalado del `worker`».
+  - §3.4: tabla de tareas (`embedding` 2 vCPU / 4 GB), arranque de 2–3 min. §3.10: costos con `embedding` en Fargate
+    (≈ 39 USD/mes con 40 h encendido, ≈ 52 con 160 h). R1, R6, R9 y R13 actualizados.
+  - PLAN: INF-1.3 ya no tiene «Requiere decidir antes» (sin cupo de GPU ni perfiles de instancia) y su C6 comprueba la
+    tarea en Fargate con 2 vCPU y 4 GB. `validation-1-3.md` (sin P4 ni C6b), `validation-2-1.md` y
+    `validation-3-1.md` siguen el cambio; los plazos de encendido bajan de 15 a 10 min.
+- **Contratos tocados (§5):** §5.1 (fuera los nombres de la GPU), §5.3 (`apagado_gpu` → `apagado_embedding`; fuera
+  `gpu_tipo_instancia`), §5.4 (`TORCH_NUM_THREADS = 2`; fuera `EMBEDDING_DEVICE`), §5.7 (fuera `-gpu-host`), §5.8 (fuera
+  `ec2-gpu`), §5.9, §5.10 y §5.11. Nada de esto estaba aplicado: sube la menor.
+- **Cómo se verificó:** cupo consultado con `service-quotas get-service-quota --quota-code L-DB2E81BA` (0.0). Revisión
+  de dinov2-small en Hugging Face (`SERVICE_EMBEDDING` CHANGELOG 0.5.0). La estimación de latencia escala la medición de
+  referencia de ADR-INF-13 por el cómputo de ViT-S/14; no se midió en Fargate.
+- **Pendiente:** medir la latencia real (EMB-3.1, BE-3.2). Si se pidió el aumento de cupo de GPU, se puede dejar o
+  cancelar: no se usa. El comentario de las ventanas de RDS en `modules/datos/main.tf` (se corrige en INF-1.3).
+
+---
+
 ## [0.8.0] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; ajustes al diseño de 0.7.0 al llevar la GPU a los documentos del backend (0.4.0),

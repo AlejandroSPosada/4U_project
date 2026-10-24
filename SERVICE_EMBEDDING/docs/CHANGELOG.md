@@ -23,6 +23,46 @@ re-indexar el dataset.
 
 ---
 
+## [0.5.0] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; la cuenta tiene cupo 0 de instancias con GPU y el equipo no puede esperar el
+  aumento. La infraestructura pasa `embedding` a Fargate con 2 vCPU, sin cambiar el encendido bajo demanda
+  (`INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` 0.9.0, ADR-INF-14).
+- **Qué cambió:**
+  - Nuevo ADR-EMB-11: modelo **DINOv2 ViT-S/14** (`facebook/dinov2-small`, 22 M parámetros) en CPU con 2 vCPU.
+    Reemplaza a ADR-EMB-01 (ViT-B/14) y ADR-EMB-10 (GPU), que no llegó a aplicarse. ADR-EMB-02, ADR-EMB-05 y
+    ADR-EMB-07 vuelven a describir CPU.
+  - Se elimina el lote **EMB-2.2 Imagen con GPU** (PLAN, §4 y `validation/validation-2-2.md`), con `EMBEDDING_DEVICE`,
+    los extras `cpu`/`cuda`, `tools/dorados.py`, la tolerancia entre dispositivos y R8.
+  - EMB-3.1 vuelve a «Rendimiento en CPU»: objetivo del lote de 5 en p95 ≤ 800 ms en 2 vCPU (§4.4); palancas: hilos,
+    ONNX Runtime, 4 vCPU, int8. §4 se renumera: EMB-3.1 §4.4, EMB-3.2 §4.5, EMB-5.1 §4.6.
+  - §1–§3: Fargate con 2 vCPU / 4 GB, apagado por defecto (`embedding.py encender` de infra), arranque de 2–3 min.
+    R1, R2, R3 y R6 actualizados.
+  - Validaciones: 1-1 y 3-1 lanzan las tareas sueltas con `--launch-type FARGATE` y 3-1 comprueba 2 vCPU / 4 GB; 2-1
+    espera vectores de 384.
+  - PLAN: EMB-1.1 sigue «En curso»; su código usa `dinov2-base` y hay que pasarlo a `dinov2-small`.
+- **Contratos tocados (§5):**
+  - **`version_vector` nueva: `dinov2-vits14/pp-v1`** (antes `dinov2-vitb14/pp-v1`), dimensión **384** (antes 768).
+    No hay vectores indexados todavía, así que no hay que re-indexar; el backend cambia `EMBEDDING_VERSION_VECTOR`,
+    la columna a `vector(384)` y el nombre del índice (backend 0.5.0).
+  - §5.2: `/v1/info` con `modelo = facebook/dinov2-small`, la revisión nueva, `arquitectura = ViT-S/14`, `dim = 384` y
+    `dispositivo = cpu`.
+  - §5.3: modelo y revisión `ed25f3a31f01632728cabb09d1542f84ab7b0056`, cabeza de `main` en Hugging Face (commit
+    «Update README.md», 2023-09-06, que solo cambia la licencia del README a Apache 2.0); `model.safetensors` de
+    88 249 960 bytes, SHA-256 `ae1e99fcefd534ed978cdeb8326f08030c96e28b7a81ffcbc98a857c84d14be1`. El preprocesamiento
+    pp-v1 y la extracción no cambian.
+  - §5.4: vuelve a una sola tolerancia (1e-5, mismo contenedor); §5.5: imagen de ~1,8 GB, ~1 GB de memoria, tarea de
+    4 GB; sin `EMBEDDING_DEVICE`. §5.7: `TORCH_NUM_THREADS = 2` y latencia objetivo en 2 vCPU. §5.8: tareas sueltas
+    en Fargate. §5.9: ejemplo de `benchmark.py` en 2 vCPU; fuera el formato de `tools/dorados.py`.
+- **Cómo se verificó:** revisión, archivos y tamaños leídos en las páginas del repositorio `facebook/dinov2-small` en
+  Hugging Face el 2026-10-24 (árbol de `main` en `ed25f3a`, 7 commits; `model.safetensors` añadido en `150c8e7`). La
+  estimación de 0,5–1,5 s para 5 fotos escala por el cómputo de ViT-S/14 la medición de referencia de ViT-B/14 de infra
+  ADR-INF-13; no se midió con PyTorch ni en Fargate.
+- **Pendiente:** pasar el código de EMB-1.1 a `dinov2-small` (`config.py`, la revisión que comprueba
+  `descargar_modelo.py` y las pruebas que comparan §5.3 con el código); medir en EMB-3.1.
+
+---
+
 ## [0.4.0] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; el equipo pide que `POST /v1/localize` responda en menos de 1 s, y la

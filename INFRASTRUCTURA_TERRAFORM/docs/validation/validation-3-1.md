@@ -18,7 +18,7 @@ según §5.11).
 | ID | Qué debe cumplirse | Cómo lo comprueba el script |
 |---|---|---|
 | P1 | `INF-1.4` en «Hecho»: HTTP API creada (su `ApiId` es la dimensión de la alarma de 5xx) | `apigatewayv2 get-apis` contiene `campus-locator-dev-api` y su `ApiEndpoint` = output `api_base_url` |
-| P2 | `INF-2.1` en «Hecho»: apagado automático de la GPU aplicado | `application-autoscaling describe-scheduled-actions --service-namespace ecs --resource-id service/campus-locator-dev/embedding` devuelve `campus-locator-dev-embedding-apagar-noche` |
+| P2 | `INF-2.1` en «Hecho»: apagado automático de `embedding` aplicado | `application-autoscaling describe-scheduled-actions --service-namespace ecs --resource-id service/campus-locator-dev/embedding` devuelve `campus-locator-dev-embedding-apagar-noche` |
 | P3 | Outputs que usa el script | `terraform -chdir=envs/dev output -json` contiene `sns_alertas_arn`, `ecs_cluster`, `familias_tarea`, `subredes_tareas`, `sg_migrate`, `sqs_ingesta_dlq_url` y `sqs_purga_dlq_url` |
 | P4 | Credenciales de la cuenta `648617469176` | `aws sts get-caller-identity` devuelve `Account = 648617469176` |
 

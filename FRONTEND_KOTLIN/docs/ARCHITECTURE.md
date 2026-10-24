@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.3.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.3.2** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
 | Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*; sin backend real todavía. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -35,7 +35,7 @@ vista** (con el archivo que la implementa). La sección de vistas está pensada 
 | Puentes WebView ↔ Android, almacenamiento local (`manifest.json`, `files/recoleccion/`, `SharedPreferences`), rutas y datos entre vistas, piezas reutilizables, **cómo la app consume la API** (mapeo a modelos, errores, rumbo) y lo propio de sus validadores | **Este documento, §5** |
 | Contrato común de los validadores de lotes | `INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` §5.11 |
 | API REST, códigos de error, formato de cada respuesta | `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5 |
-| URL pública de la API (`api_base_url`) y encendido de la GPU de embeddings en `dev` | `INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` §5.2, §3.4 y §5.10 |
+| URL pública de la API (`api_base_url`) y encendido de embeddings en `dev` | `INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` §5.2, §3.4 y §5.10 |
 
 Un cambio de interfaz se hace primero en el §5 del dueño (subiendo su versión y con entrada en su `CHANGELOG.md`) y
 después en el código.
@@ -307,13 +307,12 @@ Funciones del puente, formato de los mensajes y requisitos del lado Kotlin: §5.
 
 - La app solo conoce **la URL base de la API** (`ApiConfig.kt` = output `api_base_url` de Terraform + `/v1`). El
   servicio de embeddings, la base de datos, S3 y las colas quedan detrás del backend.
-- Arquitectura en AWS (API Gateway HTTPS, ECS Fargate y una GPU en EC2 para embeddings, RDS PostgreSQL + pgvector,
-  S3, SQS):
+- Arquitectura en AWS (API Gateway HTTPS, ECS Fargate, RDS PostgreSQL + pgvector, S3, SQS):
   `INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` §2 y §3.
 - Endpoints, cuerpos, códigos de error y límites: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5. La tabla de «endpoints
   propuestos» que vivía aquí se reemplazó por ese contrato (diferencias en `CHANGELOG.md`, versión 0.2.0).
 - Cómo los consume la app (mapeo a modelos de Kotlin, errores, rumbo, subida de fotos, caché de alertas): §5.10.
-- En `dev`, el servicio de embeddings está apagado por defecto: se enciende a mano antes de probar (tarda 5–10 min) y
+- En `dev`, el servicio de embeddings está apagado por defecto: se enciende a mano antes de probar (tarda 2–3 min) y
   se apaga solo tras 45 min sin uso y a las 22:00 (`INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` §3.4 y §5.10).
   Apagado o arrancando, `POST /v1/localize` responde `503 EMBEDDING_NO_DISPONIBLE` y la app debe decirlo (§5.10);
   encendido, el objetivo es ≤ 1 s en el servidor.
@@ -1728,7 +1727,7 @@ Formato de los datos:
 | `401 TOKEN_EXPIRADO` / `TOKEN_INVALIDO` / `NO_AUTENTICADO` en rutas de admin | `SessionManager.cerrarSesion()` y la ruta va a Login (mismo efecto que `onSinSesion`) |
 | `403 SIN_PERMISOS` | Igual que «sin permisos» de Login (7.1) |
 | `429` (cuerpo `{"message": …}`) | «Demasiados intentos, espera un momento» |
-| `503 EMBEDDING_NO_DISPONIBLE` | Escaneo (6.2) termina en error hablado: «El servicio de ubicación no está disponible en este momento» (en `dev`, con la GPU de embeddings apagada o arrancando, infra §3.4) |
+| `503 EMBEDDING_NO_DISPONIBLE` | Escaneo (6.2) termina en error hablado: «El servicio de ubicación no está disponible en este momento» (en `dev`, con embeddings apagado o arrancando, infra §3.4) |
 | `409` / `422` | Mensaje del campo afectado (`detalle.campos`) en formularios de admin |
 | Cualquier otro | «Algo salió mal» (`LoginError.Desconocido`, `ErrorDestino.DESCONOCIDO`) y se registra el `X-Request-Id` |
 
@@ -2821,7 +2820,7 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
 | R5 | Reconocimiento de voz no disponible o voces superpuestas con TalkBack | Media | Alto | Proteger `SpeechRecognizer` con `isRecognitionAvailable`; probar con TalkBack (FE-3.5); toda acción tiene equivalente táctil |
 | R6 | La sesión se borra si Android mata el proceso durante una recolección larga | Media | Medio | La recolección ya guarda en disco; la subida (7.5) pide login de nuevo y retoma por idempotencia |
 | R7 | Eventos de una sola vez perdidos (`SharedFlow` sin repetición) dejan pantallas atascadas | Baja | Medio | Ver 5.2 (escaneo) y 5.1; migrar a `Channel` donde importe |
-| R8 | En `dev` la ubicación no funciona mientras la GPU de embeddings está apagada (por defecto, y siempre desde las 22:00) | Alta | Bajo | Mensaje claro con `503 EMBEDDING_NO_DISPONIBLE` (§5.10); encender la GPU antes de probar (infra §3.4) |
+| R8 | En `dev` la ubicación no funciona mientras embeddings está apagado (por defecto, y siempre desde las 22:00) | Alta | Bajo | Mensaje claro con `503 EMBEDDING_NO_DISPONIBLE` (§5.10); encender embeddings antes de probar (infra §3.4) |
 | R9 | Ediciones de admin hechas sobre datos locales se pierden al cerrar la app (`EdicionesLocales`, editor de alertas) | Alta | Bajo | Desaparece al conectar los repositorios remotos (FE-3.3, FE-4.1) |
 
 ### 9.2 Notas para quien implemente

@@ -23,6 +23,20 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.3.2] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; `embedding` deja de usar GPU y pasa a Fargate con 2 vCPU, con el mismo encendido
+  bajo demanda (`INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` 0.9.0, ADR-INF-14).
+- **Qué cambió:** las menciones a «la GPU de embeddings» pasan a «embeddings» en §1.2, §3, §5.10 y R8 (§9.1); el
+  encendido tarda 2–3 min (antes 5–10). `validation-3-2` (C1 y C4) y `validation-3-5` (C3) usan `embedding.py` en lugar
+  de `gpu.py`.
+- **Contratos tocados (§5):** ninguno; la app no ve el modelo ni la dimensión de los vectores. Solo redacción: sube el
+  parche.
+- **Cómo se verificó:** búsqueda de «GPU» y «gpu.py» en `docs/`; revisión cruzada con infra 0.9.0 y backend 0.5.0.
+- **Pendiente:** nada.
+
+---
+
 ## [0.3.1] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; la infraestructura cambia el horario fijo de `embedding` por una GPU apagada por
