@@ -190,7 +190,7 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 |---|---|---|---|---|---|---|
 | INF-0.1 | 0 | Hecho | [0-1](./validation/validation-0-1.md) | `b20a62f` 2026-10-24 | 0.3.0 | `sub` inmutable de OIDC (`github_ids`); proveedor OIDC importado de un intento anterior |
 | INF-0.2 | 0 | Hecho | [0-2](./validation/validation-0-2.md) | `c677aeb` 2026-10-24 | 0.4.0 | Primer `apply` de `envs/dev` hecho por `infra.yml`; C3b toma el bloqueo él mismo (`terraform console` ya no lo toma desde Terraform 1.15) |
-| INF-1.1 | 1 | En curso | [1-1](./validation/validation-1-1.md) | — | — | Código escrito; faltan el `apply` desde `main` y `validate11.py` en `dev` |
+| INF-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `ff1cce2` 2026-10-24 | 0.5.0 | `apply` de la red por `infra.yml` (29 recursos); antes hubo que cancelar una ejecución de `main` de un commit sobrescrito que esperaba aprobación y retenía la fila |
 | INF-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | Antes: el bucket `campus-locator-dev-dataset-648617469176` ya existe (intento anterior, ARCHITECTURE R11) |
 | INF-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | |
 | INF-1.4 | 1 | Pendiente | [1-4](./validation/validation-1-4.md) | — | — | |

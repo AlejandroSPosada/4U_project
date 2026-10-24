@@ -4,7 +4,7 @@
 |---|---|
 | Versión del documento | **0.5.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
-| Estado | Diseño propuesto. **INF-0.1 e INF-0.2 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`); **INF-1.1 (red) escrito, pendiente de aplicar y validar**; el resto, sin código todavía |
+| Estado | Diseño propuesto. **INF-0.1, INF-0.2 e INF-1.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -238,7 +238,9 @@ Un clúster `campus-locator-dev` con tres servicios y una tarea suelta. Todas la
   terceros fijadas por SHA; `GITHUB_TOKEN` sin permisos salvo los de cada job. Un PR desde un *fork* no ejecuta el
   `plan` (no recibe token OIDC). El `plan` de un PR es un solo comentario que se actualiza en cada ejecución; un `plan`
   nuevo del mismo PR cancela el anterior, y los `apply` de `main` van en fila sin interrumpirse (si se acumulan varios
-  pendientes, GitHub deja solo el más reciente, que aplica el árbol completo de `main`). En `main`, el job
+  pendientes, GitHub deja solo el más reciente, que aplica el árbol completo de `main`). Una ejecución de `main` que
+  espera aprobación retiene la fila: la siguiente queda en cola, sin pedir aprobación, hasta que aquella se apruebe o se
+  cancele (cancelarla no toca AWS). En `main`, el job
   `apply (main)` hace `plan` y `apply` de ese mismo plan tras la aprobación; quien aprueba revisa antes el `plan` del
   PR (un *push* directo a `main` no tiene `plan` previo).
 - **Entorno `dev` de GitHub** (se crea en INF-0.1): *required reviewers* (aprobación manual) y *deployment branches*

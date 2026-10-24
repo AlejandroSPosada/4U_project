@@ -36,14 +36,18 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
     Terraform), leída de sus firmas.
   - Corrige contradicciones: INF-0.2 C4 deja a cada lote comprobar las etiquetas de lo que crea y `validation-1-1` no
     lo hacía (nuevo C2e, que también comprueba `Name`); `validation-1-1` listaba P1 antes que P2 aunque §5.11 pide
-    evaluar primero las credenciales (ahora P2 va primero). Además: C3 incluye el `default` sin reglas (C3b), nuevo C5
+    evaluar primero las credenciales (ahora P2 va primero); y su §5 no tenía la preparación (inventario de VPC,
+    comprobaciones locales, `push`, aprobación del `apply` y variables de GitHub) que `validation-0-2` sí tiene. Además: C3 incluye el `default` sin reglas (C3b), nuevo C5
     para los dos outputs, y P1 hace `init -lockfile=readonly` para no tocar el lock versionado.
 - **Contratos tocados (§5):** §5.1 (nombres del IGW, las tablas y el endpoint; `Name` del `default`; etiqueta `Name` en
   los recursos de red), §5.2 (cuándo aparecen `subredes_tareas` y `sg_migrate`), §5.3 (`cidr_vpc` y `az_secundaria`
   nuevas; `az_computo` ya se usa), §5.7 (`default` sin reglas; las reglas solo viven en `red`; solo ASCII en las
   descripciones), §5.9 (formato de `SUBREDES_TAREAS` y `SG_MIGRATE`), §5.11 y §5.12 (documentación de lo existente).
-- **Cómo se verificó:** Pendiente: `validate11.py --entorno dev` con código 0 sobre un commit de `main` (se completa al
-  cerrar el lote). Antes de entregar, con OpenTofu 1.13.2 y el proveedor aws 6.70.0 (en el entorno
+- **Cómo se verificó:** `validate11.py --entorno dev` con código 0 sobre `ff1cce2` (2026-10-24 15:40–15:41 UTC): pasan
+  P1–P2 y C1–C5 (C2a–C2e, C3a–C3b). El `apply` lo hizo `infra.yml` (`Resources: 29 added`) tras la aprobación del
+  entorno `dev`; antes hubo que cancelar una ejecución de `main` de un commit ya sobrescrito que esperaba aprobación y
+  retenía la fila de concurrencia (§3.9 y el paso 4 de `validation-1-1` §5 lo explican ahora). Variables del repositorio
+  `SUBREDES_TAREAS` y `SG_MIGRATE` creadas desde los outputs (§5.9). Antes de entregar, con OpenTofu 1.13.2 y el proveedor aws 6.70.0 (en el entorno
   de pruebas no hay Terraform): `fmt -check`, `validate` y TFLint 0.65 + *ruleset* aws 0.50 limpios en `envs/dev` y
   `modules/red`; `tofu test` del módulo con proveedor simulado (CIDR, zonas, asociaciones, ruta al IGW, endpoint, las
   nueve reglas con sus referencias, outputs, `default` sin reglas y rechazo de una CIDR que no es /16). El validador,
