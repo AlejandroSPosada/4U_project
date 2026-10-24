@@ -37,8 +37,8 @@ CONTENEDOR = "app"
 REPOSITORIO_ECR = "campus-locator/embedding"
 PUERTO = 8080
 URL_LOCAL = f"http://localhost:{PUERTO}"
-MODELO_ID = "facebook/dinov2-base"
-VERSION_VECTOR = "dinov2-vitb14/pp-v1"
+MODELO_ID = "facebook/dinov2-small"
+VERSION_VECTOR = "dinov2-vits14/pp-v1"
 PLAZO_ARRANQUE_S = 180
 # Comando del health check del contenedor `embedding` (infra §5.7).
 COMANDO_SALUD = (

@@ -97,7 +97,7 @@ class ModeloDinov2:
             self.inferir(torch.zeros((tamano, 3, LADO_ENTRADA_PX, LADO_ENTRADA_PX)))
 
     def inferir(self, lote: torch.Tensor) -> np.ndarray:
-        """Tensor (n, 3, 224, 224) ya preprocesado → matriz (n, 768) float32 con norma L2 = 1.
+        """Tensor (n, 3, 224, 224) ya preprocesado → matriz (n, DIM) float32 con norma L2 = 1.
 
         Descriptor: token CLS de la última capa tras la layernorm final (`pooler_output`, §5.3).
         """

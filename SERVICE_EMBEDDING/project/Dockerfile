@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
 # 2) Pesos de la revisión fija, descargados en el build (ADR-EMB-05). Esta etapa solo depende de
-#    config.py y del script: cambiar el resto del código no vuelve a bajar ~350 MB.
+#    config.py y del script: cambiar el resto del código no vuelve a bajar ~90 MB.
 FROM dependencias AS pesos
 COPY src/app/__init__.py src/app/config.py /build/src/app/
 COPY tools/descargar_modelo.py /build/tools/

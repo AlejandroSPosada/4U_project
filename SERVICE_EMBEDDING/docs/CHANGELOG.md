@@ -40,7 +40,10 @@ re-indexar el dataset.
     R1, R2, R3 y R6 actualizados.
   - Validaciones: 1-1 y 3-1 lanzan las tareas sueltas con `--launch-type FARGATE` y 3-1 comprueba 2 vCPU / 4 GB; 2-1
     espera vectores de 384.
-  - PLAN: EMB-1.1 sigue «En curso»; su código usa `dinov2-base` y hay que pasarlo a `dinov2-small`.
+  - Código de EMB-1.1 alineado: `config.py` y `src/ops/comun.py` (modelo, revisión, arquitectura, `version_vector`,
+    `DIM = 384`), comentario del `Dockerfile`, descripción de `pyproject.toml` y pruebas (`test_config`,
+    `test_contrato_http`, `test_modelo`: la dimensión «equivocada» de la prueba pasa de 384 a 192). EMB-1.1 sigue
+    «En curso».
 - **Contratos tocados (§5):**
   - **`version_vector` nueva: `dinov2-vits14/pp-v1`** (antes `dinov2-vitb14/pp-v1`), dimensión **384** (antes 768).
     No hay vectores indexados todavía, así que no hay que re-indexar; el backend cambia `EMBEDDING_VERSION_VECTOR`,
@@ -57,9 +60,10 @@ re-indexar el dataset.
 - **Cómo se verificó:** revisión, archivos y tamaños leídos en las páginas del repositorio `facebook/dinov2-small` en
   Hugging Face el 2026-10-24 (árbol de `main` en `ed25f3a`, 7 commits; `model.safetensors` añadido en `150c8e7`). La
   estimación de 0,5–1,5 s para 5 fotos escala por el cómputo de ViT-S/14 la medición de referencia de ViT-B/14 de infra
-  ADR-INF-13; no se midió con PyTorch ni en Fargate.
-- **Pendiente:** pasar el código de EMB-1.1 a `dinov2-small` (`config.py`, la revisión que comprueba
-  `descargar_modelo.py` y las pruebas que comparan §5.3 con el código); medir en EMB-3.1.
+  ADR-INF-13; no se midió con PyTorch ni en Fargate. Código: 27 pruebas en verde y 2 omitidas (las del modelo, que
+  necesitan PyTorch: su índice no era accesible desde donde se cambió), `ruff check` y `ruff format --check` limpios.
+- **Pendiente:** correr `pytest` completo con PyTorch (incluye `test_modelo.py`), generar `uv.lock` y construir la
+  imagen (EMB-1.1); medir en EMB-3.1.
 
 ---
 

@@ -1,7 +1,7 @@
 [project]
 name = "campus-locator-embedding"
 version = "0.1.0"
-description = "Servicio interno de embeddings (DINOv2 ViT-B/14 en CPU) de Campus Locator"
+description = "Servicio interno de embeddings (DINOv2 ViT-S/14 en CPU) de Campus Locator"
 requires-python = "==3.12.*"
 dependencies = [
     "fastapi>=0.115,<1",

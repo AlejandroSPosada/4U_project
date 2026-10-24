@@ -8,8 +8,8 @@ from app.config import Settings
 
 VALORES_5_10 = {
     "jwt_ttl_min": 720,
-    "embedding_version_vector": "dinov2-vitb14/pp-v1",
-    "embedding_timeout_s": 20,
+    "embedding_version_vector": "dinov2-vits14/pp-v1",
+    "embedding_timeout_s": 5,
     "embedding_connect_timeout_s": 3,
     "loc_max_fotos": 5,
     "loc_max_bytes_foto": 1_572_864,

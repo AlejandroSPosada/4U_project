@@ -39,9 +39,11 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   - §5.3 y §5.5: `version_vector` de los ejemplos.
   - No hay vectores guardados todavía, así que no hace falta re-indexar. Cambio incompatible con 0.4.0 en el esquema;
     mientras la versión sea `0.x`, sube la menor.
-- **Cómo se verificó:** revisión cruzada con embeddings 0.5.0 (§5.2–§5.4) e infra 0.9.0 (§3.4, §5.10, §5.11).
-- **Pendiente:** si el código de BE-1.1 ya trae `EMBEDDING_VERSION_VECTOR` o `EMBEDDING_TIMEOUT_S` en `config.py`,
-  alinearlos (`dinov2-vits14/pp-v1` y 5 s). La primera migración (BE-1.2) debe crear `vector(384)`.
+- **Código:** `src/app/config.py` (`embedding_version_vector = "dinov2-vits14/pp-v1"`, `embedding_timeout_s = 5.0`;
+  el 20 → 5 venía de 0.4.0) y `tests/unit/test_config.py`.
+- **Cómo se verificó:** revisión cruzada con embeddings 0.5.0 (§5.2–§5.4) e infra 0.9.0 (§3.4, §5.10, §5.11); 59
+  pruebas en verde, `ruff check` y `ruff format --check` limpios.
+- **Pendiente:** la primera migración (BE-1.2) debe crear `vector(384)`.
 
 ---
 

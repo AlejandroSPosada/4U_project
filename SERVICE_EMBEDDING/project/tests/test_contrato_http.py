@@ -89,12 +89,12 @@ def test_info_publica_el_contrato(cliente_listo):
         "servicio": "campus-locator-embedding",
         "version": "0.1.0",
         "commit": COMMIT[:7],
-        "modelo": "facebook/dinov2-base",
+        "modelo": "facebook/dinov2-small",
         "revision": config.MODELO_REVISION,
-        "arquitectura": "ViT-B/14",
+        "arquitectura": "ViT-S/14",
         "preprocesamiento": "pp-v1",
-        "version_vector": "dinov2-vitb14/pp-v1",
-        "dim": 768,
+        "version_vector": "dinov2-vits14/pp-v1",
+        "dim": 384,
         "normalizacion": "l2",
         "metrica": "coseno",
         "lote_max": 8,
@@ -105,7 +105,7 @@ def test_info_publica_el_contrato(cliente_listo):
 def test_info_responde_aunque_el_modelo_cargue():
     liberar = threading.Event()
     with TestClient(crear(ModeloFalso(liberar=liberar))) as cliente:
-        assert cliente.get("/v1/info").json()["version_vector"] == "dinov2-vitb14/pp-v1"
+        assert cliente.get("/v1/info").json()["version_vector"] == "dinov2-vits14/pp-v1"
         liberar.set()
 
 

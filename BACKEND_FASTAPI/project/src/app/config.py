@@ -49,8 +49,8 @@ class Settings(BaseSettings):
 
     # --- Backend §5.10: parámetros operativos -----------------------------------------------------------------
     jwt_ttl_min: int = 720
-    embedding_version_vector: str = "dinov2-vitb14/pp-v1"
-    embedding_timeout_s: float = 20.0
+    embedding_version_vector: str = "dinov2-vits14/pp-v1"
+    embedding_timeout_s: float = 5.0
     embedding_connect_timeout_s: float = 3.0
     loc_max_fotos: int = 5
     loc_max_bytes_foto: int = 1_572_864

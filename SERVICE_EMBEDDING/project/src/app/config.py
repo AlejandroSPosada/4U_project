@@ -20,13 +20,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SERVICIO = "campus-locator-embedding"
 VERSION_SERVICIO = "0.1.0"
 
-MODELO_ID = "facebook/dinov2-base"
-# Commit del repositorio de Hugging Face fijado en EMB-1.1 (ARCHITECTURE §5.3).
-MODELO_REVISION = "f9e44c814b77203eaa57a6bdbbd535f21ede1415"
-ARQUITECTURA = "ViT-B/14"
+MODELO_ID = "facebook/dinov2-small"
+# Commit del repositorio de Hugging Face fijado en 0.5.0 (ARCHITECTURE §5.3, ADR-EMB-11).
+MODELO_REVISION = "ed25f3a31f01632728cabb09d1542f84ab7b0056"
+ARQUITECTURA = "ViT-S/14"
 PREPROCESAMIENTO = "pp-v1"
-VERSION_VECTOR = "dinov2-vitb14/pp-v1"
-DIM = 768
+VERSION_VECTOR = "dinov2-vits14/pp-v1"
+DIM = 384
 NORMALIZACION = "l2"
 METRICA = "coseno"
 DISPOSITIVO = "cpu"

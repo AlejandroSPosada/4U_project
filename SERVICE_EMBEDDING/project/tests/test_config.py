@@ -37,9 +37,9 @@ def entorno_limpio(monkeypatch):
 
 
 def test_identidad_del_vector():
-    assert config.MODELO_ID == "facebook/dinov2-base"
-    assert config.VERSION_VECTOR == "dinov2-vitb14/pp-v1"
-    assert config.DIM == 768
+    assert config.MODELO_ID == "facebook/dinov2-small"
+    assert config.VERSION_VECTOR == "dinov2-vits14/pp-v1"
+    assert config.DIM == 384
     assert re.fullmatch(r"[0-9a-f]{40}", config.MODELO_REVISION)
 
 

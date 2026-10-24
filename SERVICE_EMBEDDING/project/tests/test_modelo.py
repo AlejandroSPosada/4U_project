@@ -56,7 +56,7 @@ def test_calentamiento_con_lotes_de_1_y_8(modelo, monkeypatch):
     assert tamanos == [1, 8]
 
 
-def test_vectores_de_768_float32_con_norma_1(modelo):
+def test_vectores_de_dim_float32_con_norma_1(modelo):
     lote = torch.rand((3, 3, 224, 224), generator=torch.Generator().manual_seed(1))
     vectores = modelo.inferir(lote)
     assert vectores.shape == (3, config.DIM)
@@ -97,6 +97,6 @@ def test_revision_distinta_no_carga(tmp_path):
 
 
 def test_dimension_distinta_no_carga(tmp_path):
-    guardar_modelo(tmp_path, hidden_size=384)
-    with pytest.raises(ErrorModelo, match="384"):
+    guardar_modelo(tmp_path, hidden_size=192)
+    with pytest.raises(ErrorModelo, match="192"):
         ModeloDinov2(tmp_path, hilos=1).cargar()
