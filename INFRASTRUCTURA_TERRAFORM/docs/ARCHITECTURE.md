@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.10.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.11.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
-| Estado | Diseño propuesto. **INF-0.1 a INF-1.3 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba); el resto, sin código todavía |
+| Estado | Diseño propuesto. **INF-0.1 a INF-1.3 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba). **INF-1.4 escrito** (borde HTTPS), pendiente de `apply` y validación; el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -133,7 +133,11 @@ Detalle funcional de cada flujo: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §4.
   Por eso las fotos del dataset no pasan por la API (van directo a S3 con URL prefirmada).
 - La autenticación **no** se valida en API Gateway: el JWT es propio (HS256) y lo verifica FastAPI
   (`BACKEND_FASTAPI/docs/ARCHITECTURE.md`, ADR-BE-03).
-- *Access logs* de la API a CloudWatch.
+- *Access logs* de la API a CloudWatch, en el *log group* `/campus-locator/dev/apigw` (lo crea `borde`, 14 días), con
+  el formato JSON de §5.10.
+- El VPC Link `campus-locator-dev-vpclink` vive en las dos subredes públicas (API Gateway pide subredes de al menos dos
+  zonas) con el grupo `-vpclink`, que solo sale a `8000/tcp` hacia `-api` (§5.7).
+- La API tiene `prevent_destroy` (R8): un `plan` que la recree falla en vez de cambiar la URL de la app.
 
 ### 3.4 Cómputo: ECS sobre Fargate
 
@@ -341,7 +345,7 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
 | **INF-1.1 Red** | Módulo `red`: VPC, cuatro subredes (las /24 número 0, 1, 10 y 11 de `cidr_vpc`), Internet Gateway, tablas `-publica` y `-privada`, endpoint de S3 en la pública, los cinco grupos de seguridad de §5.7 y el `default` sin reglas. Los grupos se crean aquí (no en cada módulo) y sin reglas en línea: cada regla es un `aws_vpc_security_group_ingress_rule` o `egress_rule`, así las referencias cruzadas no generan ciclos. Entrega a `envs/dev` los IDs que usan INF-1.2 a INF-1.4 (§5.12) y crea los outputs `subredes_tareas` y `sg_migrate` |
 | **INF-1.2 Datos y secretos** | Módulo `datos`: RDS en `us-east-1a` (grupo de subredes con las dos privadas y grupo de parámetros con `rds.force_ssl`); bucket con cifrado, *Block Public Access*, propiedad, ciclo de vida, política «solo TLS» y notificación a `ingesta` (la política de la cola autoriza solo a ese bucket); colas y DLQ. Módulo `secretos`: `random_password`, `random_bytes` y los tres secretos. Los dos módulos se usan entre sí a través de `envs/dev` (la contraseña va de `secretos` a RDS y el endpoint de RDS vuelve al secreto `db`) sin ciclo, porque Terraform resuelve las dependencias recurso por recurso. La **notificación** del bucket (`aws_s3_bucket_notification`) se crea después de la política de la cola, porque S3 valida el destino al guardarla. Entradas, salidas y recursos en §5.12 |
 | **INF-1.3 Cómputo** | Módulo `computo` (30 recursos; entradas, salidas y nombres internos en §5.12): repositorios ECR (etiquetas inmutables, escaneo al subir, conservar 5), clúster sin *Container Insights*, espacio de nombres privado `campus-locator.local` con los servicios de Cloud Map `api` (A + SRV) y `embedding` (A), TTL 10 s, los cinco *log groups* de los procesos, el rol de ejecución y los cuatro roles de tarea de §5.8 (todos con el *boundary*, que `envs/dev` lee de los outputs de `bootstrap` con `terraform_remote_state`), las cinco definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza; la de validación usa `postgres:17-alpine`) y los servicios `api`, `worker` y `embedding` con `desired_count = 0` hasta el primer despliegue. La imagen de prueba se publica a mano tras el `apply` (`pruebas/imagen-prueba/README.md`): los servicios en 0 no la necesitan para crearse. `validate13.py` sube `api` y `embedding` a 1 solo mientras valida |
-| **INF-1.4 Borde** | HTTP API, VPC Link en las subredes públicas, integración con el servicio Cloud Map `api`, rutas `ANY /{proxy+}` y `POST /v1/auth/login`, throttling y access logs. Expone `api_base_url` |
+| **INF-1.4 Borde** | Módulo `borde` (7 recursos; entradas, salidas y nombres internos en §5.12): HTTP API `campus-locator-dev-api` con `prevent_destroy` (R8), VPC Link en `publica-a` y `publica-b` con el grupo `-vpclink`, una integración `HTTP_PROXY` privada hacia el servicio de Cloud Map `api` (su ARN sale del nuevo output `cloud_map_api_arn` de `computo`), las rutas `ANY /{proxy+}` y `POST /v1/auth/login` hacia esa integración, etapa `$default` con despliegue automático y el *throttling* de §5.10 (general en `DefaultRouteSettings`, login en `RouteSettings`) y *access logs* en JSON en `/campus-locator/dev/apigw`, que crea el propio módulo. Expone `api_base_url` (el `ApiEndpoint`, sin barra final). `validate14.py` sube `api` a 1 solo mientras valida |
 | **INF-2.1 Encendido de `embedding` y escalado** | `src/ops/embedding.py` (`encender`, `apagar`, `estado`); apagado automático de `embedding` por inactividad (filtro de métricas sobre los *access logs* de `/v1/localize` y profundidad de las colas) y acción programada de las 22:00 (zona `America/Bogota`); política de escalado por pasos de `worker` sobre las colas, condicionada a que `embedding` esté encendido; `embedding.py apagar` y la acción de las 22:00 también dejan `worker` en 0 |
 | **INF-3.1 Observabilidad** | Topic SNS, suscripción por correo (hay que confirmarla desde el correo que envía SNS), alarmas de §5.10 y regla de EventBridge de §3.8. Expone `sns_alertas_arn` |
 | **INF-6.1 Producción** (diferido) | Ver PLAN, Fase 6 |
@@ -652,7 +656,7 @@ llaves de AWS en GitHub. Formato: `SUBREDES_TAREAS` = IDs de subred separados po
 | Latencia objetivo de `POST /v1/localize` | p95 de `integrationLatency` (*access logs*) ≤ 1000 ms con `embedding` encendido |
 | Escalado de `worker` | sube a 1 con ≥ 1 mensaje visible en `ingesta` o `purga` y `embedding` encendido; baja a 0 tras 15 min en 0, y también con `embedding.py apagar` o a las 22:00 |
 | Throttling API Gateway | general: 20 req/s, ráfaga 40 · `POST /v1/auth/login`: 2 req/s, ráfaga 5 |
-| Formato de los *access logs* | JSON por línea: `requestId`, `ip`, `requestTime`, `httpMethod`, `routeKey`, `path`, `status`, `responseLength`, `integrationLatency`, `integrationStatus` (`requestId` es el encabezado `apigw-requestid` de la respuesta) |
+| Formato de los *access logs* | JSON por línea: `requestId`, `ip`, `requestTime`, `httpMethod`, `routeKey`, `path`, `status`, `responseLength`, `integrationLatency`, `integrationStatus` (`requestId` es el encabezado `apigw-requestid` de la respuesta). Todos los valores son **cadenas** (`"status":"200"`; API Gateway escribe `"-"` si un dato no existe, p. ej. `integrationLatency` en un 429), así toda línea es JSON válido; quien calcule con `integrationLatency` la convierte a número |
 | Retención de logs | 14 días (todos los log groups) |
 | Copias de RDS | 7 días; ventana 07:00–07:30 UTC (02:00 en Bogotá, de madrugada) |
 | Mantenimiento de RDS | domingos 08:00–09:00 UTC (03:00 en Bogotá); versión menor automática |
@@ -833,8 +837,8 @@ Lo que un lote necesita saber para añadir infraestructura sin leer el código e
 | `data.aws_caller_identity.actual` | Cuenta de las credenciales (`.account_id`); alimenta el output `cuenta_id` |
 | `data.terraform_remote_state.bootstrap` | Outputs de `bootstrap` (backend S3, clave `bootstrap/terraform.tfstate` del bucket de estado; los dos roles de CI pueden leer todo el bucket). Hoy solo se usa `.outputs.limite_roles_arn` (INF-1.3) |
 | `data.aws_default_tags.actuales` | Etiquetas efectivas del proveedor; nada lo referencia (lleva `# tflint-ignore: terraform_unused_declarations`) porque solo sirve para que los validadores lean las etiquetas del estado |
-| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); `module.datos`, `module.secretos` y `module.computo`, lo que dicen sus tablas más abajo (INF-1.2, INF-1.3); `module.borde` y `module.observabilidad`, todavía sin argumentos: su lote (§4) les añade entradas y salidas |
-| Outputs de `envs/dev` | `cuenta_id` (INF-0.2); `subredes_tareas` = `[module.red.subred_tareas]` y `sg_migrate` = `module.red.grupos_seguridad["api"]` (INF-1.1); `bucket_dataset`, `sqs_ingesta_url`, `sqs_purga_url`, `sqs_ingesta_dlq_url` y `sqs_purga_dlq_url` (de `module.datos.colas[…].url`), `rds_endpoint` = `module.datos.rds_direccion` y `secretos` = `module.secretos.arns` (INF-1.2); `ecr_backend_url` y `ecr_embedding_url` (de `module.computo.ecr_urls[…]`), `ecs_cluster`, `ecs_servicios`, `familias_tarea` y `embedding_dns` (INF-1.3) |
+| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); `module.datos`, `module.secretos` y `module.computo`, lo que dicen sus tablas más abajo (INF-1.2, INF-1.3); `module.borde`, lo que dice su tabla más abajo (INF-1.4); `module.observabilidad`, todavía sin argumentos: su lote (§4) le añade entradas y salidas |
+| Outputs de `envs/dev` | `cuenta_id` (INF-0.2); `subredes_tareas` = `[module.red.subred_tareas]` y `sg_migrate` = `module.red.grupos_seguridad["api"]` (INF-1.1); `bucket_dataset`, `sqs_ingesta_url`, `sqs_purga_url`, `sqs_ingesta_dlq_url` y `sqs_purga_dlq_url` (de `module.datos.colas[…].url`), `rds_endpoint` = `module.datos.rds_direccion` y `secretos` = `module.secretos.arns` (INF-1.2); `ecr_backend_url` y `ecr_embedding_url` (de `module.computo.ecr_urls[…]`), `ecs_cluster`, `ecs_servicios`, `familias_tarea` y `embedding_dns` (INF-1.3); `api_base_url` = `module.borde.api_base_url` (INF-1.4) |
 | Última línea de `main.tf`: `# validacion-0-2 <AAAAMMDD-HHMMSS>` | La escribe y sustituye `validate02.py` (C2 la fusiona en `main`). No se borra ni hace falta moverla: el validador quita la anterior y añade la nueva al final |
 
 **Módulos (`modules/<nombre>/`)**
@@ -948,6 +952,7 @@ Por dentro: `random_password.db`, `random_bytes.jwt`, `random_password.admin_ini
 | `servicios` | `{ api, worker, embedding }` → nombre | output `ecs_servicios`; INF-2.1 |
 | `familias_tarea` | `{ api, worker, embedding, migrate, validacion }` → familia | output `familias_tarea` |
 | `embedding_dns` | `embedding.campus-locator.local` | output `embedding_dns` |
+| `cloud_map_api_arn` | ARN del servicio de Cloud Map `api` (SRV) | `borde` (`integration_uri`, INF-1.4) |
 
 Por dentro: `aws_ecr_repository.repos["backend"|"embedding"]` y `aws_ecr_lifecycle_policy.repos[…]`,
 `aws_ecs_cluster.principal`, `aws_service_discovery_private_dns_namespace.principal`,
@@ -966,6 +971,30 @@ Por dentro: `aws_ecr_repository.repos["backend"|"embedding"]` y `aws_ecr_lifecyc
   detener la tarea. `api` se registra con `container_name = "app"` y `container_port = 8000` (lo exige el SRV).
 - Servicios con `availability_zone_rebalancing = "DISABLED"` (una zona), *circuit breaker* con *rollback*,
   `assign_public_ip = true` y `ignore_changes = [task_definition, desired_count]` (ADR-INF-09).
+
+**Módulo `borde` (INF-1.4)**
+
+| Entrada | Tipo | Valor que le pasa `envs/dev` |
+|---|---|---|
+| `prefijo`, `proyecto`, `entorno` | `string` | `local.prefijo`, `var.proyecto`, `var.entorno` (nombres de §5.1 y ruta del *log group*) |
+| `subredes_publicas` | `list(string)`, exactamente dos | `module.red.subredes_publicas` |
+| `sg_vpclink` | `string` | `module.red.grupos_seguridad["vpclink"]` |
+| `cloud_map_api_arn` | `string` | `module.computo.cloud_map_api_arn` |
+
+| Salida | Valor | La usa |
+|---|---|---|
+| `api_base_url` | `ApiEndpoint` de la API (`https://<id>.execute-api.us-east-1.amazonaws.com`, sin barra final) | output `api_base_url` |
+
+Por dentro: `aws_cloudwatch_log_group.apigw`, `aws_apigatewayv2_vpc_link.principal`, `aws_apigatewayv2_api.principal`
+(con `prevent_destroy`), `aws_apigatewayv2_integration.api`, `aws_apigatewayv2_route.rutas["ANY /{proxy+}"|"POST /v1/auth/login"]`
+y `aws_apigatewayv2_stage.default`: 7 recursos. Detalles que explican un `plan`:
+- El formato de los *access logs* se genera con `jsonencode`, que ordena las claves: AWS guarda la misma cadena y el
+  `plan` queda vacío. Cambiar un campo es editar §5.10, `modules/borde/main.tf` y `CAMPOS_LOG` de `validate14.py`.
+- La integración fija `payload_format_version = "1.0"` (la única que admite `HTTP_PROXY`) y `timeout_milliseconds =
+  30000` (el máximo; R7), los valores que devuelve AWS.
+- La etapa depende de las rutas (`route_settings` exige que la ruta exista). Con `auto_deploy`, AWS crea los
+  despliegues: no hay `aws_apigatewayv2_deployment`.
+- Destruir la API exige quitar antes `prevent_destroy` (R8).
 
 **Proveedores y lock**
 - `envs/dev/.terraform.lock.hcl` fija hoy `hashicorp/aws` 6.70.0 y, desde INF-1.2, `hashicorp/random` (3.x) con

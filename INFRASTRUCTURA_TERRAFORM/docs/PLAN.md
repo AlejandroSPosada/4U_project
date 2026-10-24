@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.10.0**.
+Alineado con `ARCHITECTURE.md` **v0.11.0**.
 
 ---
 
@@ -153,7 +153,9 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 
 #### INF-1.4 — Borde HTTPS
 - **Objetivo:** URL pública HTTPS que llegue a `api`.
-- **Entregables:** módulo `borde`; output `api_base_url`.
+- **Entregables:** módulo `borde` (§3.3, §5.1, §5.7, §5.10; entradas, salidas y recursos en §5.12), con su *log group*
+  `/campus-locator/dev/apigw` y `prevent_destroy` en la API (R8); output `cloud_map_api_arn` de `computo`; en
+  `envs/dev`, el output `api_base_url` (§5.2); `src/ops/validate14.py`.
 - **Criterios de cierre:**
   - C1. `GET {api_base_url}/v1/health` devuelve 200 desde fuera de AWS (imagen de prueba o la de BE-1.1).
   - C2. Más de 2 req/s sostenidas a `POST /v1/auth/login` reciben 429; la ruta general no.
@@ -209,7 +211,7 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 | INF-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `4c04040` 2026-10-24 | 0.5.0 | `apply` de la red por `infra.yml` (29 recursos); antes hubo que cancelar una ejecución de `main` de un commit sobrescrito que esperaba aprobación y retenía la fila |
 | INF-1.2 | 1 | Hecho | [1-2](./validation/validation-1-2.md) | `e5ee713` 2026-10-24 | 0.6.0 | `apply` por `infra.yml` (24 recursos, PostgreSQL 17.9); el «plan vacío» destapó una diferencia perpetua en `rds.force_ssl` (es el valor por defecto en PostgreSQL 17), corregida con `apply_method = "pending-reboot"` |
 | INF-1.3 | 1 | Hecho | [1-3](./validation/validation-1-3.md) | `a0f2dc5` 2026-10-24 | 0.10.0 | `apply` por `infra.yml` (30 recursos) y `plan` vacío después; imagen `bootstrap` publicada a mano en los dos repositorios. La primera ejecución destapó un error del validador (C5 esperaba `t`; `boolean \|\| text` da `true`), corregido en `a0f2dc5`. `embedding` en Fargate con 2 vCPU (ADR-INF-14) |
-| INF-1.4 | 1 | Pendiente | [1-4](./validation/validation-1-4.md) | — | — | |
+| INF-1.4 | 1 | En curso | [1-4](./validation/validation-1-4.md) | — | — | Código escrito (módulo `borde`, 7 recursos; `validate14.py`); falta `apply` por `infra.yml`, `plan` vacío y validación en `dev` |
 | INF-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | Rediseñado en 0.7.0: encendido manual de `embedding` y apagado automático en lugar de horario fijo |
 | INF-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | |
 | INF-6.1 | 6 | Diferido | — | — | — | |

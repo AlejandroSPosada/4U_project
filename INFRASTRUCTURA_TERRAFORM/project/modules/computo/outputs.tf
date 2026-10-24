@@ -22,3 +22,8 @@ output "embedding_dns" {
   description = "Nombre DNS privado de embedding (embedding.campus-locator.local)."
   value       = "${aws_service_discovery_service.servicios["embedding"].name}.${aws_service_discovery_private_dns_namespace.principal.name}"
 }
+
+output "cloud_map_api_arn" {
+  description = "ARN del servicio de Cloud Map api (SRV): integration_uri de la integracion de API Gateway (modulo borde)."
+  value       = aws_service_discovery_service.servicios["api"].arn
+}

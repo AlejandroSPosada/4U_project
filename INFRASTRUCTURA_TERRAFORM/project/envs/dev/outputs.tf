@@ -81,3 +81,9 @@ output "embedding_dns" {
   description = "Nombre DNS privado de embedding (Cloud Map)."
   value       = module.computo.embedding_dns
 }
+
+# INF-1.4
+output "api_base_url" {
+  description = "URL base de la API publica, sin barra final (la app le anade /v1)."
+  value       = module.borde.api_base_url
+}

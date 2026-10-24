@@ -20,6 +20,36 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.11.0] — 2026-10-24
+
+- **Lote que la motivó:** INF-1.4 (Borde HTTPS).
+- **Qué cambió:**
+  - §3.3: el VPC Link en las dos subredes públicas con el grupo `-vpclink`, el *log group* de la API y `prevent_destroy`.
+  - §4: el lote INF-1.4 describe lo construido (módulo `borde`, 7 recursos).
+  - §5.10: los valores del formato de los *access logs* son **cadenas** (`"status":"200"`, `"-"` si falta un dato), para
+    que toda línea sea JSON válido también en un 429; quien calcule con `integrationLatency` (INF-2.1, BE-3.2) la
+    convierte a número.
+  - §5.12: `computo` tiene la salida nueva `cloud_map_api_arn`; nueva tabla del módulo `borde` (entradas, salidas,
+    nombres internos y por qué el `plan` queda vacío); `module.borde` y el output `api_base_url` en los nombres de
+    `envs/dev`.
+  - `validation-1-4.md`: orden de las precondiciones (P3 primero, como el script), C1b comprueba la imagen `bootstrap`
+    y espera la tarea `HEALTHY`, C3a también la retención y los campos del formato, C3b admite `--solo` sin C1b y
+    `status` como cadena; §5 «Cómo ejecutarlo» con Variables, Preparación y Ejecución, como `validation-1-2`/`1-3`.
+  - PLAN: entregables de INF-1.4 completos y su fila de §3 en «En curso».
+- **Contratos tocados (§5):** §5.10 (aclaración del tipo de los valores del formato) y §5.12 (salida
+  `cloud_map_api_arn` de `computo`, módulo `borde`). `api_base_url` (§5.2) se crea con el nombre ya documentado.
+  Compatible: sube la menor.
+- **Cómo se verificó:** en local con OpenTofu 1.10.6 y los proveedores de §5.12 desde un espejo: `fmt -check`,
+  `validate` de `envs/dev` y una prueba con proveedor simulado (`tofu test`) que renderiza los 7 recursos de `borde`
+  (formato con los diez campos, `api_base_url` sin barra final, la validación de dos subredes y `prevent_destroy`, que
+  impide destruir la API); TFLint 0.65.0 con el *ruleset* de AWS 0.50.0 en `envs/dev`, `modules/borde` y
+  `modules/computo`, sin avisos; `validate14.py` con ruff, su ruta de credenciales inválidas (código 3), C1a, C2a y C3a
+  contra moto server, y la ráfaga de C2b contra un servidor local con *token bucket* 2/5 (56 de 100 con 429; 100 × 200
+  en la ruta general). Pendiente en `dev`: `apply`, `plan` vacío y `validate14.py` con código 0.
+- **Pendiente:** cerrar INF-1.4 (PLAN §3) tras la validación en `dev`.
+
+---
+
 ## [0.10.0] — 2026-10-24
 
 - **Lote que la motivó:** INF-1.3 (Cómputo).

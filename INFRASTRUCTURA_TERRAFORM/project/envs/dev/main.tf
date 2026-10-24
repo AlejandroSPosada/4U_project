@@ -86,8 +86,15 @@ module "computo" {
   imagen_inicial_tag = var.imagen_inicial_tag
 }
 
-module "borde" { # INF-1.4
+module "borde" {
   source = "../../modules/borde"
+
+  prefijo           = local.prefijo
+  proyecto          = var.proyecto
+  entorno           = var.entorno
+  subredes_publicas = module.red.subredes_publicas
+  sg_vpclink        = module.red.grupos_seguridad["vpclink"]
+  cloud_map_api_arn = module.computo.cloud_map_api_arn
 }
 
 module "observabilidad" { # INF-3.1
