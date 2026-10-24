@@ -20,6 +20,46 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.3.0] — 2026-10-23
+
+- **Lote que la motivó:** INF-0.1 (bootstrap de la cuenta), al construirlo, revisarlo y aplicarlo.
+- **Qué cambió:**
+  - El repositorio (`AlejandroSPosada/4U_project`, público) se creó después del 2026-07-15, así que GitHub firma sus
+    tokens OIDC con el `sub` inmutable `repo:propietario@ID/repo@ID:…`. Nueva variable `github_ids` en `bootstrap` y
+    los *trust policies* se escriben con `<sub_repo>` (§5.8).
+  - Una revisión independiente encontró que `gha-terraform` podía crear un rol propio con `"Action": "*"` y asumirlo.
+    Nuevo *permissions boundary* `campus-locator-limite-roles`, obligatorio en todo rol que cree `envs/dev`, y
+    denegaciones explícitas en `gha-terraform` (ADR-INF-12).
+  - `gha-terraform-plan` puede leer los secretos `campus-locator/dev/*`: sin eso, el `plan` de los PR fallaría desde
+    INF-1.2 al refrescar `aws_secretsmanager_secret_version`. No amplía la exposición (el rol ya leía el estado, que
+    contiene esos valores); R5 se reescribe para decirlo.
+  - Las variables del repositorio y el entorno `dev` de GitHub los crea `bootstrap/configurar_github.py`. En un
+    repositorio personal solo puede ejecutarlo su dueño, igual que el validador de INF-0.1 (lee las variables).
+  - `project/pyproject.toml`, `project/src/ops/comun.py` y `project/.gitignore` pasan de INF-0.2 a INF-0.1: el
+    validador de INF-0.1 no corre sin ellos.
+  - Decididos `github_repo`, `correo_alertas` y `github_ids` (§5.3).
+  - Nuevo riesgo R11: recursos de un intento anterior siguen en la cuenta y chocan con nombres de §5.1.
+- **Contratos tocados (§5):** §5.1 (boundary `campus-locator-limite-roles`), §5.2 (output `limite_roles_arn` de
+  `bootstrap`), §5.3 (`github_ids`; valores de `github_repo` y `correo_alertas`), §5.8 (formato del `sub`, permisos de
+  `gha-terraform-plan` y `gha-terraform`, boundary), §5.11 (`-dirty` en el informe y cuenta dueña del repositorio en
+  los validadores de esta carpeta).
+- **Cómo se verificó:** `validate01.py --entorno dev` con código 0 sobre `b20a62f` (2026-10-24 00:11 UTC): pasan
+  P1–P5 y C1–C5, y C2 confirma el `sub` inmutable con un token real. Antes: revisión independiente del Terraform y del
+  validador, formato de HCL con `hclwrite` y el validador probado de principio a fin con AWS simulado (moto) en 12
+  escenarios. El proveedor OIDC ya existía (intento anterior, 2026-10-14) y se importó al estado de `bootstrap`.
+- **Pendiente:**
+  - Limpiar los recursos del intento anterior antes de INF-1.2 (R11): clúster ECS `campus-locator-dev-cluster` y sus
+    servicios, ECR `campus-locator-dev/*`, *snapshots* de RDS `campus-locator-dev-db*`, buckets
+    `campus-locator-dev-dataset-648617469176`, `campus-locator-dev-scans-648617469176` y `4uproject-eafit-tfstate`,
+    secreto `campus-locator-dev/jwt-secret`, *namespace* de Cloud Map, *target group*, *log groups* `/ecs/…` y roles
+    `campus-locator-dev-backend-*` y `campus-locator-dev-embedding-*`. El rol `campus-locator-github-ci` (equivalente a
+    administrador, con comodín en el `sub`) se borró a mano el 2026-10-23.
+  - `validation-0-1` da código 2 a P4 y P5, que son entregables del propio lote, pero §5.11 reserva el 2 para «otro
+    lote no está listo». Decidir si pasan a código 1.
+  - *Cost Anomaly Detection* (§3.8) no lo crea ningún lote.
+
+---
+
 ## [0.2.0] — 2026-10-23
 
 - **Lote que la motivó:** ninguno; cambio de organización del monorepo pedido por el equipo.
