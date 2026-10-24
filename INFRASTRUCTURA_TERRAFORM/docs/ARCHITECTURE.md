@@ -880,7 +880,9 @@ Por dentro: `aws_db_subnet_group.principal`, `aws_db_parameter_group.principal` 
 `aws_s3_bucket_lifecycle_configuration`, `aws_s3_bucket_policy` y `aws_s3_bucket_notification` (todos `.dataset`),
 `aws_sqs_queue.colas["ingesta"|"purga"]`, `aws_sqs_queue.dlq["ingesta"|"purga"]` y `aws_sqs_queue_policy.ingesta`:
 15 recursos, más dos `data "aws_iam_policy_document"` (`dataset` e `ingesta`). La notificación depende de la política
-de la cola y de la del bucket (S3 rechaza dos cambios de configuración a la vez sobre el mismo bucket).
+de la cola y de la del bucket (S3 rechaza dos cambios de configuración a la vez sobre el mismo bucket). `rds.force_ssl`
+se declara con `apply_method = "pending-reboot"`: en PostgreSQL 17 su valor `1` ya es el de por defecto, RDS lo lista
+como `Source = system` con ese método y, con el `immediate` por defecto del proveedor, el `plan` nunca quedaría vacío.
 
 **Módulo `secretos` (INF-1.2)**
 

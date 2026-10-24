@@ -26,9 +26,13 @@ resource "aws_db_parameter_group" "principal" {
   family      = "postgres${var.pg_version}"
   description = "Parametros de ${var.prefijo}-db: TLS obligatorio"
 
+  # En PostgreSQL 17, 1 ya es el valor por defecto: RDS lo lista como Source = system con ApplyMethod = pending-reboot,
+  # y el proveedor lo lee así. Con "immediate" (el valor por defecto del proveedor) el plan nunca quedaría vacío. El
+  # método no cambia nada: el valor efectivo es 1 en los dos casos.
   parameter {
-    name  = "rds.force_ssl"
-    value = "1"
+    name         = "rds.force_ssl"
+    value        = "1"
+    apply_method = "pending-reboot"
   }
 
   # Si cambia la versión mayor cambian el nombre y la familia, y el grupo nuevo debe existir antes de que la instancia

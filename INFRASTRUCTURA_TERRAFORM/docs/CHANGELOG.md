@@ -53,6 +53,11 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
     de por defecto (en PostgreSQL 17 lo es) puede figurar como `system`: ahora se lee sin filtrar. (10) C5 no comprobaba
     los atributos de la instancia de §3.5 (clase, `gp3`, cifrado, protección contra borrado, copias): nuevo C5d, y el
     criterio C5 del PLAN los nombra.
+  - El «plan vacío» tras el primer `apply` (paso 6 de la preparación) dio una diferencia perpetua en
+    `aws_db_parameter_group`: `rds.force_ssl = 1` es el valor por defecto en PostgreSQL 17, RDS lo devuelve como
+    `Source = system` y `ApplyMethod = pending-reboot`, y la configuración decía `immediate`. Ahora declara
+    `apply_method = "pending-reboot"` (sin efecto: el valor es 1 en los dos casos). Lo mismo confirma el cambio de C3b
+    (leer sin `--source user`).
   - Tras la revisión independiente, el validador además: no lee `ingesta` si tiene mensajes en proceso, retrasados o
     más de 10 visibles, y no sube nada si entre los visibles hay alguno ajeno (lo devuelve) o si el servicio `worker`
     está en marcha (desde INF-1.3), para no gastar reintentos de mensajes reales; solo borra claves de prueba de su
