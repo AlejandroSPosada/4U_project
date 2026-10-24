@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.9.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.10.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
-| Estado | Diseño propuesto. **INF-0.1, INF-0.2, INF-1.1 e INF-1.2 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos); el resto, sin código todavía |
+| Estado | Diseño propuesto. **INF-0.1, INF-0.2, INF-1.1 e INF-1.2 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos); **INF-1.3 con código** (cómputo, imagen de prueba y `validate13.py`), pendiente de aplicar y validar; el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -220,7 +220,9 @@ Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas, todo e
 
 ### 3.8 Observabilidad y alertas
 
-- Un *log group* por proceso, retención 14 días (§5.10).
+- Un *log group* por proceso, retención 14 días (§5.10). Los cinco de los procesos (`api`, `worker`, `embedding`,
+  `migrate`, `validacion`) los crea `computo` (INF-1.3), porque las tareas no arrancan sin ellos; el de la API, `borde`
+  (INF-1.4).
 - Alarmas de CloudWatch publicadas en el topic SNS `campus-locator-dev-alertas` (suscripción por correo, variable
   `correo_alertas`; SNS envía un correo de confirmación y no entrega nada hasta que se confirma): errores 5xx de la API,
   mensajes en cualquier DLQ, `embedding` encendido demasiadas horas seguidas (el apagado automático falló),
@@ -317,11 +319,12 @@ INFRASTRUCTURA_TERRAFORM/
     │   ├── red/                 VPC, subredes, IGW, rutas, endpoint de S3, grupos de seguridad
     │   ├── datos/               RDS (+ grupo de parámetros), bucket del dataset, colas SQS, notificación S3→SQS
     │   ├── secretos/            random_password y los tres secretos
-    │   ├── computo/             ECR, clúster, Cloud Map, roles, definiciones de tarea (incluida la de validación), servicios, autoescalado
-    │   ├── borde/               HTTP API, VPC Link, integración con Cloud Map, rutas, throttling, access logs
-    │   └── observabilidad/      log groups, topic SNS, alarmas, regla de EventBridge
+    │   ├── computo/             ECR, clúster, Cloud Map, log groups de los procesos, roles, definiciones de tarea (incluida la de validación), servicios
+    │   │                        (el autoescalado y el apagado de `embedding` los añade INF-2.1)
+    │   ├── borde/               HTTP API, VPC Link, integración con Cloud Map, rutas, throttling, access logs (y su log group)
+    │   └── observabilidad/      topic SNS, alarmas, regla de EventBridge
     ├── pruebas/
-    │   └── imagen-prueba/       Dockerfile y servidor mínimo de la imagen `bootstrap` (§5.11)
+    │   └── imagen-prueba/       Dockerfile, servidor.py y README.md (cómo publicarla) de la imagen `bootstrap` (§5.11)
     ├── src/
     │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes INF-x.y (§5.11); embedding.py (INF-2.1)
     ├── .tflint.hcl              configuración de TFLint para infra.yml
@@ -337,7 +340,7 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
 | **INF-0.2 Esqueleto** | `envs/dev` con *backend*, proveedor (`default_tags`, `allowed_account_ids`) y los seis módulos, vacíos, ya compuestos en `main.tf`; `data "aws_caller_identity"` (output `cuenta_id`) obliga a configurar el proveedor sin recursos y `data "aws_default_tags"` deja en el estado las etiquetas efectivas. `infra.yml` con `plan` en PR y `apply` aprobado en `main` (§3.9). A partir de aquí todo cambio de infraestructura entra por PR |
 | **INF-1.1 Red** | Módulo `red`: VPC, cuatro subredes (las /24 número 0, 1, 10 y 11 de `cidr_vpc`), Internet Gateway, tablas `-publica` y `-privada`, endpoint de S3 en la pública, los cinco grupos de seguridad de §5.7 y el `default` sin reglas. Los grupos se crean aquí (no en cada módulo) y sin reglas en línea: cada regla es un `aws_vpc_security_group_ingress_rule` o `egress_rule`, así las referencias cruzadas no generan ciclos. Entrega a `envs/dev` los IDs que usan INF-1.2 a INF-1.4 (§5.12) y crea los outputs `subredes_tareas` y `sg_migrate` |
 | **INF-1.2 Datos y secretos** | Módulo `datos`: RDS en `us-east-1a` (grupo de subredes con las dos privadas y grupo de parámetros con `rds.force_ssl`); bucket con cifrado, *Block Public Access*, propiedad, ciclo de vida, política «solo TLS» y notificación a `ingesta` (la política de la cola autoriza solo a ese bucket); colas y DLQ. Módulo `secretos`: `random_password`, `random_bytes` y los tres secretos. Los dos módulos se usan entre sí a través de `envs/dev` (la contraseña va de `secretos` a RDS y el endpoint de RDS vuelve al secreto `db`) sin ciclo, porque Terraform resuelve las dependencias recurso por recurso. La **notificación** del bucket (`aws_s3_bucket_notification`) se crea después de la política de la cola, porque S3 valida el destino al guardarla. Entradas, salidas y recursos en §5.12 |
-| **INF-1.3 Cómputo** | Repositorios ECR (etiquetas inmutables, escaneo básico, conservar 5), clúster, espacio de nombres privado `campus-locator.local`, roles, definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza), la tarea de validación y servicios con `desired_count = 0` hasta el primer despliegue |
+| **INF-1.3 Cómputo** | Módulo `computo` (30 recursos; entradas, salidas y nombres internos en §5.12): repositorios ECR (etiquetas inmutables, escaneo al subir, conservar 5), clúster sin *Container Insights*, espacio de nombres privado `campus-locator.local` con los servicios de Cloud Map `api` (A + SRV) y `embedding` (A), TTL 10 s, los cinco *log groups* de los procesos, el rol de ejecución y los cuatro roles de tarea de §5.8 (todos con el *boundary*, que `envs/dev` lee de los outputs de `bootstrap` con `terraform_remote_state`), las cinco definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza; la de validación usa `postgres:17-alpine`) y los servicios `api`, `worker` y `embedding` con `desired_count = 0` hasta el primer despliegue. La imagen de prueba se publica a mano tras el `apply` (`pruebas/imagen-prueba/README.md`): los servicios en 0 no la necesitan para crearse. `validate13.py` sube `api` y `embedding` a 1 solo mientras valida |
 | **INF-1.4 Borde** | HTTP API, VPC Link en las subredes públicas, integración con el servicio Cloud Map `api`, rutas `ANY /{proxy+}` y `POST /v1/auth/login`, throttling y access logs. Expone `api_base_url` |
 | **INF-2.1 Encendido de `embedding` y escalado** | `src/ops/embedding.py` (`encender`, `apagar`, `estado`); apagado automático de `embedding` por inactividad (filtro de métricas sobre los *access logs* de `/v1/localize` y profundidad de las colas) y acción programada de las 22:00 (zona `America/Bogota`); política de escalado por pasos de `worker` sobre las colas, condicionada a que `embedding` esté encendido; `embedding.py apagar` y la acción de las 22:00 también dejan `worker` en 0 |
 | **INF-3.1 Observabilidad** | Topic SNS, suscripción por correo (hay que confirmarla desde el correo que envía SNS), alarmas de §5.10 y regla de EventBridge de §3.8. Expone `sns_alertas_arn` |
@@ -417,7 +420,7 @@ Inventario de nombres:
 | `embedding_dns` | `embedding.campus-locator.local` | depuración |
 | `sns_alertas_arn` | ARN | depuración |
 | `bootstrap: rol_gha_terraform_plan_arn`, `rol_gha_terraform_arn`, `rol_gha_deploy_arn`, `bucket_estado`, `github_repo` | ARN / nombre | variables del repositorio de GitHub (§5.9) y validadores de INF-0.x |
-| `bootstrap: limite_roles_arn` | ARN de `campus-locator-limite-roles` | `envs/dev`: `permissions_boundary` de todos sus roles (INF-1.3) |
+| `bootstrap: limite_roles_arn` | ARN de `campus-locator-limite-roles` | `envs/dev`: `permissions_boundary` de todos sus roles (INF-1.3; lo lee con `data "terraform_remote_state" "bootstrap"`, §5.12) |
 
 Ningún servicio lee outputs en tiempo de ejecución: todo lo que necesitan llega por variables de entorno (§5.4).
 Los outputs aparecen con el lote que crea su recurso: `api_base_url` con INF-1.4, `sns_alertas_arn` con INF-3.1,
@@ -430,7 +433,7 @@ con INF-1.2 y el resto con INF-1.3. Desde INF-0.2, `envs/dev` tiene además el o
 `bootstrap/terraform.tfvars` y `envs/dev/terraform.tfvars` (columna «Dónde»). Los dos archivos se versionan: no
 contienen secretos. Cada variable de `envs/dev` se declara con el lote que la usa (INF-0.2: `aws_account_id`, `region`,
 `proyecto` y `entorno`; INF-1.1: `cidr_vpc`, `az_computo` y `az_secundaria`; INF-1.2: `rds_clase`, `rds_gb`,
-`rds_gb_max` y `pg_version`).
+`rds_gb_max` y `pg_version`; INF-1.3: `imagen_inicial_tag`).
 
 | Variable | Dónde | Valor en `dev` | Notas |
 |---|---|---|---|
@@ -445,7 +448,7 @@ contienen secretos. Cada variable de `envs/dev` se declara con el lote que la us
 | `correo_alertas` | ambos | *(el de `bootstrap/terraform.tfvars`)* | Presupuesto (`bootstrap`) y topic de alarmas (`envs/dev`) |
 | `presupuesto_usd` | `bootstrap` | `100` | |
 | `apagado_embedding` | `envs/dev` | `{ zona = "America/Bogota", noche = "cron(0 22 * * ? *)", inactividad_min = 45 }` | Apagado automático de `embedding` (INF-2.1); `noche = null` quita el apagado nocturno |
-| `imagen_inicial_tag` | `envs/dev` | `"bootstrap"` | Solo en la primera creación |
+| `imagen_inicial_tag` | `envs/dev` | `"bootstrap"` | Imagen de las definiciones de tarea que crea Terraform. CI registra revisiones con su imagen (ADR-INF-09); cambiarla solo crea revisiones nuevas, que ningún servicio usa hasta el siguiente despliegue |
 | `rds_clase` / `rds_gb` / `rds_gb_max` | `envs/dev` | `"db.t4g.micro"` / `20` / `50` | `rds_gb_max` debe ser mayor que `rds_gb` (lo valida el módulo `datos`) |
 | `pg_version` | `envs/dev` | `"17"` | Solo la versión mayor (lo valida el módulo `datos`): RDS elige la menor por defecto (≥ 17.1, pgvector 0.8.x) y la actualiza. Forma también la familia (`postgres17`) y el nombre del grupo de parámetros |
 
@@ -752,7 +755,10 @@ falla porque faltan credenciales, herramientas o variables da **3**, no 2: el 2 
   (la de `imagen_inicial_tag`), así los servicios pueden arrancar y validarse antes de que exista el código real. Su
   `ENTRYPOINT` ignora el comando de la definición de tarea, salvo si contiene `app.cli` (tareas `migrate`): en ese caso
   imprime `imagen de prueba: nada que migrar` y sale con 0. Con cualquier otro comando (`api`, `worker`, `embedding`)
-  arranca el servidor de prueba en los dos puertos.
+  arranca el servidor de prueba en los dos puertos. La imagen trae `python` (los *health checks* de §5.7 lo usan) y corre
+  con el usuario 10001. Se publica a mano, una vez, tras el `apply` de INF-1.3 (`pruebas/imagen-prueba/README.md`).
+  Como la política de ECR conserva 5 imágenes, tras 5 despliegues reales `bootstrap` expira; solo hace falta volver a
+  subirla si Terraform necesita crear una definición de tarea nueva antes de que CI despliegue.
 - **Tarea de validación** `campus-locator-dev-validacion`: definición de tarea sin servicio, imagen pública
   `public.ecr.aws/docker/library/postgres:17-alpine` (trae `psql` y `nslookup`), con `PGHOST`, `PGPORT`,
   `PGDATABASE`, `PGUSER` y `PGPASSWORD` (secreto `db`) y el grupo de seguridad `-api`. Los validadores la lanzan con
@@ -812,7 +818,7 @@ Lo que un lote necesita saber para añadir infraestructura sin leer el código e
 |---|---|---|
 | `backend.tf` | *backend* S3 (§3.9): bucket `campus-locator-tfstate-648617469176`, clave `dev/terraform.tfstate`, `use_lockfile`, `encrypt`, `allowed_account_ids` | No se toca |
 | `providers.tf` | `terraform { required_version = ">= 1.10" }`, `required_providers` (`hashicorp/aws ~> 6.70` y, desde INF-1.2, `hashicorp/random ~> 3.7`) y `provider "aws"` (`region = var.region`, `allowed_account_ids = [var.aws_account_id]`, `default_tags`) | Un proveedor nuevo se declara aquí (ver «Proveedores y lock») |
-| `main.tf` | Solo `data` de cuenta y las llamadas a los seis módulos | Ningún recurso suelto: todo recurso vive en un módulo |
+| `main.tf` | Solo `data` (cuenta, etiquetas y, desde INF-1.3, los outputs de `bootstrap`) y las llamadas a los seis módulos | Ningún recurso suelto: todo recurso vive en un módulo |
 | `variables.tf` / `terraform.tfvars` | Variables de §5.3 que ya usa algún lote, con `type` y `description`; sus valores | Una variable nueva se añade a §5.3 y a los dos archivos en el mismo cambio |
 | `outputs.tf` | Outputs de §5.2 | Un output nuevo se añade antes a §5.2 |
 | `.terraform.lock.hcl` | Versiones y *hashes* de los proveedores | Versionado; ver «Proveedores y lock» |
@@ -822,12 +828,13 @@ Lo que un lote necesita saber para añadir infraestructura sin leer el código e
 
 | Nombre | Qué es |
 |---|---|
-| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno`; `var.cidr_vpc`, `var.az_computo`, `var.az_secundaria` (INF-1.1); `var.rds_clase`, `var.rds_gb`, `var.rds_gb_max`, `var.pg_version` (INF-1.2) | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos) |
+| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno`; `var.cidr_vpc`, `var.az_computo`, `var.az_secundaria` (INF-1.1); `var.rds_clase`, `var.rds_gb`, `var.rds_gb_max`, `var.pg_version` (INF-1.2); `var.imagen_inicial_tag` (INF-1.3) | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos) |
 | `local.prefijo` | `"${var.proyecto}-${var.entorno}"` = `campus-locator-dev`, sin guion final: el prefijo de §5.1. Está en `main.tf` (INF-1.1); los módulos lo reciben como variable `prefijo` |
 | `data.aws_caller_identity.actual` | Cuenta de las credenciales (`.account_id`); alimenta el output `cuenta_id` |
+| `data.terraform_remote_state.bootstrap` | Outputs de `bootstrap` (backend S3, clave `bootstrap/terraform.tfstate` del bucket de estado; los dos roles de CI pueden leer todo el bucket). Hoy solo se usa `.outputs.limite_roles_arn` (INF-1.3) |
 | `data.aws_default_tags.actuales` | Etiquetas efectivas del proveedor; nada lo referencia (lleva `# tflint-ignore: terraform_unused_declarations`) porque solo sirve para que los validadores lean las etiquetas del estado |
-| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); `module.datos` y `module.secretos`, lo que dicen sus tablas más abajo (INF-1.2); los otros tres, todavía sin argumentos: su lote (§4) les añade entradas y salidas |
-| Outputs de `envs/dev` | `cuenta_id` (INF-0.2); `subredes_tareas` = `[module.red.subred_tareas]` y `sg_migrate` = `module.red.grupos_seguridad["api"]` (INF-1.1); `bucket_dataset`, `sqs_ingesta_url`, `sqs_purga_url`, `sqs_ingesta_dlq_url` y `sqs_purga_dlq_url` (de `module.datos.colas[…].url`), `rds_endpoint` = `module.datos.rds_direccion` y `secretos` = `module.secretos.arns` (INF-1.2) |
+| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); `module.datos`, `module.secretos` y `module.computo`, lo que dicen sus tablas más abajo (INF-1.2, INF-1.3); `module.borde` y `module.observabilidad`, todavía sin argumentos: su lote (§4) les añade entradas y salidas |
+| Outputs de `envs/dev` | `cuenta_id` (INF-0.2); `subredes_tareas` = `[module.red.subred_tareas]` y `sg_migrate` = `module.red.grupos_seguridad["api"]` (INF-1.1); `bucket_dataset`, `sqs_ingesta_url`, `sqs_purga_url`, `sqs_ingesta_dlq_url` y `sqs_purga_dlq_url` (de `module.datos.colas[…].url`), `rds_endpoint` = `module.datos.rds_direccion` y `secretos` = `module.secretos.arns` (INF-1.2); `ecr_backend_url` y `ecr_embedding_url` (de `module.computo.ecr_urls[…]`), `ecs_cluster`, `ecs_servicios`, `familias_tarea` y `embedding_dns` (INF-1.3) |
 | Última línea de `main.tf`: `# validacion-0-2 <AAAAMMDD-HHMMSS>` | La escribe y sustituye `validate02.py` (C2 la fusiona en `main`). No se borra ni hace falta moverla: el validador quita la anterior y añade la nueva al final |
 
 **Módulos (`modules/<nombre>/`)**
@@ -918,6 +925,47 @@ Por dentro: `random_password.db`, `random_bytes.jwt`, `random_password.admin_ini
 `aws_secretsmanager_secret.secretos["db"|"jwt"|"admin_inicial"]` y `aws_secretsmanager_secret_version.db`, `.jwt` y
 `.admin_inicial`: 9 recursos. Para rotar un valor (ADR-INF-07) se reemplaza su recurso `random_*`; la contraseña de
 `db` la toman RDS y el secreto en el mismo `apply`, y las tareas al reiniciarse.
+
+**Módulo `computo` (INF-1.3)**
+
+| Entrada | Tipo | Valor que le pasa `envs/dev` |
+|---|---|---|
+| `prefijo`, `proyecto`, `entorno`, `region` | `string` | `local.prefijo`, `var.proyecto`, `var.entorno`, `var.region` |
+| `cuenta_id` | `string` de 12 dígitos | `var.aws_account_id` (`aws:SourceAccount` de la confianza de los roles) |
+| `vpc_id`, `subred_tareas` | `string` | `module.red.vpc_id`, `module.red.subred_tareas` |
+| `grupos_seguridad` | `map(string)` con `api`, `worker` y `embedding` | `module.red.grupos_seguridad` |
+| `limite_roles_arn` | `string` | `data.terraform_remote_state.bootstrap.outputs.limite_roles_arn` |
+| `secretos` | `map(string)` con `db`, `jwt` y `admin_inicial` | `module.secretos.arns` |
+| `db_host`, `db_puerto`, `db_nombre`, `db_usuario` | `string`, `number`, `string`, `string` | `module.datos.rds_direccion`, `.rds_puerto`, `.rds_base`, `.rds_usuario` |
+| `bucket_dataset`, `bucket_dataset_arn` | `string` | `module.datos.bucket_dataset`, `.bucket_dataset_arn` |
+| `colas` | mapa de `{ nombre, url, arn }` con `ingesta` y `purga` | `module.datos.colas` |
+| `imagen_inicial_tag` | `string` | `var.imagen_inicial_tag` |
+
+| Salida | Valor | La usa |
+|---|---|---|
+| `ecr_urls` | `{ backend, embedding }` → `repositoryUri` | outputs `ecr_backend_url` y `ecr_embedding_url` |
+| `cluster` | `campus-locator-dev` | output `ecs_cluster`; INF-2.1 (autoescalado) |
+| `servicios` | `{ api, worker, embedding }` → nombre | output `ecs_servicios`; INF-2.1 |
+| `familias_tarea` | `{ api, worker, embedding, migrate, validacion }` → familia | output `familias_tarea` |
+| `embedding_dns` | `embedding.campus-locator.local` | output `embedding_dns` |
+
+Por dentro: `aws_ecr_repository.repos["backend"|"embedding"]` y `aws_ecr_lifecycle_policy.repos[…]`,
+`aws_ecs_cluster.principal`, `aws_service_discovery_private_dns_namespace.principal`,
+`aws_service_discovery_service.servicios["api"|"embedding"]`,
+`aws_cloudwatch_log_group.procesos["api"|"worker"|"embedding"|"migrate"|"validacion"]`, `aws_iam_role.ejecucion`,
+`aws_iam_role_policy_attachment.ejecucion`, `aws_iam_role_policy.ejecucion_secretos`,
+`aws_iam_role.tareas["api"|"worker"|"embedding"|"migrate"]`, `aws_iam_role_policy.tarea_api` y `.tarea_worker`,
+`aws_ecs_task_definition.tareas[…]` (las cinco familias) y `aws_ecs_service.servicios["api"|"worker"|"embedding"]`:
+30 recursos, más cuatro `data "aws_iam_policy_document"`. Detalles que explican un `plan`:
+- Las definiciones de tarea solo envían las claves que aplican (sin `null` ni listas vacías), con `environment` y
+  `secrets` ordenados por nombre y `hostPort` = `containerPort`: así ECS devuelve lo mismo y el `plan` queda vacío.
+- `api` no fija `command` (usa el `CMD` de la imagen); `worker` y `migrate` llevan los de `BACKEND_FASTAPI` §5.9;
+  `embedding`, el `CMD` de su imagen (`SERVICE_EMBEDDING` §5.5). La tarea de validación tiene un comando inocuo que los
+  validadores sobrescriben y usa el rol de tarea de `migrate`.
+- Cloud Map sin `health_check_custom_config`: las instancias que registra ECS cuentan como sanas y ECS las quita al
+  detener la tarea. `api` se registra con `container_name = "app"` y `container_port = 8000` (lo exige el SRV).
+- Servicios con `availability_zone_rebalancing = "DISABLED"` (una zona), *circuit breaker* con *rollback*,
+  `assign_public_ip = true` y `ignore_changes = [task_definition, desired_count]` (ADR-INF-09).
 
 **Proveedores y lock**
 - `envs/dev/.terraform.lock.hcl` fija hoy `hashicorp/aws` 6.70.0 y, desde INF-1.2, `hashicorp/random` (3.x) con
@@ -1068,7 +1116,7 @@ optimización (INF-6.1).
 | R8 | La URL de la API cambia si se recrea la HTTP API, y `ApiConfig.kt` queda desactualizado | Baja | Medio | `prevent_destroy` en la API; dominio propio en Fase 6 |
 | R9 | Cuotas por defecto de una cuenta nueva (vCPU de Fargate, etc.) | Baja | Medio | El sistema usa ~2,5 vCPU con todo encendido; solicitar aumento si un `apply` falla por cuota. Sin GPU desde 0.9.0: el cupo de instancias G de la cuenta es 0 (ADR-INF-14) |
 | R10 | `/v1/localize` es público: abuso que dispara costos | Baja | Medio | *Throttling*; alarma de 5xx; en `prod`, WAF o clave de app |
-| R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y pueden chocar con nombres de §5.1 (sobre todo el *namespace* de Cloud Map `campus-locator.local`, con INF-1.3) | Alta | Medio | Revisado el 2026-10-24: no había otra VPC `campus-locator-dev-vpc` (C2a de INF-1.1) ni nada que choque con INF-1.2 (el bucket del dataset ya no existe; sin instancias, *snapshots*, grupos de parámetros ni de subredes de RDS; sin colas; `campus-locator-dev/jwt-secret` está en borrado programado y su nombre no choca). Antes de INF-1.3, inventariar y limpiar el resto: clúster y servicios de ECS, ECR `campus-locator-dev/*`, *namespace* de Cloud Map, *target group*, *log groups* `/ecs/…`, roles `campus-locator-dev-backend-*` y `-embedding-*` y los buckets `campus-locator-dev-scans-648617469176` y `4uproject-eafit-tfstate` (CHANGELOG 0.3.0) |
+| R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y pueden chocar con nombres de §5.1 (sobre todo el *namespace* de Cloud Map `campus-locator.local`, con INF-1.3) | Alta | Medio | Revisado el 2026-10-24: no había otra VPC `campus-locator-dev-vpc` (C2a de INF-1.1) ni nada que choque con INF-1.2 (el bucket del dataset ya no existe; sin instancias, *snapshots*, grupos de parámetros ni de subredes de RDS; sin colas; `campus-locator-dev/jwt-secret` está en borrado programado y su nombre no choca). Antes de INF-1.3, inventariar y limpiar el resto: clúster y servicios de ECS, ECR `campus-locator-dev/*`, *namespace* de Cloud Map, *target group*, *log groups* `/ecs/…`, roles `campus-locator-dev-backend-*` y `-embedding-*` y los buckets `campus-locator-dev-scans-648617469176` y `4uproject-eafit-tfstate` (CHANGELOG 0.3.0). Revisado de nuevo antes de INF-1.3 (`.validacion/inventario-r11b.txt`): ya no quedan roles `campus-locator-dev-*` ni buckets del intento anterior; antes del `apply` de INF-1.3 se confirma que no hay *namespace* `campus-locator.local`, clúster `campus-locator-dev` ni repositorios `campus-locator/*` (`servicediscovery list-namespaces`, `ecs describe-clusters`, `ecr describe-repositories`) |
 | R12 | El repositorio es público: los logs de Actions y los comentarios del `plan` los puede leer cualquiera | Alta | Bajo | Terraform oculta los valores `sensitive` (contraseñas, secretos) en el `plan` y en los logs; ningún paso imprime el estado ni credenciales; todo output con un dato sensible se declara `sensitive`; los PR desde *forks* no ejecutan el `plan`. Lo que queda visible (IDs, ARN, URL) no da acceso por sí solo |
 | R13 | El apagado automático de `embedding` falla y queda encendido (~2,5 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas) y presupuesto con avisos |
 

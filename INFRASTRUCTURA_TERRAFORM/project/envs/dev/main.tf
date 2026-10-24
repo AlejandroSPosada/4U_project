@@ -10,6 +10,18 @@ data "aws_caller_identity" "actual" {}
 # tflint-ignore: terraform_unused_declarations
 data "aws_default_tags" "actuales" {}
 
+# Outputs de bootstrap (INF-0.1): permissions boundary de los roles de computo (ADR-INF-12). Los roles de CI leen
+# todo el bucket de estado; escribir bootstrap/* les esta denegado.
+data "terraform_remote_state" "bootstrap" {
+  backend = "s3"
+
+  config = {
+    bucket = "${var.proyecto}-tfstate-${var.aws_account_id}"
+    key    = "bootstrap/terraform.tfstate"
+    region = var.region
+  }
+}
+
 locals {
   # Prefijo de nombres de §5.1 (campus-locator-dev).
   prefijo = "${var.proyecto}-${var.entorno}"
@@ -51,8 +63,27 @@ module "secretos" {
   admin_inicial_correo = "admin@campus.edu.co"
 }
 
-module "computo" { # INF-1.3
+module "computo" {
   source = "../../modules/computo"
+
+  prefijo            = local.prefijo
+  proyecto           = var.proyecto
+  entorno            = var.entorno
+  region             = var.region
+  cuenta_id          = var.aws_account_id
+  vpc_id             = module.red.vpc_id
+  subred_tareas      = module.red.subred_tareas
+  grupos_seguridad   = module.red.grupos_seguridad
+  limite_roles_arn   = data.terraform_remote_state.bootstrap.outputs.limite_roles_arn
+  secretos           = module.secretos.arns
+  db_host            = module.datos.rds_direccion
+  db_puerto          = module.datos.rds_puerto
+  db_nombre          = module.datos.rds_base
+  db_usuario         = module.datos.rds_usuario
+  bucket_dataset     = module.datos.bucket_dataset
+  bucket_dataset_arn = module.datos.bucket_dataset_arn
+  colas              = module.datos.colas
+  imagen_inicial_tag = var.imagen_inicial_tag
 }
 
 module "borde" { # INF-1.4

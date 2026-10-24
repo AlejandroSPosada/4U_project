@@ -50,3 +50,34 @@ output "secretos" {
   description = "ARN de los secretos: { db, jwt, admin_inicial }."
   value       = module.secretos.arns
 }
+
+# INF-1.3
+output "ecr_backend_url" {
+  description = "URL del repositorio campus-locator/backend (backend.yml)."
+  value       = module.computo.ecr_urls["backend"]
+}
+
+output "ecr_embedding_url" {
+  description = "URL del repositorio campus-locator/embedding (embedding.yml)."
+  value       = module.computo.ecr_urls["embedding"]
+}
+
+output "ecs_cluster" {
+  description = "Nombre del cluster de ECS."
+  value       = module.computo.cluster
+}
+
+output "ecs_servicios" {
+  description = "Servicios de ECS: { api, worker, embedding }."
+  value       = module.computo.servicios
+}
+
+output "familias_tarea" {
+  description = "Familias de definicion de tarea: { api, worker, embedding, migrate, validacion }."
+  value       = module.computo.familias_tarea
+}
+
+output "embedding_dns" {
+  description = "Nombre DNS privado de embedding (Cloud Map)."
+  value       = module.computo.embedding_dns
+}

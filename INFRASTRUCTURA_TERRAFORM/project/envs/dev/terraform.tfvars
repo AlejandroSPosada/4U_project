@@ -14,3 +14,6 @@ rds_clase  = "db.t4g.micro"
 rds_gb     = 20
 rds_gb_max = 50
 pg_version = "17"
+
+# INF-1.3
+imagen_inicial_tag = "bootstrap"

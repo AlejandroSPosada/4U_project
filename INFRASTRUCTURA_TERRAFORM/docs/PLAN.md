@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.9.0**.
+Alineado con `ARCHITECTURE.md` **v0.10.0**.
 
 ---
 
@@ -136,7 +136,10 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 - **Objetivo:** clúster, repositorios, roles y servicios listos para recibir imágenes, con `embedding` en
   Fargate (ADR-INF-14).
 - **Entregables:** módulo `computo` (§3.4, §5.1, §5.7, §5.8; sus roles con `permissions_boundary` = output
-  `limite_roles_arn` de `bootstrap`), incluida la tarea de validación; imagen de prueba `bootstrap` (`project/pruebas/imagen-prueba/`, §5.11) publicada en los dos repositorios; outputs de §5.2.
+  `limite_roles_arn` de `bootstrap`, leído con `terraform_remote_state`), incluida la tarea de validación y los
+  *log groups* de los procesos; en `envs/dev`, la variable `imagen_inicial_tag` (§5.3) y los outputs de §5.2; imagen de
+  prueba `bootstrap` (`project/pruebas/imagen-prueba/`, §5.11) publicada en los dos repositorios;
+  `src/ops/validate13.py`.
 - **Criterios de cierre:**
   - C1. Con la imagen de prueba, el servicio `api` queda estable y se registra en Cloud Map con SRV.
   - C2. `embedding.campus-locator.local` resuelve desde la tarea de validación.
@@ -205,7 +208,7 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 | INF-0.2 | 0 | Hecho | [0-2](./validation/validation-0-2.md) | `fad2b6b` 2026-10-24 | 0.4.0 | Primer `apply` de `envs/dev` hecho por `infra.yml`; C3b toma el bloqueo él mismo (`terraform console` ya no lo toma desde Terraform 1.15) |
 | INF-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `4c04040` 2026-10-24 | 0.5.0 | `apply` de la red por `infra.yml` (29 recursos); antes hubo que cancelar una ejecución de `main` de un commit sobrescrito que esperaba aprobación y retenía la fila |
 | INF-1.2 | 1 | Hecho | [1-2](./validation/validation-1-2.md) | `e5ee713` 2026-10-24 | 0.6.0 | `apply` por `infra.yml` (24 recursos, PostgreSQL 17.9); el «plan vacío» destapó una diferencia perpetua en `rds.force_ssl` (es el valor por defecto en PostgreSQL 17), corregida con `apply_method = "pending-reboot"` |
-| INF-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | `embedding` en Fargate con 2 vCPU desde 0.9.0 (ADR-INF-14) |
+| INF-1.3 | 1 | En curso | [1-3](./validation/validation-1-3.md) | — | — | Código listo (módulo `computo`, 30 recursos; imagen de prueba; `validate13.py`); falta el `apply` por `infra.yml`, publicar la imagen `bootstrap` y validar. `embedding` en Fargate con 2 vCPU desde 0.9.0 (ADR-INF-14) |
 | INF-1.4 | 1 | Pendiente | [1-4](./validation/validation-1-4.md) | — | — | |
 | INF-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | Rediseñado en 0.7.0: encendido manual de `embedding` y apagado automático en lugar de horario fijo |
 | INF-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | |

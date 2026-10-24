@@ -61,3 +61,9 @@ variable "pg_version" {
   type        = string
   description = "Version mayor de PostgreSQL (solo el numero); RDS elige la menor (>= 17.1 para pgvector 0.8)."
 }
+
+# INF-1.3
+variable "imagen_inicial_tag" {
+  type        = string
+  description = "Etiqueta de imagen de las definiciones de tarea que crea Terraform (imagen de prueba bootstrap, §5.11); CI la reemplaza."
+}

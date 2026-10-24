@@ -69,7 +69,7 @@ resource "aws_db_instance" "principal" {
   allow_major_version_upgrade = false
   apply_immediately           = true # dev: los cambios no esperan a la ventana de mantenimiento
 
-  # Ventanas fuera del horario de dev (06:00–22:00 America/Bogota = 11:00–03:00 UTC), §5.10.
+  # Ventanas de madrugada en Bogota (copias 02:00, mantenimiento domingo 03:00; §5.10).
   backup_retention_period = 7
   backup_window           = "07:00-07:30"
   maintenance_window      = "sun:08:00-sun:09:00"

@@ -20,6 +20,38 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.10.0] — 2026-10-24
+
+- **Lote que la motivó:** INF-1.3 (Cómputo).
+- **Qué cambió:**
+  - §4: el lote INF-1.3 describe lo construido (módulo `computo`, 30 recursos). Los *log groups* de los cinco procesos
+    pasan de `observabilidad` (INF-3.1) a `computo`, porque ECS no arranca una tarea cuyo *log group* no existe; el de
+    la API va en `borde` (INF-1.4). §3.8 lo anota.
+  - §5.12: `main.tf` de `envs/dev` admite además `data "terraform_remote_state" "bootstrap"`, de donde sale
+    `limite_roles_arn` (los dos roles de CI leen todo el bucket de estado, `bootstrap/permisos.tf`); nueva tabla del
+    módulo `computo` (entradas, salidas, nombres internos y por qué el `plan` queda vacío).
+  - §5.3: `imagen_inicial_tag` se declara con INF-1.3 y se aclara su efecto (solo crea revisiones nuevas).
+  - §5.11: la imagen de prueba trae `python` (lo usan los *health checks*), corre como 10001 y se publica a mano tras
+    el `apply` (`pruebas/imagen-prueba/README.md`); qué pasa cuando la política de ECR la expira.
+  - R11: estado de la limpieza y qué confirmar antes del `apply` de INF-1.3.
+  - `validation-1-3.md`: C5 antes de C6 (orden del script), C4 comprueba los **seis** outputs de `bootstrap` (decía
+    cinco; §5.2 lista seis) y el *boundary* de los cinco roles de ECS; nota sobre la espera a `HEALTHY`.
+  - PLAN: entregables de INF-1.3 completos y su fila de §3 en «En curso».
+  - Código: comentario de las ventanas de RDS en `modules/datos/main.tf` sin el horario de `dev` (pendiente de 0.8.0 y
+    0.9.0; no cambia recursos).
+- **Contratos tocados (§5):** §5.3 (aclaración de `imagen_inicial_tag`), §5.11 (imagen de prueba) y §5.12
+  (`terraform_remote_state`, módulo `computo`). Los outputs de §5.2 de INF-1.3 se crean con los nombres ya
+  documentados. Compatible: sube la menor.
+- **Cómo se verificó:** en local con OpenTofu 1.10.6 y los proveedores de §5.12 desde un espejo: `fmt -check`,
+  `validate` de `envs/dev` y una prueba con proveedor simulado (`tofu test`) que renderiza las cinco definiciones de
+  tarea; TFLint 0.65.0 con el *ruleset* de AWS 0.50.0 en `envs/dev` y `modules/computo`, sin avisos; `servidor.py`
+  probado en local (puertos, `app.cli`, SIGTERM); `validate13.py` con ruff y su ruta de credenciales inválidas
+  (código 3). Pendiente: `plan`/`apply` en CI, `plan` vacío después y `validate13.py` en `dev`.
+- **Pendiente:** cerrar INF-1.3 (fila de PLAN §3). Copiar `ECR_BACKEND`, `ECR_EMBEDDING` y `ECS_CLUSTER` a las
+  variables del repositorio (§5.9). Ya resuelto de 0.8.0: la carpeta se llama `SERVICE_EMBEDDING`.
+
+---
+
 ## [0.9.0] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; decisión del equipo antes de INF-1.3. La cuenta tiene cupo 0 de instancias G
