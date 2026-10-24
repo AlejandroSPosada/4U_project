@@ -20,6 +20,47 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.3.0] — 2026-10-23
+
+- **Lote que la motivó:** BE-1.1 (Base del servicio). El código se escribió antes que este cambio; ambos van en el
+  mismo PR para que contrato y código se revisen juntos.
+- **Qué cambió:**
+  - Encabezado: ya hay código (desde BE-1.1).
+  - §3 y §4.1: `migrate` en `backend.yml` desde BE-1.2; estructura real de `project/` (`logs.py`, `middleware.py`,
+    `errores.py`, `.dockerignore`, `uv.lock`, `.python-version`, pruebas de los validadores).
+  - §4.2: cómo funcionan el middleware, los manejadores de error y los logs; `worker` provisional (solo latido, sin
+    consumir colas hasta BE-2.2); lo propio del backend en `backend.yml` (publicación idempotente de la imagen, revisión
+    que parte de la última de su familia, primer despliegue, comprobación de la revisión tras `services-stable` y job
+    sin `environment:` por la confianza del rol `gha-deploy`).
+  - §5.1: reglas de `X-Request-Id` (se reutiliza solo con 1 a 128 caracteres `[A-Za-z0-9._:-]`; si no, UUID v4; también
+    en los `500`), cuerpo de error con la clave `error` sola y rutas sin redirección por barra final.
+  - §5.3: `GET /v1/openapi.json` y `GET /v1/docs` fuera de `prod`; qué son `version` y `commit` en `/v1/health`;
+    cuándo `embedding` es `ok` en `/v1/health/ready`.
+  - §5.6: fila para `405` (`SOLICITUD_INVALIDA` con `detalle.metodos_permitidos` y encabezado `Allow`); una ruta que no
+    existe es `404 NO_ENCONTRADO`; regla para otros estados del framework (4xx → `SOLICITUD_INVALIDA`, 5xx →
+    `ERROR_INTERNO`).
+  - §5.9: tabla de la imagen (base, código, usuario) y `APP_COMMIT`, fijado con `--build-arg GIT_COMMIT`;
+    `migrations/` entra en la imagen desde BE-1.2; ninguna variable es obligatoria para arrancar.
+  - §5.10: nombres de los cortes de nivel (`LOC_NIVEL_ALTA_MIN`, `LOC_NIVEL_MEDIA_MIN`) y del pool (`DB_POOL_API`,
+    `DB_POOL_API_DESBORDE`, `DB_POOL_WORKER`), que §5.9 permite sobrescribir con variables; formato de log en detalle y
+    catálogo de eventos (`peticion`, `error_no_controlado`, `error_api`, `api_*`, `worker_*`, `latido`).
+  - §5.11: uso de `docker-compose.yml` en `local` (perfil `embedding`, puertos, `GIT_COMMIT`).
+  - `validation/validation-1-1.md`: P3 y P5 terminan con código 3 cuando falla una herramienta, credencial o permiso
+    (infra §5.11); C2b envía su propia petición si C2a se omitió con `--solo`.
+  - PLAN: BE-1.1 incluye el `worker` provisional y pasa a «En curso».
+- **Contratos tocados (§5):** §5.1, §5.3 (rutas nuevas de documentación), §5.6 (405 y regla general), §5.9, §5.10,
+  §5.11. Ningún cambio incompatible: sube la menor.
+- **Cómo se verificó:** 59 pruebas (API, contrato contra los esquemas de §5.1 y §5.3, unitarias y de los validadores),
+  `ruff check` y `ruff format --check`; `actionlint` con `shellcheck` sobre `.github/workflows/backend.yml`; la
+  transformación de la definición de tarea, contra el modelo de `RegisterTaskDefinition` de botocore; la imagen,
+  simulada fuera de Docker (mismas dependencias de `uv.lock`, mismo comando de §5.9 y el *health check* de infra §5.7):
+  logs JSON, `X-Request-Id`, 404 y parada del `worker`; `validate11.py` completo con AWS simulado (código 0 y, con otro
+  commit desplegado, código 1).
+- **Pendiente:** construir la imagen con Docker (no se pudo en el entorno donde se escribió) y ejecutar `validate11.py`
+  en `dev`, que espera INF-1.3 e INF-1.4.
+
+---
+
 ## [0.2.0] — 2026-10-23
 
 - **Lote que la motivó:** ninguno; cambio de organización del monorepo pedido por el equipo.

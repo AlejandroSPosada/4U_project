@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.2.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.3.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-23 |
-| Estado | Diseño propuesto. **Aún no hay código** |
+| Estado | En construcción: hay código desde BE-1.1 (`project/`); lo de lotes posteriores es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -80,7 +80,8 @@ Los tres salen de **la misma imagen** con distinto comando (§5.9).
   mensajes de ingesta esperan en la cola.
 - La base es RDS PostgreSQL 17 con pgvector 0.8.x, accesible solo desde la VPC y con TLS obligatorio.
 - Logs a CloudWatch (`/campus-locator/dev/<proceso>`) en una línea JSON por evento (§5.10).
-- Despliegue: `backend.yml` construye la imagen, ejecuta `migrate` y actualiza `api` y `worker` (infra §5.9).
+- Despliegue: `backend.yml` construye la imagen, ejecuta `migrate` (desde BE-1.2) y actualiza `api` y `worker`
+  (infra §5.9; detalles del backend en §4.2).
 
 ---
 
@@ -96,8 +97,11 @@ BACKEND_FASTAPI/
 └── project/                     todo el código
     ├── src/
     │   ├── app/
-    │   │   ├── main.py          Crea la app, monta routers, middlewares (X-Request-Id, logs, errores) y el reconciliador
+    │   │   ├── main.py          crear_app(): routers, middleware, manejadores de error y (BE-4.1) el reconciliador
     │   │   ├── config.py        Settings (pydantic-settings): lee las variables de infra §5.4 y los parámetros de §5.10
+    │   │   ├── logs.py          Logs JSON por línea (§5.10) y `request_id` de la petición en curso
+    │   │   ├── middleware.py    X-Request-Id, evento `peticion` y 500 ante fallos no previstos (§4.2)
+    │   │   ├── errores.py       ErrorApi; excepciones → formato de §5.1 con los códigos de §5.6
     │   │   ├── api/v1/          Routers: health, auth, localize, places, alerts, collect, admin_*
     │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5)
     │   │   ├── dominio/         Lógica pura y probable sin red ni base: localizacion.py, geo.py, rumbo.py, validaciones.py
@@ -109,10 +113,12 @@ BACKEND_FASTAPI/
     │   │   └── cli.py           migrar, verificar-esquema, crear-usuario (python -m app.cli …)
     │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes BE-x.y (§5.11)
     ├── migrations/              Alembic
-    ├── tests/                   unitarias (dominio), de API (httpx + base efímera), de contrato (esquemas vs §5)
+    ├── tests/                   unitarias (dominio), de API (httpx + base efímera), de contrato (vs §5), validadores
     ├── docker-compose.yml       entorno `local` (§5.11)
-    ├── Dockerfile               python:3.12-slim, usuario sin privilegios, puerto 8000
-    └── pyproject.toml           uv; ruff; pytest; grupo `ops` para los validadores
+    ├── Dockerfile               python:3.12-slim, usuario sin privilegios, puerto 8000 (§5.9)
+    ├── .dockerignore            la imagen solo recibe src/app/, pyproject.toml, uv.lock y .python-version
+    ├── pyproject.toml           uv; ruff; pytest; grupo `ops` para los validadores
+    └── uv.lock, .python-version dependencias fijadas y Python 3.12: imagen y CI instalan con `uv sync --frozen`
 ```
 
 Reglas internas:
@@ -121,9 +127,35 @@ Reglas internas:
 - Ningún log incluye tokens, contraseñas, URLs prefirmadas ni bytes de imagen.
 
 ### 4.2 BE-1.1 — Base del servicio
-FastAPI con un único proceso de uvicorn (la tarea tiene 0,25 vCPU). Middleware que asigna `X-Request-Id` (o
-respeta el del cliente) y lo pone en cada log. Manejador global que convierte excepciones en el formato de error de
-§5.1. `/v1/health` no toca la base (lo usan la app y el *health check* del contenedor); `/v1/health/ready` sí.
+FastAPI con un único proceso de uvicorn (la tarea tiene 0,25 vCPU). Un middleware ASGI asigna `X-Request-Id` (o
+respeta el del cliente, con las reglas de §5.1), lo pone en cada línea de log y registra el evento `peticion` de cada
+solicitud (§5.10). Si una excepción no controlada llega hasta él, responde `500 ERROR_INTERNO` con el formato de §5.1
+(y su `X-Request-Id`) y deja la traza en una sola línea JSON. Los manejadores de FastAPI convierten al mismo formato el
+404 de una ruta inexistente, el 405, el cuerpo mal formado y los errores de validación (§5.6). `/v1/health` no toca la
+base ni embeddings (lo usan la app y el *health check* del contenedor); `/v1/health/ready` sí (§5.3).
+
+**Logs.** uvicorn también escribe en JSON y su log de acceso se desactiva: lo reemplaza `peticion`, que lleva el
+`request_id`. Las respuestas correctas de `/v1/health` se registran en `DEBUG`, porque el *health check* llama cada 30 s
+y en `dev` `LOG_LEVEL = INFO`. Los loggers de `httpx`, `httpcore`, `botocore`, `boto3`, `urllib3` y `s3transfer` quedan
+en `WARNING`: en niveles más bajos escriben URLs completas, que podrían ser prefirmadas (§4.1).
+
+**`worker` provisional.** `backend.yml` despliega `api` y `worker` con la misma imagen (infra §5.9). Para que una tarea
+de `worker` no falle al arrancar, en BE-1.1 `python -m app.worker` solo registra un latido cada 60 s (`evento = latido`,
+`modo = sin_consumo`) y termina limpio con SIGTERM: **no consume las colas**. La ingesta llega con BE-2.2 (§4.6) y la
+purga con BE-4.1 (§4.11). Hasta entonces, si el autoescalado lo enciende por mensajes en `ingesta` o `purga`, esos
+mensajes siguen en la cola (igual que con la imagen de prueba de infra).
+
+**Despliegue con `backend.yml`.** Sigue la secuencia de infra §5.9, sin el paso `migrate` hasta BE-1.2. Lo propio del
+backend:
+- La imagen se construye con `--build-arg GIT_COMMIT=${GITHUB_SHA}` (§5.9). Si la etiqueta ya existe en ECR (reintento
+  del workflow), no se vuelve a publicar: las etiquetas son inmutables.
+- Cada revisión nueva de `campus-locator-dev-api` y `campus-locator-dev-worker` parte de la última de su familia (la de
+  Terraform o la del despliegue anterior) y solo cambia la imagen del contenedor `app`.
+- Si `api` tiene `desiredCount = 0` (primer despliegue), pasa a 1.
+- Tras `wait services-stable`, comprueba que el despliegue `PRIMARY` de `api` sea la revisión nueva con
+  `rolloutState = COMPLETED`; si el *circuit breaker* hizo *rollback*, el workflow falla.
+- El job de despliegue **no** declara `environment:`: el rol `gha-deploy` solo confía en
+  `sub = repo:<github_repo>:ref:refs/heads/main` (infra §5.8), y con un entorno el `sub` cambiaría.
 
 ### 4.3 BE-1.2 — Base de datos y migraciones
 SQLAlchemy 2 asíncrono sobre `asyncpg`; Alembic para el esquema de §5.7. La primera migración crea la extensión
@@ -281,6 +313,7 @@ Presupuesto de tiempo: embedding ≤ 20 s (límite duro), búsquedas < 100 ms; o
 | Tema | Regla |
 |---|---|
 | URL base | `{api_base_url}/v1` (`api_base_url`: output de infra §5.2). En la app, `ApiConfig.kt` |
+| Barra final | Las rutas no llevan barra final y no se redirige: `/v1/health/` responde `404 NO_ENCONTRADO` |
 | Formato | JSON UTF-8, nombres en español y `snake_case`. Valores enumerados en minúsculas (`admin`, `alta`, `biblioteca`) |
 | Fechas | ISO-8601 en UTC con `Z`: `2026-10-23T15:04:05Z` |
 | Coordenadas | WGS84 en grados decimales: `lat` ∈ [−90, 90], `lng` ∈ [−180, 180] |
@@ -288,8 +321,8 @@ Presupuesto de tiempo: embedding ≤ 20 s (límite duro), búsquedas < 100 ms; o
 | Distancias / radios | Metros (`distancia_m`, `radio_m`) |
 | Identificadores | UUID v4 en minúsculas. Los videos tienen además `numero` (entero creciente) |
 | Autenticación | `Authorization: Bearer <jwt>` en `/v1/admin/*` y `/v1/collect/*`. Los endpoints públicos no la requieren |
-| Correlación | Encabezado `X-Request-Id` en todas las respuestas; si la petición lo trae, se reutiliza |
-| Errores | `{"error": {"codigo": "TEXTO_FIJO", "mensaje": "texto para humanos", "detalle": {…} \| null}}` (códigos en §5.6) |
+| Correlación | Encabezado `X-Request-Id` en todas las respuestas, también en los `500`. Si la petición lo trae con 1 a 128 caracteres `[A-Za-z0-9._:-]`, se reutiliza; si no lo trae o no cumple, se genera un UUID v4 |
+| Errores | `{"error": {"codigo": "TEXTO_FIJO", "mensaje": "texto para humanos", "detalle": {…} \| null}}` (códigos en §5.6). El cuerpo solo tiene la clave `error` |
 | Paginación | `?pagina=1&por_pagina=24` (máx. 100) → `{"items": […], "total": 123, "pagina": 1, "por_pagina": 24}` |
 | Tamaño | Cuerpo ≤ 10 MB y respuesta en ≤ 30 s (límites de API Gateway). Respuestas generadas por API Gateway (429, 413, 503/504 de *timeout*) llegan con cuerpo `{"message": "…"}`, **no** con el formato de error de arriba: la app debe tratarlas por código HTTP |
 
@@ -309,6 +342,7 @@ Presupuesto de tiempo: embedding ≤ 20 s (límite duro), búsquedas < 100 ms; o
 |---|---|---|
 | `GET /v1/health` | Indicador de conexión de Inicio (6.1) | BE-1.1 |
 | `GET /v1/health/ready` | Diagnóstico | BE-1.1 |
+| `GET /v1/openapi.json`, `GET /v1/docs` | No los usa la app: revisión del contrato (ADR-BE-01). Solo si `APP_ENV` ≠ `prod` | BE-1.1 |
 | `POST /v1/auth/login` | Login (7.1) | BE-1.3 |
 | `POST /v1/localize` | Escaneo 360° → Resultado (6.2, 6.3) | BE-3.2 |
 | `GET /v1/places` | Selección de destino (6.4) | BE-3.1 |
@@ -319,11 +353,20 @@ Presupuesto de tiempo: embedding ≤ 20 s (límite duro), búsquedas < 100 ms; o
 
 #### `GET /v1/health`
 `200` → `{"estado": "ok", "version": "0.1.0", "commit": "<sha corto>"}`. No consulta la base ni embeddings.
+- `version`: versión del backend (`app.__version__`, la misma de `project/pyproject.toml`), no la de este documento.
+- `commit`: los 7 primeros caracteres de `APP_COMMIT` (§5.9). Si el valor no es un SHA (p. ej. `local` en
+  `docker compose`), se devuelve tal cual.
 
 #### `GET /v1/health/ready`
 `200` → `{"estado": "ok", "db": "ok" | "no_configurada", "embedding": "ok" | "no_disponible"}`. `no_configurada` solo
 se ve en BE-1.1, antes de que exista la conexión a la base (BE-1.2). `503 BASE_NO_DISPONIBLE` si la base no
 responde. Que `embedding` esté apagado (fuera de horario) **no** produce `503`.
+- `embedding = ok` si `GET {EMBEDDING_URL}/health/ready` responde `200` dentro de `EMBEDDING_CONNECT_TIMEOUT_S`;
+  cualquier otro resultado (apagado, el nombre DNS sin registros, error o lentitud) es `no_disponible`.
+
+#### `GET /v1/openapi.json` y `GET /v1/docs`
+OpenAPI generado de los esquemas Pydantic (ADR-BE-01) y su vista Swagger, para revisar el contrato. Se publican solo
+si `APP_ENV` ≠ `prod` (en `prod` responden `404`). No reemplazan este §5, que sigue siendo la fuente de verdad.
 
 #### `POST /v1/auth/login`
 Petición:
@@ -596,12 +639,16 @@ Errores: `400 FOTOS_INVALIDAS` (falta la foto, tipo o tamaño; `detalle.indice =
 | 401 | `NO_AUTENTICADO` · `TOKEN_INVALIDO` · `TOKEN_EXPIRADO` | §5.2 |
 | 401 | `CREDENCIALES_INVALIDAS` | Login fallido |
 | 403 | `SIN_PERMISOS` | Token válido sin rol `admin` |
-| 404 | `NO_ENCONTRADO` | Recurso inexistente (o video eliminado en rutas de lectura) |
+| 404 | `NO_ENCONTRADO` | Recurso inexistente (o video eliminado en rutas de lectura); también una ruta que no existe |
+| 405 | `SOLICITUD_INVALIDA` | Método no permitido en una ruta que existe; `detalle.metodos_permitidos` (p. ej. `["GET"]`) y encabezado `Allow` |
 | 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido · subir fotos a un video borrado · `If-Match` no coincide |
 | 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]` |
 | 500 | `ERROR_INTERNO` | Fallo no previsto (el `X-Request-Id` permite encontrarlo en los logs) |
 | 501 | `NO_IMPLEMENTADO` | Endpoints reservados |
 | 503 | `EMBEDDING_NO_DISPONIBLE` · `BASE_NO_DISPONIBLE` | Dependencia caída, apagada o lenta |
+
+Si el framework genera otro estado que no está en la tabla, se responde con el mismo formato: `SOLICITUD_INVALIDA`
+para un 4xx y `ERROR_INTERNO` para un 5xx. Las respuestas que genera API Gateway no siguen este formato (§5.1).
 
 ### 5.7 Esquema de la base de datos
 
@@ -780,22 +827,30 @@ borra.
 ### 5.9 Procesos de la imagen
 
 Una sola imagen (`campus-locator/backend`, `project/Dockerfile`, Python 3.12, usuario sin privilegios). Contiene solo
-`src/app/` (copiado como paquete `app`) y `migrations/`; `src/ops/` y `tests/` quedan fuera. El contenedor se llama
-`app` (infra §5.1).
+`src/app/` (copiado como paquete `app`) y `migrations/` (desde BE-1.2); `src/ops/` y `tests/` quedan fuera. El
+contenedor se llama `app` (infra §5.1).
+
+| Imagen | Valor |
+|---|---|
+| Base | `python:3.12-slim-bookworm`; dependencias instaladas con `uv sync --frozen --no-dev` desde `uv.lock` en `/opt/venv` |
+| Código | `/srv/app` (`PYTHONPATH=/srv`, directorio de trabajo `/srv`) |
+| Usuario | `app` (uid y gid 10001), sin *shell* ni directorio personal |
+| Variables fijadas en el `Dockerfile` | `APP_COMMIT` ← `--build-arg GIT_COMMIT` (SHA completo del commit; `backend.yml` pasa `${GITHUB_SHA}`; por defecto `desconocido`), `PYTHONUNBUFFERED=1`, `PYTHONDONTWRITEBYTECODE=1` |
 
 | Proceso | Comando | Puerto | Salud |
 |---|---|---|---|
 | `api` (por defecto, `CMD` de la imagen) | `uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --no-server-header` | 8000 | `GET /v1/health` |
-| `worker` | `python -m app.worker` | — | proceso vivo; registra un latido cada 60 s |
+| `worker` | `python -m app.worker` | — | proceso vivo; registra un latido cada 60 s (en BE-1.1 solo eso, §4.2) |
 | `migrate` | `python -m app.cli migrar` | — | código de salida 0 = éxito |
 | Verificación de esquema (tarea suelta) | `python -m app.cli verificar-esquema` (compara la base con §5.7; no modifica nada) | — | código de salida 0 = coincide, 1 = difiere (imprime las diferencias) |
 | Usuarios (tarea suelta con la definición de `migrate`) | `python -m app.cli crear-usuario --correo X --nombre Y [--rol admin\|user]` (contraseña desde la terminal o `CREAR_USUARIO_PASSWORD`). Si el correo existe, actualiza nombre, rol y contraseña y lo reactiva; imprime `creado` o `actualizado` | — | código 0 = hecho |
 | | `python -m app.cli desactivar-usuario --correo X` | — | 0 = desactivado (también si ya lo estaba), 1 = no existe |
 | Limpieza de pruebas (tarea suelta con la definición de `worker`) | `python -m app.cli limpiar-validacion [--video ID …]` (§4.5): sin `--video`, todos los videos `validacion-`; con `--video`, solo esos, y se niega (código 1) si alguno no lleva el prefijo. Imprime `LIMPIEZA {"videos": n, "objetos": m}` | — | código 0 = hecho |
 
-Variables que lee: las de infra §5.4 para `api`, `worker` y `migrate`. Ningún otro valor es obligatorio; los
-parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescribirse con una variable del mismo nombre
-(si se vuelve necesario, se añade antes a infra §5.4).
+Variables que lee: las de infra §5.4 para `api`, `worker` y `migrate`, y `APP_COMMIT`, que fija la imagen. Ningún
+otro valor es obligatorio; los parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescribirse con
+una variable del mismo nombre (si se vuelve necesario, se añade antes a infra §5.4). Ninguna variable es obligatoria
+para arrancar: cada lote exige las suyas al usarlas (por ejemplo, `DB_*` desde BE-1.2).
 
 ### 5.10 Parámetros operativos
 
@@ -808,7 +863,7 @@ parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescri
 | `LOC_TOP_K` / `LOC_EF_SEARCH` | 10 / 64 | Por foto |
 | `LOC_SIM_MIN` / `LOC_SIM_ALTA` | 0,55 / 0,80 | **Iniciales: se calibran en BE-3.2 con el conjunto de evaluación de EMB-3.2** |
 | `LOC_RADIO_GRUPO_M` / `LOC_PESO_EXPONENTE` / `LOC_RADIO_MIN_M` | 20 / 4 / 5 | |
-| Cortes de nivel | `alta` ≥ 0,70 · `media` ≥ 0,45 · `baja` < 0,45 | Iniciales |
+| `LOC_NIVEL_ALTA_MIN` / `LOC_NIVEL_MEDIA_MIN` (cortes de nivel) | 0,70 / 0,45 | `alta` ≥ 0,70 · `media` ≥ 0,45 · `baja` < 0,45. Iniciales |
 | `LOC_DISPERSION_RUMBO_MAX` | 30° | Para devolver `correccion_rumbo_grados` |
 | `LOC_LUGAR_CERCANO_M` / `LOC_REFERENCIAS_M` / `LOC_REFERENCIAS_MAX` | 60 / 150 / 3 | |
 | `REC_MAX_FOTOS_VIDEO` / `REC_MAX_LOTE` | 200 / 50 | 200 coincide con `MAX_FOTOS_VIDEO` de la app |
@@ -821,8 +876,24 @@ parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescri
 | `RECONCILIADOR_CADA_MIN` | 10 | Purgas pendientes |
 | `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api` |
 | `PAGINA_POR_DEFECTO` / `PAGINA_MAX` | 24 / 100 | 24 coincide con `FOTOS_POR_PAGINA` de la Galería |
-| `DB_POOL` (api / worker) | 5 + 5 de desborde / 2 | `db.t4g.micro` admite ~100 conexiones |
-| Formato de log | JSON por línea: `ts`, `nivel`, `proceso`, `request_id`, `evento`, campos propios | Sin secretos ni URLs firmadas |
+| `DB_POOL_API` / `DB_POOL_API_DESBORDE` / `DB_POOL_WORKER` | 5 / 5 / 2 | `db.t4g.micro` admite ~100 conexiones |
+| Formato de log | JSON por línea: `ts`, `nivel`, `proceso`, `request_id`, `evento`, campos propios | Sin secretos ni URLs firmadas. Detalle abajo |
+
+**Formato de log en detalle.** `ts` en UTC con milisegundos y `Z` (`2026-10-23T15:04:05.123Z`); `nivel` = `DEBUG`,
+`INFO`, `WARNING`, `ERROR` o `CRITICAL`; `proceso` = `api`, `worker` o `migrate`; `request_id` = el de la petición en
+curso o `null` fuera de una petición. Después van los campos propios del evento y, si aplica, `mensaje` (cuando el
+texto difiere del evento), `logger` y `excepcion` (la traza completa, en la misma línea). Los mensajes de librerías
+(uvicorn, por ejemplo) salen con `evento = "log"` y su texto en `mensaje`. Un campo propio nunca reemplaza a uno fijo.
+
+**Eventos de log** (cada lote añade los suyos aquí):
+
+| Evento | Proceso | Campos propios | Cuándo |
+|---|---|---|---|
+| `peticion` | `api` | `metodo`, `ruta` (sin *query string*), `estado`, `duracion_ms` | Cada solicitud HTTP. En `DEBUG` si es `/v1/health` con estado < 400; si no, en `INFO`. Es lo que busca la validación de BE-1.1 (C2b) |
+| `error_no_controlado` | `api` | `metodo`, `ruta` (y la traza en `excepcion`) | Excepción que llega al middleware (`ERROR`); la respuesta es `500 ERROR_INTERNO` |
+| `error_api` | `api` | `estado`, `codigo` | Un error de §5.6 con estado ≥ 500 (`ERROR`) |
+| `api_iniciada` / `api_detenida` | `api` | `version`, `commit`, `entorno` (solo al iniciar) | Arranque y parada de la aplicación |
+| `worker_iniciado` / `latido` / `worker_detenido` | `worker` | Al iniciar: `version`, `commit`, `entorno`, `modo`; en cada latido: `modo` | Arranque, cada 60 s y parada. `modo = sin_consumo` hasta BE-2.2 |
 
 ### 5.11 Validadores del backend
 
@@ -833,7 +904,7 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
 
 | Entorno | Qué hay | Qué no se puede validar ahí |
 |---|---|---|
-| `local` | `project/docker-compose.yml`: PostgreSQL 17 con pgvector (`pgvector/pgvector:pg17`), `api` y `worker` construidos desde `project/`, y la imagen de embeddings si se pasa `EMBEDDING_IMAGEN` | S3 y SQS no se emulan: lo que dependa de ellos solo corre en `dev` |
+| `local` | `project/docker-compose.yml`: PostgreSQL 17 con pgvector (`pgvector/pgvector:pg17`), `api` y `worker` construidos desde `project/`, y la imagen de embeddings si se pasa `EMBEDDING_IMAGEN` con el perfil `embedding` (`docker compose --profile embedding up --build`). Puertos en la máquina: `DB_PUERTO_LOCAL` (5432), `API_PUERTO_LOCAL` (8000), `EMBEDDING_PUERTO_LOCAL` (8080); `GIT_COMMIT` (por defecto `local`) llega a `/v1/health`. Las contraseñas del archivo son solo locales | S3 y SQS no se emulan: lo que dependa de ellos solo corre en `dev` |
 | `dev` | Lo desplegado en AWS (infra §2) | — |
 
 **Variables que leen**

@@ -1,0 +1,10 @@
+# Todo fuera salvo lo que necesita la imagen (ARCHITECTURE §5.9): src/app, pyproject.toml, uv.lock, .python-version.
+*
+!pyproject.toml
+!uv.lock
+!.python-version
+!src/
+src/*
+!src/app/
+**/__pycache__
+**/*.pyc

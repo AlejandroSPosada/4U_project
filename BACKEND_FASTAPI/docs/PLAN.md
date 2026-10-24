@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.2.0**.
+Alineado con `ARCHITECTURE.md` **v0.3.0**.
 
 ---
 
@@ -59,7 +59,7 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
   el formato de §5.1), `GET /v1/health`, `GET /v1/health/ready` (sin base todavía: informa `db` como no configurada),
   `project/Dockerfile`, `project/pyproject.toml` (uv, ruff, pytest, grupo `ops`), `project/docker-compose.yml` para el
   entorno `local`, `src/ops/comun.py`; `.github/workflows/backend.yml` según el contrato de infra §5.9 (sin el paso
-  `migrate` hasta BE-1.2).
+  `migrate` hasta BE-1.2); `python -m app.worker` provisional, que solo registra latidos (ARCHITECTURE §4.2).
 - **Criterios de cierre:**
   - C1. `GET {api_base_url}/v1/health` responde 200 con el `commit` desplegado.
   - C2. Un error forzado devuelve el formato de §5.1 y su `X-Request-Id` aparece en `/campus-locator/dev/api`.
@@ -198,7 +198,7 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 
 | Lote | Fase | Estado | Validación | Última validación | Versión de ARCHITECTURE al cerrar | Nota |
 |---|---|---|---|---|---|---|
-| BE-1.1 | 1 | Pendiente | [1-1](./validation/validation-1-1.md) | — | — | Sin código todavía |
+| BE-1.1 | 1 | En curso | [1-1](./validation/validation-1-1.md) | — | — | Código entregado; falta validar en `dev` (espera INF-1.3 e INF-1.4) |
 | BE-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | |
 | BE-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | |
 | BE-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | |

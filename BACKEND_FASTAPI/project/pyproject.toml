@@ -1,0 +1,54 @@
+[project]
+name = "campus-locator-backend"
+version = "0.1.0"
+description = "API REST, ingesta y localización de Campus Locator (BACKEND_FASTAPI)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.32,<1",
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+    "httpx>=0.27,<1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+# Validadores de lotes (src/ops/). No van en la imagen (ARCHITECTURE §5.9, §5.11).
+ops = [
+    "boto3>=1.35",
+    "httpx>=0.27,<1",
+]
+
+[tool.uv]
+# El código se ejecuta desde src/ (paquete `app`); no se instala como distribución.
+package = false
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "src/ops"]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "-ra"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "src/ops", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "RUF", "ASYNC"]
+ignore = [
+    "B008",    # Depends(...) en argumentos por defecto es el patrón de FastAPI
+    "RUF001",  # textos en español con rayas y signos tipográficos
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+"src/ops/**" = ["S603", "S607"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "comun"]
