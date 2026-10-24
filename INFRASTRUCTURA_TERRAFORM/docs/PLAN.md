@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.2.0**.
+Alineado con `ARCHITECTURE.md` **v0.3.0**.
 
 ---
 
@@ -70,11 +70,13 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 #### INF-0.1 — Bootstrap de la cuenta
 - **Objetivo:** que exista lo mínimo para trabajar con estado remoto y CI sin llaves de larga duración.
 - **Entregables:** `project/bootstrap/` (bucket de estado, proveedor OIDC, roles `campus-locator-gha-terraform-plan`,
-  `campus-locator-gha-terraform` y `campus-locator-gha-deploy`, presupuesto `campus-locator-mensual`); higiene manual
-  de la cuenta (ARCHITECTURE §3.1); variables de GitHub `AWS_REGION`, `AWS_ROL_TERRAFORM_PLAN_ARN`,
-  `AWS_ROL_TERRAFORM_ARN`, `AWS_ROL_DEPLOY_ARN`; entorno `dev` de GitHub con aprobación manual y despliegue solo desde
-  `main` (ARCHITECTURE §3.9).
-- **Requiere decidir antes:** `github_repo` y `correo_alertas` (ARCHITECTURE §5.3).
+  `campus-locator-gha-terraform` y `campus-locator-gha-deploy`, *permissions boundary* `campus-locator-limite-roles`,
+  presupuesto `campus-locator-mensual`); higiene manual de la cuenta (ARCHITECTURE §3.1); variables de GitHub
+  `AWS_REGION`, `AWS_ROL_TERRAFORM_PLAN_ARN`, `AWS_ROL_TERRAFORM_ARN`, `AWS_ROL_DEPLOY_ARN` y entorno `dev` de GitHub
+  con aprobación manual y despliegue solo desde `main` (ARCHITECTURE §3.9), ambos con `bootstrap/configurar_github.py`;
+  `project/pyproject.toml`, `project/src/ops/comun.py` y `project/.gitignore`, que necesita el validador de este lote.
+- **Requiere decidir antes:** `github_repo`, `correo_alertas` y, si el repositorio usa el `sub` inmutable de OIDC,
+  `github_ids` (ARCHITECTURE §5.3). Decididos el 2026-10-23.
 - **Criterios de cierre:**
   - C1. El estado de `bootstrap` está en `bootstrap/terraform.tfstate` del bucket de estado, versionado y cifrado.
   - C2. Un workflow de prueba asume `gha-terraform-plan` desde un PR y ejecuta `aws sts get-caller-identity`.
@@ -89,9 +91,8 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 - **Objetivo:** que todo cambio de infraestructura entre por PR con `plan` revisable.
 - **Entregables:** `project/envs/dev/` (backend S3 con `use_lockfile`, proveedor con `default_tags` y
   `allowed_account_ids`), `data "aws_caller_identity"` con el output `cuenta_id` (ARCHITECTURE §5.2), módulos vacíos en
-  `project/modules/`, `.github/workflows/infra.yml` (el `apply` usa el entorno `dev` de INF-0.1), `.gitignore` con
-  `*.tfstate*` y `.terraform/`, `project/pyproject.toml` y
-  `project/src/ops/comun.py` para los validadores.
+  `project/modules/`, `.github/workflows/infra.yml` (el `apply` usa el entorno `dev` de INF-0.1). `.gitignore`,
+  `pyproject.toml` y `src/ops/comun.py` ya existen desde INF-0.1: aquí solo se amplían si hace falta.
 - **Criterios de cierre:**
   - C1. Un PR con un cambio trivial publica el `plan` como comentario.
   - C2. Al fusionarlo, el `apply` espera la aprobación y termina sin errores.
@@ -123,7 +124,8 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 
 #### INF-1.3 — Cómputo
 - **Objetivo:** clúster, repositorios, roles y servicios listos para recibir imágenes.
-- **Entregables:** módulo `computo` (§3.4, §5.1, §5.7, §5.8), incluida la tarea de validación; imagen de prueba
+- **Entregables:** módulo `computo` (§3.4, §5.1, §5.7, §5.8; sus roles con `permissions_boundary` = output
+  `limite_roles_arn` de `bootstrap`), incluida la tarea de validación; imagen de prueba
   `bootstrap` (`project/pruebas/imagen-prueba/`, §5.11) publicada en los dos repositorios; outputs de §5.2.
 - **Criterios de cierre:**
   - C1. Con la imagen de prueba, el servicio `api` queda estable y se registra en Cloud Map con SRV.
@@ -181,10 +183,10 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 
 | Lote | Fase | Estado | Validación | Última validación | Versión de ARCHITECTURE al cerrar | Nota |
 |---|---|---|---|---|---|---|
-| INF-0.1 | 0 | Pendiente | [0-1](./validation/validation-0-1.md) | — | — | Falta definir `github_repo` y `correo_alertas` |
+| INF-0.1 | 0 | Hecho | [0-1](./validation/validation-0-1.md) | `b20a62f` 2026-10-24 | 0.3.0 | `sub` inmutable de OIDC (`github_ids`); proveedor OIDC importado de un intento anterior |
 | INF-0.2 | 0 | Pendiente | [0-2](./validation/validation-0-2.md) | — | — | |
 | INF-1.1 | 1 | Pendiente | [1-1](./validation/validation-1-1.md) | — | — | |
-| INF-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | |
+| INF-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | Antes: el bucket `campus-locator-dev-dataset-648617469176` ya existe (intento anterior, ARCHITECTURE R11) |
 | INF-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | |
 | INF-1.4 | 1 | Pendiente | [1-4](./validation/validation-1-4.md) | — | — | |
 | INF-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | |

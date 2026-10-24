@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.2.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.3.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-23 |
-| Estado | Diseño propuesto. **Aún no hay código de Terraform** |
+| Estado | Diseño propuesto. **INF-0.1 aplicado** (bootstrap de la cuenta); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -191,6 +191,8 @@ Un clúster `campus-locator-dev` con tres servicios y una tarea suelta. Todas la
 - Tres roles para GitHub Actions por **OIDC** (sin llaves de larga duración): uno de solo lectura para el `plan` de los
   PR, otro para aplicar Terraform y otro para desplegar imágenes. El *trust policy* solo acepta el repositorio y las
   ramas/entornos indicados en §5.8.
+- Todo rol que crea Terraform desde `envs/dev` lleva el *permissions boundary* `campus-locator-limite-roles` (§5.8,
+  ADR-INF-12): ningún rol nuevo puede tener más permisos que el propio `apply` ni tocar IAM.
 
 ### 3.8 Observabilidad y alertas
 
@@ -214,8 +216,10 @@ Un clúster `campus-locator-dev` con tres servicios y una tarea suelta. Todas la
 
 - **`project/bootstrap/`** se aplica **una sola vez** con el usuario administrador: crea el bucket de estado
   `campus-locator-tfstate-648617469176` (versionado, cifrado, privado), el proveedor OIDC de GitHub, los tres roles de
-  GitHub Actions y el presupuesto. Se aplica primero con estado local y luego se migra su propio estado al bucket
-  (`terraform init -migrate-state`).
+  GitHub Actions, el *permissions boundary* `campus-locator-limite-roles` y el presupuesto. Se aplica primero con
+  estado local y luego se migra su propio estado al bucket (`terraform init -migrate-state`). Las variables del
+  repositorio (§5.9) y el entorno `dev` de GitHub los crea `bootstrap/configurar_github.py` con `gh`; en un
+  repositorio personal solo puede hacerlo su dueño.
 - **`project/envs/dev/`** usa *backend* S3 con **bloqueo nativo** (`use_lockfile = true`, Terraform ≥ 1.10), sin
   DynamoDB
   (ADR-INF-08).
@@ -266,7 +270,8 @@ INFRASTRUCTURA_TERRAFORM/
 │   ├── ARCHITECTURE.md, PLAN.md, CHANGELOG.md
 │   └── validation/              validation-<fase>-<n>.md: cómo se comprueba cada lote (§5.11)
 └── project/                     todo el código
-    ├── bootstrap/               Estado local → migrado al bucket. Bucket de estado, OIDC, roles de CI, presupuesto
+    ├── bootstrap/               Estado local → migrado al bucket. Bucket de estado, OIDC, roles de CI, boundary, presupuesto;
+    │                            configurar_github.py (variables y entorno dev de GitHub)
     ├── envs/
     │   └── dev/                 backend.tf, providers.tf, main.tf, variables.tf, terraform.tfvars, outputs.tf
     ├── modules/
@@ -288,7 +293,7 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
 
 | Lote | Cómo funciona |
 |---|---|
-| **INF-0.1 Bootstrap** | Recursos que deben existir antes de cualquier `plan` remoto. El bucket de estado tiene `prevent_destroy`. El rol `gha-terraform-plan` (PR) solo puede leer; el rol `gha-terraform` (aplicar, con aprobación) tiene permisos amplios pero acotados a la cuenta y región; el rol `gha-deploy` solo puede publicar imágenes, registrar definiciones de tarea, actualizar los servicios y lanzar `migrate` (§5.8) También se crea a mano (con `gh api`) el **entorno `dev` de GitHub**: aprobación manual y despliegue solo desde `main` (§3.9) |
+| **INF-0.1 Bootstrap** | Recursos que deben existir antes de cualquier `plan` remoto. El bucket de estado tiene `prevent_destroy` y solo admite TLS. El rol `gha-terraform-plan` (PR) solo puede leer, incluidos los secretos de `dev`, que ya están en el estado; el rol `gha-terraform` (aplicar, con aprobación) tiene permisos amplios pero acotados a la cuenta y región, y todo rol que crea lleva el *permissions boundary* `campus-locator-limite-roles`; el rol `gha-deploy` solo puede publicar imágenes, registrar definiciones de tarea, actualizar los servicios y lanzar `migrate` (§5.8). `bootstrap/configurar_github.py` crea con `gh` las variables del repositorio y el **entorno `dev` de GitHub**: aprobación manual y despliegue solo desde `main` (§3.9) |
 | **INF-0.2 Esqueleto** | `envs/dev` con *backend*, proveedor (`default_tags`, `allowed_account_ids`) y módulos vacíos; `infra.yml` con `plan` en PR y `apply` aprobado en `main`. A partir de aquí todo cambio de infraestructura entra por PR |
 | **INF-1.1 Red** | VPC, subredes, rutas, endpoint de S3 y los cinco grupos de seguridad de §5.7. Los grupos se crean aquí (no en cada módulo) para que las reglas cruzadas no generen ciclos |
 | **INF-1.2 Datos y secretos** | RDS en `us-east-1a`; bucket con notificación a `ingesta` (la política de la cola autoriza solo a ese bucket); colas y DLQ; secretos. La **notificación** del bucket (`aws_s3_bucket_notification`) se crea después de la política de la cola, porque S3 valida el destino al guardarla |
@@ -337,6 +342,7 @@ Inventario de nombres:
 | Log groups | `/campus-locator/dev/api`, `/campus-locator/dev/worker`, `/campus-locator/dev/embedding`, `/campus-locator/dev/migrate`, `/campus-locator/dev/validacion`, `/campus-locator/dev/apigw` |
 | Streams de log de las tareas | `awslogs-stream-prefix` = nombre del proceso (`api`, `worker`, `embedding`, `migrate`, `validacion`); cada tarea escribe en `<proceso>/app/<id-de-la-tarea>` (p. ej. `embedding/app/0f3c9a…`). Una tarea suelta lanzada con la definición de `embedding` escribe en `/campus-locator/dev/embedding` con el mismo formato |
 | Roles IAM | `campus-locator-dev-ecs-ejecucion`, `campus-locator-dev-tarea-api`, `campus-locator-dev-tarea-worker`, `campus-locator-dev-tarea-embedding`, `campus-locator-dev-tarea-migrate`, `campus-locator-gha-terraform-plan`, `campus-locator-gha-terraform`, `campus-locator-gha-deploy` |
+| *Permissions boundary* | `campus-locator-limite-roles` (política gestionada; obligatoria en los roles `campus-locator-*` que crea `envs/dev`, §5.8) |
 | Presupuesto | `campus-locator-mensual` |
 | Alarmas de CloudWatch (INF-3.1) | `campus-locator-dev-api-5xx`, `campus-locator-dev-ingesta-dlq`, `campus-locator-dev-purga-dlq`, `campus-locator-dev-embedding-cpu`, `campus-locator-dev-rds-almacenamiento`, `campus-locator-dev-rds-creditos-cpu` |
 | Alarmas de escalado de `worker` (INF-2.1) | `campus-locator-dev-worker-cola-ingesta`, `campus-locator-dev-worker-cola-purga` (subir), `campus-locator-dev-worker-colas-vacias` (bajar) |
@@ -365,6 +371,7 @@ Inventario de nombres:
 | `embedding_dns` | `embedding.campus-locator.local` | depuración |
 | `sns_alertas_arn` | ARN | depuración |
 | `bootstrap: rol_gha_terraform_plan_arn`, `rol_gha_terraform_arn`, `rol_gha_deploy_arn`, `bucket_estado`, `github_repo` | ARN / nombre | variables del repositorio de GitHub (§5.9) y validadores de INF-0.x |
+| `bootstrap: limite_roles_arn` | ARN de `campus-locator-limite-roles` | `envs/dev`: `permissions_boundary` de todos sus roles (INF-1.3) |
 
 Ningún servicio lee outputs en tiempo de ejecución: todo lo que necesitan llega por variables de entorno (§5.4).
 Los outputs aparecen con el lote que crea su recurso: `api_base_url` con INF-1.4, `sns_alertas_arn` con INF-3.1 y el
@@ -382,8 +389,9 @@ contienen secretos.
 | `region` | ambos | `"us-east-1"` | |
 | `proyecto` / `entorno` | ambos | `"campus-locator"` / `"dev"` | Forman el prefijo de §5.1 |
 | `az_computo` | `envs/dev` | `"us-east-1a"` | Zona única de tareas y RDS |
-| `github_repo` | `bootstrap` | `"<owner>/<repo>"` | **Por definir.** Lo usan los *trust policies* de OIDC; `bootstrap` lo expone como output `github_repo` |
-| `correo_alertas` | ambos | *(por definir)* | Presupuesto (`bootstrap`) y topic de alarmas (`envs/dev`) |
+| `github_repo` | `bootstrap` | `"AlejandroSPosada/4U_project"` | Con las mayúsculas exactas de GitHub. Lo usan los *trust policies* de OIDC; `bootstrap` lo expone como output `github_repo` |
+| `github_ids` | `bootstrap` | `{ propietario = 142058005, repositorio = 1362957467 }` | IDs inmutables del `sub` de OIDC (§5.8): el repositorio se creó después del 2026-07-15. `null` = formato clásico |
+| `correo_alertas` | ambos | *(el de `bootstrap/terraform.tfvars`)* | Presupuesto (`bootstrap`) y topic de alarmas (`envs/dev`) |
 | `presupuesto_usd` | `bootstrap` | `100` | |
 | `horario_encendido` | `envs/dev` | `{ zona = "America/Bogota", encender = "cron(0 6 * * ? *)", apagar = "cron(0 22 * * ? *)" }` | Vacío (`null`) = 24/7 |
 | `imagen_inicial_tag` | `envs/dev` | `"bootstrap"` | Solo en la primera creación |
@@ -502,13 +510,19 @@ quiere mover a variable de entorno, se añade primero a esta tabla.
 | `campus-locator-dev-tarea-embedding` | ninguno sobre AWS | — |
 | `campus-locator-gha-deploy` | `ecr:GetAuthorizationToken`; `ecr:*Layer*`, `ecr:PutImage`, `ecr:BatchGetImage` sobre los dos repositorios; `ecs:RegisterTaskDefinition`, `ecs:DescribeTaskDefinition`, `ecs:UpdateService`, `ecs:DescribeServices`, `ecs:RunTask`, `ecs:DescribeTasks` sobre el clúster; `iam:PassRole` sobre los roles de ejecución y de tarea; `logs:GetLogEvents` sobre `/campus-locator/dev/migrate` | |
 | `campus-locator-gha-terraform-plan` | `ReadOnlyAccess`; lectura del bucket de estado y escritura solo del archivo de bloqueo `dev/terraform.tfstate.tflock` | |
-| `campus-locator-gha-terraform` | `PowerUserAccess` + IAM limitado a roles y políticas con prefijo `campus-locator-`; lectura y escritura del bucket de estado | |
+| | `secretsmanager:GetSecretValue` (el `plan` refresca `aws_secretsmanager_secret_version`; esos valores ya están en el estado, R5) | secretos `campus-locator/dev/*` |
+| `campus-locator-gha-terraform` | `PowerUserAccess` + IAM limitado a roles y políticas con prefijo `campus-locator-`; crear un rol o cambiar sus políticas exige el boundary `campus-locator-limite-roles`; lectura y escritura del bucket de estado | |
+| | Denegado: salir de la región (salvo servicios globales), tocar los roles `campus-locator-gha-*`, quitar o editar el boundary, `sts:AssumeRole`, cambiar la configuración del bucket de estado, borrar versiones del estado y escribir `bootstrap/*` | |
+| `campus-locator-limite-roles` (*permissions boundary*) | Techo de todo rol que crea `envs/dev`: todo menos `iam:*`, `organizations:*`, `account:*` y `sts:AssumeRole`, con las mismas denegaciones de región y del bucket de estado que `gha-terraform`. Los roles `ecs-ejecucion` y `tarea-*` de esta tabla lo llevan como `permissions_boundary` (ADR-INF-12) | |
 
-*Trust policy* de los roles de GitHub (proveedor `token.actions.githubusercontent.com`, `aud = sts.amazonaws.com`):
-- `gha-deploy`: `sub` = `repo:<github_repo>:ref:refs/heads/main`.
-- `gha-terraform-plan`: `sub` = `repo:<github_repo>:pull_request`. El código de un PR solo puede leer: no puede aplicar
+*Trust policy* de los roles de GitHub (proveedor `token.actions.githubusercontent.com`, `aud = sts.amazonaws.com`).
+`<sub_repo>` es el segmento del repositorio en el *claim* `sub`: GitHub usa el formato inmutable
+`propietario@ID/repo@ID` en los repositorios creados, renombrados o transferidos después del 2026-07-15 (este:
+`AlejandroSPosada@142058005/4U_project@1362957467`, variable `github_ids`) y `propietario/repo` en los demás.
+- `gha-deploy`: `sub` = `repo:<sub_repo>:ref:refs/heads/main`.
+- `gha-terraform-plan`: `sub` = `repo:<sub_repo>:pull_request`. El código de un PR solo puede leer: no puede aplicar
   cambios aunque modifique el workflow.
-- `gha-terraform`: `sub` = `repo:<github_repo>:environment:dev` (el entorno de GitHub exige aprobación manual y solo
+- `gha-terraform`: `sub` = `repo:<sub_repo>:environment:dev` (el entorno de GitHub exige aprobación manual y solo
   admite la rama `main`, §3.9).
 
 ### 5.9 Contrato de despliegue (CI/CD)
@@ -660,6 +674,9 @@ falla porque faltan credenciales, herramientas o variables da **3**, no 2: el 2 
   `terraform -chdir=envs/dev output -json` (el resto).
 - Las comprobaciones sobre GitHub (INF-0.1 y INF-0.2) usan la CLI `gh` autenticada.
 - Solo admiten el entorno `dev`.
+- El campo `commit` del informe lleva `-dirty` si hay cambios sin commit en archivos versionados de `project/`.
+- Leer las variables o configurar el entorno de un repositorio personal exige la cuenta de `gh` de su dueño (en una
+  organización, un admin).
 
 ---
 
@@ -717,6 +734,14 @@ Un solo consumidor; SNS solo añadiría un salto. La DLQ conserva los fallos 14 
 `embedding` es el mayor costo variable. Apagarlo de noche ahorra ~13 USD/mes. *Consecuencia:* `/v1/localize` no
 funciona fuera de horario; la app debe mostrar el error del backend (`FRONTEND_KOTLIN`, PLAN).
 
+**ADR-INF-12 — *Permissions boundary* obligatorio en los roles que crea `gha-terraform` (aceptada).**
+`gha-terraform` necesita crear roles (ECS), y con `PowerUserAccess` más IAM sobre `campus-locator-*` podía crear un
+rol propio con `"Action": "*"` y asumirlo: las denegaciones solas no bastaban. Todo rol nuevo exige el boundary
+`campus-locator-limite-roles` (sin IAM ni `sts:AssumeRole`, sin salir de la región ni tocar el bucket de estado), que
+no se puede quitar ni editar, y `gha-terraform` no puede asumir roles. *Consecuencias:* los roles de `envs/dev`
+declaran `permissions_boundary` (output `limite_roles_arn`) y uno sin él falla con `AccessDenied` en
+`iam:CreateRole`; los roles `campus-locator-*` ajenos a este diseño quedan fuera del modelo y deben borrarse (R11).
+
 ---
 
 ## 7. Riesgos
@@ -727,12 +752,13 @@ funciona fuera de horario; la app debe mostrar el error del backend (`FRONTEND_K
 | R2 | Tareas con IP pública expuestas | Baja | Alto | Grupos de seguridad sin entrada desde internet; `embedding` sin permisos de AWS; imágenes base mínimas con escaneo de ECR |
 | R3 | Caída de `us-east-1a` | Baja | Alto | Aceptado en `dev`; Multi-AZ en `prod` (Fase 6) |
 | R4 | `db.t4g.micro` (1 GiB) se queda corto: índice HNSW en memoria, conexiones, créditos de CPU | Media | Medio | Alarma de créditos; el índice cabe holgado hasta ~50 000 vectores de 768 dimensiones; subir a `db.t4g.small` (~23 USD/mes) si hace falta |
-| R5 | Contraseña de la base en el estado de Terraform | Media | Medio | Bucket de estado privado, cifrado y versionado; acceso solo con `gha-terraform` y el administrador |
+| R5 | Contraseña de la base y demás secretos en el estado de Terraform | Media | Medio | Bucket de estado privado, cifrado, versionado y solo TLS. Lo leen el administrador, `gha-terraform` y `gha-terraform-plan`; este último desde cualquier PR del repositorio, que solo abre quien tiene escritura. Aceptado en `dev`; se revisa en INF-6.1 |
 | R6 | Imagen de embeddings grande (~2–3 GB): arranque de 1–3 min | Alta | Bajo | *Start period* de 180 s; encender antes de usar; `worker` espera a que `embedding` esté listo |
 | R7 | Límite de 30 s y 10 MB de API Gateway | Media | Medio | Fotos del dataset directo a S3; `/v1/localize` limitado a 5 fotos de ≤ 1,5 MB (contrato del backend) |
 | R8 | La URL de la API cambia si se recrea la HTTP API, y `ApiConfig.kt` queda desactualizado | Baja | Medio | `prevent_destroy` en la API; dominio propio en Fase 6 |
 | R9 | Cuotas por defecto de una cuenta nueva (vCPU de Fargate, etc.) | Baja | Medio | El sistema usa 1,5 vCPU; solicitar aumento si un `apply` falla por cuota |
 | R10 | `/v1/localize` es público: abuso que dispara costos | Baja | Medio | *Throttling*; alarma de 5xx; en `prod`, WAF o clave de app |
+| R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y chocan con nombres de §5.1 (bucket del dataset, quizá el *namespace* de Cloud Map) | Alta | Medio | Inventario y limpieza antes de INF-1.2 (PLAN §3, nota de INF-1.2; CHANGELOG 0.3.0) |
 
 ---
 
