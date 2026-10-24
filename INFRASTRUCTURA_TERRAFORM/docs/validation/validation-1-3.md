@@ -20,7 +20,7 @@ otro lote: código 3, según §5.11).
 | P1 | `INF-1.2` en «Hecho»: base, secreto `db` y colas | `rds describe-db-instances --db-instance-identifier campus-locator-dev-db` da `DBInstanceStatus = available`; `secretsmanager describe-secret --secret-id campus-locator/dev/db` responde; `sqs get-queue-url` responde para `campus-locator-dev-ingesta` y `campus-locator-dev-purga` |
 | P2 | Outputs para lanzar la tarea de validación | `terraform -chdir=envs/dev output -json` contiene `ecs_cluster`, `familias_tarea` (con la clave `validacion`), `subredes_tareas` y `sg_migrate` |
 | P3 | Credenciales de la cuenta `648617469176` | `aws sts get-caller-identity` devuelve `Account = 648617469176` |
-| P4 | Cupo para la instancia GPU de `embedding` (R9) | `service-quotas get-service-quota --service-code ec2 --quota-code L-DB2E81BA` (bajo demanda G y VT) da ≥ 4 vCPU, las de una `g4dn.xlarge` |
+| P4 | Cupo para la instancia GPU de `embedding` (R9) | `service-quotas get-service-quota --service-code ec2 --quota-code L-DB2E81BA` (bajo demanda G y VT) da ≥ 4 vCPU, las de una `g4dn.xlarge`. Con menos de 8 avisa sin fallar: las tareas sueltas con GPU de embeddings tendrán que esperar a que el servicio esté apagado (R9) |
 
 La tarea de validación se lanza siempre igual: `ecs run-task --cluster campus-locator-dev --task-definition
 campus-locator-dev-validacion --launch-type FARGATE --started-by validacion-1-3`, red `subredes_tareas` + `sg_migrate`

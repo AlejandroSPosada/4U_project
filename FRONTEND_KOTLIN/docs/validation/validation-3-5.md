@@ -34,7 +34,7 @@ escuchando antes la explicación hablada.
 
 | ID | Qué hace la persona | Evidencia en el PR |
 |---|---|---|
-| C3 | Una persona usuaria de lector de pantalla hace dos veces el recorrido Inicio → Ubicarme → Resultado (6.3) → Destino (6.4, hasta confirmar un lugar), en `dev` y dentro del horario de `embedding` (06:00–22:00 `America/Bogota`): una solo con voz (sin tocar la pantalla salvo para iniciar) y otra solo con TalkBack (sin voz). Se anota cada vez que hablan dos voces a la vez | Video con audio de cada recorrido; nota de la sesión (fecha, modelo, versión de Android y de TalkBack, si la explicación de permisos sonó antes del diálogo, voces superpuestas: 0, y observaciones), sin datos personales de quien probó |
+| C3 | Una persona usuaria de lector de pantalla hace dos veces el recorrido Inicio → Ubicarme → Resultado (6.3) → Destino (6.4, hasta confirmar un lugar), en `dev` y con la GPU de `embedding` encendida (`gpu.py encender`, infra §3.4): una solo con voz (sin tocar la pantalla salvo para iniciar) y otra solo con TalkBack (sin voz). Se anota cada vez que hablan dos voces a la vez | Video con audio de cada recorrido; nota de la sesión (fecha, modelo, versión de Android y de TalkBack, si la explicación de permisos sonó antes del diálogo, voces superpuestas: 0, y observaciones), sin datos personales de quien probó |
 
 ## 4. Datos de prueba y limpieza
 

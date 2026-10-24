@@ -19,7 +19,7 @@ Si alguna no se cumple, el script termina con código 2 y el lote queda `Bloquea
 | P1 | `FE-1.2` en «Hecho»: la app inicia sesión contra `dev` | Fila de `FE-1.2` en `PLAN.md` §3 = `Hecho`; `POST /v1/auth/login` con las credenciales de admin responde 200 (con `401`: código 3) |
 | P2 | `FE-2.3` en «Hecho»: el PDR que etiqueta las fotos está probado en dispositivo | Fila de `FE-2.3` en `PLAN.md` §3 = `Hecho` con «Última validación» no vacía |
 | P3 | `BE-2.1` en «Hecho»: endpoints de recolección | Fila en `BACKEND_FASTAPI/docs/PLAN.md` §3 = `Hecho`; `POST /v1/collect/videos` con token y cuerpo `{}` responde `422 VALIDACION` (existe y no crea nada) |
-| P4 | `BE-2.2` en «Hecho» y `embedding` encendido: las fotos pasan a `procesada` | Fila en `BACKEND_FASTAPI/docs/PLAN.md` §3 = `Hecho`; `GET /v1/health/ready` responde `"db": "ok"` y `"embedding": "ok"` (fuera de 06:00–22:00 `America/Bogota` falla) |
+| P4 | `BE-2.2` en «Hecho» y `embedding` encendido: las fotos pasan a `procesada` | Fila en `BACKEND_FASTAPI/docs/PLAN.md` §3 = `Hecho`; `GET /v1/health/ready` responde `"db": "ok"` y `"embedding": "ok"` (si está apagado, el script lo enciende antes y al terminar lo deja como estaba, infra §5.11; para eso necesita `AWS_PROFILE`) |
 | P5 | El recorrido indicado con `--video` existe en el backend (BE-2.1 entrega `GET /v1/admin/videos`) | `GET /v1/admin/videos?q=<nombre>` con token devuelve exactamente un video con ese nombre; sin `--video`: código 3 |
 
 ## 2. Comprobaciones automáticas

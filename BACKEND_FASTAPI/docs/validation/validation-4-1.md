@@ -18,7 +18,7 @@ Si alguna no se cumple, el script termina con código 2 y el lote queda `Bloquea
 |---|---|---|
 | P1 | `AWS_PROFILE` de la cuenta `648617469176` | `aws sts get-caller-identity` → `Account`. Si falla: código 3 (credenciales) |
 | P2 | Login de admin | `POST /v1/auth/login` con `VALIDACION_ADMIN_*` (o el secreto `campus-locator/dev/admin-inicial`) → `200` con `usuario.rol = "admin"` |
-| P3 | `BE-2.2` en «Hecho», dentro del horario | `PLAN.md` §3 marca BE-2.2 «Hecho»; `GET /v1/health/ready` → `"embedding": "ok"`; hora `America/Bogota` entre 06:00 y 21:00 |
+| P3 | `BE-2.2` en «Hecho» y `embedding` encendido | `PLAN.md` §3 marca BE-2.2 «Hecho»; `GET /v1/health/ready` → `"embedding": "ok"` (si está apagado, el script lo enciende antes y al terminar lo deja como estaba (infra §5.11)); hora `America/Bogota` antes de las 21:00 (apagado nocturno de la GPU) |
 | P4 | `BE-2.4` en «Hecho»: búsqueda de vecinos | `PLAN.md` §3 marca BE-2.4 «Hecho»; `POST /v1/admin/diagnostico/vecinos?k=1` con una foto sintética → `200` |
 | P5 | Escalado de `worker` controlable | `application-autoscaling describe-scalable-targets --service-namespace ecs --resource-ids service/campus-locator-dev/worker` devuelve el objetivo |
 | P6 | Recursos para inspeccionar | Outputs `bucket_dataset`, `sqs_purga_url`, `sqs_purga_dlq_url`, `subredes_tareas` y `sg_migrate`; `ecs describe-task-definition` de `campus-locator-dev-validacion` |
@@ -67,4 +67,4 @@ uv run --group ops python src/ops/validate41.py --entorno dev
 
 Variables: `AWS_PROFILE` (obligatoria; también cambia el escalado y las réplicas de `worker`), `VALIDACION_API_URL`,
 `VALIDACION_ADMIN_CORREO` y `VALIDACION_ADMIN_PASSWORD` (opcionales; ver `ARCHITECTURE.md` §5.11). Mientras dura C3 la
-ingesta de `dev` queda detenida. Duración aproximada: 45 minutos.
+ingesta de `dev` queda detenida. Duración aproximada: 45 minutos, más 5–10 si hay que encender la GPU.

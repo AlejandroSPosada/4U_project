@@ -20,6 +20,35 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.4.0] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; el equipo pide que `POST /v1/localize` responda en menos de 1 s, y la
+  infraestructura pasa `embedding` a una GPU bajo demanda, apagada por defecto, en lugar del horario fijo de `dev`
+  (`INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` 0.7.0, ADR-INF-13).
+- **Qué cambió:**
+  - §3: `embedding` apagado por defecto y encendido a mano; `worker` escala solo con `embedding` encendido; desaparece
+    el horario de `dev`.
+  - §4.5 y §5.3: «fuera de horario» pasa a «con la GPU apagada».
+  - §4.10: presupuesto de tiempo con `EMBEDDING_TIMEOUT_S` (5 s) y objetivo p95 en el servidor ≤ 1 s (antes p95 total
+    ≤ 5 s).
+  - §5.11: los validadores que necesitan `embedding` lo encienden si está apagado y lo dejan como estaba (infra §5.11).
+  - R2: el riesgo pasa a superar 1 s en el servidor; la mitigación principal es la GPU.
+  - Ejemplos de `latencia_ms` (localización y diagnóstico de vecinos) acordes con la GPU.
+  - PLAN: BE-3.2 C3 mide p95 de `integrationLatency` ≤ 1 s con `embedding` en su GPU.
+  - Validaciones 2-2, 2-3, 2-4, 3-2 y 4-1: en lugar de exigir el horario, encienden `embedding` si hace falta y solo
+    piden empezar con margen antes del apagado de las 22:00. 2-2 C3b espera hasta 15 min a que `embedding` vuelva. 3-2
+    C3 comprueba el tamaño con GPU (3 vCPU, 12 GB, una GPU) y mide en los *access logs* de API Gateway, no en el
+    cliente.
+- **Contratos tocados (§5):** §5.3 (`/v1/health/ready`: solo redacción; `POST /v1/localize`: el
+  `503 EMBEDDING_NO_DISPONIBLE` por lentitud llega a los 5 s en lugar de 20 s, y ejemplo de `latencia_ms`), §5.5
+  (ejemplo de `latencia_ms` del diagnóstico de vecinos), §5.10 (`EMBEDDING_TIMEOUT_S` 20 → 5), §5.11. Ningún cambio incompatible en la API: sube la menor.
+- **Cómo se verificó:** revisión cruzada con infra 0.7.0 (§3.4, §5.4, §5.10, ADR-INF-13) y embeddings 0.4.0 (§4.4,
+  §5.7, ADR-EMB-10). Sin código: lo cambiado entra con BE-2.2 y BE-3.2.
+- **Pendiente:** si `docker-compose.yml` de `local` usa embeddings en CPU para probar `/v1/localize`, subir allí
+  `EMBEDDING_TIMEOUT_S` (lo hace el lote que implemente la localización, BE-3.2).
+
+---
+
 ## [0.3.0] — 2026-10-23
 
 - **Lote que la motivó:** BE-1.1 (Base del servicio). El código se escribió antes que este cambio; ambos van en el

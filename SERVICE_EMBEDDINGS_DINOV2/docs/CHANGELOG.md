@@ -23,6 +23,46 @@ re-indexar el dataset.
 
 ---
 
+## [0.4.0] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; el equipo pide que `POST /v1/localize` responda en menos de 1 s, y la
+  infraestructura pasa `embedding` a una GPU bajo demanda (`INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` 0.7.0,
+  ADR-INF-13). En 1 vCPU, 5 fotos tardan ~5,5 s.
+- **Qué cambió:**
+  - Nuevo ADR-EMB-10: inferencia en GPU (NVIDIA T4) en `dev` y en CPU en `local` y CI, con el mismo código y la misma
+    `version_vector`. ADR-EMB-02, ADR-EMB-05 y ADR-EMB-07 anotan lo que cambia.
+  - Nuevo lote **EMB-2.2 Imagen con GPU** (§4.4, PLAN, `validation/validation-2-2.md`): extras `cpu` y `cuda` con un
+    solo `uv.lock`, `EMBEDDING_DEVICE`, float32 sin TF32, preprocesamiento en CPU, `tools/dorados.py` dentro de la
+    imagen.
+  - EMB-3.1 pasa a «Rendimiento en GPU»: objetivo del lote de 5 en p95 ≤ 500 ms (antes 3 s en CPU) y palancas nuevas
+    (§4.5); `validation-3-1.md` mide en la GPU (proveedor de capacidad `campus-locator-dev-gpu`, 3 vCPU, 12 GB, una
+    GPU).
+  - §1, §2, §3: el servicio corre en EC2 con GPU, apagado por defecto y encendido a mano; desaparece el horario de
+    `dev`. R1, R3 y R6 actualizados; nuevo R8.
+  - §4 se renumera: EMB-2.2 es §4.4, EMB-3.1 §4.5, EMB-3.2 §4.6 y EMB-5.1 §4.7.
+  - `validation-1-1.md`: C1b lanza la tarea en el proveedor de capacidad de la GPU (antes `--launch-type FARGATE`) y
+    P1 comprueba que existe.
+- **Contratos tocados (§5):**
+  - §5.2: `/v1/info` publica `dispositivo = cuda` en `dev` (el campo ya existía con `cpu`).
+  - §5.3: el dispositivo no forma parte de la `version_vector`; precisión sin TF32 en GPU.
+  - §5.4: tolerancia nueva **entre dispositivos** (≤ 1e-4 por componente frente a los dorados, calculados en CPU); la
+    de 1e-5 queda para el mismo dispositivo.
+  - §5.5: variable `EMBEDDING_DEVICE`; imagen de ~6 GB con CUDA desde EMB-2.2; `tools/dorados.py` y los dorados dentro
+    de la imagen; memoria en GPU.
+  - §5.7: parámetro `EMBEDDING_DEVICE`, latencia objetivo en GPU y campos `dispositivo` y `gpu` en `modelo_listo`.
+  - §5.8: tareas sueltas en la GPU; los validadores que necesitan el servicio lo encienden y lo dejan como estaba.
+  - §5.9: formato de `tools/dorados.py` y ejemplo de `benchmark.py` en GPU.
+  - La `version_vector` **no** cambia: sigue siendo `dinov2-vitb14/pp-v1`, salvo que EMB-2.2 C2 encuentre los
+    vectores en GPU a más de 1e-4 de los dorados (R8); en ese caso se decide una versión nueva antes de indexar nada
+    en GPU.
+- **Cómo se verificó:** revisión cruzada con infra 0.7.0 (§3.4, §5.4, §5.10, ADR-INF-13) y con el backend 0.4.0. Que
+  el coseno entre dos vectores unitarios de 768 dimensiones a ≤ 1e-4 por componente supera 0,99999 sale de
+  ‖d‖ ≤ 1e-4 · √768 ≈ 2,8e-3 y coseno = 1 − ‖d‖²/2. Sin código: EMB-2.2 aún no se construye.
+- **Pendiente:** EMB-2.2 (código y validación). Renombrar la carpeta `SERVICE_EMBEDDINGS_DINOV2` a
+  `SERVICE_EMBEDDING`, el nombre que usan los documentos, y ajustar los `paths` de `embedding.yml`.
+
+---
+
 ## [0.3.0] — 2026-10-23
 
 - **Lote que la motivó:** EMB-1.1 (servicio base e imagen).

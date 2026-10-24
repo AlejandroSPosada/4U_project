@@ -20,6 +20,33 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.8.0] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; ajustes al diseño de 0.7.0 al llevar la GPU a los documentos del backend (0.4.0),
+  de embeddings (0.4.0) y de la app (0.3.1).
+- **Qué cambió:**
+  - §3.4 y ADR-INF-13: el grupo de autoescalado de la GPU pasa de 0–1 a **0–2** instancias. La segunda solo existe
+    mientras una tarea suelta que pide GPU (validadores y `benchmark.py` de embeddings) coincide con el servicio
+    encendido; sin eso, la medición o la validación tendrían que apagar el servicio.
+  - R9, PLAN (INF-1.3, «Requiere decidir antes») y `validation-1-3.md` P4: el cupo recomendado de instancias G sube a
+    8 vCPU; con 4 (el mínimo, que P4 sigue exigiendo) se avisa en lugar de fallar.
+  - §3.4, §4 y §5.10: `gpu.py apagar` y la acción de las 22:00 también dejan `worker` en 0 (capacidad máxima 0 hasta
+    el siguiente `gpu.py encender`), aunque queden mensajes: antes podía quedar encendido días esperando a la GPU.
+    Nueva acción programada `campus-locator-dev-worker-apagar-noche`; PLAN INF-2.1 (entregables y C1) y
+    `validation-2-1.md` (C1b y C2a) la incluyen.
+  - §5.11 (Reglas): los validadores que necesitan `embedding` lo encienden si está apagado y lo dejan como lo
+    encontraron; las tareas sueltas con GPU no necesitan el servicio.
+  - §3.4: corregida la frase «se apaga con `gpu.py apagar`, solo tras 45 min…» (se apaga a mano o solo).
+- **Contratos tocados (§5):** §5.1 (acción programada nueva), §5.10 (escalado de `worker`), §5.11 (regla nueva para
+  los validadores). Todos compatibles: sube la menor.
+- **Cómo se verificó:** revisión cruzada de las cuatro carpetas: ninguna referencia a «horario de `dev`», «06:00»,
+  «Fargate» para `embedding` o «PyTorch en CPU» en `dev` fuera del historial de los CHANGELOG.
+- **Pendiente:** el comentario de las ventanas de RDS en `modules/datos/main.tf` todavía habla del horario de `dev`
+  (se corrige en INF-1.3; no cambia recursos). Renombrar la carpeta `SERVICE_EMBEDDINGS_DINOV2` a `SERVICE_EMBEDDING`,
+  el nombre que usan todos los documentos (incluido el disparador de `embedding.yml` en §3.9).
+
+---
+
 ## [0.7.0] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; decisión del equipo antes de INF-1.3: `POST /v1/localize` debe responder en menos

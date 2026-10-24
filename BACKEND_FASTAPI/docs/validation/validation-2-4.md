@@ -17,7 +17,7 @@ Si alguna no se cumple, el script termina con código 2 y el lote queda `Bloquea
 | ID | Qué debe cumplirse | Cómo lo comprueba el script |
 |---|---|---|
 | P1 | `AWS_PROFILE` de la cuenta `648617469176` | `aws sts get-caller-identity` → `Account`. Si falla: código 3 (credenciales) |
-| P2 | `BE-2.2` en «Hecho» y dentro del horario: las fotos de prueba llegan a `procesada` | `PLAN.md` §3 marca BE-2.2 «Hecho»; `GET /v1/health/ready` → `"db": "ok"` y `"embedding": "ok"`; hora `America/Bogota` entre 06:00 y 21:30 |
+| P2 | `BE-2.2` en «Hecho» y `embedding` encendido: las fotos de prueba llegan a `procesada` | `PLAN.md` §3 marca BE-2.2 «Hecho»; `GET /v1/health/ready` → `"db": "ok"` y `"embedding": "ok"` (si está apagado, el script lo enciende antes y al terminar lo deja como estaba (infra §5.11)); hora `America/Bogota` antes de las 21:30 (apagado nocturno de la GPU) |
 | P3 | Login de admin | `POST /v1/auth/login` con `VALIDACION_ADMIN_*` (o el secreto `campus-locator/dev/admin-inicial`) → `200` con `usuario.rol = "admin"` |
 | P4 | Recursos para inspeccionar | Outputs `bucket_dataset`, `subredes_tareas` y `sg_migrate`; `ecs describe-task-definition` de `campus-locator-dev-validacion`, `campus-locator-dev-migrate` y `campus-locator-dev-worker` |
 
@@ -64,4 +64,4 @@ uv run --group ops python src/ops/validate24.py --entorno dev
 
 Variables: `AWS_PROFILE` (obligatoria), `VALIDACION_API_URL`, `VALIDACION_ADMIN_CORREO` y `VALIDACION_ADMIN_PASSWORD`
 (opcionales; ver `ARCHITECTURE.md` §5.11). Duración aproximada: 15 minutos (ingesta de las tres fotos y cinco tareas
-sueltas).
+sueltas), más 5–10 si hay que encender la GPU.

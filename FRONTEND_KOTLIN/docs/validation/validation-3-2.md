@@ -31,13 +31,15 @@ Si C3 falla por no haber escaneos, se repite después de las manuales con `--sol
 
 ## 3. Comprobaciones manuales
 
-El script imprime los lugares de `GET /v1/places` y la hora de `dev`: C1 se hace entre las 06:00 y las 22:00
-`America/Bogota` (`GET /v1/health/ready` da `"embedding": "ok"`) y C4, fuera de ese horario (`"no_disponible"`).
+El script imprime los lugares de `GET /v1/places` y el estado de `embedding`: C1 se hace con la GPU encendida
+(`GET /v1/health/ready` da `"embedding": "ok"`; si está apagada, el script la enciende como `gpu.py encender`, infra
+§3.4 y §5.11) y C4 con ella apagada (`"no_disponible"`): al terminar C1, el script la apaga si la encendió él; si ya
+estaba encendida, C4 se hace cuando se apague sola (45 min sin uso o a las 22:00).
 
 | ID | Qué hace la persona | Evidencia en el PR |
 |---|---|---|
 | C1 | Elige 10 puntos conocidos del campus con dataset (junto a lugares de la lista) y en cada uno hace Inicio → Ubicarme, da la vuelta y escucha el Resultado (6.3) | Tabla de los 10 puntos (punto, lugar esperado, lo que dijo la app, nivel de confianza, si pidió repetir) y video con audio de al menos dos; en cada punto la app dice el lugar correcto o, con confianza baja, lo dice y ofrece «Volver a ubicarme» |
-| C4 | Fuera del horario, hace Inicio → Ubicarme y da la vuelta completa | Video con audio: tras «Analizando…», la app dice «El servicio de ubicación no está disponible en este momento» (§5.10) y no se cierra |
+| C4 | Con la GPU apagada, hace Inicio → Ubicarme y da la vuelta completa | Video con audio: tras «Analizando…», la app dice «El servicio de ubicación no está disponible en este momento» (§5.10) y no se cierra |
 
 ## 4. Datos de prueba y limpieza
 

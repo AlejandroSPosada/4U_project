@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.7.0**.
+Alineado con `ARCHITECTURE.md` **v0.8.0**.
 
 ---
 
@@ -137,10 +137,11 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
   (ADR-INF-13).
 - **Entregables:** módulo `computo` (§3.4, §5.1, §5.7, §5.8; sus roles con `permissions_boundary` = output
   `limite_roles_arn` de `bootstrap`), incluida la tarea de validación y la capacidad GPU de `embedding` (plantilla de
-  lanzamiento, grupo de autoescalado 0–1, proveedor de capacidad, rol y perfil de instancia
+  lanzamiento, grupo de autoescalado 0–2, proveedor de capacidad, rol y perfil de instancia
   `campus-locator-dev-ec2-gpu`); el grupo `campus-locator-dev-gpu-host` en el módulo `red` (§5.7); la variable
   `gpu_tipo_instancia` (§5.3); imagen de prueba `bootstrap` (`project/pruebas/imagen-prueba/`, §5.11) publicada en los dos repositorios; outputs de §5.2.
-- **Requiere decidir antes:** (1) cupo de instancias G bajo demanda ≥ 4 vCPU (Service Quotas `L-DB2E81BA`; el aumento
+- **Requiere decidir antes:** (1) cupo de instancias G bajo demanda ≥ 8 vCPU, o ≥ 4 como mínimo (Service Quotas
+  `L-DB2E81BA`; el aumento
   puede tardar días, R9); (2) si `gha-terraform` y el *boundary* permiten crear perfiles de instancia `campus-locator-*`
   y pasar el rol de instancia a EC2: se comprueba leyendo `bootstrap/permisos.tf` y, si no, se amplía `bootstrap` (lo
   aplica el administrador).
@@ -169,10 +170,12 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 - **Objetivo:** pagar la GPU de `embedding` solo mientras se usa, y `worker` solo cuando hay trabajo (ADR-INF-13).
 - **Entregables:** `src/ops/gpu.py` (`encender`, `apagar`, `estado`); filtro de métricas `campus-locator-dev-localize`,
   alarma `campus-locator-dev-embedding-inactivo` y política `campus-locator-dev-embedding-apagar`; acción programada
-  `campus-locator-dev-embedding-apagar-noche`; política por pasos de `worker` condicionada a `embedding` encendido;
+  `campus-locator-dev-embedding-apagar-noche` y `campus-locator-dev-worker-apagar-noche`; política por pasos de
+  `worker` condicionada a `embedding` encendido;
   variable `apagado_gpu` (§3.4, §5.1, §5.3, §5.10).
 - **Criterios de cierre:**
-  - C1. `gpu.py encender` deja `embedding` sano en ≤ 15 min; `gpu.py apagar` lo deja en 0 y la instancia termina.
+  - C1. `gpu.py encender` deja `embedding` sano en ≤ 15 min; `gpu.py apagar` lo deja en 0, deja `worker` en 0 y la
+    instancia termina.
   - C2. Sin peticiones a `/v1/localize` ni mensajes en las colas durante `apagado_gpu.inactividad_min`, `embedding` se
     apaga solo; la acción de las 22:00 existe con la zona y la hora de §5.3.
   - C3. Con mensajes de prueba en `ingesta` y `embedding` encendido, `worker` sube a 1 y vuelve a 0 a los ~15 min de

@@ -23,6 +23,21 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.3.1] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; la infraestructura cambia el horario fijo de `embedding` por una GPU apagada por
+  defecto que se enciende a mano (`INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` 0.7.0, ADR-INF-13).
+- **Qué cambió:** referencias al «horario de `dev`» en §1.2 (regla de contratos), §3 («El backend visto desde la app»), el
+  mensaje de `503 EMBEDDING_NO_DISPONIBLE` de §5.10 y R8 (§9.1); `validation-2-1` P4 (el script enciende `embedding` si hace falta),
+  `validation-3-2` (C1 con la GPU encendida y C4 con ella apagada, en lugar de dentro y fuera del horario) y
+  `validation-3-5` C3.
+- **Contratos tocados (§5):** ninguno; la app ya trataba `503 EMBEDDING_NO_DISPONIBLE`. Solo redacción: sube el parche.
+- **Cómo se verificó:** búsqueda de «horario», «06:00» y «22:00» en `docs/` y revisión cruzada con infra 0.7.0 y
+  backend 0.4.0.
+- **Pendiente:** nada.
+
+---
+
 ## [0.3.0] — 2026-10-23
 
 - **Lote que la motivó:** ninguno; cambio de organización del monorepo pedido por el equipo.

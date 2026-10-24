@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.3.0**.
+Alineado con `ARCHITECTURE.md` **v0.4.0**.
 
 ---
 
@@ -152,7 +152,8 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 - **Criterios de cierre:**
   - C1. En al menos 10 puntos conocidos del campus con dataset, el error mediano es ≤ 15 m.
   - C2. Ninguna respuesta de nivel `alta` tiene error > 30 m.
-  - C3. p95 de latencia ≤ 5 s con `embedding` en su tamaño de `dev`.
+  - C3. p95 de latencia en el servidor (`integrationLatency` de los *access logs*, infra §5.10) ≤ 1 s con `embedding`
+    encendido en su GPU de `dev`.
   - C4. Ninguna foto de consulta queda en S3, en disco ni en los logs.
   - C5. Fotos de un lugar sin dataset devuelven `200` con `resultado = "sin_coincidencias"`.
   - C6. Los umbrales calibrados están registrados en ARCHITECTURE §5.10.

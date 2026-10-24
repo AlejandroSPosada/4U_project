@@ -18,7 +18,7 @@ Si alguna no se cumple, el script termina con código 2 y el lote queda `Bloquea
 |---|---|---|
 | P1 | `AWS_PROFILE` de la cuenta `648617469176` | `aws sts get-caller-identity` → `Account`. Si falla: código 3 (credenciales) |
 | P2 | `BE-2.1` en «Hecho»: login y recolección desplegados | `POST /v1/auth/login` (admin, ver §5) → `200`; `POST /v1/collect/videos/<uuid nuevo>/images` con un elemento válido → `404 NO_ENCONTRADO` |
-| P3 | `BE-2.2` en «Hecho» y dentro del horario: sin `worker` ninguna foto llega a `procesada` | `PLAN.md` §3 marca BE-2.2 «Hecho»; `GET /v1/health/ready` → `"embedding": "ok"`; hora `America/Bogota` entre 06:00 y 21:45 |
+| P3 | `BE-2.2` en «Hecho» y `embedding` encendido: sin `worker` (que solo escala con la GPU encendida) ninguna foto llega a `procesada` | `PLAN.md` §3 marca BE-2.2 «Hecho»; `GET /v1/health/ready` → `"embedding": "ok"` (si está apagado, el script lo enciende antes y al terminar lo deja como estaba (infra §5.11)); hora `America/Bogota` antes de las 21:30 (apagado nocturno de la GPU) |
 | P4 | `BE-3.1` en «Hecho»: endpoints de lugares y alertas | `PLAN.md` §3 marca BE-3.1 «Hecho»; `GET /v1/admin/places` y `GET /v1/admin/alerts` → `200` |
 
 ## 2. Comprobaciones automáticas
@@ -59,4 +59,4 @@ uv run --group ops python src/ops/validate23.py --entorno dev
 ```
 
 Variables: `AWS_PROFILE` (obligatoria), `VALIDACION_API_URL`, `VALIDACION_ADMIN_CORREO` y `VALIDACION_ADMIN_PASSWORD`
-(opcionales; ver `ARCHITECTURE.md` §5.11). Duración aproximada: 8 minutos.
+(opcionales; ver `ARCHITECTURE.md` §5.11). Duración aproximada: 8 minutos, más 5–10 si hay que encender la GPU.
