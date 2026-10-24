@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.3.0**.
+Alineado con `ARCHITECTURE.md` **v0.4.0**.
 
 ---
 
@@ -90,9 +90,11 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 #### INF-0.2 — Esqueleto de `envs/dev` y CI de Terraform
 - **Objetivo:** que todo cambio de infraestructura entre por PR con `plan` revisable.
 - **Entregables:** `project/envs/dev/` (backend S3 con `use_lockfile`, proveedor con `default_tags` y
-  `allowed_account_ids`), `data "aws_caller_identity"` con el output `cuenta_id` (ARCHITECTURE §5.2), módulos vacíos en
-  `project/modules/`, `.github/workflows/infra.yml` (el `apply` usa el entorno `dev` de INF-0.1). `.gitignore`,
-  `pyproject.toml` y `src/ops/comun.py` ya existen desde INF-0.1: aquí solo se amplían si hace falta.
+  `allowed_account_ids`, `.terraform.lock.hcl` versionado), `data "aws_caller_identity"` con el output `cuenta_id`
+  (ARCHITECTURE §5.2) y `data "aws_default_tags"`, módulos vacíos en `project/modules/`, `project/.tflint.hcl`,
+  `.github/workflows/infra.yml` (el `apply` usa el entorno `dev` de INF-0.1) y `src/ops/validate02.py`. `.gitignore`,
+  `pyproject.toml` y `src/ops/comun.py` ya existen desde INF-0.1: aquí no cambian (`envs/dev/.gitignore` complementa
+  el de `project/`).
 - **Criterios de cierre:**
   - C1. Un PR con un cambio trivial publica el `plan` como comentario.
   - C2. Al fusionarlo, el `apply` espera la aprobación y termina sin errores.
@@ -184,7 +186,7 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 | Lote | Fase | Estado | Validación | Última validación | Versión de ARCHITECTURE al cerrar | Nota |
 |---|---|---|---|---|---|---|
 | INF-0.1 | 0 | Hecho | [0-1](./validation/validation-0-1.md) | `b20a62f` 2026-10-24 | 0.3.0 | `sub` inmutable de OIDC (`github_ids`); proveedor OIDC importado de un intento anterior |
-| INF-0.2 | 0 | Pendiente | [0-2](./validation/validation-0-2.md) | — | — | |
+| INF-0.2 | 0 | En curso | [0-2](./validation/validation-0-2.md) | — | — | Código escrito; falta el primer `apply` y la validación en `dev` |
 | INF-1.1 | 1 | Pendiente | [1-1](./validation/validation-1-1.md) | — | — | |
 | INF-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | Antes: el bucket `campus-locator-dev-dataset-648617469176` ya existe (intento anterior, ARCHITECTURE R11) |
 | INF-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | |
