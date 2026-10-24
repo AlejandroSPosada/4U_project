@@ -31,6 +31,10 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   `describe-db-subnet-groups`, `sqs list-queues --queue-name-prefix campus-locator` y
   `secretsmanager list-secrets --include-planned-deletion` con el perfil de administración, 2026-10-24.
 - **Pendiente:** inventario y limpieza de lo que lista R11 antes de INF-1.3.
+- **Historial reescrito (mismo día):** el correo de autor de los commits estaba mal (erratas y uno de la máquina), así
+  que se reescribió `main` con `git filter-repo --mailmap`, sin cambiar el contenido. Los hashes citados en este
+  archivo y en PLAN §3 se actualizaron: `b20a62f` → `fbe68f8` (INF-0.1), `c677aeb` → `fad2b6b` (INF-0.2) y `ff1cce2` →
+  `4c04040` (INF-1.1). Los informes de `.validacion/` y los PR #4 y #5 conservan los hashes viejos.
 
 ---
 
@@ -57,7 +61,7 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   los recursos de red), §5.2 (cuándo aparecen `subredes_tareas` y `sg_migrate`), §5.3 (`cidr_vpc` y `az_secundaria`
   nuevas; `az_computo` ya se usa), §5.7 (`default` sin reglas; las reglas solo viven en `red`; solo ASCII en las
   descripciones), §5.9 (formato de `SUBREDES_TAREAS` y `SG_MIGRATE`), §5.11 y §5.12 (documentación de lo existente).
-- **Cómo se verificó:** `validate11.py --entorno dev` con código 0 sobre `ff1cce2` (2026-10-24 15:40–15:41 UTC): pasan
+- **Cómo se verificó:** `validate11.py --entorno dev` con código 0 sobre `4c04040` (2026-10-24 15:40–15:41 UTC): pasan
   P1–P2 y C1–C5 (C2a–C2e, C3a–C3b). El `apply` lo hizo `infra.yml` (`Resources: 29 added`) tras la aprobación del
   entorno `dev`; antes hubo que cancelar una ejecución de `main` de un commit ya sobrescrito que esperaba aprobación y
   retenía la fila de concurrencia (§3.9 y el paso 4 de `validation-1-1` §5 lo explican ahora). Variables del repositorio
@@ -87,8 +91,8 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   nombres que ya existen (`data.aws_caller_identity.actual`, `data.aws_default_tags.actuales`, los seis `module.*`), cómo
   se escriben los módulos, cómo se añade un proveedor al lock, qué hace fallar a CI y las ayudas propias de
   `validate02.py`.
-- **Contratos tocados (§5):** ninguno nuevo; §5.9 y §5.12 describen lo que ya existía desde INF-0.2 (`c677aeb`).
-- **Cómo se verificó:** cada nombre y valor se copió de los archivos de INF-0.2 validados en `c677aeb`.
+- **Contratos tocados (§5):** ninguno nuevo; §5.9 y §5.12 describen lo que ya existía desde INF-0.2 (`fad2b6b`).
+- **Cómo se verificó:** cada nombre y valor se copió de los archivos de INF-0.2 validados en `fad2b6b`.
 - **Pendiente:** lo mismo que en 0.3.0.
 
 ---
@@ -117,7 +121,7 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   - Nuevo riesgo R12: repositorio público, logs y comentarios del `plan` visibles.
 - **Contratos tocados (§5):** §5.3 (aclaración, sin cambio de nombres). Los workflows (§3.9) amplían su disparador de
   forma compatible.
-- **Cómo se verificó:** `validate02.py --entorno dev` con código 0 sobre `c677aeb` (2026-10-24 14:04–14:10 UTC): pasan
+- **Cómo se verificó:** `validate02.py --entorno dev` con código 0 sobre `fad2b6b` (2026-10-24 14:04–14:10 UTC): pasan
   P1–P6 y C1–C4b, con el PR de prueba #5 comentado, fusionado y aplicado por `infra.yml` tras la aprobación del entorno
   `dev`; el primer `apply` de `envs/dev` también lo hizo `infra.yml`. Antes de entregar, con OpenTofu 1.13.2 y el
   proveedor aws 6.70.0 (no había Terraform en el entorno de pruebas): `fmt -check`, `validate` y TFLint 0.65 + *ruleset* aws 0.50 limpios en `envs/dev`, `modules/` y
@@ -139,7 +143,7 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 - **Qué cambió:** §5.11 documenta la API de `project/src/ops/comun.py` (clase `Validador`, excepciones y ayudas de
   `gh`, Terraform y AWS) y la forma de un validador de esta carpeta.
 - **Contratos tocados (§5):** ninguno nuevo; §5.11 describe ayudas que ya existían desde INF-0.1.
-- **Cómo se verificó:** la tabla se escribió desde el código de `comun.py` que validó INF-0.1 (`b20a62f`).
+- **Cómo se verificó:** la tabla se escribió desde el código de `comun.py` que validó INF-0.1 (`fbe68f8`).
 - **Pendiente:** lo mismo que en 0.3.0.
 
 ---
@@ -167,7 +171,7 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   `bootstrap`), §5.3 (`github_ids`; valores de `github_repo` y `correo_alertas`), §5.8 (formato del `sub`, permisos de
   `gha-terraform-plan` y `gha-terraform`, boundary), §5.11 (`-dirty` en el informe y cuenta dueña del repositorio en
   los validadores de esta carpeta).
-- **Cómo se verificó:** `validate01.py --entorno dev` con código 0 sobre `b20a62f` (2026-10-24 00:11 UTC): pasan
+- **Cómo se verificó:** `validate01.py --entorno dev` con código 0 sobre `fbe68f8` (2026-10-24 00:11 UTC): pasan
   P1–P5 y C1–C5, y C2 confirma el `sub` inmutable con un token real. Antes: revisión independiente del Terraform y del
   validador, formato de HCL con `hclwrite` y el validador probado de principio a fin con AWS simulado (moto) en 12
   escenarios. El proveedor OIDC ya existía (intento anterior, 2026-10-14) y se importó al estado de `bootstrap`.
