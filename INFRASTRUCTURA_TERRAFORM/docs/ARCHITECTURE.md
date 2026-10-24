@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.5.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.6.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
-| Estado | Diseño propuesto. **INF-0.1, INF-0.2 e INF-1.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad); el resto, sin código todavía |
+| Estado | Diseño propuesto. **INF-0.1, INF-0.2 e INF-1.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad); **INF-1.2 escrito** (datos y secretos), pendiente de aplicar y validar; el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -165,20 +165,28 @@ Un clúster `campus-locator-dev` con tres servicios y una tarea suelta. Todas la
 
 **RDS PostgreSQL** (`campus-locator-dev-db`)
 - PostgreSQL **17** (≥ 17.1, la que trae pgvector 0.8.0 en RDS), `db.t4g.micro` (2 vCPU, 1 GiB), una sola zona
-  (`us-east-1a`), 20 GB `gp3` con autoescalado de almacenamiento hasta 50 GB.
-- Sin acceso público; solo admite `:5432` desde los grupos de seguridad de `api`, `worker` y `migrate`.
-- Copias automáticas 7 días; *snapshot* final al destruir; `deletion_protection` activado.
+  (`us-east-1a`), 20 GB `gp3` cifrados (clave de AWS de RDS) con autoescalado de almacenamiento hasta 50 GB.
+- Terraform fija solo la versión mayor (`engine_version = "17"`): RDS crea la instancia con la menor por defecto y la
+  actualiza sola (`auto_minor_version_upgrade`) en la ventana de mantenimiento (§5.10). Cambiar de mayor no es
+  automático (`allow_major_version_upgrade = false`).
+- Sin acceso público; solo admite `:5432` desde los grupos de seguridad de `api` y `worker` (`migrate` y la tarea de
+  validación usan el de `api`, §5.7). Vive en el grupo de subredes `campus-locator-dev-db` (las dos privadas).
+- Copias automáticas 7 días; *snapshot* final `campus-locator-dev-db-final` al destruir (si ya existe uno de una
+  destrucción anterior, hay que borrarlo antes); `deletion_protection` activado. En `dev` los cambios se aplican con
+  el `apply` (`apply_immediately`), sin esperar a la ventana.
 - La extensión `vector` la crea la primera migración del backend (`CREATE EXTENSION IF NOT EXISTS vector`).
   Terraform no crea tablas.
 - Grupo de parámetros propio (§5.10) con `rds.force_ssl = 1`.
 
 **S3** (`campus-locator-dev-dataset-648617469176`)
-- Privado, cifrado SSE-S3, *Block Public Access*, propiedad de objetos `BucketOwnerEnforced`, sin versionado.
+- Privado, cifrado SSE-S3, *Block Public Access*, propiedad de objetos `BucketOwnerEnforced`, sin versionado, y una
+  política que rechaza toda petición sin TLS (§5.5).
 - Prefijos y notificación hacia SQS en §5.5. Las fotos de `/v1/localize` **nunca** se escriben aquí: se procesan en
   memoria y se descartan (`BACKEND_FASTAPI/docs/ARCHITECTURE.md`, ADR-BE-06).
 
 **SQS**
-- `ingesta`: recibe directamente las notificaciones `ObjectCreated` de S3. DLQ tras 5 recepciones.
+- `ingesta`: recibe directamente las notificaciones `ObjectCreated` de S3. DLQ tras 5 recepciones. Al guardar la
+  notificación, S3 deja en la cola un `s3:TestEvent` (§5.6).
 - `purga`: la llena la `api` al borrar un video. DLQ tras 5 recepciones.
 - Atributos en §5.6. El formato de los mensajes lo define el backend (§5.8 de su documento).
 
@@ -188,6 +196,10 @@ Un clúster `campus-locator-dev` con tres servicios y una tarea suelta. Todas la
 - La contraseña de la base la genera Terraform (`random_password`) y la guarda en el secreto `db`; no hay rotación
   automática en `dev` (ADR-INF-07). Consecuencia: el valor queda en el estado de Terraform, que está cifrado y es
   privado (§3.9).
+- Los secretos usan la clave gestionada `aws/secretsmanager` y, si se borran, quedan 7 días recuperables (el mínimo):
+  mientras tanto su nombre no se puede volver a crear. Para recrearlos antes, se restauran
+  (`aws secretsmanager restore-secret --secret-id <nombre>`) y se importan al estado
+  (`terraform import 'module.secretos.aws_secretsmanager_secret.secretos["<clave>"]' <ARN>`).
 - La configuración no secreta va como variables de entorno en texto plano en la definición de tarea (§5.4).
 
 ### 3.7 Identidad y permisos
@@ -316,7 +328,7 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
 | **INF-0.1 Bootstrap** | Recursos que deben existir antes de cualquier `plan` remoto. El bucket de estado tiene `prevent_destroy` y solo admite TLS. El rol `gha-terraform-plan` (PR) solo puede leer, incluidos los secretos de `dev`, que ya están en el estado; el rol `gha-terraform` (aplicar, con aprobación) tiene permisos amplios pero acotados a la cuenta y región, y todo rol que crea lleva el *permissions boundary* `campus-locator-limite-roles`; el rol `gha-deploy` solo puede publicar imágenes, registrar definiciones de tarea, actualizar los servicios y lanzar `migrate` (§5.8). `bootstrap/configurar_github.py` crea con `gh` las variables del repositorio y el **entorno `dev` de GitHub**: aprobación manual y despliegue solo desde `main` (§3.9) |
 | **INF-0.2 Esqueleto** | `envs/dev` con *backend*, proveedor (`default_tags`, `allowed_account_ids`) y los seis módulos, vacíos, ya compuestos en `main.tf`; `data "aws_caller_identity"` (output `cuenta_id`) obliga a configurar el proveedor sin recursos y `data "aws_default_tags"` deja en el estado las etiquetas efectivas. `infra.yml` con `plan` en PR y `apply` aprobado en `main` (§3.9). A partir de aquí todo cambio de infraestructura entra por PR |
 | **INF-1.1 Red** | Módulo `red`: VPC, cuatro subredes (las /24 número 0, 1, 10 y 11 de `cidr_vpc`), Internet Gateway, tablas `-publica` y `-privada`, endpoint de S3 en la pública, los cinco grupos de seguridad de §5.7 y el `default` sin reglas. Los grupos se crean aquí (no en cada módulo) y sin reglas en línea: cada regla es un `aws_vpc_security_group_ingress_rule` o `egress_rule`, así las referencias cruzadas no generan ciclos. Entrega a `envs/dev` los IDs que usan INF-1.2 a INF-1.4 (§5.12) y crea los outputs `subredes_tareas` y `sg_migrate` |
-| **INF-1.2 Datos y secretos** | RDS en `us-east-1a`; bucket con notificación a `ingesta` (la política de la cola autoriza solo a ese bucket); colas y DLQ; secretos. La **notificación** del bucket (`aws_s3_bucket_notification`) se crea después de la política de la cola, porque S3 valida el destino al guardarla |
+| **INF-1.2 Datos y secretos** | Módulo `datos`: RDS en `us-east-1a` (grupo de subredes con las dos privadas y grupo de parámetros con `rds.force_ssl`); bucket con cifrado, *Block Public Access*, propiedad, ciclo de vida, política «solo TLS» y notificación a `ingesta` (la política de la cola autoriza solo a ese bucket); colas y DLQ. Módulo `secretos`: `random_password`, `random_bytes` y los tres secretos. Los dos módulos se usan entre sí a través de `envs/dev` (la contraseña va de `secretos` a RDS y el endpoint de RDS vuelve al secreto `db`) sin ciclo, porque Terraform resuelve las dependencias recurso por recurso. La **notificación** del bucket (`aws_s3_bucket_notification`) se crea después de la política de la cola, porque S3 valida el destino al guardarla. Entradas, salidas y recursos en §5.12 |
 | **INF-1.3 Cómputo** | Repositorios ECR (etiquetas inmutables, escaneo básico, conservar 5), clúster, espacio de nombres privado `campus-locator.local`, roles, definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza), la tarea de validación y servicios con `desired_count = 0` hasta el primer despliegue |
 | **INF-1.4 Borde** | HTTP API, VPC Link en las subredes públicas, integración con el servicio Cloud Map `api`, rutas `ANY /{proxy+}` y `POST /v1/auth/login`, throttling y access logs. Expone `api_base_url` |
 | **INF-2.1 Escalado y horario** | Acciones programadas (zona `America/Bogota`) para `embedding` y `worker`; política de escalado por pasos de `worker` sobre la profundidad de las colas |
@@ -358,7 +370,7 @@ Inventario de nombres:
 | Contenedor dentro de cada tarea | `app` (todas las tareas tienen un solo contenedor con ese nombre) |
 | Espacio de nombres Cloud Map | `campus-locator.local` (DNS privado de la VPC) |
 | Repositorios ECR | `campus-locator/backend`, `campus-locator/embedding` |
-| RDS | instancia `campus-locator-dev-db`, base `campus_locator`, usuario `campus_app`, grupo de parámetros `campus-locator-dev-pg17` |
+| RDS | instancia `campus-locator-dev-db`, base `campus_locator`, usuario `campus_app`, grupo de parámetros `campus-locator-dev-pg17`, grupo de subredes `campus-locator-dev-db`, *snapshot* final `campus-locator-dev-db-final` |
 | Bucket del dataset | `campus-locator-dev-dataset-648617469176` |
 | Bucket de estado | `campus-locator-tfstate-648617469176` (claves: `bootstrap/terraform.tfstate`, `dev/terraform.tfstate`) |
 | Colas SQS | `campus-locator-dev-ingesta`, `campus-locator-dev-ingesta-dlq`, `campus-locator-dev-purga`, `campus-locator-dev-purga-dlq` |
@@ -400,14 +412,16 @@ Inventario de nombres:
 
 Ningún servicio lee outputs en tiempo de ejecución: todo lo que necesitan llega por variables de entorno (§5.4).
 Los outputs aparecen con el lote que crea su recurso: `api_base_url` con INF-1.4, `sns_alertas_arn` con INF-3.1,
-`subredes_tareas` y `sg_migrate` con INF-1.1 y el resto con INF-1.2 e INF-1.3. Desde INF-0.2, `envs/dev` tiene además el output `cuenta_id` (de un
+`subredes_tareas` y `sg_migrate` con INF-1.1, `bucket_dataset`, las cuatro `sqs_*_url`, `rds_endpoint` y `secretos` con INF-1.2 y el resto
+con INF-1.3. Desde INF-0.2, `envs/dev` tiene además el output `cuenta_id` (de un
 `data "aws_caller_identity"`, que obliga a evaluar el proveedor y su `allowed_account_ids` aunque no haya recursos).
 
 ### 5.3 Variables de entrada
 
 `bootstrap/terraform.tfvars` y `envs/dev/terraform.tfvars` (columna «Dónde»). Los dos archivos se versionan: no
 contienen secretos. Cada variable de `envs/dev` se declara con el lote que la usa (INF-0.2: `aws_account_id`, `region`,
-`proyecto` y `entorno`; INF-1.1: `cidr_vpc`, `az_computo` y `az_secundaria`).
+`proyecto` y `entorno`; INF-1.1: `cidr_vpc`, `az_computo` y `az_secundaria`; INF-1.2: `rds_clase`, `rds_gb`, `rds_gb_max`
+y `pg_version`).
 
 | Variable | Dónde | Valor en `dev` | Notas |
 |---|---|---|---|
@@ -423,8 +437,8 @@ contienen secretos. Cada variable de `envs/dev` se declara con el lote que la us
 | `presupuesto_usd` | `bootstrap` | `100` | |
 | `horario_encendido` | `envs/dev` | `{ zona = "America/Bogota", encender = "cron(0 6 * * ? *)", apagar = "cron(0 22 * * ? *)" }` | Vacío (`null`) = 24/7 |
 | `imagen_inicial_tag` | `envs/dev` | `"bootstrap"` | Solo en la primera creación |
-| `rds_clase` / `rds_gb` / `rds_gb_max` | `envs/dev` | `"db.t4g.micro"` / `20` / `50` | |
-| `pg_version` | `envs/dev` | `"17"` (versión menor ≥ 17.1) | pgvector 0.8.x |
+| `rds_clase` / `rds_gb` / `rds_gb_max` | `envs/dev` | `"db.t4g.micro"` / `20` / `50` | `rds_gb_max` debe ser mayor que `rds_gb` (lo valida el módulo `datos`) |
+| `pg_version` | `envs/dev` | `"17"` | Solo la versión mayor (lo valida el módulo `datos`): RDS elige la menor por defecto (≥ 17.1, pgvector 0.8.x) y la actualiza. Forma también la familia (`postgres17`) y el nombre del grupo de parámetros |
 
 ### 5.4 Variables de entorno y secretos por proceso
 
@@ -437,6 +451,11 @@ Valores que **inyecta la infraestructura**. Qué hace cada servicio con ellos lo
 | `campus-locator/dev/db` | `host`, `port`, `dbname`, `username`, `password` | `DB_PASSWORD` ← `password` (en la tarea de validación, `PGPASSWORD`) | `api`, `worker`, `migrate`, `validacion` |
 | `campus-locator/dev/jwt` | `secret` (64 bytes aleatorios codificados en base64; el backend usa la cadena tal cual como clave HMAC, sin decodificarla) | `JWT_SECRET` ← `secret` | `api` |
 | `campus-locator/dev/admin-inicial` | `correo`, `password` | `ADMIN_INICIAL_CORREO` ← `correo`, `ADMIN_INICIAL_PASSWORD` ← `password` | `migrate` |
+
+Formato de los valores (los genera el módulo `secretos`): `port` es un número JSON (`5432`) y el resto son cadenas; el
+`password` de `db` tiene 40 caracteres alfanuméricos (no hay que escaparlo en una URL de conexión) y el de
+`admin-inicial`, 24 alfanuméricos con al menos 2 mayúsculas, 2 minúsculas y 2 dígitos. En una definición de tarea, cada
+variable se inyecta con `valueFrom = "<ARN del secreto>:<clave>::"` (output `secretos`).
 
 El secreto `admin-inicial` lo crea Terraform con `correo = "admin@campus.edu.co"` (el mismo de las pruebas de la
 app) y contraseña aleatoria; se consulta en la consola para el primer inicio de sesión y se cambia después.
@@ -478,6 +497,9 @@ quiere mover a variable de entorno, se añade primero a esta tabla.
 - **Notificación**: `s3:ObjectCreated:*` con filtro `prefix = "dataset/"`, `suffix = ".jpg"` → cola
   `campus-locator-dev-ingesta`. Ningún otro prefijo genera eventos.
 - Cifrado SSE-S3, *Block Public Access* completo, sin CORS (la app es nativa).
+- Política del bucket: una sola declaración, que deniega `s3:*` a cualquiera si la petición no usa TLS
+  (`aws:SecureTransport = false`). Los permisos los dan las políticas de identidad (§5.8); las URL prefirmadas que firma
+  `api` deben ser `https://` (las de boto3 lo son por defecto).
 - Ciclo de vida: abortar subidas multiparte incompletas a los 7 días. Los objetos no expiran (el borrado lo hace la
   purga).
 - Las fotos de `/v1/localize` no se escriben en ningún bucket.
@@ -492,9 +514,10 @@ quiere mover a variable de entorno, se añade primero a esta tabla.
 
 - Todas cifradas con SSE-SQS. La política de recurso de `ingesta` concede `sqs:SendMessage` al servicio
   `s3.amazonaws.com` solo con `aws:SourceArn` = el bucket del dataset y `aws:SourceAccount` = la cuenta; el rol de
-  tarea de `api` envía con su política de identidad (§5.8).
+  tarea de `api` envía con su política de identidad (§5.8). `purga` y las DLQ no tienen política de recurso.
 - El **formato de los mensajes** (incluido cómo tratar el `s3:TestEvent` que S3 envía al configurar la notificación)
-  lo define `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.8.
+  lo define `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.8. Tras el `apply` de INF-1.2 queda uno en `ingesta`;
+  `validate12.py` lo borra (`validation-1-2` §4).
 - **Topic SNS** `campus-locator-dev-alertas`: lo publican CloudWatch Alarms y AWS Budgets; suscripción por correo a
   `correo_alertas`. No lo usa ningún servicio.
 
@@ -618,7 +641,8 @@ llaves de AWS en GitHub. Formato: `SUBREDES_TAREAS` = IDs de subred separados po
 | Throttling API Gateway | general: 20 req/s, ráfaga 40 · `POST /v1/auth/login`: 2 req/s, ráfaga 5 |
 | Formato de los *access logs* | JSON por línea: `requestId`, `ip`, `requestTime`, `httpMethod`, `routeKey`, `path`, `status`, `responseLength`, `integrationLatency`, `integrationStatus` (`requestId` es el encabezado `apigw-requestid` de la respuesta) |
 | Retención de logs | 14 días (todos los log groups) |
-| Copias de RDS | 7 días |
+| Copias de RDS | 7 días; ventana 07:00–07:30 UTC (02:00 en Bogotá, fuera del horario de `dev`) |
+| Mantenimiento de RDS | domingos 08:00–09:00 UTC (03:00 en Bogotá); versión menor automática |
 | `rds.force_ssl` / `max_connections` | `1` / por defecto de la clase |
 | Alarmas | `5xx` de la API > 5 en 5 min · cualquier DLQ con ≥ 1 mensaje · tarea detenida por error (EventBridge, §3.8) · CPU de `embedding` > 90 % por 15 min · RDS `FreeStorageSpace` < 4 GiB (4 294 967 296 bytes) · RDS `CPUCreditBalance` < 20 |
 | Presupuesto | 100 USD/mes; avisos 50 % y 80 % real, 100 % pronosticado |
@@ -753,7 +777,8 @@ tabla basta para escribir uno nuevo sin leer el código. Si cambian, la tabla se
 | `CUENTA`, `REGION`, `PROYECTO`, `DIR_INFORMES` | Constantes (`PROYECTO` y `DIR_INFORMES` son rutas: `project/` y `project/.validacion/`) |
 | `PATRON_CREDENCIALES_TERRAFORM`, `PATRON_SIN_INIT` | Expresiones regulares que reconocen en la salida de Terraform un fallo de credenciales (→ código 3) o una copia sin `init` |
 
-Forma de un validador (`validate01.py` la sigue; `validate11.py` es el ejemplo más corto, de solo lectura): `import comun`
+Forma de un validador (`validate01.py` la sigue; `validate11.py` es el ejemplo más corto, de solo lectura, y
+`validate12.py` el de uno que crea datos de prueba —objetos y mensajes— y los limpia con `al_limpiar`): `import comun`
 (el script se ejecuta como `python src/ops/validate<fase><n>.py`), `main()` crea el `Validador` y devuelve
 `correr(cuerpo)`, y el módulo termina con `sys.exit(main())`. `cuerpo(v)`
 evalúa primero las precondiciones de credenciales (código 3), luego las de otros lotes (código 2), sin seguir si alguna
@@ -769,7 +794,7 @@ Lo que un lote necesita saber para añadir infraestructura sin leer el código e
 | Archivo | Contiene | Regla |
 |---|---|---|
 | `backend.tf` | *backend* S3 (§3.9): bucket `campus-locator-tfstate-648617469176`, clave `dev/terraform.tfstate`, `use_lockfile`, `encrypt`, `allowed_account_ids` | No se toca |
-| `providers.tf` | `terraform { required_version = ">= 1.10" }`, `required_providers` (`hashicorp/aws ~> 6.70`) y `provider "aws"` (`region = var.region`, `allowed_account_ids = [var.aws_account_id]`, `default_tags`) | Un proveedor nuevo se declara aquí (ver «Proveedores y lock») |
+| `providers.tf` | `terraform { required_version = ">= 1.10" }`, `required_providers` (`hashicorp/aws ~> 6.70` y, desde INF-1.2, `hashicorp/random ~> 3.7`) y `provider "aws"` (`region = var.region`, `allowed_account_ids = [var.aws_account_id]`, `default_tags`) | Un proveedor nuevo se declara aquí (ver «Proveedores y lock») |
 | `main.tf` | Solo `data` de cuenta y las llamadas a los seis módulos | Ningún recurso suelto: todo recurso vive en un módulo |
 | `variables.tf` / `terraform.tfvars` | Variables de §5.3 que ya usa algún lote, con `type` y `description`; sus valores | Una variable nueva se añade a §5.3 y a los dos archivos en el mismo cambio |
 | `outputs.tf` | Outputs de §5.2 | Un output nuevo se añade antes a §5.2 |
@@ -780,12 +805,12 @@ Lo que un lote necesita saber para añadir infraestructura sin leer el código e
 
 | Nombre | Qué es |
 |---|---|
-| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno`; `var.cidr_vpc`, `var.az_computo`, `var.az_secundaria` (INF-1.1) | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos) |
+| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno`; `var.cidr_vpc`, `var.az_computo`, `var.az_secundaria` (INF-1.1); `var.rds_clase`, `var.rds_gb`, `var.rds_gb_max`, `var.pg_version` (INF-1.2) | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos) |
 | `local.prefijo` | `"${var.proyecto}-${var.entorno}"` = `campus-locator-dev`, sin guion final: el prefijo de §5.1. Está en `main.tf` (INF-1.1); los módulos lo reciben como variable `prefijo` |
 | `data.aws_caller_identity.actual` | Cuenta de las credenciales (`.account_id`); alimenta el output `cuenta_id` |
 | `data.aws_default_tags.actuales` | Etiquetas efectivas del proveedor; nada lo referencia (lleva `# tflint-ignore: terraform_unused_declarations`) porque solo sirve para que los validadores lean las etiquetas del estado |
-| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); los otros cinco, todavía sin argumentos: su lote (§4) les añade entradas y salidas |
-| Outputs de `envs/dev` | `cuenta_id` (INF-0.2); `subredes_tareas` = `[module.red.subred_tareas]` y `sg_migrate` = `module.red.grupos_seguridad["api"]` (INF-1.1) |
+| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); `module.datos` y `module.secretos`, lo que dicen sus tablas más abajo (INF-1.2); los otros tres, todavía sin argumentos: su lote (§4) les añade entradas y salidas |
+| Outputs de `envs/dev` | `cuenta_id` (INF-0.2); `subredes_tareas` = `[module.red.subred_tareas]` y `sg_migrate` = `module.red.grupos_seguridad["api"]` (INF-1.1); `bucket_dataset`, `sqs_ingesta_url`, `sqs_purga_url`, `sqs_ingesta_dlq_url` y `sqs_purga_dlq_url` (de `module.datos.colas[…].url`), `rds_endpoint` = `module.datos.rds_direccion` y `secretos` = `module.secretos.arns` (INF-1.2) |
 | Última línea de `main.tf`: `# validacion-0-2 <AAAAMMDD-HHMMSS>` | La escribe y sustituye `validate02.py` (C2 la fusiona en `main`). No se borra ni hace falta moverla: el validador quita la anterior y añade la nueva al final |
 
 **Módulos (`modules/<nombre>/`)**
@@ -830,18 +855,65 @@ Por dentro (para leer un `plan`): `aws_vpc.principal`, `aws_subnet.subredes["pub
 `aws_vpc_security_group_egress_rule.salida_libre[…]`: 29 recursos. Las tablas no llevan bloques `route` en línea (una
 ruta nueva es un `aws_route`) y los grupos tampoco llevan reglas en línea (§5.7).
 
+**Módulo `datos` (INF-1.2)**
+
+| Entrada | Tipo | Valor que le pasa `envs/dev` |
+|---|---|---|
+| `prefijo` | `string` | `local.prefijo` |
+| `cuenta_id` | `string` de 12 dígitos | `var.aws_account_id` (sufijo del bucket y `aws:SourceAccount` de la política de `ingesta`) |
+| `az_computo` | `string` | `var.az_computo` |
+| `subredes_privadas` | `list(string)`, exactamente dos | `module.red.subredes_privadas` |
+| `sg_rds` | `string` | `module.red.grupos_seguridad["rds"]` |
+| `rds_clase`, `rds_gb`, `rds_gb_max`, `pg_version` | `string`, `number`, `number` (> `rds_gb`), `string` de solo dígitos | las variables de §5.3 del mismo nombre |
+| `db_password` | `string`, `sensitive` | `module.secretos.db_password` |
+
+| Salida | Valor | La usa |
+|---|---|---|
+| `rds_direccion` | endpoint sin puerto | `secretos` (`db_host`); output `rds_endpoint`; `computo` (`DB_HOST`, INF-1.3) |
+| `rds_puerto`, `rds_base`, `rds_usuario` | `5432`, `campus_locator`, `campus_app` | `secretos`; `computo` (`DB_PORT`, `DB_NAME`, `DB_USER`) |
+| `bucket_dataset`, `bucket_dataset_arn` | nombre y ARN del bucket | output `bucket_dataset`; `computo` (`S3_BUCKET_DATASET` y políticas de §5.8) |
+| `colas` | mapa `{ ingesta, purga, ingesta_dlq, purga_dlq }` → `{ nombre, url, arn }` | outputs `sqs_*_url`; `computo` (`SQS_URL_*` y políticas de §5.8); alarmas de INF-2.1 e INF-3.1 (`nombre`) |
+
+Por dentro: `aws_db_subnet_group.principal`, `aws_db_parameter_group.principal` (con `create_before_destroy`),
+`aws_db_instance.principal`, `aws_s3_bucket.dataset` y sus `aws_s3_bucket_ownership_controls`,
+`aws_s3_bucket_public_access_block`, `aws_s3_bucket_server_side_encryption_configuration`,
+`aws_s3_bucket_lifecycle_configuration`, `aws_s3_bucket_policy` y `aws_s3_bucket_notification` (todos `.dataset`),
+`aws_sqs_queue.colas["ingesta"|"purga"]`, `aws_sqs_queue.dlq["ingesta"|"purga"]` y `aws_sqs_queue_policy.ingesta`:
+15 recursos, más dos `data "aws_iam_policy_document"` (`dataset` e `ingesta`). La notificación depende de la política
+de la cola y de la del bucket (S3 rechaza dos cambios de configuración a la vez sobre el mismo bucket).
+
+**Módulo `secretos` (INF-1.2)**
+
+| Entrada | Tipo | Valor que le pasa `envs/dev` |
+|---|---|---|
+| `ruta` | `string` `<proyecto>/<entorno>` | `"${var.proyecto}/${var.entorno}"` |
+| `db_host`, `db_puerto`, `db_nombre`, `db_usuario` | `string`, `number`, `string`, `string` | `module.datos.rds_direccion`, `.rds_puerto`, `.rds_base` y `.rds_usuario` |
+| `admin_inicial_correo` | `string` | `"admin@campus.edu.co"` (§5.4) |
+
+| Salida | Valor | La usa |
+|---|---|---|
+| `db_password` | contraseña de la base (`sensitive`) | `datos` |
+| `arns` | mapa `{ db, jwt, admin_inicial }` → ARN | output `secretos`; `computo` (rol de ejecución y `secrets` de las definiciones de tarea, INF-1.3) |
+
+Por dentro: `random_password.db`, `random_bytes.jwt`, `random_password.admin_inicial`,
+`aws_secretsmanager_secret.secretos["db"|"jwt"|"admin_inicial"]` y `aws_secretsmanager_secret_version.db`, `.jwt` y
+`.admin_inicial`: 9 recursos. Para rotar un valor (ADR-INF-07) se reemplaza su recurso `random_*`; la contraseña de
+`db` la toman RDS y el secreto en el mismo `apply`, y las tareas al reiniciarse.
+
 **Proveedores y lock**
-- `envs/dev/.terraform.lock.hcl` fija hoy `hashicorp/aws` 6.70.0 con *hashes* de `linux_amd64`, `windows_amd64`,
-  `darwin_amd64` y `darwin_arm64`. CI usa `init -lockfile=readonly`: si el lock no tiene un proveedor o su *hash*, el
-  job falla en `terraform init`.
-- Añadir o actualizar un proveedor (p. ej. `hashicorp/random` para `random_password` en INF-1.2):
+- `envs/dev/.terraform.lock.hcl` fija hoy `hashicorp/aws` 6.70.0 y, desde INF-1.2, `hashicorp/random` (3.x) con
+  *hashes* de `linux_amd64`, `windows_amd64`, `darwin_amd64` y `darwin_arm64`. CI usa `init -lockfile=readonly`: si el
+  lock no tiene un proveedor o su *hash*, el job falla en `terraform init`.
+- Añadir un proveedor (como `hashicorp/random` en INF-1.2): `init` **sin** `-upgrade`, que instala solo lo que falta y
+  conserva las versiones ya fijadas, y después `providers lock` con las cuatro plataformas:
   ```bash
   cd INFRASTRUCTURA_TERRAFORM/project
-  terraform -chdir=envs/dev init -upgrade
+  terraform -chdir=envs/dev init -input=false
   terraform -chdir=envs/dev providers lock -platform=linux_amd64 -platform=windows_amd64 \
     -platform=darwin_amd64 -platform=darwin_arm64
   ```
-  y se versiona el lock en el mismo commit.
+  Actualizar uno es lo mismo con `init -upgrade`, que sube **todos** los proveedores hasta donde permita su
+  restricción: va en su propio cambio. En ambos casos el lock se versiona en el mismo commit.
 
 **Lo que hace fallar a CI** (antes de llegar al `plan`)
 - `terraform fmt -check -recursive` sobre `project/`: se corre `terraform fmt -recursive` antes de hacer commit.

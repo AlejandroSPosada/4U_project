@@ -20,6 +20,71 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.6.0] — 2026-10-24
+
+- **Lote que la motivó:** INF-1.2 (datos y secretos).
+- **Qué cambió:**
+  - Módulo `datos`: RDS PostgreSQL 17 (`db.t4g.micro`, `us-east-1a`, 20→50 GB `gp3` cifrados, privada, grupo de
+    subredes `campus-locator-dev-db`, grupo de parámetros `campus-locator-dev-pg17` con `rds.force_ssl = 1`, copias 7
+    días, *snapshot* final y `deletion_protection`); bucket del dataset (SSE-S3, *Block Public Access*,
+    `BucketOwnerEnforced`, sin versionado ni CORS, multiparte abortada a los 7 días, notificación `dataset/*.jpg` →
+    `ingesta` creada después de la política de la cola); colas `ingesta` y `purga` con sus DLQ y la política de
+    `ingesta` limitada al bucket y a la cuenta.
+  - Módulo `secretos`: `random_password` (base, 40 alfanuméricos; admin inicial, 24), `random_bytes` (JWT, 64 bytes en
+    base64) y los tres secretos de §5.4. `datos` y `secretos` se usan entre sí a través de `envs/dev` sin ciclo.
+  - `envs/dev`: variables `rds_clase`, `rds_gb`, `rds_gb_max` y `pg_version`; proveedor `hashicorp/random ~> 3.7`;
+    outputs `bucket_dataset`, `sqs_*_url`, `rds_endpoint` y `secretos`.
+  - Decisiones nuevas: política del bucket que deniega toda petición sin TLS (como el bucket de estado);
+    `engine_version` solo con la mayor (RDS elige y actualiza la menor, sin diferencias en el `plan`); ventanas de copia
+    y mantenimiento fuera del horario de `dev`; cifrado en reposo de RDS; `apply_immediately` en `dev`; secretos
+    recuperables 7 días; `purga` y las DLQ sin política de recurso.
+  - Corrige contradicciones: (1) INF-0.2 C4 deja a cada lote comprobar las etiquetas de lo que crea y
+    `validation-1-2` no lo hacía: nuevo criterio C6 en el PLAN y en el validador. (2) §5.12 decía añadir un proveedor
+    con `init -upgrade`, que además sube `aws` dentro de `~> 6.70`; ahora `init` sin `-upgrade` (`-upgrade` solo para
+    actualizar, en su propio cambio). (3) `validation-1-2` devolvía los mensajes ajenos a la cola en cuanto los leía y
+    seguía leyendo hasta 120 s: el mismo mensaje se podía recibir muchas veces en una ejecución y, con
+    `maxReceiveCount = 5`, acabar en la DLQ; ahora quedan ocultos hasta el final (una recepción por ejecución), y el
+    `s3:TestEvent` que deja la notificación se borra. (4) C2 podía pasar sin notificación alguna; ahora exige que haya
+    llegado el evento de C1 (control positivo). (5) `validation-1-2` listaba P1 y P2 sin decir que P2 (credenciales)
+    va primero, como pide §5.11. (6) §3.5 decía que RDS admite `:5432` desde el grupo de `migrate`, que no existe:
+    `migrate` usa el de `api` (§5.7). (7) `validation-1-2` no tenía la preparación (inventario, lock, `plan`, *push*,
+    aprobación del `apply` y «plan vacío») que sí tiene `validation-1-1`. (8) §5.3 daba `pg_version = "17"` como
+    «versión menor ≥ 17.1»: es solo la mayor. (9) C3b leía `rds.force_ssl` con `--source user`, pero un valor igual al
+    de por defecto (en PostgreSQL 17 lo es) puede figurar como `system`: ahora se lee sin filtrar. (10) C5 no comprobaba
+    los atributos de la instancia de §3.5 (clase, `gp3`, cifrado, protección contra borrado, copias): nuevo C5d, y el
+    criterio C5 del PLAN los nombra.
+  - Tras la revisión independiente, el validador además: no lee `ingesta` si tiene mensajes en proceso, retrasados o
+    más de 10 visibles, y no sube nada si entre los visibles hay alguno ajeno (lo devuelve) o si el servicio `worker`
+    está en marcha (desde INF-1.3), para no gastar reintentos de mensajes reales; solo borra claves de prueba de su
+    propio sello o de otro con más de 15 min (no las de otra ejecución en curso); registra cada objeto antes de subirlo;
+    clasifica todo un lote de mensajes antes de borrar; da código 3 (no 2) a un error transitorio de AWS en las
+    precondiciones; y la limpieza de la cola no deja de devolver los ajenos aunque falle la lectura.
+- **Contratos tocados (§5):** §5.1 (grupo de subredes y *snapshot* final de RDS), §5.2 (outputs que aparecen con
+  INF-1.2), §5.3 (variables de INF-1.2; `pg_version` es solo la mayor), §5.4 (formato de los valores y `valueFrom`),
+  §5.5 (política «solo TLS»), §5.6 (`purga` y DLQ sin política; `s3:TestEvent`), §5.10 (ventanas de RDS), §5.11 (forma
+  de un validador que crea datos) y §5.12 (módulos `datos` y `secretos`; cómo añadir un proveedor al lock). §3.5 y
+  §3.6 añaden cómo destruir con un *snapshot* final previo y cómo recrear un secreto en su plazo de recuperación.
+- **Cómo se verificó:** pendiente la ejecución de `validate12.py --entorno dev` tras el `apply` (PLAN §3). Antes de
+  entregar, sin Terraform ni acceso a AWS en el entorno de pruebas: con OpenTofu 1.11.1, aws 6.70.0 y random 3.9.1,
+  `fmt -check`, `validate` y TFLint 0.65 + *ruleset* aws 0.50 limpios en `envs/dev`, `modules/datos` y
+  `modules/secretos`; `tofu test` de `envs/dev` con proveedores simulados (sin ciclo entre `datos` y `secretos`); y un
+  `tofu apply` completo de `envs/dev` contra AWS simulado (moto 5.2.4: 53 recursos, 29 de la red y 24 de este lote). El
+  validador, con el `comun.py` real, contra ese estado en 35 escenarios: camino feliz; restos y `s3:TestEvent`; mensajes
+  ajenos (vuelven con una sola recepción); cola con 12 mensajes (no la lee); `worker` en marcha; notificación sin
+  sufijo, sin prefijo o ausente; RDS pública; regla `0.0.0.0/0`; `rds.force_ssl = 0`; PostgreSQL 17.0 y 17.10; sin
+  protección contra borrado; JWT de 32 bytes; `port` como texto; secreto ausente; ningún valor de secreto en la salida;
+  CORS; ciclo de vida que expira; política con `Allow` o ausente; visibilidad equivocada; política de `ingesta` sin
+  condición; `purga` con política; etiqueta ausente; sin la red (código 2); perfil inexistente y `--solo` inválido
+  (código 3); alias `--solo C5`; `--sin-limpieza` y la ejecución siguiente. Lo que moto no reproduce (sin TLS no se
+  puede subir con la política «solo TLS»; etiquetas al crear el bucket; versión menor) se ajustó en el estado simulado.
+  Revisión independiente del Terraform y del validador: sin defectos de exposición en Terraform; sus hallazgos sobre el
+  validador están corregidos (ver arriba) y los de destrucción quedan documentados en §3.5 y §3.6.
+- **Pendiente:** el «plan vacío» de INF-1.2 es un paso manual de la preparación (`validation-1-2` §5, paso 6), no una
+  comprobación del validador: el próximo validador que lance un `plan` une las dos variantes de `validate02.py` y
+  `validate11.py` en `comun.py` (§5.12). Inventario y limpieza de lo que lista R11 antes de INF-1.3.
+
+---
+
 ## [0.5.1] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; inventario de los restos del intento anterior (R11) antes de INF-1.2.

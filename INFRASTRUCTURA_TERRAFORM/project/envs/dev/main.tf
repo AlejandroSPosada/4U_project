@@ -25,12 +25,30 @@ module "red" {
   az_secundaria = var.az_secundaria
 }
 
-module "datos" { # INF-1.2
+module "datos" {
   source = "../../modules/datos"
+
+  prefijo           = local.prefijo
+  cuenta_id         = var.aws_account_id
+  az_computo        = var.az_computo
+  subredes_privadas = module.red.subredes_privadas
+  sg_rds            = module.red.grupos_seguridad["rds"]
+  rds_clase         = var.rds_clase
+  rds_gb            = var.rds_gb
+  rds_gb_max        = var.rds_gb_max
+  pg_version        = var.pg_version
+  db_password       = module.secretos.db_password
 }
 
-module "secretos" { # INF-1.2
+module "secretos" {
   source = "../../modules/secretos"
+
+  ruta                 = "${var.proyecto}/${var.entorno}"
+  db_host              = module.datos.rds_direccion
+  db_puerto            = module.datos.rds_puerto
+  db_nombre            = module.datos.rds_base
+  db_usuario           = module.datos.rds_usuario
+  admin_inicial_correo = "admin@campus.edu.co"
 }
 
 module "computo" { # INF-1.3

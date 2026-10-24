@@ -40,3 +40,24 @@ variable "az_secundaria" {
   type        = string
   description = "Segunda zona, solo para publica-b y privada-b (§5.3)."
 }
+
+# INF-1.2
+variable "rds_clase" {
+  type        = string
+  description = "Clase de la instancia de RDS."
+}
+
+variable "rds_gb" {
+  type        = number
+  description = "Almacenamiento inicial de RDS en GB (gp3)."
+}
+
+variable "rds_gb_max" {
+  type        = number
+  description = "Tope del autoescalado de almacenamiento de RDS en GB."
+}
+
+variable "pg_version" {
+  type        = string
+  description = "Version mayor de PostgreSQL (solo el numero); RDS elige la menor (>= 17.1 para pgvector 0.8)."
+}

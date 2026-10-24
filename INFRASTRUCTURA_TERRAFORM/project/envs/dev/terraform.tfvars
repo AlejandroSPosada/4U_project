@@ -8,3 +8,9 @@ entorno        = "dev"
 cidr_vpc      = "10.20.0.0/16"
 az_computo    = "us-east-1a"
 az_secundaria = "us-east-1b"
+
+# INF-1.2
+rds_clase  = "db.t4g.micro"
+rds_gb     = 20
+rds_gb_max = 50
+pg_version = "17"
