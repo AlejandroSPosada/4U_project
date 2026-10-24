@@ -20,6 +20,20 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.4.1] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; que el próximo lote (INF-1.1) pueda trabajar sin leer el código de INF-0.2.
+- **Qué cambió:** §5.9 documenta lo fijo de `infra.yml` (jobs, pasos, marca del comentario, versiones) del que depende
+  `validate02.py`; nueva §5.12 con las convenciones del código de Terraform: qué va en cada archivo de `envs/dev`, los
+  nombres que ya existen (`data.aws_caller_identity.actual`, `data.aws_default_tags.actuales`, los seis `module.*`), cómo
+  se escriben los módulos, cómo se añade un proveedor al lock, qué hace fallar a CI y las ayudas propias de
+  `validate02.py`.
+- **Contratos tocados (§5):** ninguno nuevo; §5.9 y §5.12 describen lo que ya existía desde INF-0.2 (`c677aeb`).
+- **Cómo se verificó:** cada nombre y valor se copió de los archivos de INF-0.2 validados en `c677aeb`.
+- **Pendiente:** lo mismo que en 0.3.0.
+
+---
+
 ## [0.4.0] — 2026-10-24
 
 - **Lote que la motivó:** INF-0.2 (esqueleto de `envs/dev` y CI de Terraform).

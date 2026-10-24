@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.4.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.4.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-23 |
 | Estado | Diseño propuesto. **INF-0.1 e INF-0.2 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
@@ -562,6 +562,20 @@ revisión nueva al encender).
 **Primer despliegue**: el primer `backend.yml` además pone `desired_count = 1` en `api`; el horario se encarga de
 `embedding` y `worker`.
 
+**`infra.yml`** (INF-0.2; la secuencia completa está en §3.9). Lo que otros archivos dan por fijo:
+
+| Elemento | Valor | Quién depende de él |
+|---|---|---|
+| Disparadores | `pull_request` y `push` a `main` con cambios en `INFRASTRUCTURA_TERRAFORM/project/**` o en `.github/workflows/infra.yml` | — |
+| Job de PR | `plan (PR)`: rol `vars.AWS_ROL_TERRAFORM_PLAN_ARN`; pasos `terraform fmt -check`, `tflint`, `terraform validate`, `terraform plan`, `Comentar el plan en el PR` | `validate02.py` C1 (busca el job por el prefijo `plan` y esos cuatro primeros pasos por nombre) |
+| Comentario del plan | uno por PR, de `github-actions[bot]`, con la marca `<!-- infra-plan envs/dev -->`; se actualiza en cada ejecución | `validate02.py` C1 |
+| Job de `main` | `apply (main)`: entorno `dev`, rol `vars.AWS_ROL_TERRAFORM_ARN`; `plan -out=tfplan` y `apply tfplan` | `validate02.py` C2 (prefijo `apply`; busca `Apply complete!` en su log) |
+| Versiones | `env.TF_VERSION` (= la del equipo, hoy `1.16.6`) y `env.TFLINT_VERSION` (`v0.65.0`); acciones fijadas por SHA con la versión en un comentario | Cambiar `TF_VERSION` exige que el equipo use la misma en local (P5 de `validation-0-2` avisa si difiere) |
+| Variables que lee | `AWS_REGION`, `AWS_ROL_TERRAFORM_PLAN_ARN`, `AWS_ROL_TERRAFORM_ARN` | — |
+
+Renombrar un job, uno de esos pasos o la marca del comentario rompe `validate02.py`: se cambian los dos en el mismo
+commit.
+
 **Variables del repositorio de GitHub** (*Settings → Variables*, no secretos):
 `AWS_REGION`, `AWS_ROL_DEPLOY_ARN`, `AWS_ROL_TERRAFORM_PLAN_ARN`, `AWS_ROL_TERRAFORM_ARN`, `ECR_BACKEND`,
 `ECR_EMBEDDING`, `ECS_CLUSTER`,
@@ -716,6 +730,69 @@ Forma de un validador (`validate01.py` la sigue): `main()` crea el `Validador` y
 evalúa primero las precondiciones de credenciales (código 3), luego las de otros lotes (código 2), sin seguir si alguna
 falla; limpia restos `validacion-…` de ejecuciones anteriores; registra con `al_limpiar` lo que cree, en cuanto lo crea,
 y ejecuta las comprobaciones en el orden del documento de validación.
+
+### 5.12 Código de Terraform de `envs/dev` y de los módulos (convenciones)
+
+Lo que un lote necesita saber para añadir infraestructura sin leer el código existente (INF-0.2 dejó el esqueleto).
+
+**Archivos de `envs/dev`**
+
+| Archivo | Contiene | Regla |
+|---|---|---|
+| `backend.tf` | *backend* S3 (§3.9): bucket `campus-locator-tfstate-648617469176`, clave `dev/terraform.tfstate`, `use_lockfile`, `encrypt`, `allowed_account_ids` | No se toca |
+| `providers.tf` | `terraform { required_version = ">= 1.10" }`, `required_providers` (`hashicorp/aws ~> 6.70`) y `provider "aws"` (`region = var.region`, `allowed_account_ids = [var.aws_account_id]`, `default_tags`) | Un proveedor nuevo se declara aquí (ver «Proveedores y lock») |
+| `main.tf` | Solo `data` de cuenta y las llamadas a los seis módulos | Ningún recurso suelto: todo recurso vive en un módulo |
+| `variables.tf` / `terraform.tfvars` | Variables de §5.3 que ya usa algún lote, con `type` y `description`; sus valores | Una variable nueva se añade a §5.3 y a los dos archivos en el mismo cambio |
+| `outputs.tf` | Outputs de §5.2 | Un output nuevo se añade antes a §5.2 |
+| `.terraform.lock.hcl` | Versiones y *hashes* de los proveedores | Versionado; ver «Proveedores y lock» |
+| `.gitignore` | Ignora `.terraform/` y los planes; reincluye el lock y `terraform.tfvars` | — |
+
+**Nombres que ya existen en `envs/dev`**
+
+| Nombre | Qué es |
+|---|---|
+| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno` | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos). No hay todavía un `local` con el prefijo de §5.1: el primer lote que lo necesite lo define en `main.tf` y lo añade a esta tabla |
+| `data.aws_caller_identity.actual` | Cuenta de las credenciales (`.account_id`); alimenta el output `cuenta_id` |
+| `data.aws_default_tags.actuales` | Etiquetas efectivas del proveedor; nada lo referencia (lleva `# tflint-ignore: terraform_unused_declarations`) porque solo sirve para que los validadores lean las etiquetas del estado |
+| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`, hoy sin argumentos. Su lote (§4) les añade entradas y salidas |
+| Última línea de `main.tf`: `# validacion-0-2 <AAAAMMDD-HHMMSS>` | La escribe y sustituye `validate02.py` (C2 la fusiona en `main`). No se borra ni hace falta moverla: el validador quita la anterior y añade la nueva al final |
+
+**Módulos (`modules/<nombre>/`)**
+- Cada uno tiene `main.tf` y `versions.tf` (`terraform { required_version = ">= 1.10" }`). Cuando un módulo usa un
+  proveedor, lo declara en `required_providers` de su `versions.tf` con la misma restricción que `envs/dev`.
+- Entradas en `variables.tf` (siempre con `type` y `description`) y salidas en `outputs.tf`. Un módulo nunca llama a
+  otro: `main.tf` de `envs/dev` pasa los outputs de uno como entradas de otro.
+- Las cuatro etiquetas de §5.1 las pone el proveedor (`default_tags`): los recursos no las repiten; solo añaden las
+  propias (`Name` u otras de su lote).
+
+**Proveedores y lock**
+- `envs/dev/.terraform.lock.hcl` fija hoy `hashicorp/aws` 6.70.0 con *hashes* de `linux_amd64`, `windows_amd64`,
+  `darwin_amd64` y `darwin_arm64`. CI usa `init -lockfile=readonly`: si el lock no tiene un proveedor o su *hash*, el
+  job falla en `terraform init`.
+- Añadir o actualizar un proveedor (p. ej. `hashicorp/random` para `random_password` en INF-1.2):
+  ```bash
+  cd INFRASTRUCTURA_TERRAFORM/project
+  terraform -chdir=envs/dev init -upgrade
+  terraform -chdir=envs/dev providers lock -platform=linux_amd64 -platform=windows_amd64 \
+    -platform=darwin_amd64 -platform=darwin_arm64
+  ```
+  y se versiona el lock en el mismo commit.
+
+**Lo que hace fallar a CI** (antes de llegar al `plan`)
+- `terraform fmt -check -recursive` sobre `project/`: se corre `terraform fmt -recursive` antes de hacer commit.
+- TFLint (`project/.tflint.hcl`: preset `recommended` y *ruleset* de AWS 0.50.0) en cada directorio de `project/`,
+  `bootstrap/` incluido. Cualquier aviso falla el job: variables sin `type`, variables, `locals` o `data` sin usar
+  (salvo con `# tflint-ignore` justificado), módulos sin `required_version`, proveedores sin versión, o valores que el
+  *ruleset* de AWS sabe inválidos (tipos de instancia, clases de RDS…). TFLint no está instalado en las máquinas del
+  equipo: lo ejecuta solo CI.
+
+**Trabajo en local**: `export AWS_PROFILE=<perfil>` y una vez `terraform -chdir=envs/dev init`. `plan` en local está
+permitido (toma el bloqueo unos segundos); `apply` va por `infra.yml` (§3.9).
+
+**Ayudas propias de `validate02.py`** (no están en `comun.py`): procesos de `terraform` en segundo plano que se detienen
+con SIGINT para que suelten el bloqueo, y toma del bloqueo creando el `.tflock` con escritura condicional, porque desde
+Terraform 1.15 `terraform console` ya no lo toma. Si otro validador las necesita, se mueven a `comun.py` y se añaden a
+la tabla de §5.11.
 
 ---
 
