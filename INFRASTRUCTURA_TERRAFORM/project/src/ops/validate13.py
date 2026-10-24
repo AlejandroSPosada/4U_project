@@ -824,7 +824,7 @@ def c5_base(ctx: Contexto) -> str:
     problemas = []
     if codigo != 0:
         problemas.append(f"app salió con {codigo}")
-    if not ssl or ssl[1] != "t":
+    if not ssl or ssl[1] not in ("t", "true"):  # boolean || text da «true» (no «t», que es lo que imprime psql)
         problemas.append(f"la conexión con sslmode=require no usa TLS ({ssl[1] if ssl else 'sin resultado'})")
     if not vector or version(vector[1]) < (0, 8, 0):
         problemas.append(f"extensión vector {vector[1] if vector else 'no creada'}; se exige ≥ 0.8.0")
@@ -836,7 +836,8 @@ def c5_base(ctx: Contexto) -> str:
         problemas.append(f"log: {comun.resumir(log, 300)}")
     return comprobar(
         problemas,
-        f"ssl = t, vector {vector[1] if vector else '?'}, sin TLS rechazada (no pg_hba.conf entry … no encryption)",
+        f"ssl = {ssl[1] if ssl else '?'}, vector {vector[1] if vector else '?'}, "
+        "sin TLS rechazada (no pg_hba.conf entry … no encryption)",
     )
 
 
