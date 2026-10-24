@@ -4,7 +4,7 @@
 |---|---|
 | Versión del documento | **0.4.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-23 |
-| Estado | Diseño propuesto. **INF-0.1 aplicado** (bootstrap de la cuenta); **INF-0.2 escrito** (esqueleto de `envs/dev` y `infra.yml`), pendiente de validar; el resto, sin código todavía |
+| Estado | Diseño propuesto. **INF-0.1 e INF-0.2 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |

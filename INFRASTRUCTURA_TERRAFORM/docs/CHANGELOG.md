@@ -44,8 +44,10 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   - Nuevo riesgo R12: repositorio público, logs y comentarios del `plan` visibles.
 - **Contratos tocados (§5):** §5.3 (aclaración, sin cambio de nombres). Los workflows (§3.9) amplían su disparador de
   forma compatible.
-- **Cómo se verificó:** antes de entregar, con OpenTofu 1.13.2 y el proveedor aws 6.70.0 (no había Terraform en el
-  entorno de pruebas): `fmt -check`, `validate` y TFLint 0.65 + *ruleset* aws 0.50 limpios en `envs/dev`, `modules/` y
+- **Cómo se verificó:** `validate02.py --entorno dev` con código 0 sobre `c677aeb` (2026-10-24 14:04–14:10 UTC): pasan
+  P1–P6 y C1–C4b, con el PR de prueba #5 comentado, fusionado y aplicado por `infra.yml` tras la aprobación del entorno
+  `dev`; el primer `apply` de `envs/dev` también lo hizo `infra.yml`. Antes de entregar, con OpenTofu 1.13.2 y el
+  proveedor aws 6.70.0 (no había Terraform en el entorno de pruebas): `fmt -check`, `validate` y TFLint 0.65 + *ruleset* aws 0.50 limpios en `envs/dev`, `modules/` y
   `bootstrap/`; actionlint + shellcheck limpios en `infra.yml`; el script del comentario probado con node; el
   validador, de principio a fin contra S3/STS/IAM simulados (moto, con escrituras condicionales) para P1–P6 y C3–C4, y
   contra un `gh` simulado en 12 escenarios para C1–C2 (restos anteriores, plan con cambios o fallido, `main` protegida,
@@ -53,7 +55,7 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   cuenta equivocada, `--solo C2`, dos ejecuciones seguidas). Revisión independiente de `infra.yml`, `envs/dev` y el
   validador contra el código de Terraform 1.16.6: encontró el cambio de `console` y los riesgos de C2a y de la limpieza
   de restos (corregidos y probados de nuevo en los escenarios «main avanzó», «main ocupada», «padre distinto», PR de
-  *fork* y C3b interrumpida). Pendiente: `validate02.py --entorno dev` con código 0 en `main`.
+  *fork* y C3b interrumpida).
 - **Pendiente:** lo mismo que en 0.3.0.
 
 ---
