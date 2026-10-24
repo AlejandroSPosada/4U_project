@@ -33,3 +33,5 @@ module "borde" { # INF-1.4
 module "observabilidad" { # INF-3.1
   source = "../../modules/observabilidad"
 }
+
+# validacion-0-2 20261024-025255
