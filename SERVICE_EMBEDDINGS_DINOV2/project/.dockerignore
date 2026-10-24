@@ -1,0 +1,10 @@
+# Solo entra al contexto lo que la imagen necesita (ARCHITECTURE §5.5): src/app y tools/benchmark.py,
+# más lo necesario para construirla. src/ops/, tests/ y tools/evaluacion/ quedan fuera.
+*
+!pyproject.toml
+!uv.lock
+!src/app/
+!tools/descargar_modelo.py
+!tools/benchmark.py
+**/__pycache__
+**/*.pyc

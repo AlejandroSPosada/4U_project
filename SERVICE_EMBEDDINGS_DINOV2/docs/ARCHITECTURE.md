@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.2.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.3.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-23 |
-| Estado | Diseño propuesto. **Aún no hay código** |
+| Estado | En construcción: código de EMB-1.1 (servicio base e imagen); el resto de lotes, pendiente |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Servicio HTTP interno que convierte fotos en **vectores de 768 dimensiones** con **DINOv2 ViT-B/14** sobre CPU. No
@@ -84,28 +84,65 @@ SERVICE_EMBEDDING/
 └── project/                      todo el código
     ├── src/
     │   ├── app/
-    │   │   ├── main.py           FastAPI: rutas, arranque (carga + calentamiento), manejador de errores
-    │   │   ├── config.py         Parámetros de §5.7 (pydantic-settings)
+    │   │   ├── main.py           FastAPI: rutas, arranque (carga + calentamiento), errores, X-Request-Id, logs JSON
+    │   │   ├── config.py         Identidad del modelo y del vector (§5.3) y parámetros de §5.7 (pydantic-settings)
     │   │   ├── modelo.py         Carga de DINOv2 desde MODELO_DIR, inferencia por lotes, normalización L2
     │   │   ├── preproceso.py     Pipeline pp-v1 (función pura: bytes → tensor)
     │   │   └── planificador.py   Cola con prioridad y el hilo único de inferencia
     │   └── ops/                  validate<fase><n>.py y comun.py: validadores de los lotes EMB-x.y (§5.8)
     ├── tools/
-    │   ├── descargar_modelo.py   Se ejecuta en el build: baja la revisión fija a /opt/modelo
+    │   ├── descargar_modelo.py   Se ejecuta en el build: baja la revisión fija a /opt/modelo y deja revision.json
     │   ├── benchmark.py          EMB-3.1: latencia por tamaño de lote (va dentro de la imagen, §5.8)
     │   └── evaluacion/           EMB-3.2: recuperación sobre un conjunto etiquetado
-    ├── tests/                    preproceso, vectores dorados (golden/), contrato HTTP
-    ├── Dockerfile
-    └── pyproject.toml            uv; ruff; pytest; grupo `ops` para los validadores
+    ├── tests/                    contrato HTTP, configuración, modelo, validadores; preproceso y vectores dorados
+    │                             (golden/) desde EMB-2.1
+    ├── .dockerignore             solo entra a la imagen lo de §5.5
+    ├── .gitignore                incluye .validacion/ (informes de los validadores)
+    ├── Dockerfile                tres etapas (§4.2)
+    ├── pyproject.toml            uv (PyTorch desde su índice de CPU); ruff; pytest; grupo `ops` para los validadores
+    └── uv.lock                   versiones exactas de todas las dependencias (R4); se versiona
 ```
+
+El workflow `embedding.yml` vive en `.github/workflows/` de la raíz del monorepo (infra §3.9).
 
 ### 4.2 EMB-1.1 — Servicio base e imagen
 - El `Dockerfile` instala PyTorch para CPU desde el índice de ruedas de CPU de PyTorch (evita las dependencias de
   CUDA y ahorra más de 1 GB) y `transformers`, y **descarga los pesos durante el build** a `/opt/modelo` con la
   revisión fija de §5.3. En ejecución se activa `HF_HUB_OFFLINE=1`: el servicio no sale a internet para nada.
-- Al arrancar: carga el modelo en modo evaluación, fija los hilos (`TORCH_NUM_THREADS`), ejecuta dos inferencias de
-  calentamiento (lote 1 y lote 8) y solo entonces `GET /health/ready` responde 200.
+- La imagen se construye en **tres etapas**:
+  1. `dependencias`: `uv sync --locked --no-dev` instala en `/opt/venv` exactamente lo de `uv.lock`.
+  2. `pesos`: `tools/descargar_modelo.py` baja `config.json`, `model.safetensors` y `preprocessor_config.json` de la
+     revisión fija y escribe `revision.json`. La etapa solo depende de `config.py` y del script, así que cambiar el
+     resto del código reutiliza la caché y no vuelve a bajar ~350 MB.
+  3. Final: `python:3.12-slim` con `/opt/venv`, `/opt/modelo`, `src/app/` y `tools/benchmark.py`; sin uv ni caché de
+     descargas, usuario `app` (uid 10001) sin carpeta personal.
+- **Arranque** (ADR-EMB-09). Uvicorn empieza a escuchar de inmediato y el modelo se prepara en un hilo aparte:
+  mientras tanto `GET /health` responde 200, `GET /health/ready` 503 y `GET /v1/info` 200. El hilo, en orden:
+  1. comprueba que `revision.json` coincide con el modelo y la revisión de §5.3;
+  2. fija los hilos: `OMP_NUM_THREADS` y `MKL_NUM_THREADS` = `TORCH_NUM_THREADS` antes de importar PyTorch,
+     `torch.set_num_threads(TORCH_NUM_THREADS)` y un hilo entre operadores;
+  3. carga `Dinov2Model` desde `MODELO_DIR` (solo archivos locales, *safetensors*) en float32 y modo evaluación, y
+     comprueba que produce 768 dimensiones;
+  4. calienta con dos inferencias sobre tensores de ceros de 224 × 224 (lote 1 y lote 8);
+  5. solo entonces `GET /health/ready` responde 200 y se registra `modelo_listo` con los tiempos de carga y
+     calentamiento.
+
+  Si cualquier paso falla, registra `carga_del_modelo_fallida` con la traza y el proceso termina con código 1.
+- **Logs**: todo sale en JSON por la salida estándar desde la primera línea, también lo de uvicorn y `transformers`
+  (sus barras de progreso se desactivan); el registro de acceso de uvicorn se sustituye por el evento `peticion`
+  (formato en §5.7).
 - `GET /v1/info` publica la versión del vector para que el backend la compruebe.
+- **CI/CD** (`embedding.yml`, contrato de infra §5.9):
+  - En PR: `uv sync --locked`, `ruff check`, `ruff format --check` y `pytest`.
+  - En `main` (o a mano con `workflow_dispatch`, p. ej. tras un cambio de Terraform en la tarea, ADR-INF-09): las
+    mismas pruebas; imagen `linux/amd64` con `GIT_COMMIT` = SHA, publicada en ECR solo si esa etiqueta no existe
+    (son inmutables); nueva revisión de `campus-locator-dev-embedding` a partir de la última de la familia,
+    cambiando solo la imagen del contenedor `app`; `update-service`.
+  - Si el servicio tiene réplicas, espera hasta 25 min a que el despliegue quede `COMPLETED` con la revisión nueva y
+    falla si el *circuit breaker* revierte a la anterior (que `wait services-stable` daría por buena). Con 0
+    réplicas (fuera del horario de `dev`) no espera: la revisión nueva se toma al encender.
+  - El job de despliegue no declara `environment`: el rol `gha-deploy` solo confía en
+    `sub = repo:<github_repo>:ref:refs/heads/main` (infra §5.8).
 
 ### 4.3 EMB-2.1 — Vectorización por lotes
 1. `POST /v1/embed` recibe 1–8 imágenes y valida tipo y tamaño antes de encolar.
@@ -162,7 +199,8 @@ Procedimiento previsto para cambiar de modelo o preprocesamiento sin dejar de ub
 | Autenticación | Ninguna. El acceso lo limita el grupo de seguridad (solo `api` y `worker`) |
 | Formato | JSON UTF-8, `snake_case`, en español |
 | Errores | `{"error": {"codigo": "…", "mensaje": "…", "detalle": {…} \| null}}` (mismo formato que el backend) |
-| Correlación | Respeta y devuelve `X-Request-Id` |
+| Correlación | Respeta y devuelve `X-Request-Id` si tiene de 1 a 128 caracteres de `[A-Za-z0-9._:-]`; si falta o no cumple, genera uno (32 caracteres hexadecimales). Va en todas las respuestas, también en las de error |
+| Documentación interactiva | `/docs` y `/openapi.json` solo con `APP_ENV=local`; en `dev` responden `404` |
 
 ### 5.2 Endpoints
 
@@ -181,7 +219,7 @@ Procedimiento previsto para cambiar de modelo o preprocesamiento sin dejar de ub
   "version": "0.1.0",
   "commit": "a1b2c3d",
   "modelo": "facebook/dinov2-base",
-  "revision": "<SHA del commit del repositorio de Hugging Face, fijado en EMB-1.1>",
+  "revision": "f9e44c814b77203eaa57a6bdbbd535f21ede1415",
   "arquitectura": "ViT-B/14",
   "preprocesamiento": "pp-v1",
   "version_vector": "dinov2-vitb14/pp-v1",
@@ -192,6 +230,10 @@ Procedimiento previsto para cambiar de modelo o preprocesamiento sin dejar de ub
   "dispositivo": "cpu"
 }
 ```
+- Responde también mientras el modelo carga: son datos fijos de la imagen, y si los pesos no fueran la revisión
+  anotada el proceso no llegaría a quedar listo (§4.2).
+- `commit` = los 7 primeros caracteres de `GIT_COMMIT` (§5.5), o `desconocido` si la imagen se construyó sin ese
+  argumento. `lote_max` = `LOTE_MAX` (§5.7).
 
 #### `POST /v1/embed`
 - `multipart/form-data` con 1 a `LOTE_MAX` (8) partes llamadas `imagenes`, de tipo `image/jpeg` o `image/png`, cada
@@ -215,7 +257,7 @@ Procedimiento previsto para cambiar de modelo o preprocesamiento sin dejar de ub
 | Elemento | Valor en `pp-v1` |
 |---|---|
 | Modelo | `facebook/dinov2-base` (DINOv2 ViT-B/14, 86 M parámetros, licencia Apache 2.0) en `transformers` (`Dinov2Model`) |
-| Revisión | SHA de commit fijo del repositorio en Hugging Face; se elige y anota aquí en EMB-1.1 |
+| Revisión | `f9e44c814b77203eaa57a6bdbbd535f21ede1415`: cabeza de `main` en Hugging Face al fijarla en EMB-1.1 (commit «Update README.md», 2024-01-17). De ella se usan `config.json`, `model.safetensors` y `preprocessor_config.json` |
 | Precisión | float32, `torch.inference_mode()`, modo evaluación |
 | 1. Decodificación | Pillow; orientación EXIF aplicada (`ImageOps.exif_transpose`); convertir a RGB (descarta alfa) |
 | 2. Redimensión | Lado **menor** a 256 px, interpolación bicúbica con antialias, manteniendo proporción |
@@ -244,12 +286,13 @@ de la tolerancia de §5.4) exige una versión nueva (ADR-EMB-08).
 | Elemento | Valor |
 |---|---|
 | Repositorio ECR | `campus-locator/embedding` (infra §5.1) |
-| Base | `python:3.12-slim`, usuario sin privilegios, contenedor `app` |
+| Base | `python:3.12-slim`, usuario sin privilegios `app` (uid 10001), contenedor `app` |
+| Construcción | Desde `project/`: `docker build --platform linux/amd64 --build-arg GIT_COMMIT=<sha> .`; tres etapas (§4.2) y dependencias exactas de `uv.lock` (uv 0.11.32). Sin `uv.lock` el build falla |
 | Comando (`CMD`) | `uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers 1 --no-server-header` |
 | Puerto | `8080` |
-| Pesos | En la imagen, `/opt/modelo` (descargados en el build) |
+| Pesos | En la imagen, `/opt/modelo` (descargados en el build por `tools/descargar_modelo.py`, que deja `revision.json` con el modelo y la revisión; si no coinciden con §5.3, el servicio no arranca) |
 | Contenido | `src/app/` (como paquete `app`) y `tools/benchmark.py`; `src/ops/`, `tests/` y `tools/evaluacion/` quedan fuera |
-| Variables fijadas en el `Dockerfile` | `MODELO_DIR=/opt/modelo`, `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1` (la aplicación además aplica `TORCH_NUM_THREADS` a PyTorch y a OpenMP al arrancar) |
+| Variables fijadas en el `Dockerfile` | `MODELO_DIR=/opt/modelo`, `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `HF_HOME=/tmp/huggingface` (el usuario de la imagen no tiene carpeta personal) y `GIT_COMMIT` (argumento de build con el SHA del commit, por defecto `desconocido`; `/v1/info` publica sus 7 primeros caracteres como `commit`) (la aplicación además aplica `TORCH_NUM_THREADS` a PyTorch y a OpenMP al arrancar) |
 | Variables que inyecta la infraestructura | `TORCH_NUM_THREADS`, `LOG_LEVEL`, `APP_ENV` (infra §5.4) |
 | Tamaño esperado | ~2 GB (PyTorch CPU + transformers + pesos de ~350 MB) |
 | Memoria en ejecución | ~1,5 GB en reposo; la tarea tiene 3 GB para lotes de 8 |
@@ -260,6 +303,8 @@ de la tolerancia de §5.4) exige una versión nueva (ADR-EMB-08).
 |---|---|---|
 | 400 | `SOLICITUD_INVALIDA` | Sin partes `imagenes` o multipart mal formado |
 | 400 | `IMAGEN_INVALIDA` | Una imagen no se pudo decodificar o mide menos de 64 px de lado; `detalle.indice` = posición |
+| 404 | `NO_ENCONTRADO` | Ruta inexistente |
+| 405 | `METODO_NO_PERMITIDO` | Método no admitido en una ruta existente |
 | 413 | `LOTE_DEMASIADO_GRANDE` | Más de 8 imágenes, una de más de 4 MB o una petición de más de 16 MB |
 | 415 | `TIPO_NO_SOPORTADO` | Tipo distinto de `image/jpeg` o `image/png` |
 | 503 | `NO_LISTO` | El modelo aún carga |
@@ -277,7 +322,9 @@ de la tolerancia de §5.4) exige una versión nueva (ADR-EMB-08).
 | `RETRY_AFTER_S` | 5 | En `503 SATURADO` |
 | Hilos de PyTorch | `TORCH_NUM_THREADS` (valor en infra §5.4) | Igual a los vCPU de la tarea |
 | Latencia objetivo | lote de 5: p95 ≤ 3 s; lote de 1: p95 ≤ 1 s | **A medir en EMB-3.1**; aún sin datos |
-| Formato de log | JSON por línea: `ts`, `nivel`, `request_id`, `prioridad`, `n_imagenes`, `cola_ms`, `inferencia_ms` | Nunca bytes de imagen |
+| Formato de log | JSON por línea en la salida estándar: siempre `ts` (UTC, ms), `nivel` y `evento`; además, según el evento, `request_id`, `prioridad`, `n_imagenes`, `cola_ms`, `inferencia_ms` (vectorización, EMB-2.1), `metodo`, `ruta`, `estado_http`, `duracion_ms` (cada petición), `carga_ms`, `calentamiento_ms`, `revision`, `version_vector`, `hilos`, `commit` (arranque) y `traza` (errores) | Nunca bytes de imagen. Eventos: `arranque`, `modelo_listo`, `carga_del_modelo_fallida`, `peticion`, `error_no_previsto` y los de uvicorn. Las peticiones a `/health` y `/health/ready` van en nivel `DEBUG` (el *health check* llama cada 30 s) |
+
+Cada parámetro tiene su valor por defecto en `config.py` y se puede sobrescribir con una variable de entorno del mismo nombre; si alguna se vuelve necesaria en `dev`, se añade antes a infra §5.4.
 
 ### 5.8 Validadores del servicio
 
@@ -303,6 +350,21 @@ con el endpoint de diagnóstico del backend (§5.9).
 
 **Datos de prueba**: imágenes sintéticas generadas por el propio validador y las cinco imágenes de
 `project/tests/golden/`; el servicio no guarda nada, así que no hay limpieza más allá de detener las tareas sueltas.
+
+**`src/ops/comun.py`** (desde EMB-1.1) reúne lo que comparten los validadores de esta carpeta:
+- Los nombres del contrato (cuenta, clúster, servicio, familia, log group, contenedor y repositorio de infra §5.1;
+  puerto, `version_vector` y comando del *health check* de infra §5.7) y la lectura del SHA anotado en §5.3.
+- `ejecutar(lote)`: argumentos, orden, estados, códigos de salida e informe de infra §5.11. Las precondiciones se
+  evalúan en el orden en que el validador las declara y se para en la primera que no se cumple; el informe las lista
+  por ID. Cada validador declara una función de limpieza que se usa dos veces: al empezar (restos de una ejecución
+  anterior, antes de comprobar puertos o recursos) y al terminar.
+- Clasificación de errores: falta de Docker o de una variable, credenciales inválidas, permisos insuficientes de AWS,
+  `--solo` con un ID inexistente o un error inesperado en una precondición → **3**; `PrecondicionNoCumplida` → **2**;
+  una comprobación que falla o lanza un error inesperado → **1**, y se siguen ejecutando las demás.
+- `--solo C1` incluye las subcomprobaciones (`C1a`, `C1b`).
+- Docker se usa por su CLI y AWS con boto3 desde `AWS_PROFILE` (región `us-east-1`); para una imagen de ECR hace
+  `docker login` con el token de `ecr:GetAuthorizationToken`, sin imprimirlo.
+- Necesita en la máquina de quien valida: Docker (`local`), credenciales de AWS (`dev`) y `git` (commit del informe).
 
 ### 5.9 Formatos de las herramientas y del conjunto de evaluación
 
@@ -385,6 +447,14 @@ ingesta.
 **ADR-EMB-08 — `version_vector` explícita y cambios nunca silenciosos (aceptada).**
 Mezclar vectores de versiones distintas degrada la búsqueda sin dar errores. Cualquier cambio que altere los números
 produce una versión nueva y un re-indexado (procedimiento de §4.6).
+
+**ADR-EMB-09 — Modelo preparado en segundo plano; si falla, el proceso termina (aceptada, EMB-1.1).**
+`GET /health` debe responder mientras el modelo carga (§5.2), pero uvicorn no acepta conexiones hasta que termina el
+arranque de la aplicación; por eso la carga y el calentamiento van en un hilo aparte. Si fallan (pesos ausentes o de
+otra revisión, falta de memoria), el proceso termina con código 1: ECS reemplaza la tarea y la regla de EventBridge
+avisa (infra §3.8), en lugar de mantener viva una tarea que nunca quedará lista hasta que el *health check* agote el
+*start period* y sus reintentos. *Consecuencia:* un error de pesos se ve como tareas que se reinician, con
+`carga_del_modelo_fallida` en el log.
 
 ---
 

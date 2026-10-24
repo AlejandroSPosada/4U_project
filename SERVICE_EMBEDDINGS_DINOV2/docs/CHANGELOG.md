@@ -23,6 +23,50 @@ re-indexar el dataset.
 
 ---
 
+## [0.3.0] — 2026-10-23
+
+- **Lote que la motivó:** EMB-1.1 (servicio base e imagen).
+- **Qué cambió:**
+  - Revisión de `facebook/dinov2-base` fijada en §5.3: `f9e44c814b77203eaa57a6bdbbd535f21ede1415`, la cabeza de
+    `main` en Hugging Face al consultarla (commit «Update README.md» del 2024-01-17). La imagen descarga de ella
+    `config.json`, `model.safetensors` y `preprocessor_config.json`.
+  - Primer código en `project/`: `/health`, `/health/ready`, `/v1/info`, carga y calentamiento del modelo en
+    segundo plano, `Dockerfile`, `src/ops/comun.py` y `validate11.py`; workflow `.github/workflows/embedding.yml`.
+  - §4.1 y §4.2 describen lo construido: estructura real (`.dockerignore`, `uv.lock`, pruebas), imagen en tres
+    etapas, orden del arranque, logs y comportamiento de `embedding.yml` (espera propia que detecta el *rollback* del
+    *circuit breaker*; sin `environment` en el job de despliegue).
+  - Nuevo ADR-EMB-09: el modelo se prepara en segundo plano y, si falla, el proceso termina con código 1.
+  - §5.8 documenta `src/ops/comun.py` (orden, limpieza al empezar y al terminar, clasificación de errores en
+    códigos, `--solo` con subcomprobaciones, acceso a Docker, AWS y ECR).
+- **Contratos tocados (§5):**
+  - §5.1: reglas de `X-Request-Id` (1–128 caracteres de `[A-Za-z0-9._:-]`; si no, se genera) y documentación
+    interactiva solo en `local`.
+  - §5.2: ejemplo de `/v1/info` con la revisión real; responde también mientras el modelo carga; `commit` cae a
+    `desconocido` sin `GIT_COMMIT`.
+  - §5.3: revisión anotada.
+  - §5.5: `revision.json` y arranque que la verifica; usuario `app` (uid 10001); cómo se construye; variables
+    `GIT_COMMIT` y `HF_HOME=/tmp/huggingface` (el usuario de la imagen no tiene carpeta personal).
+  - §5.6: `404 NO_ENCONTRADO` (mismo código que el backend) y `405 METODO_NO_PERMITIDO`, con el formato de §5.1.
+  - §5.7: formato completo del log (campos y eventos; salud en `DEBUG`) y sobrescritura de parámetros por variable
+    de entorno.
+  - La `version_vector` **no** cambia: sigue siendo `dinov2-vitb14/pp-v1`; la revisión se fija por primera vez, antes
+    de que exista ningún vector.
+- **Cómo se verificó:** SHA leído de la página de archivos de `main` del repositorio en Hugging Face el
+  2026-10-23. 37 pruebas en verde (contrato HTTP con un modelo falso; carga, CLS tras la *layernorm* y norma L2 con
+  un DINOv2 diminuto en `transformers` 5.20.2 y PyTorch 2.14.1; contrato de los validadores, incluida la coherencia
+  de §5.3 y de `validation-1-1` con el código) y `ruff` limpio. Arranque real con `uvicorn`: `/health` 200 durante
+  la carga, `/health/ready` 503 → 200, `/v1/info` completo, log JSON desde la primera línea, el *health check* de
+  infra §5.7 sale con 0 y el proceso termina con 1 si `revision.json` no coincide. `validate11.py` se ejercitó con
+  dobles de Docker y de ECS (códigos 0, 1, 2 y 3) y `embedding.yml` pasa `actionlint` y `shellcheck`. La imagen no
+  se construyó (el entorno de trabajo no llegaba al índice de PyTorch ni a Hugging Face): construirla y ejecutar
+  `validate11.py` contra AWS queda para quien cierra el lote.
+- **Pendiente:** generar y versionar `project/uv.lock` (`uv lock`; el índice de PyTorch para CPU no era accesible al
+  escribir el lote); ejecutar `validate11.py` en `local` y en `dev` (C1 espera INF-1.3). La carpeta del repositorio se
+  llama `SERVICE_EMBEDDINGS_DINOV2`, no `SERVICE_EMBEDDING` como dicen los documentos: `embedding.yml` usa el nombre
+  real; si se renombra, hay que cambiar sus `paths`.
+
+---
+
 ## [0.2.0] — 2026-10-23
 
 - **Lote que la motivó:** ninguno; cambio de organización del monorepo pedido por el equipo.
