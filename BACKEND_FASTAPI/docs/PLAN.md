@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.5.1**.
+Alineado con `ARCHITECTURE.md` **v0.6.0**.
 
 ---
 
@@ -200,7 +200,7 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 | Lote | Fase | Estado | Validación | Última validación | Versión de ARCHITECTURE al cerrar | Nota |
 |---|---|---|---|---|---|---|
 | BE-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `2fe5a9d` 2026-10-24 | 0.5.1 | Primer despliegue por `backend.yml` (`api` de 0 a 1 réplica con `campus-locator-dev-api:2`). La primera ejecución destapó que `backend.yml` nunca había llegado al repositorio y que C3a rechazaba un commit que solo tocara el workflow (corregido en 0.5.1) |
-| BE-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | |
+| BE-1.2 | 1 | En curso | [1-2](./validation/validation-1-2.md) | — | — | |
 | BE-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | |
 | BE-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | |
 | BE-2.2 | 2 | Pendiente | [2-2](./validation/validation-2-2.md) | — | — | |

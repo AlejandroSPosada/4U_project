@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.5.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.6.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
-| Estado | En construcción: hay código desde BE-1.1 (`project/`); lo de lotes posteriores es diseño propuesto |
+| Estado | En construcción: hay código de BE-1.1 y BE-1.2 (`project/`); lo de lotes posteriores es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -105,16 +105,16 @@ BACKEND_FASTAPI/
     │   │   ├── errores.py       ErrorApi; excepciones → formato de §5.1 con los códigos de §5.6
     │   │   ├── api/v1/          Routers: health, auth, localize, places, alerts, collect, admin_*
     │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5)
-    │   │   ├── dominio/         Lógica pura y probable sin red ni base: localizacion.py, geo.py, rumbo.py, validaciones.py
-    │   │   ├── servicios/       Casos de uso: localizar, recolectar, ingerir, purgar, alertas, lugares, estadisticas
-    │   │   ├── db/              Modelos SQLAlchemy, sesión async, consultas (incluida la búsqueda vectorial)
+    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2); localizacion.py, geo.py, rumbo.py
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2), localizar, recolectar, ingerir, purgar, alertas, lugares, estadisticas
+    │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor async), esquema.py (§5.7 comprobable); consultas (incluida la búsqueda vectorial)
     │   │   ├── clientes/        embedding.py (httpx), s3.py y sqs.py (boto3 en hilos de anyio)
     │   │   ├── seguridad/       jwt.py, hash.py (argon2id), dependencias requiere_admin / usuario_opcional
     │   │   ├── worker.py        Bucle de consumo de las colas (python -m app.worker)
-    │   │   └── cli.py           migrar, verificar-esquema, crear-usuario (python -m app.cli …)
+    │   │   └── cli.py           python -m app.cli: migrar y verificar-esquema (BE-1.2), crear-usuario y desactivar-usuario (BE-1.3), limpiar-validacion (BE-2.1)
     │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes BE-x.y (§5.11)
-    ├── migrations/              Alembic
-    ├── tests/                   unitarias (dominio), de API (httpx + base efímera), de contrato (vs §5), validadores
+    ├── migrations/              Alembic: env.py y versions/ (SQL explícito; 0001 = esquema inicial de §5.7)
+    ├── tests/                   unitarias, de API, de contrato (vs §5), con base (`base`: PostgreSQL efímero, §4.3) y de los validadores
     ├── docker-compose.yml       entorno `local` (§5.11)
     ├── Dockerfile               python:3.12-slim, usuario sin privilegios, puerto 8000 (§5.9)
     ├── .dockerignore            la imagen solo recibe src/app/, pyproject.toml, uv.lock y .python-version
@@ -125,7 +125,9 @@ BACKEND_FASTAPI/
 Reglas internas:
 - `dominio/` no importa nada de FastAPI, SQLAlchemy ni boto3: se prueba sin infraestructura.
 - Los routers solo validan, llaman a un servicio y traducen errores de dominio a los códigos de §5.6.
-- Ningún log incluye tokens, contraseñas, URLs prefirmadas ni bytes de imagen.
+- Ningún log incluye tokens, contraseñas, URLs prefirmadas ni bytes de imagen. Tampoco los valores de una sentencia
+  SQL: los motores usan `hide_parameters` y las trazas omiten el `DETAIL` de PostgreSQL, que copia la fila rechazada
+  (§4.3, §5.10).
 
 ### 4.2 BE-1.1 — Base del servicio
 FastAPI con un único proceso de uvicorn (la tarea tiene 0,25 vCPU). Un middleware ASGI asigna `X-Request-Id` (o
@@ -146,11 +148,11 @@ de `worker` no falle al arrancar, en BE-1.1 `python -m app.worker` solo registra
 purga con BE-4.1 (§4.11). Hasta entonces, si el autoescalado lo enciende por mensajes en `ingesta` o `purga`, esos
 mensajes siguen en la cola (igual que con la imagen de prueba de infra).
 
-**Despliegue con `backend.yml`** (`.github/workflows/` de la raíz del monorepo). Sigue la secuencia de infra §5.9, sin
-el paso `migrate` hasta BE-1.2. Lo propio del backend:
+**Despliegue con `backend.yml`** (`.github/workflows/` de la raíz del monorepo). Sigue la secuencia de infra §5.9; el
+paso `migrate`, desde BE-1.2, está en §4.3. Lo propio del backend:
 - Disparadores: PR y *push* a `main` con cambios en `BACKEND_FASTAPI/project/**` o en el propio `backend.yml` (infra
-  §3.9). En los dos, `uv sync --frozen`, `ruff check`, `ruff format --check` y `pytest`, sin base de datos hasta BE-1.2.
-  En `main`, el despliegue solo empieza si las pruebas pasan.
+  §3.9). En los dos, `uv sync --frozen --group ops`, `ruff check`, `ruff format --check` y `pytest`, con un PostgreSQL
+  efímero desde BE-1.2 (§4.3). En `main`, el despliegue solo empieza si las pruebas pasan.
 - Mismas convenciones que `infra.yml`: `permissions: {}` y los permisos mínimos en cada job, acciones fijadas por SHA
   con la versión en un comentario, `persist-credentials: false`, `allowed-account-ids` y uv 0.11.32 (el que copia el
   `Dockerfile`). Una ejecución nueva de un PR cancela la anterior; los despliegues de `main` van en fila.
@@ -158,11 +160,12 @@ el paso `migrate` hasta BE-1.2. Lo propio del backend:
   permisos que tiene `gha-deploy` (infra §5.8), que no incluyen `ecr:DescribeImages`.
 - La imagen se construye con `--build-arg GIT_COMMIT=${GITHUB_SHA}` (§5.9). Si la etiqueta ya existe en ECR (reintento
   del workflow), no se vuelve a publicar: las etiquetas son inmutables.
-- Cada revisión nueva de `campus-locator-dev-api` y `campus-locator-dev-worker` parte de la última de su familia (la de
-  Terraform o la del despliegue anterior) y solo cambia la imagen del contenedor `app`; se quitan los campos de solo
+- Cada revisión nueva de `campus-locator-dev-migrate` (desde BE-1.2), `campus-locator-dev-api` y
+  `campus-locator-dev-worker` parte de la última de su familia (la de Terraform o la del despliegue anterior) y solo
+  cambia la imagen del contenedor `app`; se quitan los campos de solo
   lectura de `describe-task-definition` (`taskDefinitionArn`, `revision`, `status`, `requiresAttributes`,
   `compatibilities`, `registeredAt`, `registeredBy`, `deregisteredAt` y `deleteRequestedAt`). Así `worker` conserva
-  su comando (`python -m app.worker`).
+  su comando (`python -m app.worker`) y `migrate`, el suyo (`python -m app.cli migrar`).
 - Si `api` tiene `desiredCount = 0` (primer despliegue), pasa a 1.
 - Tras `wait services-stable`, comprueba que el despliegue `PRIMARY` de `api` sea la revisión nueva con
   `rolloutState = COMPLETED` (espera hasta 2 min más a que llegue a ese estado); si el *circuit breaker* hizo
@@ -174,9 +177,53 @@ el paso `migrate` hasta BE-1.2. Lo propio del backend:
   `sub = repo:<github_repo>:ref:refs/heads/main` (infra §5.8), y con un entorno el `sub` cambiaría.
 
 ### 4.3 BE-1.2 — Base de datos y migraciones
-SQLAlchemy 2 asíncrono sobre `asyncpg`; Alembic para el esquema de §5.7. La primera migración crea la extensión
-`vector` y los tipos enumerados. `python -m app.cli migrar` aplica `alembic upgrade head` y luego crea el admin
-inicial si no existe ningún usuario `admin` (lee `ADMIN_INICIAL_*`). Es idempotente: se ejecuta en cada despliegue.
+SQLAlchemy 2 asíncrono sobre `asyncpg` (`app/db/sesion.py`): un motor por proceso, con TLS según `DB_SSLMODE`
+(`require` en AWS, porque RDS lo exige) y `DB_CONNECT_TIMEOUT_S` para abrir cada conexión (§5.10). `api` crea el suyo
+al arrancar, sin conectarse: arranca aunque la base no responda, y lo informa `GET /v1/health/ready` (§5.3). Cualquier
+fallo al **abrir** una conexión (red, DNS, TLS, credenciales, falta de permiso `CONNECT`, base inexistente, tiempo
+agotado) es «base no disponible»; después, solo lo son los de red y los de la clase 08 de PostgreSQL. Los motores usan
+`hide_parameters` (los errores no llevan los valores de la sentencia) y las trazas de los logs omiten el `DETAIL` de
+PostgreSQL, que puede copiar la fila rechazada: un hash de contraseña o un correo (§5.10). Alembic
+aplica el esquema de §5.7; las migraciones están en `project/migrations/` (SQL explícito; `0001` crea la extensión
+`vector`, los tipos enumerados, las tablas, los índices y el índice HNSW parcial) y entran en la imagen (§5.9).
+
+**`python -m app.cli migrar`** (tarea `migrate`, paso 2 de `backend.yml`). Es idempotente: se ejecuta en cada
+despliegue.
+1. Toma un bloqueo consultivo de sesión (`pg_advisory_lock`; espera hasta 5 min): dos `migrate` a la vez (un despliegue
+   y un validador) se ejecutan en fila.
+2. `alembic upgrade head` en una transacción: el DDL de PostgreSQL es transaccional, así que una migración que falla no
+   deja nada a medias.
+3. Si no hay **ninguna** fila con rol `admin` (activa o no), crea el admin inicial: `ADMIN_INICIAL_CORREO` normalizado
+   (§4.4), `ADMIN_INICIAL_PASSWORD` con argon2id y nombre «Administrador». Si ya hay uno, no toca nada: desactivar al
+   admin a propósito no lo revive. Si el correo ya es de un usuario `user`, falla (código 1) en lugar de cambiarle el
+   rol; para eso está `crear-usuario --rol admin` (BE-1.3).
+
+Registra `migracion_iniciada` y `migracion_terminada` (revisión anterior y nueva, si aplicó algo y qué pasó con el admin
+inicial); los errores, con los eventos y códigos de salida de §5.9 y §5.10.
+
+**`python -m app.cli verificar-esquema`** (tarea suelta con la definición de `migrate`; la lanza el validador de BE-1.2).
+En una transacción de solo lectura toma el mismo bloqueo consultivo en modo compartido (si hay un `migrar` en curso,
+espera hasta 5 min a que termine en lugar de leer un esquema a medio migrar), lee el catálogo del esquema `public` y lo
+compara con `app/db/esquema.py`, la forma comprobable de §5.7. Cada diferencia es un evento `esquema_diferencia` (objeto, aspecto, esperado y encontrado) y el
+resultado, `esquema_verificado`. Su código de salida distingue «difiere» (1) de «no se pudo verificar» (2, §5.9).
+
+**Coherencia del esquema.** La migración, los modelos (`app/db/modelos.py`) y `esquema.py` describen lo mismo: las
+pruebas aplican la migración y `create_all` de los modelos a bases vacías y comprueban que las dos coinciden exactamente
+con `esquema.py`. Cambiar el esquema es una revisión nueva en `migrations/versions/` más esos dos archivos y §5.7, en el
+mismo cambio. Los textos de `esquema.py` (restricciones, índices) son los del catálogo de PostgreSQL 17, la versión de
+RDS y de CI (riesgo R11).
+
+**Pruebas con base.** Las marcadas `base` (`tests/base/`) crean una base nueva por prueba en el PostgreSQL de
+`PRUEBAS_DB_URL` y la borran al terminar. En `backend.yml` es un servicio `pgvector/pgvector:pg17` (la imagen del
+`docker-compose.yml`) y `PRUEBAS_DB_OBLIGATORIA=1` hace que fallen, en lugar de omitirse, si no hay base; en una máquina
+sin PostgreSQL se omiten. El job de pruebas instala también el grupo `ops`, para probar los validadores.
+
+**Paso `migrate` de `backend.yml`** (infra §5.9, paso 2). Registra la revisión nueva de `campus-locator-dev-migrate`
+junto con las de `api` y `worker` (§4.2), la lanza con `run-task` (Fargate, `SUBREDES_TAREAS`, `SG_MIGRATE`, IP
+pública), espera a que pare, imprime su log (`/campus-locator/dev/migrate`, stream `migrate/app/<id de la tarea>`) y
+falla si el contenedor `app` no sale con 0; entonces `api` y `worker` no se actualizan (sus revisiones quedan sin usar,
+y el siguiente despliegue parte de ellas). Solo usa permisos de `gha-deploy` (infra §5.8): `run-task` sin etiquetas
+(que pedirían `ecs:TagResource`), `describe-tasks` y `logs:GetLogEvents` sobre ese log group.
 
 ### 4.4 BE-1.3 — Autenticación
 `POST /v1/auth/login` busca el usuario por correo normalizado (sin espacios, minúsculas), verifica la contraseña con
@@ -376,9 +423,10 @@ fotos, embeddings §5.7), búsquedas < 100 ms; objetivo p95 en el servidor ≤ 1
   `docker compose`), se devuelve tal cual.
 
 #### `GET /v1/health/ready`
-`200` → `{"estado": "ok", "db": "ok" | "no_configurada", "embedding": "ok" | "no_disponible"}`. `no_configurada` solo
-se ve en BE-1.1, antes de que exista la conexión a la base (BE-1.2). `503 BASE_NO_DISPONIBLE` si la base no
-responde. Que `embedding` esté apagado (se enciende a mano, infra §3.4) **no** produce `503`.
+`200` → `{"estado": "ok", "db": "ok", "embedding": "ok" | "no_disponible"}`. Si la base no responde a `SELECT 1` en
+`DB_CONNECT_TIMEOUT_S` (§5.10), o faltan las variables `DB_*`, `503 BASE_NO_DISPONIBLE` con el formato de §5.1 (desde
+BE-1.2 ya no existe `db = no_configurada`). Que `embedding` esté apagado (se enciende a mano, infra §3.4) **no** produce
+`503`. Las dos comprobaciones se hacen en paralelo.
 - `embedding = ok` si `GET {EMBEDDING_URL}/health/ready` responde `200` dentro de `EMBEDDING_CONNECT_TIMEOUT_S`;
   cualquier otro resultado (apagado, el nombre DNS sin registros, error o lentitud) es `no_disponible`.
 
@@ -670,110 +718,135 @@ para un 4xx y `ERROR_INTERNO` para un 5xx. Las respuestas que genera API Gateway
 
 ### 5.7 Esquema de la base de datos
 
-PostgreSQL 17 con la extensión `vector` (pgvector 0.8.x). Los UUID se generan con `gen_random_uuid()`, nativo de
-PostgreSQL. Todas las fechas son `timestamptz`.
+PostgreSQL 17 con la extensión `vector` (pgvector 0.8.x), en el esquema `public`. `python -m app.cli verificar-esquema`
+(§5.9) compara la base con **exactamente** lo que dice esta sección: tipos enumerados, tablas, columnas (tipo, nulo y
+valor por defecto), restricciones e índices con sus nombres, secuencias y la revisión de Alembic; un objeto de más
+(tabla, columna, índice, vista, función, *trigger*, tipo) también es una diferencia. La forma comprobable está en
+`project/src/app/db/esquema.py`, con los textos del catálogo de PostgreSQL 17; la migración `0001` y los modelos
+(`app/db/modelos.py`) dejan exactamente eso (§4.3).
 
-**Tipos enumerados**
-`rol_usuario` (`user`, `admin`) · `categoria_lugar` (8 valores de §5.3) · `tipo_alerta` (6 valores) ·
-`prioridad_alerta` (`normal`, `alta`) · `estado_video` (`pendiente`, `procesando`, `procesado`, `con_errores`,
+**Convenciones**
+- Columnas `NOT NULL` salvo las marcadas «sí» en *Nulo*: lo que la app puede no informar, lo que se completa en un paso
+  posterior (tamaño real, dimensiones, error) y las marcas de borrado. Todas las fechas son `timestamptz`.
+- `id uuid` con `DEFAULT gen_random_uuid()` (nativo de PostgreSQL); `creado_en` y `actualizado_en` con `DEFAULT now()`.
+  `actualizado_en` lo actualiza la aplicación en cada cambio: no hay *triggers*.
+- Los `CHECK` fijan los rangos y longitudes de esta sección y algunos invariantes baratos. Un `CHECK` deja pasar el nulo
+  de una columna nula. Los límites que son parámetros de §5.10 (`REC_MAX_BYTES_FOTO`, `LOC_MAX_FOTOS`…) los valida la
+  aplicación, para que cambiar el parámetro no exija una migración.
+- «WGS84»: `lat` ∈ [−90, 90] y `lng` ∈ [−180, 180] (§5.1). «Rumbo»: [0, 360) (ADR-BE-12). Longitudes en caracteres.
+- Nombres de restricciones e índices como los pone PostgreSQL: `<tabla>_pkey`, `<tabla>_<columnas>_key` (únicos),
+  `<tabla>_<columna>_fkey`, `<tabla>_<columna>_idx` y `<tabla>_<regla>_check` (`<regla>` = la columna o el nombre que
+  indica la tabla).
+- Las FK hacia `usuarios` no tienen `ON DELETE`: los usuarios no se borran (§4.4). Las demás llevan la acción indicada.
+- Además existe `alembic_version` (de Alembic), con la revisión aplicada: `verificar-esquema` exige la última de las
+  migraciones de la imagen.
+
+**Tipos enumerados** (los valores, en este orden)
+`rol_usuario` (`user`, `admin`) · `categoria_lugar` (`biblioteca`, `cafeteria`, `bano`, `bloque`, `auditorio`,
+`deportes`, `administracion`, `entrada`) · `tipo_alerta` (`agua`, `mobiliario`, `escalones`, `obra`, `vehiculos`,
+`otro`) · `prioridad_alerta` (`normal`, `alta`) · `estado_video` (`pendiente`, `procesando`, `procesado`, `con_errores`,
 `eliminado`) · `estado_imagen` (`pendiente_subida`, `subida`, `procesada`, `error`) · `calidad_imagen` (`alta`,
-`normal`, `baja`).
+`normal`, `baja`). En el código: `app/dominio/enumerados.py`.
 
 **`usuarios`**
 
-| Columna | Tipo | Reglas |
-|---|---|---|
-| `id` | `uuid` | PK, `gen_random_uuid()` |
-| `correo` | `text` | único, guardado en minúsculas y sin espacios |
-| `nombre` | `text` | no nulo |
-| `rol` | `rol_usuario` | por defecto `user` |
-| `hash_password` | `text` | argon2id |
-| `activo` | `boolean` | por defecto `true` |
-| `creado_en`, `ultimo_acceso_en` | `timestamptz` | |
+| Columna | Tipo | Nulo | Por defecto | Reglas |
+|---|---|---|---|---|
+| `id` | `uuid` | | `gen_random_uuid()` | PK |
+| `correo` | `text` | | | único (`usuarios_correo_key`); guardado sin espacios alrededor y en minúsculas: `correo = lower(btrim(correo))` y no vacío (`usuarios_correo_check`) |
+| `nombre` | `text` | | | no vacío (`usuarios_nombre_check`) |
+| `rol` | `rol_usuario` | | `user` | |
+| `hash_password` | `text` | | | argon2id (§4.4) |
+| `activo` | `boolean` | | `true` | |
+| `creado_en` | `timestamptz` | | `now()` | |
+| `ultimo_acceso_en` | `timestamptz` | sí | | |
 
 **`lugares`**
 
-| Columna | Tipo | Reglas |
-|---|---|---|
-| `id` | `uuid` | PK |
-| `nombre` | `text` | 2–80 |
-| `nombre_normalizado` | `text` | único; minúsculas y sin tildes (lo calcula la aplicación) |
-| `categoria` | `categoria_lugar` | |
-| `lat`, `lng` | `double precision` | rangos WGS84 |
-| `alias` | `text[]` | por defecto `{}` |
-| `descripcion`, `referencias` | `text` | ≤ 300 |
-| `imagen_key` | `text` | clave en `lugares/` o nulo |
-| `creado_en`, `actualizado_en` | `timestamptz` | |
-| `creado_por` | `uuid` | FK `usuarios` |
+| Columna | Tipo | Nulo | Por defecto | Reglas |
+|---|---|---|---|---|
+| `id` | `uuid` | | `gen_random_uuid()` | PK |
+| `nombre` | `text` | | | 2–80 |
+| `nombre_normalizado` | `text` | | | único; minúsculas y sin tildes (lo calcula la aplicación) |
+| `categoria` | `categoria_lugar` | | | |
+| `lat`, `lng` | `double precision` | | | WGS84 |
+| `alias` | `text[]` | | `'{}'` | hasta 20 textos de ≤ 60 (lo valida la API, §5.5) |
+| `descripcion`, `referencias` | `text` | sí | | ≤ 300 |
+| `imagen_key` | `text` | sí | | exactamente `lugares/{id}.jpg` (infra §5.5) |
+| `creado_en`, `actualizado_en` | `timestamptz` | | `now()` | |
+| `creado_por` | `uuid` | | | FK `usuarios` |
 
 **`alertas`**
 
-| Columna | Tipo | Reglas |
-|---|---|---|
-| `id` | `uuid` | PK; lo puede generar la app |
-| `lat`, `lng` | `double precision` | |
-| `mensaje` | `text` | 1–200 |
-| `tipo` / `prioridad` | enumerados | |
-| `radio_m` | `smallint` | 5–100, por defecto 15 |
-| `activa` | `boolean` | por defecto `true` |
-| `vigencia_desde`, `vigencia_hasta` | `timestamptz` | nulos o `hasta > desde` |
-| `version` | `integer` | empieza en 1, +1 en cada cambio |
-| `creado_en`, `actualizado_en` | `timestamptz` | índice en `actualizado_en` |
-| `creado_por`, `actualizado_por` | `uuid` | FK `usuarios` |
-| `eliminada_en` | `timestamptz` | *tombstone*; filas borradas hace > 90 días se eliminan físicamente |
+| Columna | Tipo | Nulo | Por defecto | Reglas |
+|---|---|---|---|---|
+| `id` | `uuid` | | `gen_random_uuid()` | PK; lo puede generar la app (ADR-BE-10) |
+| `lat`, `lng` | `double precision` | | | WGS84 |
+| `mensaje` | `text` | | | 1–200 |
+| `tipo` | `tipo_alerta` | | `otro` | |
+| `prioridad` | `prioridad_alerta` | | `normal` | |
+| `radio_m` | `smallint` | | `15` | 5–100 |
+| `activa` | `boolean` | | `true` | |
+| `vigencia_desde`, `vigencia_hasta` | `timestamptz` | sí | | si están las dos, `hasta > desde` (`alertas_vigencia_check`) |
+| `version` | `integer` | | `1` | ≥ 1; +1 en cada cambio |
+| `creado_en`, `actualizado_en` | `timestamptz` | | `now()` | índice `alertas_actualizado_en_idx` |
+| `creado_por`, `actualizado_por` | `uuid` | | | FK `usuarios` |
+| `eliminada_en` | `timestamptz` | sí | | *tombstone*: borrar fija `eliminada_en` y `actualizado_en`, así `GET /v1/alerts?desde=` usa el mismo índice; las borradas hace más de 90 días se eliminan físicamente |
 
 **`videos`**
 
-| Columna | Tipo | Reglas |
-|---|---|---|
-| `id` | `uuid` | PK |
-| `numero` | `integer` | único, secuencia `videos_numero_seq` |
-| `nombre` | `text` | 1–40 |
-| `ref_cliente` | `text` | único junto con `creado_por` |
-| `estado` | `estado_video` | |
-| `iniciado_en`, `finalizado_en` | `timestamptz` | informados por la app |
-| `duracion_s`, `pasos` | `integer` | |
-| `distancia_m` | `real` | |
-| `inicio_lat`, `inicio_lng` | `double precision` | |
-| `inicio_rumbo` | `real` | [0, 360) o nulo |
-| `total_fotos_declaradas` | `smallint` | 0–200 |
-| `dispositivo`, `app_version` | `text` | |
-| `subida_completa_en` | `timestamptz` | |
-| `creado_por` | `uuid` | FK `usuarios` |
-| `creado_en`, `actualizado_en` | `timestamptz` | |
-| `eliminado_en`, `eliminado_por`, `purgado_en` | | borrado lógico y purga |
+| Columna | Tipo | Nulo | Por defecto | Reglas |
+|---|---|---|---|---|
+| `id` | `uuid` | | `gen_random_uuid()` | PK |
+| `numero` | `integer` | | `nextval('videos_numero_seq')` | único (`videos_numero_key`); la secuencia (`integer`) pertenece a la columna |
+| `nombre` | `text` | | | 1–40 |
+| `ref_cliente` | `text` | | | 1–40; único junto con `creado_por` (`videos_creado_por_ref_cliente_key`) |
+| `estado` | `estado_video` | | `pendiente` | |
+| `iniciado_en`, `finalizado_en` | `timestamptz` | sí | | informados por la app |
+| `duracion_s`, `pasos` | `integer` | sí | | ≥ 0 |
+| `distancia_m` | `real` | sí | | ≥ 0 |
+| `inicio_lat`, `inicio_lng` | `double precision` | sí | | WGS84; las dos o ninguna (`videos_inicio_check`) |
+| `inicio_rumbo` | `real` | sí | | rumbo |
+| `total_fotos_declaradas` | `smallint` | | `0` | 0–200 |
+| `dispositivo`, `app_version` | `text` | sí | | |
+| `subida_completa_en` | `timestamptz` | sí | | |
+| `creado_por` | `uuid` | | | FK `usuarios` |
+| `creado_en`, `actualizado_en` | `timestamptz` | | `now()` | |
+| `eliminado_en`, `purgado_en` | `timestamptz` | sí | | borrado lógico y purga (ADR-BE-07): `estado = 'eliminado'` si y solo si `eliminado_en` no es nulo, y `eliminado_en` y `eliminado_por` van juntos (`videos_eliminado_check`); `purgado_en` solo con `eliminado_en` (`videos_purgado_en_check`) |
+| `eliminado_por` | `uuid` | sí | | FK `usuarios` |
 
 **`imagenes`**
 
-| Columna | Tipo | Reglas |
-|---|---|---|
-| `id` | `uuid` | PK |
-| `video_id` | `uuid` | FK `videos` (`ON DELETE CASCADE`) |
-| `orden` | `smallint` | 1–200; único junto con `video_id` |
-| `s3_key` | `text` | único; formato de infra §5.5 |
-| `lat`, `lng` | `double precision` | |
-| `rumbo` | `real` | [0, 360) o nulo |
-| `capturada_en` | `timestamptz` | |
-| `bytes_declarados`, `bytes` | `integer` | |
-| `etag` | `text` | |
-| `ancho`, `alto` | `smallint` | tras corregir EXIF |
-| `estado` | `estado_imagen` | índice |
-| `error` | `text` | motivo legible |
-| `intentos` | `smallint` | por defecto 0 |
-| `calidad` | `calidad_imagen` | por defecto `normal` |
-| `lugar_id` | `uuid` | FK `lugares` (`ON DELETE SET NULL`), índice |
-| `notas` | `text` | ≤ 500 |
-| `creado_en`, `actualizado_en` | `timestamptz` | |
+| Columna | Tipo | Nulo | Por defecto | Reglas |
+|---|---|---|---|---|
+| `id` | `uuid` | | `gen_random_uuid()` | PK |
+| `video_id` | `uuid` | | | FK `videos` (`ON DELETE CASCADE`) |
+| `orden` | `smallint` | | | 1–200; único junto con `video_id` (`imagenes_video_id_orden_key`) |
+| `s3_key` | `text` | | | único; exactamente `dataset/{video_id}/{id}.jpg` (infra §5.5; `imagenes_s3_key_check`) |
+| `lat`, `lng` | `double precision` | | | WGS84 |
+| `rumbo` | `real` | sí | | rumbo |
+| `capturada_en` | `timestamptz` | | | informada por la app |
+| `bytes_declarados` | `integer` | | | > 0 (el máximo, `REC_MAX_BYTES_FOTO`, lo valida la API) |
+| `bytes` | `integer` | sí | | ≥ 0; tamaño real en S3 |
+| `etag` | `text` | sí | | |
+| `ancho`, `alto` | `smallint` | sí | | > 0; tras corregir EXIF |
+| `estado` | `estado_imagen` | | `pendiente_subida` | índice `imagenes_estado_idx` |
+| `error` | `text` | sí | | motivo legible; no nulo si y solo si `estado = 'error'` (`imagenes_error_check`) |
+| `intentos` | `smallint` | | `0` | ≥ 0 |
+| `calidad` | `calidad_imagen` | | `normal` | |
+| `lugar_id` | `uuid` | sí | | FK `lugares` (`ON DELETE SET NULL`); índice `imagenes_lugar_id_idx` |
+| `notas` | `text` | sí | | ≤ 500 |
+| `creado_en`, `actualizado_en` | `timestamptz` | | `now()` | |
 
 **`embeddings`**
 
-| Columna | Tipo | Reglas |
-|---|---|---|
-| `imagen_id` | `uuid` | FK `imagenes` (`ON DELETE CASCADE`) |
-| `version_vector` | `text` | p. ej. `dinov2-vits14/pp-v1` (definido por embeddings, §5.3 de su documento) |
-| `vector` | `vector(384)` | normalizado L2 |
-| `creado_en` | `timestamptz` | |
-| PK | (`imagen_id`, `version_vector`) | |
+| Columna | Tipo | Nulo | Por defecto | Reglas |
+|---|---|---|---|---|
+| `imagen_id` | `uuid` | | | FK `imagenes` (`ON DELETE CASCADE`) |
+| `version_vector` | `text` | | | p. ej. `dinov2-vits14/pp-v1` (definido por embeddings, §5.3 de su documento) |
+| `vector` | `vector(384)` | | | normalizado L2 (lo garantiza embeddings; sin `CHECK`) |
+| `creado_en` | `timestamptz` | | `now()` | |
+| PK | (`imagen_id`, `version_vector`) | | | |
 
 Índice por versión activa (parcial):
 ```sql
@@ -782,24 +855,37 @@ CREATE INDEX embeddings_hnsw_dinov2_vits14_pp_v1 ON embeddings
   WHERE version_vector = 'dinov2-vits14/pp-v1';
 ```
 Toda consulta vectorial filtra por la misma `version_vector` para usar el índice. El valor se escribe **como literal**
-en
-la consulta (sale de `EMBEDDING_VERSION_VECTOR`, nunca de la petición): con un parámetro, las sentencias preparadas de
-`asyncpg` pueden pasar a un plan genérico que ignora el índice parcial. Una versión nueva del modelo llega
-con su propia migración (índice parcial nuevo) y se activa cambiando `EMBEDDING_VERSION_VECTOR` (§5.10).
+en la consulta (sale de `EMBEDDING_VERSION_VECTOR`, nunca de la petición): con un parámetro, las sentencias preparadas
+de `asyncpg` pueden pasar a un plan genérico que ignora el índice parcial. Una versión nueva del modelo llega con su
+propia migración (índice parcial nuevo) y se activa cambiando `EMBEDDING_VERSION_VECTOR` (§5.10).
 
-**`eventos_localizacion`** (anónimo, retención 180 días)
+**`eventos_localizacion`** (anónimo, retención 180 días; sin IP, sin identificador de dispositivo, sin fotos)
 
-`id bigserial` · `creado_en` · `origen` (`escaneo`, `frame`) · `resultado` (`ok`, `sin_coincidencias`, `error`) ·
-`nivel` · `confianza real` · `lat`, `lng` (redondeadas a 5 decimales, ~1 m) · `fotos_usadas`,
-`fotos_con_coincidencia smallint` · `latencia_ms integer` · `version_vector` · `app_version`.
-Sin IP, sin identificador de dispositivo, sin fotos.
+| Columna | Tipo | Nulo | Por defecto | Reglas |
+|---|---|---|---|---|
+| `id` | `bigint` | | `nextval('eventos_localizacion_id_seq')` | PK (`bigserial`) |
+| `creado_en` | `timestamptz` | | `now()` | índice `eventos_localizacion_creado_en_idx` (retención y estadísticas) |
+| `origen` | `text` | | | `escaneo` o `frame` (`CHECK`, no tipo enumerado) |
+| `resultado` | `text` | | | `ok`, `sin_coincidencias` o `error` |
+| `nivel` | `text` | sí | | `alta`, `media` o `baja` |
+| `confianza` | `real` | sí | | [0, 1] |
+| `lat`, `lng` | `double precision` | sí | | WGS84, redondeadas a 5 decimales (~1 m) por la aplicación; las dos o ninguna (`eventos_localizacion_posicion_check`) |
+| `fotos_usadas`, `fotos_con_coincidencia` | `smallint` | | | 0 ≤ `fotos_con_coincidencia` ≤ `fotos_usadas` (`eventos_localizacion_fotos_check`) |
+| `latencia_ms` | `integer` | | | ≥ 0 |
+| `version_vector` | `text` | | | |
+| `app_version` | `text` | sí | | |
 
 **`auditoria`**
 
-`id bigserial` · `creado_en` · `actor_id uuid` (nulo en logins fallidos) · `accion text` (`usuario.login`,
-`video.renombrar`, `video.eliminar`, `imagen.editar`, `imagen.eliminar`, `imagen.reprocesar`, `lugar.crear`,
-`lugar.editar`, `lugar.eliminar`, `alerta.upsert`, `alerta.eliminar`) · `entidad text` · `entidad_id text` ·
-`detalle jsonb` (sin secretos).
+| Columna | Tipo | Nulo | Por defecto | Reglas |
+|---|---|---|---|---|
+| `id` | `bigint` | | `nextval('auditoria_id_seq')` | PK (`bigserial`) |
+| `creado_en` | `timestamptz` | | `now()` | |
+| `actor_id` | `uuid` | sí | | FK `usuarios`; nulo en logins fallidos |
+| `accion` | `text` | | | `usuario.login`, `video.renombrar`, `video.eliminar`, `imagen.editar`, `imagen.eliminar`, `imagen.reprocesar`, `lugar.crear`, `lugar.editar`, `lugar.eliminar`, `alerta.upsert`, `alerta.eliminar`. Sin `CHECK`: el catálogo crece con los lotes |
+| `entidad` | `text` | | | tipo de la entidad (`usuario`, `video`, `imagen`, `lugar`, `alerta`) |
+| `entidad_id` | `text` | sí | | |
+| `detalle` | `jsonb` | | `'{}'` | un objeto JSON (`auditoria_detalle_check`), sin secretos |
 
 ### 5.8 Mensajes de las colas
 
@@ -845,8 +931,8 @@ borra.
 ### 5.9 Procesos de la imagen
 
 Una sola imagen (`campus-locator/backend`, `project/Dockerfile`, Python 3.12, usuario sin privilegios). Contiene solo
-`src/app/` (copiado como paquete `app`) y `migrations/` (desde BE-1.2); `src/ops/` y `tests/` quedan fuera. El
-contenedor se llama `app` (infra §5.1).
+`src/app/` (copiado como paquete `app`, en `/srv/app`) y `migrations/` (en `/srv/migrations`, desde BE-1.2); `src/ops/`
+y `tests/` quedan fuera. El contenedor se llama `app` (infra §5.1).
 
 | Imagen | Valor |
 |---|---|
@@ -859,11 +945,21 @@ contenedor se llama `app` (infra §5.1).
 |---|---|---|---|
 | `api` (por defecto, `CMD` de la imagen) | `uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --no-server-header` | 8000 | `GET /v1/health` |
 | `worker` | `python -m app.worker` | — | proceso vivo; registra un latido cada 60 s (en BE-1.1 solo eso, §4.2) |
-| `migrate` | `python -m app.cli migrar` | — | código de salida 0 = éxito |
-| Verificación de esquema (tarea suelta) | `python -m app.cli verificar-esquema` (compara la base con §5.7; no modifica nada) | — | código de salida 0 = coincide, 1 = difiere (imprime las diferencias) |
+| `migrate` | `python -m app.cli migrar` (§4.3) | — | código de salida 0 = migrado y admin inicial en orden; 1 = falló una migración o el admin inicial; 2 y 3, abajo |
+| Verificación de esquema (tarea suelta con la definición de `migrate`) | `python -m app.cli verificar-esquema` (compara la base con §5.7 en una transacción de solo lectura) | — | código de salida 0 = coincide; 1 = difiere (un evento `esquema_diferencia` por diferencia); 2 = no se pudo verificar (base no disponible o error al leer el catálogo); 3, abajo |
 | Usuarios (tarea suelta con la definición de `migrate`) | `python -m app.cli crear-usuario --correo X --nombre Y [--rol admin\|user]` (contraseña desde la terminal o `CREAR_USUARIO_PASSWORD`). Si el correo existe, actualiza nombre, rol y contraseña y lo reactiva; imprime `creado` o `actualizado` | — | código 0 = hecho |
 | | `python -m app.cli desactivar-usuario --correo X` | — | 0 = desactivado (también si ya lo estaba), 1 = no existe |
 | Limpieza de pruebas (tarea suelta con la definición de `worker`) | `python -m app.cli limpiar-validacion [--video ID …]` (§4.5): sin `--video`, todos los videos `validacion-`; con `--video`, solo esos, y se niega (código 1) si alguno no lleva el prefijo. Imprime `LIMPIEZA {"videos": n, "objetos": m}` | — | código 0 = hecho |
+
+**Códigos de salida de `python -m app.cli`**, comunes a todos los comandos. Sus logs son líneas JSON de §5.10 con
+`proceso = migrate`; `migrar` y `verificar-esquema` informan su resultado (y las diferencias) solo como eventos de log:
+
+| Código | Significado |
+|---|---|
+| 0 | Hecho (en `verificar-esquema`, la base coincide) |
+| 1 | Resultado negativo: el que diga cada comando arriba (difiere, falló, no existe) |
+| 2 | No se pudo trabajar con la base: no se pudo abrir la conexión (red, DNS, TLS, credenciales, permiso `CONNECT`, base inexistente, tiempo agotado) o se perdió después (evento `base_no_disponible`) |
+| 3 | Uso o configuración: argumentos (argparse daría 2; aquí es 3), una variable con un valor no válido (p. ej. `DB_PORT=abc`), `DB_*` que faltan o `ADMIN_INICIAL_*` cuando hay que crear el admin (evento `configuracion_incompleta`) |
 
 Variables que lee: las de infra §5.4 para `api`, `worker` y `migrate`, y `APP_COMMIT`, que fija la imagen. Ningún
 otro valor es obligatorio; los parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescribirse con
@@ -895,12 +991,14 @@ para arrancar: cada lote exige las suyas al usarlas (por ejemplo, `DB_*` desde B
 | `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api` |
 | `PAGINA_POR_DEFECTO` / `PAGINA_MAX` | 24 / 100 | 24 coincide con `FOTOS_POR_PAGINA` de la Galería |
 | `DB_POOL_API` / `DB_POOL_API_DESBORDE` / `DB_POOL_WORKER` | 5 / 5 / 2 | `db.t4g.micro` admite ~100 conexiones |
+| `DB_CONNECT_TIMEOUT_S` | 5 | Tiempo máximo para abrir una conexión (asyncpg espera 60 s por defecto) y para el `SELECT 1` de `/v1/health/ready` |
 | Formato de log | JSON por línea: `ts`, `nivel`, `proceso`, `request_id`, `evento`, campos propios | Sin secretos ni URLs firmadas. Detalle abajo |
 
 **Formato de log en detalle.** `ts` en UTC con milisegundos y `Z` (`2026-10-23T15:04:05.123Z`); `nivel` = `DEBUG`,
 `INFO`, `WARNING`, `ERROR` o `CRITICAL`; `proceso` = `api`, `worker` o `migrate`; `request_id` = el de la petición en
 curso o `null` fuera de una petición. Después van los campos propios del evento y, si aplica, `mensaje` (cuando el
-texto difiere del evento), `logger` y `excepcion` (la traza completa, en la misma línea). Los mensajes de librerías
+texto difiere del evento), `logger` y `excepcion` (la traza completa, en la misma línea, con el `DETAIL` de los errores
+de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la fila rechazada). Los mensajes de librerías
 (uvicorn, por ejemplo) salen con `evento = "log"` y su texto en `mensaje`. Un campo propio nunca reemplaza a uno fijo.
 
 **Eventos de log** (cada lote añade los suyos aquí):
@@ -912,6 +1010,14 @@ texto difiere del evento), `logger` y `excepcion` (la traza completa, en la mism
 | `error_api` | `api` | `estado`, `codigo` | Un error de §5.6 con estado ≥ 500 (`ERROR`) |
 | `api_iniciada` / `api_detenida` | `api` | `version`, `commit`, `entorno` (solo al iniciar) | Arranque y parada de la aplicación |
 | `worker_iniciado` / `latido` / `worker_detenido` | `worker` | Al iniciar: `version`, `commit`, `entorno`, `modo`; en cada latido: `modo` | Arranque, cada 60 s y parada. `modo = sin_consumo` hasta BE-2.2 |
+| `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` (`WARNING`; responde `503`); en `migrate`, la CLI termina con 2 (`ERROR`) |
+| `configuracion_incompleta` | `migrate` | `faltan`, `invalidas` (nombres de variables), `motivo` (sin el valor recibido) | Faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), o una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT` (`ERROR`); la CLI termina con 3 |
+| `migracion_iniciada` | `migrate` | `version`, `commit`, `entorno`, `revision_objetivo` | Al empezar `migrar` |
+| `migracion_terminada` | `migrate` | `revision_anterior`, `revision`, `aplicada`, `admin_inicial` (`creado` \| `ya_habia_admin`), `usuario_id` (si lo creó), `duracion_ms` | `migrar` terminó con 0. Los mensajes de Alembic (`Running upgrade  -> 0001, …`) salen antes como `evento = log` |
+| `migracion_fallida` | `migrate` | `motivo` (y la traza en `excepcion`) | Falló una migración o el admin inicial (`ERROR`); la CLI termina con 1 |
+| `esquema_diferencia` | `migrate` | `objeto` (p. ej. `columna alertas.radio_m`), `aspecto` (`falta`, `sobra`, `tipo`, `nulo`, `defecto`, `generada`, `definicion`, `valores`, `propietaria`, `revision`), `esperado`, `encontrado` | Una por diferencia de `verificar-esquema` (`WARNING`) |
+| `esquema_verificado` | `migrate` | `resultado` (`coincide` \| `difiere`), `diferencias`, `revision`, `revision_esperada`, `servidor`, `pgvector` | Al terminar `verificar-esquema` (`INFO` si coincide; si no, `WARNING`) |
+| `verificacion_fallida` | `migrate` | `motivo` (y la traza en `excepcion`) | Error que impide comparar y no es de conexión: al leer el catálogo, al cargar las migraciones o al esperar más de 5 min a un `migrar` en curso (`LockNotAvailableError`) (`ERROR`); la CLI termina con 2 |
 
 ### 5.11 Validadores del backend
 
@@ -922,7 +1028,7 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
 
 | Entorno | Qué hay | Qué no se puede validar ahí |
 |---|---|---|
-| `local` | `project/docker-compose.yml`: PostgreSQL 17 con pgvector (`pgvector/pgvector:pg17`), `api` y `worker` construidos desde `project/`, y la imagen de embeddings si se pasa `EMBEDDING_IMAGEN` con el perfil `embedding` (`docker compose --profile embedding up --build`). Puertos en la máquina: `DB_PUERTO_LOCAL` (5432), `API_PUERTO_LOCAL` (8000), `EMBEDDING_PUERTO_LOCAL` (8080); `GIT_COMMIT` (por defecto `local`) llega a `/v1/health`. Las contraseñas del archivo son solo locales | S3 y SQS no se emulan: lo que dependa de ellos solo corre en `dev` |
+| `local` | `project/docker-compose.yml`: PostgreSQL 17 con pgvector (`pgvector/pgvector:pg17`), `api` y `worker` construidos desde `project/`, y la imagen de embeddings si se pasa `EMBEDDING_IMAGEN` con el perfil `embedding` (`docker compose --profile embedding up --build`). Puertos en la máquina: `DB_PUERTO_LOCAL` (5432), `API_PUERTO_LOCAL` (8000), `EMBEDDING_PUERTO_LOCAL` (8080); `GIT_COMMIT` (por defecto `local`) llega a `/v1/health`. Las contraseñas del archivo son solo locales. La base se migra con `docker compose run --rm api python -m app.cli migrar`, que crea el admin inicial con el `ADMIN_INICIAL_*` local del archivo | S3 y SQS no se emulan: lo que dependa de ellos solo corre en `dev` |
 | `dev` | Lo desplegado en AWS (infra §2) | — |
 
 **Variables que leen**
@@ -1032,3 +1138,4 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 | R8 | Reloj del teléfono desajustado (`capturada_en`) | Media | Bajo | El servidor guarda `creado_en` propio; `capturada_en` solo informa |
 | R9 | `db.t4g.micro` se queda corto (memoria del índice, conexiones) | Baja | Medio | Pools pequeños; ver infra R4 |
 | R10 | Formatos de error distintos cuando responde API Gateway | Alta | Bajo | §5.1 lo documenta; la app decide por código HTTP |
+| R11 | El texto del catálogo (restricciones, índices) cambia con una versión mayor de PostgreSQL y `verificar-esquema` da diferencias que no lo son | Baja | Bajo | RDS actualiza por su cuenta solo la versión menor (infra §3.5); CI usa la misma mayor (`pg17`) y prueba que la migración deja exactamente `esquema.py`; un cambio de mayor actualiza `esquema.py` en el mismo cambio |

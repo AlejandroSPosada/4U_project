@@ -1,6 +1,8 @@
 # Entorno `local` del backend (ARCHITECTURE §5.11).
 #
 #   docker compose up --build                     # db + api + worker
+#   docker compose run --rm api python -m app.cli migrar             # esquema de §5.7 y admin inicial (BE-1.2)
+#   docker compose run --rm api python -m app.cli verificar-esquema
 #   EMBEDDING_IMAGEN=<imagen> docker compose --profile embedding up --build   # además, el servicio de embeddings
 #
 # S3 y SQS no se emulan: lo que dependa de ellos solo se valida en `dev`.
@@ -25,6 +27,9 @@ x-entorno: &entorno
   DB_SSLMODE: disable
   EMBEDDING_URL: http://embedding:8080
   JWT_SECRET: local-solo-desarrollo-no-usar-en-aws
+  # Admin inicial que crea `migrar` si no hay ningún admin (en AWS, secreto admin-inicial, infra §5.4).
+  ADMIN_INICIAL_CORREO: admin@campus.edu.co
+  ADMIN_INICIAL_PASSWORD: local-solo-desarrollo-admin
 
 services:
   db:

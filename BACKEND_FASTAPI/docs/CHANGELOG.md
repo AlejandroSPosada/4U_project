@@ -20,6 +20,91 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.6.0] — 2026-10-24
+
+- **Lote que la motivó:** BE-1.2 (Base de datos y migraciones).
+- **Qué cambió:**
+  - §4.1: estructura real de `db/`, `cli.py`, `servicios/migracion.py`, `dominio/`, `migrations/` y `tests/base/`.
+  - §4.2: `backend.yml` instala el grupo `ops`, prueba con un PostgreSQL efímero y registra también la revisión de
+    `migrate`.
+  - §4.3: cómo funcionan el motor (TLS, tiempo de conexión, `api` arranca sin base), `migrar` (bloqueo consultivo,
+    transacción, admin inicial solo si no hay ninguna fila `admin`, conflicto si el correo es de un `user`),
+    `verificar-esquema` (solo lectura, eventos), la coherencia migración/modelos/`esquema.py`, las pruebas con base
+    (`PRUEBAS_DB_URL`, `PRUEBAS_DB_OBLIGATORIA`) y el paso `migrate` de `backend.yml` con los permisos de `gha-deploy`.
+  - §4.1 y §5.10: los logs tampoco llevan valores de sentencias SQL (`hide_parameters`, `DETAIL` de PostgreSQL omitido en
+    las trazas).
+  - R11: el texto del catálogo depende de la versión mayor de PostgreSQL.
+  - `validation/validation-1-2.md`: qué precondiciones se evalúan en cada entorno, C1 exige que el segundo `migrar` no
+    aplique nada, C2 copia los eventos `esquema_diferencia` y distingue el código 2, detalles de las tareas sueltas
+    (`startedBy`, streams), herramientas y cómo se ve una ejecución sin despliegue previo.
+  - PLAN: alineado con 0.6.0; BE-1.2 pasa a «En curso».
+- **Contratos tocados (§5):**
+  - §5.7 (completa lo que no fijaba; `verificar-esquema` compara contra exactamente esto): nulabilidad y valores por
+    defecto de todas las columnas; restricciones `CHECK` (rangos y longitudes de §5.7, WGS84, rumbo, no negativos,
+    `s3_key = dataset/{video_id}/{id}.jpg`, `imagen_key = lugares/{id}.jpg`, coherencia del borrado de videos, `error`
+    solo con `estado = 'error'`, `vigencia_hasta > vigencia_desde`, `detalle` objeto); nombres de restricciones e índices
+    con la convención de PostgreSQL; índices nuevos `imagenes_lugar_id_idx` (ya decía «índice») y
+    `eventos_localizacion_creado_en_idx` (retención); secuencias `videos_numero_seq` (`integer`),
+    `eventos_localizacion_id_seq` y `auditoria_id_seq`; `origen`, `resultado` y `nivel` de `eventos_localizacion` como
+    `text` con `CHECK` (no tipos enumerados); FK de `auditoria.actor_id` a `usuarios`; `alembic_version`.
+  - §5.3 `GET /v1/health/ready`: desaparece `db = no_configurada` (solo existía en BE-1.1); sin `DB_*` o sin respuesta
+    de la base en `DB_CONNECT_TIMEOUT_S`, `503 BASE_NO_DISPONIBLE`. La app no usa este endpoint (§5.3: diagnóstico).
+  - §5.9: rutas de la imagen (`/srv/app`, `/srv/migrations`), códigos de salida de `migrar` y `verificar-esquema` y
+    tabla común de `python -m app.cli` (0 hecho, 1 negativo, **2 base no disponible**, 3 uso o configuración; argparse
+    usaría 2 y se cambia a 3). `verificar-esquema` ya no «imprime» diferencias: son eventos de log.
+  - §5.10: parámetro `DB_CONNECT_TIMEOUT_S` (5 s) y eventos `base_no_disponible`, `configuracion_incompleta`,
+    `migracion_iniciada`, `migracion_terminada`, `migracion_fallida`, `esquema_diferencia`, `esquema_verificado` y
+    `verificacion_fallida`.
+  - §5.11: en `local`, la base se migra con `docker compose run --rm api python -m app.cli migrar`.
+  - Cambio incompatible en §5.3 (un valor que desaparece); mientras la versión sea `0.x`, sube la menor.
+- **Código:** dependencias `sqlalchemy[asyncio]`, `asyncpg`, `alembic` y `argon2-cffi` (`uv.lock` solo añade
+  paquetes); `src/app/db/` (`sesion.py`, `modelos.py` con un tipo `vector` propio, sin el paquete `pgvector` que
+  arrastraría numpy, `esquema.py`), `src/app/cli.py`, `src/app/servicios/migracion.py`, `src/app/seguridad/hash.py`,
+  `src/app/dominio/enumerados.py` y `validaciones.py`; `src/app/logs.py` (trazas sin el `DETAIL` de PostgreSQL); `migrations/` (`env.py` y `versions/0001_esquema_inicial.py`);
+  `/v1/health/ready` con la base; `config.py` (`db_connect_timeout_s`); `Dockerfile` y `.dockerignore` con
+  `migrations/`; `docker-compose.yml` con `ADMIN_INICIAL_*` locales; `src/ops/validate12.py` y, en `src/ops/comun.py`,
+  `ejecutar_proceso`, `lanzar_tarea`, `leer_log`, `red_tareas` y `ResultadoTarea`; `.github/workflows/backend.yml`.
+- **Cómo se verificó:**
+  - Revisión independiente del código (otra sesión, sin ver cómo se escribió). Encontró cuatro defectos, corregidos y
+    con prueba: (1) un error al insertar el admin dejaba el hash argon2id y el correo en la traza del log, tanto por los
+    parámetros de SQLAlchemy (ahora `hide_parameters`) como por el `DETAIL` de PostgreSQL (ahora omitido en toda traza);
+    (2) `DB_PORT=abc` o la falta de `migrations/` salían con código 1 y una traza suelta (ahora 3 con
+    `configuracion_incompleta`, o 1 con `migracion_fallida`); (3) la clasificación de fallos de conexión tomaba un
+    `FileNotFoundError` o un `PermissionError` por «base no disponible» y no contaba la falta de permiso `CONNECT` ni la
+    clase 08 (ahora todo fallo al abrir la conexión es 2 y, después, solo los de red y la clase 08); (4)
+    `verificar-esquema` podía decir «difiere» durante un `migrar` (ahora espera su bloqueo). Además, `ready` informaba
+    «faltan DB_*» con un `DB_SSLMODE` no válido.
+  - `ruff check` y `ruff format --check` limpios. `pytest`: 199 pruebas con PostgreSQL 16.15 y pgvector 0.6.0
+    (`PRUEBAS_DB_URL`) y el grupo `ops`; sin base ni `ops`, 142 pasan y 34 se omiten; con `PRUEBAS_DB_OBLIGATORIA=1` y
+    sin base, las 32 pruebas con base fallan. Entre ellas: la migración y los modelos dejan exactamente `esquema.py`
+    (0 diferencias), §5.7 del documento coincide con `esquema.py` (tablas, columnas, tipo, nulo y valor por defecto,
+    tipos enumerados y nombres citados), `migrar` es idempotente y dos a la vez van en fila, admin inicial (correo
+    normalizado, argon2id, no revive un admin desactivado, 3 sin variables, 1 si el correo es de un `user`),
+    `verificar-esquema` detecta 15 cambios hechos a mano y no modifica nada, las restricciones rechazan datos
+    incoherentes, un vector de 384 ida y vuelta, y `/v1/health/ready` con base, sin base y con credenciales malas.
+  - CLI contra un PostgreSQL real: código 2 con conexión rechazada, contraseña incorrecta, base inexistente, tiempo
+    agotado y TLS rechazado; 0 con `DB_SSLMODE=require` contra un servidor con TLS; 3 sin `DB_*`, con `DB_SSLMODE` no
+    válido y con un argumento desconocido.
+  - Imagen simulada fuera de Docker (solo las dependencias de producción de `uv.lock`, código en `/srv`): `migrar`,
+    `verificar-esquema` y `uvicorn` con el comando de §5.9; `ready` da 200 con base y 503 `BASE_NO_DISPONIBLE` sin ella,
+    con su `X-Request-Id` y el evento `base_no_disponible`.
+  - `backend.yml`: `actionlint` con `shellcheck`. El job de despliegue se ejecutó con `aws`, `docker` y `sleep`
+    simulados (23 escenarios): las entradas de `register-task-definition` y `run-task` se validaron contra el modelo de
+    botocore 1.43 y `--query` se aplicó con JMESPath; todas las llamadas están en los permisos de `gha-deploy`; `run-task`
+    no lleva etiquetas; `migrate` conserva su comando; si `migrate` sale con 1, no arranca, `run-task` no lanza la tarea
+    o no para a tiempo, el workflow falla sin tocar `api` ni `worker`; un log que nunca llega no impide un `migrate`
+    con 0; sin `SUBREDES_TAREAS` o `SG_MIGRATE`, falla antes de llamar a AWS.
+  - `validate12.py` con AWS, HTTP y Docker simulados (17 pruebas): `dev` y `local` completos, C2 «difiere» frente a
+    «no se pudo verificar», migrate con otra imagen que `api`, segundo `migrar` que aplica, contenedor que no arranca,
+    RDS 16.4 o en `modifying` (código 2), sin outputs de red (2), sin `AWS_PROFILE` (3), y nunca imprime la contraseña
+    del secreto.
+- **Pendiente:** colocar `.github/workflows/backend.yml` (las herramientas de edición no pueden escribir en
+  `.github/workflows/`) y subirlo a `main`; la primera ejecución de CI, con PostgreSQL 17, confirma los textos del
+  catálogo de `esquema.py` (aquí se probó con 16, R11); ejecutar `validate12.py --entorno dev` cuando `backend.yml`
+  termine en verde.
+
+---
+
 ## [0.5.1] — 2026-10-24
 
 - **Lote que la motivó:** BE-1.1. La primera validación en `dev` falló en C1–C3 porque `.github/workflows/backend.yml`

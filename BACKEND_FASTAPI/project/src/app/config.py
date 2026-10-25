@@ -4,7 +4,8 @@ Lee las variables que inyecta la infraestructura (`INFRASTRUCTURA_TERRAFORM/docs
 parámetros operativos del backend (`BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.10). Cada parámetro tiene su valor
 inicial aquí y puede sobrescribirse con una variable de entorno del mismo nombre (§5.9).
 
-Ninguna variable es obligatoria para arrancar: cada lote exige las suyas cuando las usa (p. ej. `DB_*` desde BE-1.2).
+Ninguna variable es obligatoria para arrancar: cada lote exige las suyas cuando las usa. Las `DB_*` las exigen la
+CLI (`migrar`, `verificar-esquema`) y `GET /v1/health/ready`, que sin ellas responde `503 BASE_NO_DISPONIBLE`.
 """
 
 from __future__ import annotations
@@ -89,6 +90,8 @@ class Settings(BaseSettings):
     db_pool_api: int = 5
     db_pool_api_desborde: int = 5
     db_pool_worker: int = 2
+    # Tiempo máximo para abrir una conexión (asyncpg espera 60 s por defecto) y para el `SELECT 1` de /v1/health/ready
+    db_connect_timeout_s: float = 5.0
 
     @field_validator("log_level")
     @classmethod

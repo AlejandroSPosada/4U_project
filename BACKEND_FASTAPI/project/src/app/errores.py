@@ -42,6 +42,8 @@ MENSAJE_POR_CODIGO: dict[str, str] = {
     "VALIDACION": "Hay campos con valores no válidos.",
     "ERROR_INTERNO": "Error interno del servidor. Indica el X-Request-Id al reportarlo.",
     "NO_IMPLEMENTADO": "Esta operación aún no está disponible.",
+    "BASE_NO_DISPONIBLE": "La base de datos no está disponible.",
+    "EMBEDDING_NO_DISPONIBLE": "El servicio de embeddings no está disponible.",
 }
 
 _UBICACIONES = {"body", "query", "path", "header", "cookie"}

@@ -3,8 +3,8 @@
 #
 #   docker build --platform linux/amd64 --build-arg GIT_COMMIT=$(git rev-parse HEAD) -t campus-locator/backend:local .
 #
-# Contiene solo src/app/ (como paquete `app`); src/ops/ y tests/ quedan fuera (.dockerignore).
-# migrations/ se añade con BE-1.2.
+# Contiene src/app/ (como paquete `app`) y migrations/ (BE-1.2, que lee `python -m app.cli migrar`); src/ops/ y tests/
+# quedan fuera (.dockerignore).
 
 ARG PYTHON_IMAGEN=python:3.12-slim-bookworm
 
@@ -39,9 +39,10 @@ RUN groupadd --system --gid 10001 app \
 COPY --from=dependencias /opt/venv /opt/venv
 WORKDIR /srv
 COPY src/app ./app
+COPY migrations ./migrations
 
 USER app
 EXPOSE 8000
 
-# Proceso `api`. `worker` y `migrate` sobrescriben el comando en su definición de tarea (§5.9).
+# Proceso `api`. `worker` y `migrate` (python -m app.cli migrar) sobrescriben el comando en su definición de tarea (§5.9).
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--no-server-header"]

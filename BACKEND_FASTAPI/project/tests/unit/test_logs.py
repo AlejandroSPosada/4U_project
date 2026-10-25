@@ -88,3 +88,33 @@ def test_cada_peticion_queda_registrada_con_su_request_id(cliente, logs_json):
 def test_la_query_string_no_llega_a_los_logs(cliente, logs_json):
     cliente.get("/v1/health?token=no-debe-aparecer")
     assert "no-debe-aparecer" not in json.dumps(logs_json.lineas)
+
+
+def test_la_traza_omite_el_detail_de_postgres(logs_json):
+    import asyncpg
+    from sqlalchemy import exc as sa_exc
+
+    from app.logs import obtener_logger, registrar
+
+    detalle = "Failing row contains (7c1e, admin@campus.edu.co, Administrador, admin,\n$argon2id$v=19$m=65536…)."
+    original = asyncpg.exceptions.CheckViolationError('new row for relation "usuarios" violates check constraint')
+    original.detail = detalle
+    try:
+        try:
+            raise original
+        except asyncpg.exceptions.CheckViolationError as exc:
+            raise sa_exc.IntegrityError("INSERT …", None, exc) from exc
+    except sa_exc.IntegrityError:
+        registrar(obtener_logger("prueba"), "fallo", logging.ERROR, exc_info=True)
+    [linea] = [linea for linea in logs_json.lineas if linea["evento"] == "fallo"]
+    assert "argon2id" not in linea["excepcion"]
+    assert "admin@campus.edu.co" not in linea["excepcion"]
+    assert "violates check constraint" in linea["excepcion"]
+    assert "(omitido)" in linea["excepcion"]
+
+
+def test_una_linea_detail_sin_atributo_tambien_se_omite():
+    from app.logs import traza_sin_datos
+
+    texto = "Error: duplicate key\nDETAIL:  Key (correo)=(a@b.co) already exists.\nfin"
+    assert traza_sin_datos(texto, None) == "Error: duplicate key\nDETAIL: (omitido)\nfin"

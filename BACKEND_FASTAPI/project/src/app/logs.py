@@ -1,7 +1,8 @@
 """Logs en JSON, una línea por evento (ARCHITECTURE §5.10).
 
 Campos fijos: `ts`, `nivel`, `proceso`, `request_id`, `evento`; después, los campos propios del evento.
-Nunca se registran tokens, contraseñas, URLs prefirmadas ni bytes de imagen (§4.1).
+Nunca se registran tokens, contraseñas, URLs prefirmadas ni bytes de imagen (§4.1). En las trazas (`excepcion`) se
+omite el `DETAIL` de los errores de PostgreSQL, que puede copiar la fila rechazada (p. ej. un hash de contraseña).
 
 Uso:
     from app.logs import obtener_logger, registrar
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sys
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -24,6 +26,32 @@ request_id_actual: ContextVar[str | None] = ContextVar("request_id_actual", defa
 _CAMPOS_FIJOS = ("ts", "nivel", "proceso", "request_id", "evento")
 _EVENTO_GENERICO = "log"
 _LOGGERS_RUIDOSOS = ("httpx", "httpcore", "botocore", "boto3", "urllib3", "s3transfer", "asyncio")
+_OMITIDO = "(omitido)"
+_LINEA_DETAIL = re.compile(r"^(\s*DETAIL:).*$", re.MULTILINE)
+
+
+def _detalles_postgres(exc: BaseException | None) -> set[str]:
+    """Los `detail` de los errores de PostgreSQL (asyncpg) de la cadena de excepciones."""
+    detalles: set[str] = set()
+    pendientes: list[Any] = [exc]
+    vistas: set[int] = set()
+    while pendientes:
+        actual = pendientes.pop()
+        if not isinstance(actual, BaseException) or id(actual) in vistas:
+            continue
+        vistas.add(id(actual))
+        detalle = getattr(actual, "detail", None)
+        if isinstance(detalle, str) and detalle.strip():
+            detalles.add(detalle)
+        pendientes += [getattr(actual, "orig", None), actual.__cause__, actual.__context__]
+    return detalles
+
+
+def traza_sin_datos(texto: str, exc: BaseException | None) -> str:
+    """La traza sin el `DETAIL` de PostgreSQL: «Failing row contains (…)» o «Key (correo)=(…)» llevan valores."""
+    for detalle in sorted(_detalles_postgres(exc), key=len, reverse=True):
+        texto = texto.replace(detalle, _OMITIDO)
+    return _LINEA_DETAIL.sub(rf"\1 {_OMITIDO}", texto)
 
 
 class FiltroContexto(logging.Filter):
@@ -61,7 +89,7 @@ class FormatoJson(logging.Formatter):
             datos["mensaje"] = mensaje
         datos["logger"] = record.name
         if record.exc_info:
-            datos["excepcion"] = self.formatException(record.exc_info)
+            datos["excepcion"] = traza_sin_datos(self.formatException(record.exc_info), record.exc_info[1])
         return json.dumps(datos, ensure_ascii=False, default=str)
 
 

@@ -276,7 +276,29 @@ def _utf8_en_consola() -> None:
                 pass
 
 
-# --- Procesos externos (git, terraform) --------------------------------------------------------------------------
+# --- Procesos externos (git, terraform, docker) ------------------------------------------------------------------
+def ejecutar_proceso(
+    argumentos: Sequence[str], *, cwd: Path | None = None, timeout: float = 600
+) -> subprocess.CompletedProcess[str]:
+    """Como `ejecutar_comando`, pero devuelve el resultado con su código en vez de lanzar si no es 0."""
+    ejecutable = shutil.which(argumentos[0])
+    if ejecutable is None:
+        raise ErrorConfiguracion(f"no se encontró `{argumentos[0]}` en el PATH")
+    try:
+        return subprocess.run(
+            [ejecutable, *argumentos[1:]],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        raise Falla(f"`{' '.join(argumentos[:4])} …` no terminó en {int(timeout)} s") from None
+
+
 def ejecutar_comando(argumentos: Sequence[str], *, cwd: Path | None = None, timeout: float = 120) -> str:
     """Ejecuta un comando y devuelve su salida estándar. Herramienta ausente → `ErrorConfiguracion`.
 
@@ -374,6 +396,157 @@ def es_acceso_denegado(exc: BaseException) -> bool:
     return codigo in {"AccessDenied", "AccessDeniedException", "UnauthorizedOperation", "ExpiredToken"} or (
         "AccessDenied" in codigo
     )
+
+
+# --- Tareas sueltas de ECS (backend §5.11) -----------------------------------------------------------------------
+CLUSTER = "campus-locator-dev"
+CONTENEDOR = "app"
+FAMILIA_MIGRATE = "campus-locator-dev-migrate"
+FAMILIA_VALIDACION = "campus-locator-dev-validacion"
+#: Log group y `awslogs-stream-prefix` de cada familia (infra §5.1): el stream es `<prefijo>/app/<id de la tarea>`.
+LOGS_TAREA = {
+    FAMILIA_MIGRATE: ("/campus-locator/dev/migrate", "migrate"),
+    FAMILIA_VALIDACION: ("/campus-locator/dev/validacion", "validacion"),
+}
+ESPERA_TAREA_S = 900
+PAUSA_LOGS_S = 5.0
+INTENTOS_LOGS = 12
+
+
+@dataclass
+class ResultadoTarea:
+    """Una tarea suelta ya detenida: código de salida del contenedor `app` (None si no llegó a correr) y su log."""
+
+    arn: str
+    definicion: str
+    codigo: int | None
+    motivo: str
+    lineas: list[str] = field(default_factory=list)
+
+    @property
+    def id(self) -> str:
+        return self.arn.rsplit("/", 1)[-1]
+
+    def eventos(self, nombre: str | None = None) -> list[dict[str, Any]]:
+        """Líneas JSON del log (§5.10), opcionalmente solo las de un `evento`."""
+        encontrados = []
+        for linea in self.lineas:
+            try:
+                datos = json.loads(linea)
+            except ValueError:
+                continue
+            if isinstance(datos, dict) and (nombre is None or datos.get("evento") == nombre):
+                encontrados.append(datos)
+        return encontrados
+
+
+def red_tareas(outputs: dict[str, Any]) -> dict[str, Any]:
+    """`networkConfiguration` de `run-task` con los outputs `subredes_tareas` y `sg_migrate` (infra §5.2)."""
+    subredes, grupo = outputs.get("subredes_tareas"), outputs.get("sg_migrate")
+    if not subredes or not grupo:
+        raise PrecondicionNoCumplida("INF-1.1: faltan los outputs `subredes_tareas` o `sg_migrate`")
+    if isinstance(subredes, str):
+        subredes = [s for s in subredes.split(",") if s]
+    return {"awsvpcConfiguration": {"subnets": list(subredes), "securityGroups": [grupo], "assignPublicIp": "ENABLED"}}
+
+
+def _error_aws_tarea(exc: Exception, que: str) -> Exception:
+    if es_acceso_denegado(exc):
+        return ErrorConfiguracion(f"sin permiso para {que}: {codigo_error_aws(exc)}")
+    return Falla(f"{que}: {codigo_error_aws(exc) or _resumen(exc)}")
+
+
+def lanzar_tarea(
+    ecs: Any,
+    logs: Any,
+    *,
+    definicion: str,
+    red: dict[str, Any],
+    familia: str,
+    comando: Sequence[str] | None = None,
+    iniciada_por: str = "validacion",
+    espera_s: float = ESPERA_TAREA_S,
+    dormir: Callable[[float], None] = time.sleep,
+) -> ResultadoTarea:
+    """`ecs run-task` (Fargate) de `definicion` (familia o ARN de una revisión), espera a que pare y lee su log.
+
+    Con `comando`, sobrescribe el del contenedor `app`. `familia` elige el log group y el prefijo de §5.1.
+    """
+    from botocore.exceptions import ClientError, WaiterError
+
+    peticion: dict[str, Any] = {
+        "cluster": CLUSTER,
+        "launchType": "FARGATE",
+        "taskDefinition": definicion,
+        "networkConfiguration": red,
+        "count": 1,
+        "startedBy": iniciada_por[:36],
+    }
+    if comando is not None:
+        peticion["overrides"] = {"containerOverrides": [{"name": CONTENEDOR, "command": list(comando)}]}
+    try:
+        respuesta = ecs.run_task(**peticion)
+    except ClientError as exc:
+        raise _error_aws_tarea(exc, f"lanzar {definicion.rsplit('/', 1)[-1]}") from None
+    tareas = respuesta.get("tasks") or []
+    if not tareas:
+        fallos = "; ".join(f"{f.get('arn', '')} {f.get('reason', '')}".strip() for f in respuesta.get("failures", []))
+        raise Falla(f"run-task no lanzó la tarea ({fallos or 'sin motivo'})")
+    arn = tareas[0]["taskArn"]
+    try:
+        ecs.get_waiter("tasks_stopped").wait(
+            cluster=CLUSTER, tasks=[arn], WaiterConfig={"Delay": 6, "MaxAttempts": max(1, int(espera_s // 6))}
+        )
+    except WaiterError:
+        raise Falla(f"la tarea {arn.rsplit('/', 1)[-1]} no se detuvo en {int(espera_s)} s") from None
+    descrita = ecs.describe_tasks(cluster=CLUSTER, tasks=[arn])["tasks"][0]
+    contenedor = next((c for c in descrita.get("containers", []) if c.get("name") == CONTENEDOR), {})
+    resultado = ResultadoTarea(
+        arn=arn,
+        definicion=descrita.get("taskDefinitionArn", definicion),
+        codigo=contenedor.get("exitCode"),
+        motivo=contenedor.get("reason") or descrita.get("stoppedReason", ""),
+    )
+    grupo, prefijo = LOGS_TAREA[familia]
+    resultado.lineas = leer_log(logs, grupo, f"{prefijo}/{CONTENEDOR}/{resultado.id}", dormir=dormir)
+    return resultado
+
+
+def leer_log(
+    logs: Any,
+    grupo: str,
+    stream: str,
+    *,
+    intentos: int = INTENTOS_LOGS,
+    pausa_s: float = PAUSA_LOGS_S,
+    dormir: Callable[[float], None] = time.sleep,
+) -> list[str]:
+    """Mensajes de un stream de CloudWatch Logs, desde el principio. El log de una tarea tarda unos segundos en
+    aparecer tras detenerse: reintenta mientras el stream no exista o esté vacío. Devuelve [] si nunca aparece."""
+    from botocore.exceptions import ClientError
+
+    for intento in range(intentos):
+        mensajes: list[str] = []
+        token: str | None = None
+        try:
+            while True:
+                argumentos = {"logGroupName": grupo, "logStreamName": stream, "startFromHead": True}
+                if token:
+                    argumentos["nextToken"] = token
+                pagina = logs.get_log_events(**argumentos)
+                mensajes += [evento.get("message", "") for evento in pagina.get("events", [])]
+                siguiente = pagina.get("nextForwardToken")
+                if not siguiente or siguiente == token:
+                    break
+                token = siguiente
+        except ClientError as exc:
+            if codigo_error_aws(exc) != "ResourceNotFoundException":
+                raise _error_aws_tarea(exc, f"leer {grupo} {stream}") from None
+        if mensajes:
+            return mensajes
+        if intento < intentos - 1:
+            dormir(pausa_s)
+    return []
 
 
 # --- API del backend ---------------------------------------------------------------------------------------------

@@ -19,5 +19,5 @@ class PreparacionRespuesta(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     estado: Literal["ok"]
-    db: Literal["ok", "no_configurada"] = Field(description="`no_configurada` solo hasta BE-1.2")
+    db: Literal["ok"] = Field(description="Si la base no responde, el endpoint responde `503 BASE_NO_DISPONIBLE`")
     embedding: Literal["ok", "no_disponible"]

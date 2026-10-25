@@ -18,10 +18,37 @@ def test_health_cumple_el_esquema(cliente):
     assert set(cuerpo) == {"estado", "version", "commit"}
 
 
-def test_ready_cumple_el_esquema(cliente):
-    cuerpo = cliente.get("/v1/health/ready").json()
+def test_ready_cumple_el_esquema(cliente, ajustes, monkeypatch):
+    from fastapi.testclient import TestClient
+    from pydantic import SecretStr
+
+    from app.db import sesion
+    from app.main import crear_app
+
+    async def base_responde(_motor, _timeout_s):
+        return None
+
+    monkeypatch.setattr(sesion, "comprobar_conexion", base_responde)
+    configurados = ajustes.model_copy(
+        update={
+            "db_host": "base.invalid",
+            "db_name": "campus_locator",
+            "db_user": "campus_app",
+            "db_password": SecretStr("x"),
+        }
+    )
+    with TestClient(crear_app(configurados)) as con_base:
+        cuerpo = con_base.get("/v1/health/ready").json()
     PreparacionRespuesta.model_validate(cuerpo)
     assert set(cuerpo) == {"estado", "db", "embedding"}
+    assert cuerpo["db"] == "ok"
+
+
+def test_ready_sin_base_cumple_el_formato_de_error(cliente):
+    r = cliente.get("/v1/health/ready")
+    assert r.status_code == 503
+    ErrorRespuesta.model_validate(r.json())
+    assert r.json()["error"]["codigo"] == "BASE_NO_DISPONIBLE"
 
 
 def test_errores_cumplen_el_esquema(cliente):

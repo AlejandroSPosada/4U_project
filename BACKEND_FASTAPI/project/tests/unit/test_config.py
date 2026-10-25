@@ -46,6 +46,7 @@ VALORES_5_10 = {
     "db_pool_api": 5,
     "db_pool_api_desborde": 5,
     "db_pool_worker": 2,
+    "db_connect_timeout_s": 5,
 }
 
 
