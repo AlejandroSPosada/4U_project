@@ -20,6 +20,105 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.7.0] — 2026-10-25
+
+- **Lote que la motivó:** BE-1.3 (Autenticación).
+- **Qué cambió:**
+  - §4.4 reescrita con lo construido: login uniforme (una consulta, un argon2id contra un hash ficticio si el correo no
+    existe, auditoría, sin conexión a la base durante el hash, `LOGIN_HASH_CONCURRENTES`), orden de rechazos de
+    `requiere_admin`, usuarios por CLI (con la negativa a dejar sin admin), acceso a la base desde la API
+    (`sesion.transaccion`, `es_fallo_de_base`, 503) y por qué no una dependencia con `yield`. Nueva tabla «qué ofrece
+    BE-1.3 al código» para BE-2.1 y BE-3.1: `requiere_admin`/`UsuarioActual`, `RUTAS_ADMIN`/`RUTAS_COLLECT`,
+    `obtener_motor`, `transaccion`, `auditoria.anotar`, `tokens`, `hash_ficticio`, validaciones y fixtures.
+  - §4.1: estructura real (`api/dependencias.py`, `api/v1/auth.py` y `reservados.py`, `seguridad/tokens.py` y
+    `dependencias.py`, `servicios/autenticacion.py`, `usuarios.py` y `auditoria.py`, `esquemas/auth.py`); §4.3 remite a
+    §4.4 para el acceso a la base desde la API.
+  - ADR-BE-13 (login uniforme y autorización con el estado actual de la base). R7 (sin límite de intentos por cuenta:
+    pendiente de decisión) y R12 nuevo (argon2id en 0,25 vCPU).
+  - §5.11: ayudas nuevas de `comun.py` (`leer_secreto`, `credenciales_admin`, `ClienteApi` con reintentos de 429 de API
+    Gateway y pausa entre logins, `EntornoBackend` para la CLI y SQL en `local` y `dev`, el usuario de prueba);
+    `ejecutar_proceso` y `lanzar_tarea` aceptan `entorno`; `JWT_SECRET` en `local` para `validate13.py`.
+  - `validation/validation-1-3.md`: P6 (compose en `local`), el usuario de prueba se crea dentro de C5 (un fallo es
+    `falla`, no un error), C4a cambia un carácter del medio de la firma, C6 compara con los logins que hizo el script,
+    reintentos de 429 y §5 con variables, preparación y ejecución.
+  - PLAN: alineado con 0.7.0; entregables de BE-1.3 completos (acceso a la base y reservados); BE-1.3 «En curso».
+  - Tras una revisión independiente (antes de publicar 0.7.0, así que se corrige aquí): (1) un NUL en `identificador`
+    o `password` llegaba a PostgreSQL (22021) y daba `500` sin auditoría: ahora `422 VALIDACION`
+    (`validaciones.motivo_texto_no_admitido`, regla para todo texto que llegue a la base); (2) la cola del hash no
+    tenía tope ni plazo: `ColaHash` con `LOGIN_HASH_COLA_MAX` y `LOGIN_HASH_ESPERA_MAX_S` y `503 SERVICIO_OCUPADO`;
+    (3) la protección del último admin tenía una carrera, contaba admins inactivos, no cubría `desactivar-usuario` y
+    `--rol` degradaba en silencio: ahora bloqueo consultivo, solo admins activos, las dos operaciones, `--rol` opcional
+    y `INSERT … ON CONFLICT`; (4) la limpieza de `validate13.py` podía dejar activo al usuario de prueba; (5)
+    `ClienteApi` reintenta el `500` de API Gateway.
+- **Contratos tocados (§5):**
+  - §5.2: cabecera, claims exactos y su formato, orden de los rechazos (un `user` desactivado da `401`, no `403`), rol
+    mirado también en la base, `WWW-Authenticate: Bearer`, `500` sin `JWT_SECRET`, consecuencias (reactivar devuelve la
+    validez a los tokens; cambiar la contraseña no los invalida).
+  - §5.3 `POST /v1/auth/login`: límites de `identificador` (1–320) y `password` (1–256), sin NUL ni sustitutos sueltos,
+    campos de más ignorados, cuerpo fijo del `401`, `400`, `503 BASE_NO_DISPONIBLE`, `503 SERVICIO_OCUPADO` con
+    `Retry-After: 5` y `500`; solo se audita el intento en el que se comprueba la contraseña. Endpoints reservados:
+    existen desde BE-1.3 (antes `404`).
+  - §5.6: código nuevo `503 SERVICIO_OCUPADO`; `BASE_NO_DISPONIBLE` en cualquier endpoint que use la base;
+    `WWW-Authenticate` en los 401 de token.
+  - §5.7: `usuario.crear`, `usuario.actualizar` y `usuario.desactivar` en el catálogo de `auditoria`; forma de las filas
+    de BE-1.3 (un rechazo por saturación no se anota); `ultimo_acceso_en` = último login correcto; `hash_password`
+    remite a §4.3 (decía §4.4). Sin cambios en el esquema.
+  - §5.9: `crear-usuario` informa con el evento `usuario_guardado` (decía «imprime `creado` o `actualizado`»); `--rol`
+    es opcional (sin él, un usuario existente conserva su rol; uno nuevo es `user`); reglas de `--correo`, `--nombre` y
+    la contraseña; ni `crear-usuario` ni `desactivar-usuario` dejan la base sin un admin activo (1, `usuario_rechazado`)
+    y van en fila con el bloqueo consultivo `7242031220260002`; cómo lanzarlos en `dev` y `local`; `api` necesita
+    `JWT_SECRET` y `CREAR_USUARIO_PASSWORD` entra en las variables.
+  - §5.10: parámetros `LOGIN_HASH_CONCURRENTES` (2), `LOGIN_HASH_COLA_MAX` (8) y `LOGIN_HASH_ESPERA_MAX_S` (10);
+    eventos `login` (con `resultado = rechazado`), `autorizacion_rechazada`, `usuario_guardado`, `usuario_desactivado`,
+    `usuario_no_encontrado`, `usuario_rechazado` y `comando_fallido`; `configuracion_incompleta` también en `api` (sin
+    `JWT_SECRET`) y `base_no_disponible` en cualquier endpoint.
+  - Endpoint y contenido nuevos sin romper nada desplegado: sube la menor.
+- **Código:** dependencia `pyjwt` (2.15.1; `uv.lock` rehecho con uv 0.11.32, el de la imagen y CI, para conservar
+  `revision = 3`: solo añade el paquete); `app/seguridad/tokens.py` y `dependencias.py`; `app/api/dependencias.py`,
+  `api/v1/auth.py`, `api/v1/reservados.py` y `api/v1/__init__.py` (routers protegidos); `app/esquemas/auth.py`;
+  `app/servicios/autenticacion.py`, `usuarios.py` y `auditoria.py`; `app/db/sesion.py` (`transaccion`,
+  `es_fallo_de_base`); `app/errores.py` (503 de `BaseNoDisponible` y mensajes nuevos); `app/main.py` (`ColaHash` y
+  hash ficticio al arrancar); `app/cli.py` (dos comandos); `app/config.py` (`login_hash_*`);
+  `app/dominio/validaciones.py`; `src/ops/validate13.py` y `src/ops/comun.py`.
+- **Cómo se verificó** (en WSL, `uv` 0.13 y 0.11.32, Docker 29; nada en AWS):
+  - `ruff check` y `ruff format --check` limpios; `uv lock --check` con uv 0.11.32.
+  - `pytest` con PostgreSQL 17.11 + pgvector (el `db` del compose) y `PRUEBAS_DB_OBLIGATORIA=1`: 350 pruebas, todas
+    pasan (151 nuevas de BE-1.3). Sin base, las 52 con base se omiten; con `PRUEBAS_DB_OBLIGATORIA=1` y sin URL, fallan.
+    Las de la revisión: NUL en cada campo → 422 sin auditoría ni `error_api`; cola llena → 503 con `Retry-After: 5`,
+    sin tocar la base ni auditar; sin turno a tiempo → `espera_agotada` y los puestos liberados; dos degradaciones a la
+    vez de los dos únicos admins → una rechazada; un admin inactivo no cuenta; no se desactiva al último admin activo;
+    sin `--rol` se conserva el rol; dos creaciones del mismo correo a la vez → `creado` y `actualizado`; la limpieza de
+    `validate13.py` desactiva al usuario si `crear-usuario` falla tras reactivarlo y tolera que no exista; `500` de API
+    Gateway reintentado y el del backend no.
+    Entre las nuevas: claims exactos, clave usada como texto (HMAC calculado a mano), 13 tokens alterados →
+    `TokenInvalido`, vencido por un segundo → `TokenExpirado`; login correcto (claims, `ultimo_acceso_en`, auditoría
+    `exito`), los tres fallos con cuerpo y encabezados idénticos, **un** argon2id por intento (contra el hash ficticio
+    si el correo no existe) y su auditoría sin contraseña ni identificador; `requiere_admin` (sin token, otro esquema,
+    basura, otra clave, vencido, `user`, desactivado, degradado, `sub` desconocido, reactivado; 401 antes que 422; sin
+    base 401 o 503 según el token); toda ruta de `/v1/admin` y `/v1/collect` exige el token (por el OpenAPI); conexión
+    cortada a mitad de transacción → 503 y nada confirmado; un *timeout* de httpx no es «base no disponible»; CLI
+    (crear, actualizar, reactivar, desactivar, último admin, sin esquema, contraseña por variable y terminal, códigos 2
+    y 3); contrato (§5.2 claims, ejemplos y cuerpo fijo de §5.3, códigos de §5.6, parámetros y **todos** los eventos que
+    registra el código frente a §5.10); `validate13.py` contra una API falsa que firma con `app.seguridad.tokens`
+    (dev completo, 429 de API Gateway, cuerpos distintos, backend que no mira `activo`, firma con la clave decodificada,
+    limpieza, `local`, sin secretos en la salida) y las ayudas nuevas de `comun.py`.
+  - `docker compose up --build` (la imagen instala `pyjwt` con `uv sync --frozen`), `migrar` y
+    `validate13.py --entorno local`: código 0 con las siete comprobaciones en `[PASA]`, dos veces seguidas;
+    `validate12.py --entorno local` sigue en 0. Ni el informe ni los logs de `api` contienen contraseñas ni tokens.
+    Contra la misma imagen: un NUL en `identificador` da `422` con `No puede contener el carácter NUL.`, y 30 logins a
+    la vez dieron 25 `401` y 5 `503 SERVICIO_OCUPADO` con `Retry-After: 5`.
+  - Tiempos del login en `local` (15 muestras por caso, sin límite de CPU): mediana 92,9 ms (correo desconocido), 92,5
+    (contraseña incorrecta), 92,4 (inactivo) y 94,2 (correcto).
+- **Pendiente:**
+  - Desplegar (`backend.yml`) y ejecutar `validate13.py --entorno dev`; anotar los tiempos de C2 en `dev` (R12). Sin
+    comprobar en `dev`: si una avalancha de logins deja sin CPU el *health check* (R12).
+  - La app trata hoy cualquier 5xx como «sin conexión» (`FRONTEND_KOTLIN` §5.10): `503 SERVICIO_OCUPADO` con
+    `Retry-After` podría mostrarse como «ocupado, reintenta»; es opcional y lo decide el frontend.
+  - Decidir el límite de intentos de login por cuenta que propone infra (su CHANGELOG 0.12.0, R10): no entra en
+    BE-1.3 (R7).
+
+---
+
 ## [0.6.1] — 2026-10-25
 
 - **Lote que la motivó:** BE-1.2, al cerrarlo. Una auditoría del documento contra el código (otra sesión, leyéndolo

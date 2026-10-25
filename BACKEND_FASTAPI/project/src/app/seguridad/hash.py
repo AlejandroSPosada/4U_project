@@ -6,10 +6,23 @@ la tarea de 0,5 GB. El hash guarda sus parámetros: si se cambian, los hashes vi
 
 from __future__ import annotations
 
+import functools
+import secrets
+
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 
 _hasher = PasswordHasher()
+
+
+@functools.cache
+def hash_ficticio() -> str:
+    """Hash de una contraseña aleatoria, con los mismos parámetros que `calcular` (BE-1.3, §4.4).
+
+    El login lo verifica cuando el correo no existe, para tardar lo mismo que con una contraseña incorrecta. Se calcula
+    una vez por proceso (`api` lo hace al arrancar) y nunca coincide con nada que llegue en una petición.
+    """
+    return calcular(secrets.token_urlsafe(32))
 
 
 def calcular(password: str) -> str:

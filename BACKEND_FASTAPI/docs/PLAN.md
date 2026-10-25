@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.6.1**.
+Alineado con `ARCHITECTURE.md` **v0.7.0**.
 
 ---
 
@@ -78,8 +78,10 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 - **Historias:** habilita HU-10, HU-13, HU-14.
 
 #### BE-1.3 — Autenticación
-- **Entregables:** `POST /v1/auth/login`, JWT de §5.2, dependencia `requiere_admin`, auditoría de intentos,
-  `python -m app.cli crear-usuario` (crea o actualiza y reactiva) y `desactivar-usuario` (§5.9).
+- **Entregables:** `POST /v1/auth/login`, JWT de §5.2, dependencia `requiere_admin` (en `/v1/admin/*` y
+  `/v1/collect/*`), auditoría de intentos, `python -m app.cli crear-usuario` (crea o actualiza y reactiva) y
+  `desactivar-usuario` (§5.9), acceso a la base desde la API con `503 BASE_NO_DISPONIBLE` (§4.4) y los endpoints
+  reservados de §5.3 respondiendo `501` (`GET /v1/admin/stats/uso` lo usa la validación).
 - **Criterios de cierre:**
   - C1. Credenciales válidas devuelven un token con los *claims* de §5.2.
   - C2. «Correo inexistente» y «contraseña incorrecta» dan la misma respuesta `401 CREDENCIALES_INVALIDAS`.
@@ -201,7 +203,7 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 |---|---|---|---|---|---|---|
 | BE-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `2fe5a9d` 2026-10-24 | 0.5.1 | Primer despliegue por `backend.yml` (`api` de 0 a 1 réplica con `campus-locator-dev-api:2`). La primera ejecución destapó que `backend.yml` nunca había llegado al repositorio y que C3a rechazaba un commit que solo tocara el workflow (corregido en 0.5.1) |
 | BE-1.2 | 1 | Hecho | [1-2](./validation/validation-1-2.md) | `684f233` 2026-10-25 | 0.6.0 | Primera migración en dev por la tarea `migrate` (`campus-locator-dev-migrate:2`): revisión `0001` sobre PostgreSQL 17.9 y pgvector 0.8.1; `verificar-esquema` coincide, lo que confirma en PostgreSQL 17 los textos del catálogo de `esquema.py` (§4.3, R11). El admin inicial lo creó el paso migrate del despliegue: las dos ejecuciones de C1 dieron `ya_habia_admin` (§5.10) |
-| BE-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | |
+| BE-1.3 | 1 | En curso | [1-3](./validation/validation-1-3.md) | — | — | Código, pruebas y `validate13.py --entorno local` con código 0 (ARCHITECTURE 0.7.0); falta desplegar y validar en `dev`. Límite de intentos por cuenta (propuesta de infra 0.12.0, R7): pendiente de decisión |
 | BE-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | |
 | BE-2.2 | 2 | Pendiente | [2-2](./validation/validation-2-2.md) | — | — | |
 | BE-2.3 | 2 | Pendiente | [2-3](./validation/validation-2-3.md) | — | — | |

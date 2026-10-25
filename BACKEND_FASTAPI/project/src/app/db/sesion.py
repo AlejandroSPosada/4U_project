@@ -130,6 +130,21 @@ def es_fallo_de_conexion(exc: BaseException) -> bool:
     return False
 
 
+def es_fallo_de_base(exc: BaseException) -> bool:
+    """`es_fallo_de_conexion`, pero solo si la excepción es de la base o de la red: de SQLAlchemy, de asyncpg o un
+    `OSError` suelto que no sea `TimeoutError` (BE-1.3, §4.4).
+
+    Lo usa `transaccion`. El filtro evita tomar por «base no disponible» un error de otra dependencia cuya cadena de
+    causas lleve un `OSError` o un `TimeoutError` (p. ej. un *timeout* de httpx al llamar a embeddings) y un
+    `TimeoutError` suelto, que suele venir de un `asyncio.timeout` del propio código.
+    """
+    import asyncpg
+
+    de_la_base = (sa_exc.SQLAlchemyError, asyncpg.exceptions.PostgresError, asyncpg.exceptions.InterfaceError)
+    suelto_de_red = isinstance(exc, OSError) and not isinstance(exc, TimeoutError)
+    return (isinstance(exc, (BaseNoDisponible, *de_la_base)) or suelto_de_red) and es_fallo_de_conexion(exc)
+
+
 def _origen(exc: BaseException) -> BaseException:
     """La excepción original detrás de los envoltorios de SQLAlchemy (`orig`) y de `raise … from`."""
     actual, vistas = exc, {id(exc)}
@@ -161,6 +176,27 @@ async def conectar(motor: AsyncEngine) -> AsyncIterator[AsyncConnection]:
         yield conexion
     finally:
         await conexion.close()
+
+
+@asynccontextmanager
+async def transaccion(motor: AsyncEngine) -> AsyncIterator[AsyncConnection]:
+    """Una unidad de trabajo (BE-1.3, §4.4): abre una conexión con `conectar`, empieza una transacción, la confirma al
+    salir del bloque (o la deshace si sale con una excepción) y cierra la conexión.
+
+    Un fallo de conexión en cualquier punto (al abrir, en una sentencia o al confirmar) sale como `BaseNoDisponible`,
+    que la API responde con `503 BASE_NO_DISPONIBLE`; el resto de excepciones salen tal cual. La conexión solo se tiene
+    mientras dura el bloque: lo lento que no use la base (un hash, una llamada a embeddings) va fuera.
+    """
+    async with conectar(motor) as conexion:
+        try:
+            async with conexion.begin():
+                yield conexion
+        except BaseNoDisponible:
+            raise
+        except Exception as exc:
+            if es_fallo_de_base(exc):
+                raise BaseNoDisponible(describir(exc)) from exc
+            raise
 
 
 async def comprobar_conexion(motor: AsyncEngine, timeout_s: float) -> None:

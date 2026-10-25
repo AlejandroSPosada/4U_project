@@ -2,7 +2,8 @@
 
 - `ErrorApi`: la lanzan routers y servicios para responder un error del contrato.
 - `registrar_manejadores(app)`: convierte en ese formato las excepciones de FastAPI/Starlette (404 de ruta, 405,
-  validación, cuerpo mal formado) y las `ErrorApi`.
+  validación, cuerpo mal formado), las `ErrorApi` y `sesion.BaseNoDisponible` (`503 BASE_NO_DISPONIBLE` con el evento
+  `base_no_disponible`, BE-1.3).
 - Los fallos no previstos (500 `ERROR_INTERNO`) los atrapa el middleware de solicitud (`app.middleware`), que es el
   único que puede añadir `X-Request-Id` a esa respuesta.
 """
@@ -18,6 +19,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.db import sesion
 from app.logs import obtener_logger, registrar
 
 log = obtener_logger(__name__)
@@ -37,12 +39,16 @@ CODIGO_POR_ESTADO: dict[int, str] = {
 MENSAJE_POR_CODIGO: dict[str, str] = {
     "SOLICITUD_INVALIDA": "La solicitud está mal formada.",
     "NO_AUTENTICADO": "Hace falta iniciar sesión.",
+    "TOKEN_INVALIDO": "La sesión no es válida. Inicia sesión de nuevo.",
+    "TOKEN_EXPIRADO": "La sesión expiró. Inicia sesión de nuevo.",
+    "CREDENCIALES_INVALIDAS": "Correo o contraseña incorrectos.",
     "SIN_PERMISOS": "No tienes permisos para esta operación.",
     "NO_ENCONTRADO": "El recurso no existe.",
     "VALIDACION": "Hay campos con valores no válidos.",
     "ERROR_INTERNO": "Error interno del servidor. Indica el X-Request-Id al reportarlo.",
     "NO_IMPLEMENTADO": "Esta operación aún no está disponible.",
     "BASE_NO_DISPONIBLE": "La base de datos no está disponible.",
+    "SERVICIO_OCUPADO": "El servicio está ocupado. Inténtalo de nuevo en unos segundos.",
     "EMBEDDING_NO_DISPONIBLE": "El servicio de embeddings no está disponible.",
 }
 
@@ -156,6 +162,11 @@ async def _manejar_error_api(request: Request, exc: ErrorApi) -> JSONResponse:
     return respuesta_error(exc.estado_http, exc.codigo, exc.mensaje, exc.detalle, exc.encabezados)
 
 
+async def _manejar_base_no_disponible(request: Request, exc: sesion.BaseNoDisponible) -> JSONResponse:
+    registrar(log, "base_no_disponible", logging.WARNING, motivo=str(exc))
+    return respuesta_error(503, "BASE_NO_DISPONIBLE")
+
+
 async def _manejar_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     codigo = _codigo_para_estado(exc.status_code)
     mensaje = MENSAJE_POR_CODIGO.get(codigo, "Error.")
@@ -179,5 +190,6 @@ async def _manejar_validacion(request: Request, exc: RequestValidationError) -> 
 def registrar_manejadores(app: FastAPI) -> None:
     # Starlette tipa los manejadores con `Exception`; cada uno recibe solo su clase.
     app.add_exception_handler(ErrorApi, _manejar_error_api)
+    app.add_exception_handler(sesion.BaseNoDisponible, _manejar_base_no_disponible)
     app.add_exception_handler(StarletteHTTPException, _manejar_http)
     app.add_exception_handler(RequestValidationError, _manejar_validacion)

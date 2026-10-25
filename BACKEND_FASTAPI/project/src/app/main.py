@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import anyio.to_thread
 from fastapi import FastAPI
 
 from app import __version__
@@ -21,6 +22,8 @@ from app.errores import registrar_manejadores
 from app.esquemas.errores import ErrorRespuesta
 from app.logs import configurar_logs, obtener_logger, registrar
 from app.middleware import MiddlewareSolicitud
+from app.seguridad import hash as hash_password
+from app.servicios.autenticacion import ColaHash
 
 log = obtener_logger(__name__)
 
@@ -39,6 +42,10 @@ def crear_app(ajustes: Settings | None = None) -> FastAPI:
         except sesion.ConfiguracionIncompleta as exc:
             aplicacion.state.motor = None
             aplicacion.state.motivo_sin_motor = f"configuracion_incompleta: {exc}"
+        # BE-1.3: cola de verificaciones argon2id nueva para este bucle y el hash ficticio del login calculado antes de
+        # la primera petición.
+        aplicacion.state.cola_hash = ColaHash.desde(ajustes)
+        await anyio.to_thread.run_sync(hash_password.hash_ficticio)
         registrar(log, "api_iniciada", version=__version__, commit=ajustes.commit_corto, entorno=ajustes.app_env)
         try:
             yield
@@ -61,6 +68,7 @@ def crear_app(ajustes: Settings | None = None) -> FastAPI:
     app.state.ajustes = ajustes
     app.state.motor = None  # lo crea el ciclo de vida (BE-1.2)
     app.state.motivo_sin_motor = "configuracion_incompleta: faltan DB_*"
+    app.state.cola_hash = ColaHash.desde(ajustes)  # el ciclo de vida la renueva al arrancar (BE-1.3)
 
     registrar_manejadores(app)
     app.add_middleware(MiddlewareSolicitud)

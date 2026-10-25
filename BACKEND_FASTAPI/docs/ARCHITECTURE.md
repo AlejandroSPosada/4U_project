@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.6.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.7.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: hay código de BE-1.1 y BE-1.2 (`project/`); lo de lotes posteriores es diseño propuesto |
+| Estado | En construcción: hay código de BE-1.1 a BE-1.3 (`project/`); lo de lotes posteriores es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -102,19 +102,21 @@ BACKEND_FASTAPI/
     │   │   ├── config.py        Settings (pydantic-settings): lee las variables de infra §5.4 y los parámetros de §5.10
     │   │   ├── logs.py          Logs JSON por línea (§5.10) y `request_id` de la petición en curso
     │   │   ├── middleware.py    X-Request-Id, evento `peticion` y 500 ante fallos no previstos (§4.2)
-    │   │   ├── errores.py       ErrorApi; excepciones → formato de §5.1 con los códigos de §5.6
-    │   │   ├── api/v1/          Routers: health, auth, localize, places, alerts, collect, admin_*
-    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5)
-    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2; qué ofrecen, en §4.3); localizacion.py, geo.py, rumbo.py
-    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2), localizar, recolectar, ingerir, purgar, alertas, lugares, estadisticas
-    │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor y conexiones), esquema.py (§5.7 comprobable), qué ofrecen en §4.3; consultas (incluida la búsqueda vectorial)
+    │   │   ├── errores.py       ErrorApi; excepciones → formato de §5.1 con los códigos de §5.6; BaseNoDisponible → 503 (BE-1.3)
+    │   │   ├── api/
+    │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_limitador_hash (BE-1.3, §4.4)
+    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: localize, places, alerts, collect, admin_*
+    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3)
+    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); localizacion.py, geo.py, rumbo.py
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); localizar, recolectar, ingerir, purgar, alertas, lugares, estadisticas
+    │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas (incluida la búsqueda vectorial)
     │   │   ├── clientes/        embedding.py (httpx), s3.py y sqs.py (boto3 en hilos de anyio)
-    │   │   ├── seguridad/       jwt.py, hash.py (argon2id, §4.3), dependencias requiere_admin / usuario_opcional
+    │   │   ├── seguridad/       hash.py (argon2id, §4.3), tokens.py (JWT, §5.2) y dependencias.py (requiere_admin), BE-1.3 (§4.4)
     │   │   ├── worker.py        Bucle de consumo de las colas (python -m app.worker)
     │   │   └── cli.py           python -m app.cli: migrar y verificar-esquema (BE-1.2), crear-usuario y desactivar-usuario (BE-1.3), limpiar-validacion (BE-2.1)
     │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes BE-x.y (§5.11)
     ├── migrations/              Alembic: env.py y versions/ (SQL explícito; 0001 = esquema inicial de §5.7)
-    ├── tests/                   unitarias, de API, de contrato (vs §5), con base (`base`: PostgreSQL efímero, §4.3) y de los validadores
+    ├── tests/                   unit/, api/, contrato/ (vs §5), base/ (marca `base`: PostgreSQL efímero, §4.3) y ops/ (validadores)
     ├── docker-compose.yml       entorno `local` (§5.11)
     ├── Dockerfile               python:3.12-slim, usuario sin privilegios, puerto 8000 (§5.9)
     ├── .dockerignore            la imagen solo recibe src/app/, migrations/, pyproject.toml, uv.lock y .python-version
@@ -265,8 +267,8 @@ y el siguiente despliegue parte de ellas). Solo usa permisos de `gha-deploy` (in
 - En `api`, el motor está en `app.state.motor` (pool `DB_POOL_API` + `DB_POOL_API_DESBORDE`, §5.10) y se cierra al
   parar; vale `None` si la configuración está incompleta, y entonces `app.state.motivo_sin_motor` dice por qué. El
   `worker` creará el suyo con `DB_POOL_WORKER` (BE-2.2), y cada comando de la CLI usa uno sin pool.
-- Todavía no hay sesión por petición ni manejador de `BaseNoDisponible`: un router que la deje escapar respondería
-  `500 ERROR_INTERNO`. Los añade BE-1.3 (§4.4).
+- Cómo lo usa un router (dependencia `obtener_motor`, `sesion.transaccion` y el `503` de `BaseNoDisponible`): lo añadió
+  BE-1.3, en §4.4.
 
 *Modelos, vectores y enumerados*:
 - `app.db.modelos` (SQLAlchemy 2 declarativo; `Base.metadata` es §5.7): `Usuario` (`usuarios`), `Lugar` (`lugares`),
@@ -315,24 +317,87 @@ y el siguiente despliegue parte de ellas). Solo usa permisos de `gha-deploy` (in
    `WITH` de §5.7 y `WHERE version_vector = '<versión>'`.
 
 ### 4.4 BE-1.3 — Autenticación
-`POST /v1/auth/login` busca el usuario por correo normalizado (`normalizar_correo`: sin espacios alrededor y en
-minúsculas, §4.3), verifica la contraseña con argon2id (`hash.verificar`, §4.3) y emite un JWT HS256 (§5.2). Respuesta idéntica para «no existe», «contraseña incorrecta» e «inactivo», para
-no revelar qué correos existen. Devuelve el token **también** a usuarios `user`: es la app la que decide no abrir el
-panel (comportamiento ya implementado en `LoginViewModel`). Cada intento se registra en `auditoria`
-(`usuario.login`, con éxito o fallo, sin la contraseña). La dependencia `requiere_admin` valida firma, expiración y
-rol en cada endpoint `/v1/admin/*` y `/v1/collect/*`, también en los reservados (que responden `501` solo después de
-validar el token).
 
-Usuarios por línea de comandos (§5.9): `crear-usuario` crea o, si el correo ya existe, actualiza nombre, rol y
-contraseña y lo reactiva; `desactivar-usuario` lo desactiva (sus tokens dejan de valer, §5.2). No hay borrado de
-usuarios: la fila queda por la auditoría.
+**Login** (`POST /v1/auth/login`, §5.3; `servicios/autenticacion.py`). Todos los intentos hacen el mismo trabajo, para
+que ni la respuesta ni el tiempo revelen qué correos existen (ADR-BE-13):
+0. Pydantic rechaza con `422 VALIDACION` un `identificador` o `password` vacío, largo de más o con un carácter NUL o un
+   sustituto suelto (`validaciones.motivo_texto_no_admitido`): PostgreSQL rechaza el NUL en `text` (22021) y, sin
+   esta regla, el login respondía `500` sin fila de auditoría.
+1. Sin `JWT_SECRET`, `500 ERROR_INTERNO` antes de tocar la base (evento `configuracion_incompleta`, proceso `api`).
+2. Reserva un puesto en la `ColaHash` de la app: si ya hay `LOGIN_HASH_CONCURRENTES` (2) + `LOGIN_HASH_COLA_MAX` (8)
+   intentos dentro, `503 SERVICIO_OCUPADO` con `Retry-After: 5` sin tocar la base.
+3. Busca el usuario por correo normalizado (`normalizar_correo`, §4.3) en una transacción corta.
+4. Verifica **una** contraseña con argon2id, fuera de la base y en un hilo (`anyio.to_thread`), como mucho
+   `LOGIN_HASH_CONCURRENTES` a la vez (cada una usa 64 MiB y la tarea tiene 0,5 GB): la del usuario o, si el correo no
+   existe, `hash.hash_ficticio()` (una contraseña aleatoria con los mismos parámetros, calculada al arrancar `api`). Si
+   el turno no llega en `LOGIN_HASH_ESPERA_MAX_S` (10 s), también `503 SERVICIO_OCUPADO`. Así un cliente insistente
+   no acumula una cola sin fin, nadie espera más de ~10 s más un hash (API Gateway corta a los 30 s) y `api` no hashea
+   para peticiones que ya se cortaron.
+5. En otra transacción anota el intento en `auditoria` (`usuario.login`, §5.7) y, si entró, fija
+   `usuarios.ultimo_acceso_en`. Registra el evento `login` (§5.10).
+6. Correo desconocido, contraseña incorrecta o usuario inactivo → `401 CREDENCIALES_INVALIDAS`, mismo cuerpo y mismos
+   encabezados; si no, firma el token (§5.2) y responde `200`.
 
-**Acceso a la base.** BE-1.3 es el primer lote con endpoints que usan la base, así que añade lo que BE-1.2 dejó para
-después (§4.3): una dependencia de FastAPI que abre la conexión del motor de `app.state.motor` con `sesion.conectar`
-(o una sesión ORM sobre esa conexión), para que cualquier fallo al abrirla llegue como `BaseNoDisponible`, y un
-manejador que convierte `BaseNoDisponible`, y los errores para los que `es_fallo_de_conexion` es cierto, en
-`503 BASE_NO_DISPONIBLE` (§5.6) con el evento `base_no_disponible`; también cuando `app.state.motor` es `None`. Sin
-eso, esos errores acaban en `500 ERROR_INTERNO`.
+Un rechazo por la cola (pasos 2 y 4) no comprobó ninguna contraseña: no se anota en `auditoria` (solo el evento
+`login` con `resultado = rechazado`), para que una avalancha no traslade la carga a la base; §5.3 y §5.7 lo dicen así.
+
+Devuelve el token **también** a usuarios `user`: la app decide no abrir el panel (`LoginViewModel`). Ni la
+contraseña ni el identificador escrito se guardan ni se registran (un identificador desconocido puede ser una
+contraseña escrita en el campo equivocado). Comprobado en `local` (15 muestras de cada caso, imagen sin límite de
+CPU): mediana de 92–94 ms en los cuatro casos (desconocido, contraseña incorrecta, inactivo y correcto). En `dev`, con
+0,25 vCPU, será más lento (**a verificar en dev**). No hay límite de intentos por cuenta: R7.
+
+**Autorización** (`seguridad/dependencias.py`, ADR-BE-03, ADR-BE-13). `requiere_admin` es una dependencia de los
+routers `/v1/admin` y `/v1/collect` (`app/api/v1/__init__.py`), así que corre antes que cualquier otra cosa de la
+ruta, incluida la validación del cuerpo (una petición sin token con un cuerpo no válido da `401`, no `422`; probado).
+Rechaza en este orden: sin `Authorization: Bearer <token>` → `401 NO_AUTENTICADO`; token vencido (con firma válida) →
+`401 TOKEN_EXPIRADO`; cualquier otro defecto del token → `401 TOKEN_INVALIDO`; después consulta la base: `sub` que no
+existe o usuario desactivado → `401 TOKEN_INVALIDO`; rol `admin` que falta en el token **o** en la base → `403
+SIN_PERMISOS`. Sin token válido la respuesta no depende de la base (sin base, `401`; con token válido y sin base,
+`503`). Los `401` llevan `WWW-Authenticate: Bearer` y cada rechazo registra `autorizacion_rechazada` (§5.10). Los
+endpoints reservados (§5.3) ya existen: los públicos responden `501` y `GET /v1/admin/stats/uso` responde `501` solo
+después de pasar `requiere_admin`.
+
+**Usuarios por línea de comandos** (`servicios/usuarios.py`, §5.9): `crear-usuario` crea o, si el correo ya existe,
+actualiza nombre, contraseña y (solo con `--rol`) rol, y lo reactiva; `desactivar-usuario` lo desactiva (sus tokens
+dejan de valer en la siguiente petición). No hay borrado: la fila queda por la auditoría. Ninguno deja la base sin un
+admin **activo**: quitar el rol o desactivar a un usuario con rol `admin` exige que quede otro admin activo (si no,
+código 1). Sin ninguna fila `admin`, además, `migrar` intentaría crear el admin inicial (§4.3) y, si su correo es el de
+ese usuario, fallaría en cada despliegue. Las dos operaciones toman al empezar su transacción el bloqueo consultivo
+`7242031220260002` (`pg_advisory_xact_lock`; el de `migrar` es `…0001`): dos a la vez van en fila, así la comprobación
+del último admin no tiene carreras y dos `crear-usuario` del mismo correo nuevo dan `creado` y `actualizado` (el
+`INSERT` lleva además `ON CONFLICT (correo) DO NOTHING`, por si el correo lo crea otro proceso). Cada cambio deja una
+fila en `auditoria` (`usuario.crear`, `usuario.actualizar`, `usuario.desactivar`, §5.7).
+
+**Acceso a la base desde la API** (lo que BE-1.2 dejó para este lote). Cada unidad de trabajo es
+`async with sesion.transaccion(motor) as conexion:` (abajo): la conexión solo se tiene durante el bloque, así que lo
+lento sin base (el hash, una llamada a embeddings) va fuera y no ocupa el pool (5 + 5). Un fallo de conexión en
+cualquier punto sale como `BaseNoDisponible` y el manejador de `errores.py` lo responde `503 BASE_NO_DISPONIBLE` con
+el evento `base_no_disponible` (`WARNING`, `motivo`); sin motor (`app.state.motor = None`), igual. La conversión solo
+se aplica a errores de SQLAlchemy, de asyncpg o a un `OSError` suelto que no sea `TimeoutError` (`es_fallo_de_base`): un
+*timeout* de httpx (embeddings) también lleva un `OSError` en su cadena de causas y no debe salir como «base no
+disponible». Por eso tampoco se usa una dependencia con `yield` que tenga la conexión toda la petición: cualquier
+excepción del endpoint pasaría por ella.
+
+**Para los lotes siguientes: qué ofrece BE-1.3 al código.**
+
+| Elemento | Qué hace |
+|---|---|
+| `app.seguridad.dependencias.requiere_admin` → `UsuarioActual` | Dependencia de §5.2 (arriba). `UsuarioActual` es un *dataclass* congelado con `id` (`uuid.UUID`), `nombre`, `correo` y `rol` (`RolUsuario`), leídos de la base en esa petición. Un endpoint que necesite al admin (p. ej. `creado_por`) declara `usuario: UsuarioActual = Depends(requiere_admin)`: FastAPI la evalúa una sola vez por petición aunque el router ya la tenga |
+| `app.api.v1.RUTAS_ADMIN`, `RUTAS_COLLECT` | Listas de `APIRouter` que se montan en `/v1/admin` y `/v1/collect` con `requiere_admin` y las respuestas 401/403/503 en el OpenAPI. Un lote añade ahí su router **sin** el prefijo `/admin` o `/collect` (p. ej. `APIRouter(prefix="/videos")`), nunca en `router_v1`. `tests/api/test_auth.py` comprueba, con el OpenAPI, que toda operación de esos prefijos declara el esquema `jwt` y responde 401 sin token (FastAPI 0.143 incluye los routers de forma perezosa: `app.routes` muestra un `_IncludedRouter`, no las rutas) |
+| `app.api.dependencias.obtener_motor(request)` → `AsyncEngine` | El motor de `api`; sin motor lanza `BaseNoDisponible` (→ 503). Se llama dentro del endpoint, o como `Depends`, **después** de lo que deba responder antes (p. ej. un 422 o un 500 de configuración) |
+| `app.api.dependencias.obtener_ajustes(request)` → `Settings`; `obtener_cola_hash(request)` → `ColaHash` | Los `Settings` de la app; la cola de verificaciones argon2id (`app.state.cola_hash`, renovada en cada arranque). `ColaHash(concurrentes, cola_max, espera_max_s)` (`servicios/autenticacion.py`): `reservar()` (o `Saturado("cola_llena")`), `await verificar(hash, password)` (espera turno como mucho `espera_max_s`, o `Saturado("espera_agotada")`, y libera el puesto) o `liberar()` si no llega a verificar; `dentro` cuenta los puestos ocupados. El router traduce `Saturado` a `503 SERVICIO_OCUPADO` con `Retry-After: 5` |
+| `app.db.sesion.transaccion(motor)` | `async with`: abre una conexión con `conectar`, `BEGIN`, `COMMIT` al salir del bloque (o `ROLLBACK` si sale con una excepción) y cierra. Convierte los fallos de conexión en `BaseNoDisponible`; el resto sale tal cual (p. ej. `IntegrityError`, que el servicio traduce a su `ErrorApi`). Lo que deba confirmarse junto (un cambio y su fila de `auditoria`) va en el mismo bloque. Probado: una conexión cortada a mitad de bloque (`pg_terminate_backend`) sale como `BaseNoDisponible` y deshace lo anterior |
+| `app.db.sesion.es_fallo_de_base(exc)` | Lo que convierte `transaccion` (arriba) |
+| `app.servicios.auditoria.anotar(conexion, *, accion, entidad, entidad_id=None, actor_id=None, detalle=None)` | Inserta una fila de `auditoria` dentro de la transacción del cambio que registra (si el cambio se deshace, la fila también). `entidad_id` se guarda como texto; `detalle`, objeto JSON sin secretos. Las acciones de cada lote están en §5.7 |
+| `app.errores.ErrorApi(estado, codigo, mensaje=None, detalle=None, encabezados=None)` | (BE-1.1) El mensaje por defecto de cada código está en `MENSAJE_POR_CODIGO`; BE-1.3 añade `TOKEN_INVALIDO`, `TOKEN_EXPIRADO`, `CREDENCIALES_INVALIDAS` y `SERVICIO_OCUPADO` |
+| `app.seguridad.tokens` | `emitir(usuario_id=, rol=, nombre=, ajustes=, ahora=None)` → `TokenEmitido(token, expira_en, jti)`; `decodificar(token, ajustes)` → `Claims(sub, rol, nombre, iat, exp, jti)` o `TokenExpirado` / `TokenInvalido` / `ClaveNoConfigurada`. Firma con PyJWT 2.15 (`pyjwt` en `pyproject.toml`). El módulo no se llama `jwt.py` para no confundirse con el paquete `jwt` |
+| `app.seguridad.hash.hash_ficticio()` | Hash argon2id de una contraseña aleatoria, uno por proceso (§4.3 para `calcular` y `verificar`) |
+| `app.dominio.validaciones` | `PASSWORD_MIN` (8), `PASSWORD_MAX` (256), `IDENTIFICADOR_MAX` (320), `motivo_texto_no_admitido(texto)` (`None`, o el motivo si lleva un carácter NUL o un sustituto suelto), `tiene_forma_de_correo(correo)` (`algo@algo` sin espacios ni otra `@`, y texto admitido) y `motivo_password_no_valida(password)` (`None` o el motivo, sin el valor). **Todo texto de una petición que llegue a la base pasa por `motivo_texto_no_admitido`** con un `field_validator` del esquema Pydantic que lance `ValueError(motivo)` (→ `422 VALIDACION`; ejemplo en `esquemas/auth.py`): si no, PostgreSQL lo rechaza y la API responde `500` |
+| Fixtures de prueba | Las de §4.3; el admin de `base_migrada` (`admin.pruebas@campus.edu.co` / `Pruebas-admin-123`) sirve para el login. Los `Settings` de prueba no traen `JWT_SECRET`: se añade con `model_copy(update={"jwt_secret": SecretStr(…)})` (≥ 32 bytes: con menos, PyJWT avisa con `InsecureKeyLengthWarning`). Ejemplos en `tests/base/test_auth_base.py` |
+
+Trampas: `ruff` marca `S105` en constantes con «password» en el nombre (`# noqa: S105` si es un nombre, no un valor).
+Los logs nunca llevan el token: si hace falta correlacionar, `usuario_id` y el `X-Request-Id`.
 
 ### 4.5 BE-2.1 — Recolección (subida del dataset)
 La app graba sin conexión y sube al terminar (vista 7.5 de la app). Secuencia:
@@ -481,7 +546,7 @@ fotos, embeddings §5.7), búsquedas < 100 ms; objetivo p95 en el servidor ≤ 1
 | **Rumbo** | Grados en **[0, 360)**, 0 = **norte verdadero** (geográfico), sentido horario. `null` si se desconoce (ADR-BE-12) |
 | Distancias / radios | Metros (`distancia_m`, `radio_m`) |
 | Identificadores | UUID v4 en minúsculas. Los videos tienen además `numero` (entero creciente) |
-| Autenticación | `Authorization: Bearer <jwt>` en `/v1/admin/*` y `/v1/collect/*`. Los endpoints públicos no la requieren |
+| Autenticación | `Authorization: Bearer <jwt>` en `/v1/admin/*` y `/v1/collect/*` (§5.2). Los endpoints públicos no la requieren y la ignoran |
 | Correlación | Encabezado `X-Request-Id` en todas las respuestas, también en los `500`. Si la petición lo trae con 1 a 128 caracteres `[A-Za-z0-9._:-]`, se reutiliza; si no lo trae o no cumple, se genera un UUID v4 |
 | Errores | `{"error": {"codigo": "TEXTO_FIJO", "mensaje": "texto para humanos", "detalle": {…} \| null}}` (códigos en §5.6). El cuerpo solo tiene la clave `error` |
 | Paginación | `?pagina=1&por_pagina=24` (máx. 100) → `{"items": […], "total": 123, "pagina": 1, "por_pagina": 24}` |
@@ -490,12 +555,23 @@ fotos, embeddings §5.7), búsquedas < 100 ms; objetivo p95 en el servidor ≤ 1
 ### 5.2 JWT
 
 - Algoritmo `HS256`, clave `JWT_SECRET` (infra §5.4) usada **como texto**: los bytes UTF-8 de la cadena base64, sin
-  decodificarla. Emisor `iss = "campus-locator-api"`.
-- Claims: `sub` (id del usuario), `rol` (`admin` \| `user`), `nombre`, `iat`, `exp` (`iat` + `JWT_TTL_MIN`), `jti`.
+  decodificarla. Cabecera `{"alg": "HS256", "typ": "JWT"}`. Emisor `iss = "campus-locator-api"`.
+- Claims (todos y solo estos): `iss`, `sub`, `rol`, `nombre`, `iat`, `exp`, `jti`. `sub` = id del usuario (UUID en
+  texto); `rol` ∈ {`admin`, `user`}; `nombre` = el del usuario al iniciar sesión; `iat` y `exp` en segundos Unix
+  (enteros), `exp` = `iat` + `JWT_TTL_MIN` · 60; `jti` = UUID v4 nuevo en cada token. `expira_en` del login es `exp`.
 - Sin *refresh token*: al vencer, la app vuelve a Login (la app ya borra la sesión en cada arranque en frío).
-- Rechazos: sin encabezado → `401 NO_AUTENTICADO`; firma inválida → `401 TOKEN_INVALIDO`; vencido →
-  `401 TOKEN_EXPIRADO`; rol distinto de `admin` en una ruta de admin → `403 SIN_PERMISOS`; usuario desactivado después
-  de emitir el token → `401 TOKEN_INVALIDO`.
+- Rechazos, en este orden (el primero que aplica):
+  1. Sin encabezado `Authorization`, con otro esquema que `Bearer` o sin token → `401 NO_AUTENTICADO`.
+  2. Firma correcta, con todos los claims, y `exp` pasado (sin margen) → `401 TOKEN_EXPIRADO`.
+  3. Cualquier otro defecto del token (formato, firma, otro algoritmo, `iss` distinto, falta un claim o tiene un valor
+     no válido) → `401 TOKEN_INVALIDO`.
+  4. `sub` que no es un usuario, o usuario desactivado (se mira en la base en cada petición) → `401 TOKEN_INVALIDO`.
+  5. Rol distinto de `admin` en el token o, ahora, en la base → `403 SIN_PERMISOS`.
+
+  Así, un `user` desactivado recibe `401`, no `403`. Los `401` llevan el encabezado `WWW-Authenticate: Bearer`.
+  Sin `JWT_SECRET` en `api`, las rutas protegidas y el login responden `500 ERROR_INTERNO`.
+- Consecuencias: reactivar a un usuario (`crear-usuario`, §5.9) devuelve la validez a sus tokens sin vencer; cambiar
+  la contraseña no invalida los tokens emitidos (solo desactivar).
 
 ### 5.3 Endpoints públicos
 
@@ -535,6 +611,11 @@ Petición:
 ```json
 { "identificador": "admin@campus.edu.co", "password": "••••••" }
 ```
+- `identificador`: texto de 1 a 320 caracteres, el correo. Se compara sin espacios alrededor y en minúsculas.
+- `password`: texto de 1 a 256 caracteres; no se recorta.
+- Ninguno de los dos puede llevar el carácter NUL (`\u0000`) ni un sustituto suelto (p. ej. `\ud800`).
+- Otros campos se ignoran.
+
 `200`:
 ```json
 {
@@ -543,8 +624,23 @@ Petición:
   "usuario": { "id": "7c1e…", "nombre": "Alejandro Gómez", "correo": "admin@campus.edu.co", "rol": "admin" }
 }
 ```
-Errores: `401 CREDENCIALES_INVALIDAS` (correo inexistente, contraseña incorrecta o usuario inactivo, sin distinguir),
-`422 VALIDACION`, `429` de API Gateway.
+- `token`: JWT de §5.2; `expira_en` = su `exp`. `usuario.correo` es el guardado (sin espacios y en minúsculas).
+- Se entrega también a usuarios `user`: la app decide qué abrir.
+- Cada intento en el que se comprueba la contraseña, correcto o no, queda en `auditoria` (`usuario.login`, §5.7). Los
+  rechazados antes (`422`, `400`, `503`, `500`) no.
+
+Errores:
+- `401 CREDENCIALES_INVALIDAS` si el correo no existe, la contraseña no corresponde o el usuario está inactivo, sin
+  distinguir: el cuerpo es siempre
+  `{"error": {"codigo": "CREDENCIALES_INVALIDAS", "mensaje": "Correo o contraseña incorrectos.", "detalle": null}}`,
+  con los mismos encabezados y el mismo trabajo (§4.4).
+- `422 VALIDACION` (campos que faltan, fuera de rango o con un carácter no admitido, `detalle.campos`),
+  `400 SOLICITUD_INVALIDA` (JSON roto).
+- `503 SERVICIO_OCUPADO` con `Retry-After: 5` (segundos): hay demasiados inicios de sesión esperando su turno, o el
+  turno no llegó en `LOGIN_HASH_ESPERA_MAX_S` (§4.4, §5.10). No dice nada de la cuenta; se puede reintentar.
+- `503 BASE_NO_DISPONIBLE`; `500 ERROR_INTERNO` si falta `JWT_SECRET`.
+- `429` de API Gateway (*throttling* de esta ruta, infra §5.10; cuerpo `{"message": …}`, §5.1). El backend no limita
+  intentos por cuenta (R7).
 
 #### `POST /v1/localize`
 `multipart/form-data` con:
@@ -633,9 +729,11 @@ la evalúa la app** en el momento de anunciar, porque una alerta puede empezar a
 servidor.
 
 #### Endpoints reservados
-`POST /v1/localize/frame`, `GET /v1/route` y `POST /v1/eventos` responden hoy `501 NO_IMPLEMENTADO`. Su contrato se
-definirá aquí antes de implementarlos (Fase 5). El reservado de administración, `GET /v1/admin/stats/uso` (§5.5),
-exige primero el token de admin (`401`/`403`) y después responde `501`.
+`POST /v1/localize/frame`, `GET /v1/route` y `POST /v1/eventos` responden hoy `501 NO_IMPLEMENTADO`, sin mirar el
+cuerpo ni los parámetros. Su contrato se definirá aquí antes de implementarlos (Fase 5). El reservado de
+administración, `GET /v1/admin/stats/uso` (§5.5), exige primero el token de admin (`401`/`403`, §5.2) y después
+responde `501`. Existen desde BE-1.3 (antes daban `404`). Un `501` es un 5xx para la métrica de API Gateway y su
+alarma (infra §5.10: más de 5 en 5 min; sin comprobar en `dev`): `validate13.py` provoca uno por ejecución.
 
 ### 5.4 Endpoints de recolección (requieren `admin`)
 
@@ -798,16 +896,17 @@ Errores: `400 FOTOS_INVALIDAS` (falta la foto, tipo o tamaño; `detalle.indice =
 |---|---|---|
 | 400 | `SOLICITUD_INVALIDA` | Cuerpo mal formado (JSON inválido, multipart roto) |
 | 400 | `FOTOS_INVALIDAS` | `/v1/localize` y `/v1/admin/diagnostico/vecinos`: cantidad, tipo o tamaño de fotos, o `rumbos` incoherente |
-| 401 | `NO_AUTENTICADO` · `TOKEN_INVALIDO` · `TOKEN_EXPIRADO` | §5.2 |
-| 401 | `CREDENCIALES_INVALIDAS` | Login fallido |
-| 403 | `SIN_PERMISOS` | Token válido sin rol `admin` |
+| 401 | `NO_AUTENTICADO` · `TOKEN_INVALIDO` · `TOKEN_EXPIRADO` | §5.2 (con `WWW-Authenticate: Bearer`) |
+| 401 | `CREDENCIALES_INVALIDAS` | Login fallido (cuerpo fijo, §5.3) |
+| 403 | `SIN_PERMISOS` | Token válido de un usuario activo sin rol `admin` (§5.2) |
 | 404 | `NO_ENCONTRADO` | Recurso inexistente (o video eliminado en rutas de lectura); también una ruta que no existe |
 | 405 | `SOLICITUD_INVALIDA` | Método no permitido en una ruta que existe; `detalle.metodos_permitidos` (p. ej. `["GET"]`) y encabezado `Allow` |
 | 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido · subir fotos a un video borrado · `If-Match` no coincide |
 | 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]` |
 | 500 | `ERROR_INTERNO` | Fallo no previsto (el `X-Request-Id` permite encontrarlo en los logs) |
 | 501 | `NO_IMPLEMENTADO` | Endpoints reservados |
-| 503 | `EMBEDDING_NO_DISPONIBLE` · `BASE_NO_DISPONIBLE` | Dependencia caída, apagada o lenta |
+| 503 | `EMBEDDING_NO_DISPONIBLE` · `BASE_NO_DISPONIBLE` | Dependencia caída, apagada o lenta. `BASE_NO_DISPONIBLE`, en cualquier endpoint que use la base (desde BE-1.3, §4.4) |
+| 503 | `SERVICIO_OCUPADO` | `POST /v1/auth/login` con la cola de verificaciones llena o sin turno a tiempo (§5.3); lleva `Retry-After` |
 
 Si el framework genera otro estado que no está en la tabla, se responde con el mismo formato: `SOLICITUD_INVALIDA`
 para un 4xx y `ERROR_INTERNO` para un 5xx. Las respuestas que genera API Gateway no siguen este formato (§5.1).
@@ -852,10 +951,10 @@ valor por defecto), restricciones e índices con sus nombres, secuencias y la re
 | `correo` | `text` | | | único (`usuarios_correo_key`); guardado sin espacios alrededor y en minúsculas: `correo = lower(btrim(correo))` y no vacío (`usuarios_correo_check`) |
 | `nombre` | `text` | | | no vacío ni solo espacios: `btrim(nombre) <> ''` (`usuarios_nombre_check`) |
 | `rol` | `rol_usuario` | | `user` | |
-| `hash_password` | `text` | | | argon2id (§4.4) |
-| `activo` | `boolean` | | `true` | |
+| `hash_password` | `text` | | | argon2id (§4.3) |
+| `activo` | `boolean` | | `true` | `false` = no puede iniciar sesión y sus tokens no valen (§5.2) |
 | `creado_en` | `timestamptz` | | `now()` | |
-| `ultimo_acceso_en` | `timestamptz` | sí | | |
+| `ultimo_acceso_en` | `timestamptz` | sí | | último login correcto (BE-1.3) |
 
 **`lugares`**
 
@@ -977,11 +1076,20 @@ propia migración (índice parcial nuevo) y se activa cambiando `EMBEDDING_VERSI
 |---|---|---|---|---|
 | `id` | `bigint` | | `nextval('auditoria_id_seq')` | PK (`bigserial`) |
 | `creado_en` | `timestamptz` | | `now()` | |
-| `actor_id` | `uuid` | sí | | FK `usuarios`; nulo en logins fallidos |
-| `accion` | `text` | | | `usuario.login`, `video.renombrar`, `video.eliminar`, `imagen.editar`, `imagen.eliminar`, `imagen.reprocesar`, `lugar.crear`, `lugar.editar`, `lugar.eliminar`, `alerta.upsert`, `alerta.eliminar`. Sin `CHECK`: el catálogo crece con los lotes |
+| `actor_id` | `uuid` | sí | | FK `usuarios`; nulo en logins fallidos y en los cambios hechos por la CLI |
+| `accion` | `text` | | | `usuario.login`, `usuario.crear`, `usuario.actualizar`, `usuario.desactivar`, `video.renombrar`, `video.eliminar`, `imagen.editar`, `imagen.eliminar`, `imagen.reprocesar`, `lugar.crear`, `lugar.editar`, `lugar.eliminar`, `alerta.upsert`, `alerta.eliminar`. Sin `CHECK`: el catálogo crece con los lotes |
 | `entidad` | `text` | | | tipo de la entidad (`usuario`, `video`, `imagen`, `lugar`, `alerta`) |
 | `entidad_id` | `text` | sí | | |
 | `detalle` | `jsonb` | | `'{}'` | un objeto JSON (`auditoria_detalle_check`), sin secretos |
+
+**`auditoria`: filas de BE-1.3** (`entidad = 'usuario'`; nunca la contraseña, su hash, el token ni el identificador
+escrito):
+
+| `accion` | `actor_id` | `entidad_id` | `detalle` |
+|---|---|---|---|
+| `usuario.login` (cada intento en el que se comprobó la contraseña; no los rechazados antes, p. ej. `503 SERVICIO_OCUPADO`) | el usuario si entró; si no, nulo | el usuario si el correo existe; si no, nulo | `{"resultado": "exito"}` o `{"resultado": "fallo", "motivo": "correo_desconocido" \| "password_incorrecta" \| "usuario_inactivo"}` |
+| `usuario.crear`, `usuario.actualizar` (`crear-usuario`) | nulo | el usuario | `{"origen": "cli", "rol": …, "reactivado": true \| false}`, y `"rol_anterior"` al actualizar |
+| `usuario.desactivar` (`desactivar-usuario`) | nulo | el usuario | `{"origen": "cli", "ya_estaba_inactivo": true \| false}` |
 
 ### 5.8 Mensajes de las colas
 
@@ -1043,12 +1151,33 @@ y `tests/` quedan fuera. El contenedor se llama `app` (infra §5.1).
 | `worker` | `python -m app.worker` | — | proceso vivo; registra un latido cada 60 s (en BE-1.1 solo eso, §4.2) |
 | `migrate` | `python -m app.cli migrar` (§4.3) | — | código de salida 0 = migrado y admin inicial en orden; 1 = falló una migración o el admin inicial, o esperó más de 5 min a otro `migrar`; 2 y 3, abajo |
 | Verificación de esquema (tarea suelta con la definición de `migrate`) | `python -m app.cli verificar-esquema` (compara la base con §5.7 en una transacción de solo lectura) | — | código de salida 0 = coincide; 1 = difiere (un evento `esquema_diferencia` por diferencia); 2 = no se pudo verificar (base no disponible o error al leer el catálogo); 3, abajo |
-| Usuarios (tarea suelta con la definición de `migrate`) | `python -m app.cli crear-usuario --correo X --nombre Y [--rol admin\|user]` (contraseña desde la terminal o `CREAR_USUARIO_PASSWORD`). Si el correo existe, actualiza nombre, rol y contraseña y lo reactiva; imprime `creado` o `actualizado` | — | código 0 = hecho |
-| | `python -m app.cli desactivar-usuario --correo X` | — | 0 = desactivado (también si ya lo estaba), 1 = no existe |
+| Usuarios (tarea suelta con la definición de `migrate`; BE-1.3) | `python -m app.cli crear-usuario --correo X --nombre Y [--rol admin\|user]`. Si el correo existe, actualiza nombre, contraseña y, si se pasa `--rol`, rol (sin `--rol` conserva el suyo), y lo reactiva; un usuario nuevo sin `--rol` es `user`. Resultado: evento `usuario_guardado` (`resultado` = `creado` \| `actualizado`) | — | 0 = hecho; 1 = dejaría sin ningún admin activo (`usuario_rechazado`) u otro error de la base (`comando_fallido`); 2 y 3, abajo |
+| | `python -m app.cli desactivar-usuario --correo X`. Resultado: evento `usuario_desactivado` | — | 0 = desactivado (también si ya lo estaba); 1 = no existe (`usuario_no_encontrado`), dejaría sin ningún admin activo (`usuario_rechazado`) u otro error (`comando_fallido`); 2 y 3, abajo |
 | Limpieza de pruebas (tarea suelta con la definición de `worker`) | `python -m app.cli limpiar-validacion [--video ID …]` (§4.5): sin `--video`, todos los videos `validacion-`; con `--video`, solo esos, y se niega (código 1) si alguno no lleva el prefijo. Imprime `LIMPIEZA {"videos": n, "objetos": m}` | — | código 0 = hecho |
 
+**`crear-usuario` y `desactivar-usuario` en detalle** (BE-1.3, §4.4):
+- `--correo` se normaliza (sin espacios alrededor y en minúsculas) y tiene que tener la forma `algo@algo` (sin
+  espacios ni una segunda `@`); `--nombre` se recorta y no puede quedar vacío; ninguno admite el carácter NUL ni un
+  sustituto suelto. Si no, código 3 por stderr.
+- La contraseña de `crear-usuario` nunca va como argumento: se lee de `CREAR_USUARIO_PASSWORD` (si está y no está
+  vacía) o, si no y hay terminal, se pide dos veces (tienen que coincidir). Debe tener de 8 a 256 caracteres. Sin
+  variable ni terminal, con las dos escritas distintas o fuera de rango: código 3 con `configuracion_incompleta`
+  (`faltan` o `invalidas`, sin el valor). Se comprueba antes que `DB_*`.
+- Ninguno de los dos deja la base sin un admin activo: quitar el rol (`crear-usuario --rol user`) o desactivar a un
+  usuario con rol `admin` exige que quede otro admin **activo**; si no, código 1 con `usuario_rechazado` y nada
+  cambia. Los dos toman el bloqueo consultivo de transacción `7242031220260002` (distinto del de `migrar`): dos
+  ejecuciones a la vez van en fila, y dos `crear-usuario` del mismo correo nuevo dan `creado` y `actualizado`
+  (§4.4; probado).
+- Cada cambio deja su fila en `auditoria` (§5.7). Solo necesitan `DB_*`, no `ADMIN_INICIAL_*`.
+- En `dev`: `aws ecs run-task` con la última revisión de `campus-locator-dev-migrate`, red `subredes_tareas` +
+  `sg_migrate` con IP pública, y `containerOverrides` con `command` y, para la contraseña, `environment`
+  (`CREAR_USUARIO_PASSWORD`). Ese valor queda visible en `describe-tasks` para quien tenga acceso a la cuenta: para el
+  admin real, mejor una contraseña temporal que se cambia después con otra ejecución. En `local`:
+  `docker compose run --rm -T -e CREAR_USUARIO_PASSWORD api python -m app.cli crear-usuario …` con la variable
+  exportada (así lo hace `validate13.py`), o sin `-T` ni `-e` para que la pida por la terminal (sin comprobar).
+
 **Códigos de salida de `python -m app.cli`**, comunes a todos los comandos. Sus logs son líneas JSON de §5.10 con
-`proceso = migrate`; `migrar` y `verificar-esquema` informan su resultado (y las diferencias) solo como eventos de log.
+`proceso = migrate`; todos informan su resultado solo como eventos de log (desde BE-1.3, también `crear-usuario`).
 La excepción es un error en los argumentos: argparse escribe el uso y el error en texto por stderr, sin evento.
 
 | Código | Significado |
@@ -1056,10 +1185,12 @@ La excepción es un error en los argumentos: argparse escribe el uso y el error 
 | 0 | Hecho (en `verificar-esquema`, la base coincide) |
 | 1 | Resultado negativo: el que diga cada comando arriba (difiere, falló, no existe) |
 | 2 | No se pudo trabajar con la base: no se pudo abrir la conexión (red, DNS, TLS, credenciales, permiso `CONNECT`, base inexistente, tiempo agotado) o se perdió después (evento `base_no_disponible`). En `verificar-esquema`, también un error que impide comparar sin ser de conexión: al leer el catálogo, al cargar las migraciones o al esperar más de 5 min a un `migrar` en curso (evento `verificacion_fallida`) |
-| 3 | Uso o configuración: argumentos (argparse daría 2; aquí es 3; escribe el uso y el error en texto por stderr, sin evento), una variable con un valor no válido (p. ej. `DB_PORT=abc`), `DB_*` que faltan o `ADMIN_INICIAL_*` cuando hay que crear el admin (evento `configuracion_incompleta`) |
+| 3 | Uso o configuración: argumentos (argparse daría 2; aquí es 3; escribe el uso y el error en texto por stderr, sin evento), una variable con un valor no válido (p. ej. `DB_PORT=abc`), `DB_*` que faltan, `ADMIN_INICIAL_*` cuando hay que crear el admin o la contraseña de `crear-usuario` (evento `configuracion_incompleta`) |
 
-Variables que lee: las de infra §5.4 para `api`, `worker` y `migrate`, y `APP_COMMIT`, que fija la imagen. Ningún
-otro valor es obligatorio; los parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescribirse con
+Variables que lee: las de infra §5.4 para `api`, `worker` y `migrate`, `APP_COMMIT`, que fija la imagen, y
+`CREAR_USUARIO_PASSWORD` (solo `crear-usuario`). `api` necesita `JWT_SECRET` (infra §5.4) para el login y las rutas
+protegidas: sin ella arranca, pero esas rutas responden `500` (§5.2); con menos de 32 bytes, PyJWT avisa
+(`InsecureKeyLengthWarning`, en texto por stderr). Ningún otro valor es obligatorio; los parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescribirse con
 una variable del mismo nombre (si se vuelve necesario, se añade antes a infra §5.4). Ninguna variable es obligatoria
 para arrancar: cada lote exige las suyas al usarlas (por ejemplo, `DB_*` desde BE-1.2). De las `DB_*` de conexión
 (infra §5.4), tienen valor por defecto `DB_PORT` (5432) y `DB_SSLMODE` (`require`). `DB_SSLMODE` admite `disable`, `allow`, `prefer`, `require`,
@@ -1071,7 +1202,10 @@ que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que 
 
 | Parámetro (`config.py`) | Valor inicial | Notas |
 |---|---|---|
-| `JWT_TTL_MIN` | 720 (12 h) | |
+| `JWT_TTL_MIN` | 720 (12 h) | `exp − iat` del token (§5.2) |
+| `LOGIN_HASH_CONCURRENTES` | 2 | Verificaciones argon2id a la vez en `api` (cada una usa 64 MiB; la tarea tiene 0,5 GB). Las demás esperan su turno sin conexión a la base (§4.4) |
+| `LOGIN_HASH_COLA_MAX` | 8 | Logins que pueden esperar turno además de los que verifican; el siguiente recibe `503 SERVICIO_OCUPADO` sin tocar la base |
+| `LOGIN_HASH_ESPERA_MAX_S` | 10 | Espera máxima por el turno; después, `503 SERVICIO_OCUPADO`. Muy por debajo de los 30 s de API Gateway |
 | `EMBEDDING_VERSION_VECTOR` | `dinov2-vits14/pp-v1` | Debe coincidir con `GET /v1/info` de embeddings. Se comprueba en la primera llamada tras cada arranque del servicio y cada 10 min (no al arrancar `api`, porque embeddings puede estar apagado); si no coincide, no se usa el servicio y `/v1/health/ready` lo informa |
 | `EMBEDDING_TIMEOUT_S` / `EMBEDDING_CONNECT_TIMEOUT_S` | 5 / 3 | Un reintento solo si la conexión fue rechazada. 5 s deja margen sobre los ≤ 800 ms esperados para 5 fotos en `dev` (embeddings §5.7); si hace falta, se sube con la variable del mismo nombre |
 | `LOC_MAX_FOTOS` / `LOC_MAX_BYTES_FOTO` | 5 / 1 572 864 (1,5 MB) | |
@@ -1111,8 +1245,15 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `error_api` | `api` | `estado`, `codigo` | Un error de §5.6 con estado ≥ 500 (`ERROR`) |
 | `api_iniciada` / `api_detenida` | `api` | `version`, `commit`, `entorno` (solo al iniciar) | Arranque y parada de la aplicación |
 | `worker_iniciado` / `latido` / `worker_detenido` | `worker` | Al iniciar: `version`, `commit`, `entorno`, `modo`; en cada latido: `modo` | Arranque, cada 60 s y parada. `modo = sin_consumo` hasta BE-2.2 |
-| `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` (`WARNING`; responde `503`); en `migrate`, la CLI termina con 2 (`ERROR`) |
-| `configuracion_incompleta` | `migrate` | `faltan`, `invalidas` (nombres de variables), `motivo` (sin el valor recibido) | Faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), o una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT` (`ERROR`); la CLI termina con 3 |
+| `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` y, desde BE-1.3, en cualquier endpoint que la use (`WARNING`; responde `503`); en `migrate`, la CLI termina con 2 (`ERROR`) |
+| `configuracion_incompleta` | `migrate`, `api` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, o falta o no vale la contraseña de `crear-usuario` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida (`ERROR`; responde `500`) |
+| `login` | `api` | `resultado` (`exito` \| `fallo` \| `rechazado`), `motivo` (`null` \| `correo_desconocido` \| `password_incorrecta` \| `usuario_inactivo` \| `cola_llena` \| `espera_agotada`), `usuario_id` (`null` si el correo no existe o no se buscó) | Cada `POST /v1/auth/login` con el cuerpo válido que llega a la cola del hash (`INFO` si entró; `WARNING` si no). `rechazado` = `503 SERVICIO_OCUPADO`, sin fila de auditoría. Nunca el correo escrito ni la contraseña |
+| `autorizacion_rechazada` | `api` | `codigo` (`NO_AUTENTICADO`, `TOKEN_INVALIDO`, `TOKEN_EXPIRADO`, `SIN_PERMISOS`), `usuario_id` (el `sub` si el token era válido; si no, `null`) | `requiere_admin` rechaza una petición (`INFO`) |
+| `usuario_guardado` | `migrate` | `resultado` (`creado` \| `actualizado`), `usuario_id`, `rol`, `reactivado`, `rol_anterior` (solo al actualizar) | `crear-usuario` terminó con 0 |
+| `usuario_desactivado` | `migrate` | `usuario_id`, `ya_estaba_inactivo` | `desactivar-usuario` terminó con 0 |
+| `usuario_no_encontrado` | `migrate` | — | `desactivar-usuario` con un correo que no existe (`WARNING`); termina con 1 |
+| `usuario_rechazado` | `migrate` | `motivo` | `crear-usuario` o `desactivar-usuario` dejaría sin ningún admin activo (`ERROR`); termina con 1 |
+| `comando_fallido` | `migrate` | `comando`, `motivo` (y la traza en `excepcion`) | Error de `crear-usuario` o `desactivar-usuario` que no es de conexión (p. ej. la base sin migrar) (`ERROR`); termina con 1 |
 | `migracion_iniciada` | `migrate` | `version`, `commit`, `entorno`, `revision_objetivo` | Al empezar `migrar` |
 | `migracion_terminada` | `migrate` | `revision_anterior`, `revision`, `aplicada`, `admin_inicial` (`creado` \| `ya_habia_admin`), `usuario_id` (si lo creó), `duracion_ms` | `migrar` terminó con 0. Los mensajes de Alembic (`Running upgrade  -> 0001, …`) salen antes como `evento = log` |
 | `migracion_fallida` | `migrate` | `motivo` (y la traza en `excepcion`) | Falló una migración o el admin inicial, o esperó más de 5 min a otro `migrar` (`LockNotAvailableError`) (`ERROR`); la CLI termina con 1 |
@@ -1137,7 +1278,8 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
 | Variable | Uso | En `dev`, si falta |
 |---|---|---|
 | `VALIDACION_API_URL` | URL base con `/v1` | Se arma con el output `api_base_url` de infra |
-| `VALIDACION_ADMIN_CORREO`, `VALIDACION_ADMIN_PASSWORD` | Iniciar sesión como admin | Se leen del secreto `campus-locator/dev/admin-inicial` |
+| `VALIDACION_ADMIN_CORREO`, `VALIDACION_ADMIN_PASSWORD` | Iniciar sesión como admin (hacen falta las dos; en `local`, las del compose: `admin@campus.edu.co` / `local-solo-desarrollo-admin`) | Se leen del secreto `campus-locator/dev/admin-inicial` |
+| `JWT_SECRET` | Solo `validate13.py` en `local`: comprobar y falsificar firmas (la del compose, `local-solo-desarrollo-no-usar-en-aws`) | Se lee del secreto `campus-locator/dev/jwt` (clave `secret`) |
 | `AWS_PROFILE` | Inspeccionar S3, SQS, logs y lanzar tareas | Obligatoria en `dev` |
 
 **Cómo comprueban lo que no se ve desde fuera**
@@ -1170,11 +1312,14 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
 - AWS e infraestructura: `sesion_aws()` (perfil de `AWS_PROFILE`, `us-east-1`), `verificar_cuenta(sesion)` (exige la
   cuenta del proyecto), `outputs_terraform()` (`terraform output -json` de `INFRASTRUCTURA_TERRAFORM/project/envs/dev`,
   con `terraform init` ya hecho), `url_api(outputs)` (`VALIDACION_API_URL`, o `api_base_url` + `/v1`),
-  `ejecutar_proceso([...])` (un comando externo; devuelve el resultado con su código) y `commit_local()`.
+  `ejecutar_proceso([...], cwd=None, timeout=600, entorno=None)` (un comando externo; devuelve el resultado con su
+  código; `entorno` añade variables al proceso hijo sin ponerlas en la línea de comandos) y `commit_local()`.
 - Tareas sueltas de ECS (BE-1.2): `red_tareas(outputs)` arma la red de `run-task` (`subredes_tareas`, `sg_migrate`, IP
   pública; sin esos outputs, `PrecondicionNoCumplida`). `lanzar_tarea(ecs, logs, definicion=…, red=…, familia=…,
-  comando=None, iniciada_por="validacion")` lanza la definición (familia o ARN de una revisión) en Fargate, en
-  `campus-locator-dev` y sin etiquetas; `comando` sustituye el del contenedor `app`, y `familia` (`FAMILIA_MIGRATE` o
+  comando=None, iniciada_por="validacion", entorno=None)` lanza la definición (familia o ARN de una revisión) en
+  Fargate, en `campus-locator-dev` y sin etiquetas; `comando` sustituye el del contenedor `app`, `entorno` (BE-1.3) le
+  añade variables (`environment` del *override*: no se imprimen, pero quedan en `describe-tasks`, así que solo valores
+  de prueba), y `familia` (`FAMILIA_MIGRATE` o
   `FAMILIA_VALIDACION`) elige el log group y el prefijo del stream. Espera hasta 900 s a que la tarea pare y devuelve
   un `ResultadoTarea`: `id`, `arn`, `definicion` (ARN de la revisión), `codigo` (salida del contenedor `app`; `None` si
   no llegó a correr), `motivo`, `lineas` (el log) y `eventos(nombre)` (las líneas JSON de §5.10, todas o las de un
@@ -1182,6 +1327,25 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
   intenta hasta 12 veces, con 5 s entre intentos (`[]` si nunca llega). Al lanzar la tarea o leer el log, un error de
   AWS por falta de permiso es `ErrorConfiguracion` y cualquier otro, `Falla`; un error mientras espera a que pare
   también es `Falla` («no se detuvo en 900 s»), y uno de `describe-tasks` llega sin convertir.
+
+Ayudas de BE-1.3 (para los validadores que inician sesión o usan la CLI; las de BE-2.1 y BE-3.1 las reutilizan):
+
+| Elemento | Qué hace |
+|---|---|
+| `leer_secreto(sesion, secreto, lote="INF-1.2")` → `dict` | JSON de un secreto de Secrets Manager. Sin permiso → `ErrorConfiguracion`; no existe → `PrecondicionNoCumplida` del `lote`; no es un objeto JSON → `ErrorConfiguracion`. Constantes `SECRETO_ADMIN` (`campus-locator/dev/admin-inicial`) y `SECRETO_JWT` (`campus-locator/dev/jwt`) |
+| `credenciales_admin(entorno, sesion=None)` → `(correo, password)` | `VALIDACION_ADMIN_CORREO` y `VALIDACION_ADMIN_PASSWORD` si están las dos; si no y es `dev`, las claves `correo` y `password` de `SECRETO_ADMIN`; si no, `ErrorConfiguracion` |
+| `ClienteApi(url_base, http=None, dormir=time.sleep, reloj=time.monotonic)` | `pedir(metodo, ruta, token=None, **kwargs)` (ruta relativa a la URL con `/v1`; `token` añade `Authorization: Bearer`; un `429` **de API Gateway** se reintenta tras 1, 2, 4 y 8 s, y un `500 {"message": "Internal Server Error"}` **de API Gateway** —`api` sin instancias en Cloud Map, infra §5.13: la petición no llegó al backend— tras 2, 4 y 8 s; si no ceden, se devuelve el último; los 429 y 500 del backend (formato §5.1) no se reintentan; `reintentos_429`, `reintentos_500`); `login(correo, password)` (`POST /auth/login` con al menos `PAUSA_LOGIN_S` = 0,6 s desde el anterior, por el *throttling* de 2 req/s de infra §5.10; cuenta `logins_ok` y `logins_fallidos`); `token(correo, password, quien=…)` (el token de un 200, o `Falla` con el código, y con «¿está desplegado BE-1.3?» ante un 404); `ultima_duracion_ms`, `reintentos_429`, `cerrar()`. `http` es un `httpx.Client` (15 s) o, en las pruebas, un objeto con `request()` y `close()` |
+| `es_respuesta_api_gateway(r)`, `codigo_error(r)`, `describir_respuesta(r)` | ¿Cuerpo `{"message": …}` de API Gateway (infra §5.13)?; `error.codigo` o `None`; texto corto para un detalle (`401 CREDENCIALES_INVALIDAS`, `429 (API Gateway)`), nunca el cuerpo |
+| `EntornoBackend(entorno, sesion=None, outputs=None, iniciada_por="validacion", dormir=time.sleep)` | `cli(argumentos, entorno=None)` → `ResultadoTarea`: en `local`, `docker compose run --rm -T [-e VAR…] api python -m app.cli …` desde `project/`, con los valores solo en el entorno del proceso; en `dev`, tarea suelta con la última revisión de `campus-locator-dev-migrate`, que debe usar la imagen del servicio `api` (si no, `Falla`: `backend.yml` no terminó). `sql(consulta)` → líneas de `psql -tAc` (en `local`, `docker compose exec -T db psql -U campus_app -d campus_locator`; en `dev`, la tarea `campus-locator-dev-validacion`) o `Falla` si `psql` no termina con 0. También `imagen(definicion)` → `(arn, imagen)` y `revision_migrate()`. `outputs` es una función que devuelve los outputs (por defecto, `outputs_terraform`) |
+| `motivo_cli(resultado)` | Por qué un `app.cli` no dio 0, a partir de sus eventos (`base_no_disponible`, `configuracion_incompleta`, `comando_fallido`, `usuario_rechazado`, `usuario_no_encontrado`, `migracion_fallida`, `verificacion_fallida`) |
+| `USUARIO_VALIDACION`, `crear_usuario_validacion(backend)` → contraseña, `desactivar_usuario_validacion(backend, tolerar_inexistente=False)` → detalle | El usuario de prueba de rol `user` (abajo): `crear-usuario --rol user` con una contraseña aleatoria `validacion-pw-<uuid>` en `CREAR_USUARIO_PASSWORD` (se devuelve, nunca se imprime) y `desactivar-usuario`; `Falla` con `motivo_cli` si no terminan con 0. Con `tolerar_inexistente` (para la limpieza), «no existe» (1 con `usuario_no_encontrado`) no es un fallo |
+
+`validate13.py` es el ejemplo de uso: el `Contexto` crea `ClienteApi` y `EntornoBackend` en P2, pide los tokens la
+primera vez que una comprobación los necesita (así `--solo` funciona) y, en `limpieza`, desactiva el usuario de prueba
+si pudo quedar activo. Marca «pudo quedar activo» **antes** de lanzar `crear-usuario`: si la tarea reactiva al usuario
+y después falla la espera o la lectura del log, la limpieza lo desactiva igual (y si no llegó a crearlo, lo tolera). Sus funciones `partes_jwt`, `firma_valida`, `firmar` y `alterar_firma` hacen el HMAC a mano,
+sin la biblioteca del backend; `alterar_firma` cambia un carácter **del medio** de la firma, porque el último puede
+codificar solo bits de relleno de base64url y no cambiarla.
 
 **Datos de prueba**: videos con `ref_cliente` y `nombre` que empiezan por `validacion-` (con coordenadas fuera del
 campus, para no mezclarse con el dataset real), lugares cuyo nombre empieza por `validacion-`, alertas cuyo mensaje
@@ -1194,7 +1358,7 @@ empieza por `validacion-`, y un usuario `validacion+user@campus.edu.co` de rol `
 | Lugares y alertas | Con sus `DELETE` de §5.5 (BE-3.1) |
 | Videos de prueba, antes de BE-4.1 | `limpiar-validacion --video <id> …` en una tarea suelta con la definición `campus-locator-dev-worker` (§5.9) |
 | Videos de prueba, con BE-4.1 hecho | `DELETE /v1/admin/videos/{id}`; su purga limpia S3 |
-| Usuario `validacion+user@campus.edu.co` | Lo crea o reactiva `crear-usuario --rol user` (contraseña aleatoria en `CREAR_USUARIO_PASSWORD`, nunca impresa) y lo desactiva `desactivar-usuario` al terminar, ambos en una tarea suelta de `migrate`. La fila queda inactiva entre ejecuciones |
+| Usuario `validacion+user@campus.edu.co` | Lo crea o reactiva `crear-usuario --rol user` (contraseña aleatoria en `CREAR_USUARIO_PASSWORD`, nunca impresa) y lo desactiva `desactivar-usuario` al terminar, ambos en una tarea suelta de `migrate` (en `local`, con `docker compose run`): `crear_usuario_validacion` y `desactivar_usuario_validacion` de `comun.py`. La fila queda inactiva entre ejecuciones; reactivarla devuelve la validez a sus tokens sin vencer (§5.2), que solo tuvo el validador |
 
 Al empezar, cada validador que crea videos borra los `validacion-` que haya dejado una ejecución interrumpida
 (`limpiar-validacion` sin `--video`, o los `DELETE` si BE-4.1 está hecho). Las filas de `auditoria` que generan las
@@ -1250,6 +1414,24 @@ no existe todavía. `GET /v1/route` queda reservado.
 El PDR de la app ya usa norte verdadero; el escaneo 360° hoy entrega acimut magnético en (−180, 180]. Unificar en el
 contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos del dataset con los de la consulta.
 
+**ADR-BE-13 — Login uniforme y autorización con el estado actual de la base (aceptada, BE-1.3).**
+- Todo intento de login hace lo mismo: una consulta, **una** verificación argon2id (contra un hash ficticio si el
+  correo no existe) y una fila de auditoría; y responde lo mismo. Así ni el cuerpo ni el tiempo dicen qué correos
+  existen o están inactivos (el motivo solo queda en el log y en `auditoria`).
+- `requiere_admin` comprueba el token y después, en cada petición, que el usuario exista, esté activo y siga siendo
+  `admin` en la base (además de en el token). Es la consecuencia de ADR-BE-03 (revocar = desactivar) y cuesta una
+  consulta por clave primaria. El usuario inactivo da `401` antes que el rol `403`: su sesión ya no vale.
+- PyJWT firma y comprueba (`algorithms=["HS256"]` fijo: ni `none` ni otros algoritmos); el validador hace el HMAC a mano
+  para no compartir el error de una biblioteca.
+- La verificación argon2id tiene una cola acotada en número (`LOGIN_HASH_COLA_MAX`) y en tiempo
+  (`LOGIN_HASH_ESPERA_MAX_S`): lo que no cabe recibe `503 SERVICIO_OCUPADO` con `Retry-After`, un código propio y no
+  `BASE_NO_DISPONIBLE`, que diría algo falso al diagnosticar. No se anota en `auditoria` (no se comprobó ninguna
+  contraseña y una avalancha escribiría una fila por petición); queda el evento `login` con `resultado = rechazado`.
+- *Alternativas descartadas:* comprobar solo el token (no permite revocar); una dependencia con `yield` que tenga la
+  conexión toda la petición (el hash ocuparía el pool, y sus excepciones pasarían por ella, §4.4).
+- *Consecuencias:* reactivar a un usuario devuelve la validez a sus tokens sin vencer; cambiar la contraseña no los
+  invalida. Sin límite de intentos por cuenta (R7).
+
 ---
 
 ## 7. Riesgos
@@ -1262,8 +1444,9 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 | R4 | Una URL PUT permite subir archivos enormes | Baja | Bajo | URL de 15 min ligada a una clave; el `worker` rechaza > 4 MB y la purga los borra |
 | R5 | Rumbos de fuentes distintas (magnético vs. verdadero) | Alta | Medio | ADR-BE-12; lote del frontend para convertir en el escaneo |
 | R6 | Eventos de S3 duplicados o fuera de orden | Media | Bajo | Idempotencia por imagen y ETag |
-| R7 | Fuerza bruta contra el login | Baja | Alto | *Throttling* de API Gateway, argon2id, auditoría de intentos, alarma de 5xx |
+| R7 | Fuerza bruta contra el login | Baja | Alto | *Throttling* de API Gateway (aproximado y común a todos los clientes: frena volumen, no intentos sueltos, infra §3.3), argon2id, auditoría de cada intento con su motivo (`usuario.login`, §5.7), alarma de 5xx. **Sin límite de intentos por cuenta:** infra lo propone (su CHANGELOG 0.12.0 y R10: 5 fallos en 15 min por correo → `429` con `Retry-After` durante 15 min, fallos en PostgreSQL); no entra en BE-1.3 y está pendiente de decisión. Si se adopta, cambia §5.3 (un error nuevo del login) y la app lo consume |
 | R8 | Reloj del teléfono desajustado (`capturada_en`) | Media | Bajo | El servidor guarda `creado_en` propio; `capturada_en` solo informa |
 | R9 | `db.t4g.micro` se queda corto (memoria del índice, conexiones) | Baja | Medio | Pools pequeños; ver infra R4 |
 | R10 | Formatos de error distintos cuando responde API Gateway | Alta | Bajo | §5.1 lo documenta; la app decide por código HTTP |
 | R11 | El texto del catálogo (restricciones, índices) cambia con una versión mayor de PostgreSQL y `verificar-esquema` da diferencias que no lo son | Baja | Bajo | RDS actualiza por su cuenta solo la versión menor (infra §3.5); CI usa la misma mayor (`pg17`) y prueba que la migración deja exactamente `esquema.py`; un cambio de mayor actualiza `esquema.py` en el mismo cambio |
+| R12 | argon2id en 0,25 vCPU: login lento, falta de memoria o el *health check* sin CPU con varios a la vez | Media | Medio | Como mucho `LOGIN_HASH_CONCURRENTES` (2) a la vez, fuera de la base, 64 MiB cada uno; como mucho 8 más esperando y 10 s de espera (luego `503 SERVICIO_OCUPADO`, §4.4). En `local` tarda ~92 ms; en `dev`, **a verificar** (C2 de `validate13.py` informa los tiempos). **Riesgo que queda:** con un flujo sostenido de logins, las dos verificaciones argon2 (t = 3, 64 MiB, p = 4) pueden ocupar los 0,25 vCPU y retrasar `GET /v1/health`; si el *health check* del contenedor (cada 30 s, 5 s de plazo, 3 fallos, infra §5.7) falla, ECS reinicia la tarea. Sin comprobar. Palancas: `LOGIN_HASH_CONCURRENTES = 1`, bajar los parámetros de argon2 (los hashes viejos siguen verificándose, §4.3) o el límite por cuenta de R7 |

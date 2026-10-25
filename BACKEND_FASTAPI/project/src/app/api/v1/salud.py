@@ -8,6 +8,7 @@ import logging
 from fastapi import APIRouter, Depends, Request
 
 from app import __version__
+from app.api.dependencias import obtener_ajustes
 from app.clientes import embedding
 from app.config import Settings
 from app.db import sesion
@@ -19,10 +20,6 @@ from app.logs import obtener_logger, registrar
 log = obtener_logger(__name__)
 
 router = APIRouter(prefix="/health", tags=["salud"])
-
-
-def obtener_ajustes(request: Request) -> Settings:
-    return request.app.state.ajustes
 
 
 @router.get("", response_model=SaludRespuesta, summary="Indicador de conexión")

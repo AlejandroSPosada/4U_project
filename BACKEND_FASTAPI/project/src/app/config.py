@@ -50,6 +50,11 @@ class Settings(BaseSettings):
 
     # --- Backend §5.10: parámetros operativos -----------------------------------------------------------------
     jwt_ttl_min: int = 720
+    # Verificaciones argon2id a la vez en `api` (cada una usa 64 MiB; la tarea tiene 0,5 GB), cuántas más pueden esperar
+    # turno y cuánto como mucho; si no, 503 SERVICIO_OCUPADO (§4.4). BE-1.3
+    login_hash_concurrentes: int = 2
+    login_hash_cola_max: int = 8
+    login_hash_espera_max_s: float = 10.0
     embedding_version_vector: str = "dinov2-vits14/pp-v1"
     embedding_timeout_s: float = 5.0
     embedding_connect_timeout_s: float = 3.0
