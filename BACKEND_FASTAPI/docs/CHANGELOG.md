@@ -20,6 +20,28 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.9.1] — 2026-10-25
+
+- **Lote que la motivó:** BE-2.2 (primera ejecución de `validate22.py` en `dev`, sobre `c5917bd`).
+- **Qué cambió:**
+  - `validate22.py --entorno dev` terminó con código 3 en P6: mientras la tarea de `embedding` arrancaba, ECS ya daba
+    el despliegue por `COMPLETED` con la tarea `HEALTHY`, pero Cloud Map aún no la tenía registrada y
+    `servicediscovery get-instances-health-status` respondió **error** `InstanceNotFound` (no una lista vacía), que
+    `EmbeddingDev` dejaba pasar sin traducir («error inesperado»). La limpieza apagó `embedding` bien.
+  - `comun.EmbeddingDev` (§5.11): las llamadas que `encender` repite mientras espera (`describe-services`, `list-tasks`,
+    `describe-tasks`, `get-instances-health-status`, `get-metric-statistics`, `describe-alarms`) pasan por
+    `_sondear`: `InstanceNotFound` y los límites de peticiones (`CODIGOS_TODAVIA_NO`) son «todavía no» y se sigue
+    esperando hasta el límite; un permiso que falta, `ErrorConfiguracion` (código 3); otro error, `Falla` (código 2
+    en P6). Revisadas también `list-tasks` y `describe-tasks` en el arranque: no lanzan por una tarea que aún no está
+    (lista vacía o `failures`), pero ahora también toleran el *throttling*.
+  - §5.11: la tabla de `EmbeddingDev` y sus constantes, y la «trampa del arranque de `embedding`» nueva; se quita la
+    nota de 0.9.0 que decía que esos errores no se traducían.
+- **Contratos tocados (§5):** ninguno (solo el validador y su documentación; versión de parche).
+- **Cómo se verificó:** `tests/ops/test_validate22.py` con un Cloud Map falso que responde `InstanceNotFound` las
+  primeras 3 veces (P6 pasa y vuelve a consultar) y otro que responde `AccessDeniedException` (código 3 y la
+  limpieza apaga `embedding`); `ruff check`, `ruff format --check` y la suite completa con `PRUEBAS_DB_OBLIGATORIA=1`.
+- **Pendiente:** repetir `validate22.py --entorno dev` (lo corre el maestro, `validation-2-2.md` §5).
+
 ## [0.9.0] — 2026-10-25
 
 - **Lote que la motivó:** BE-2.2 (Worker de ingesta).

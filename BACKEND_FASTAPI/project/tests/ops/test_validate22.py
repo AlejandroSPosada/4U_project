@@ -92,6 +92,8 @@ class Mundo:
         self.worker_duplica = False  # crea un segundo vector con un evento repetido
         self.worker_consume_sin_embedding = False
         self.inf21 = True
+        self.cloud_map_sin_instancia = 0  # llamadas a Cloud Map que responden InstanceNotFound (tarea sin registrar)
+        self.cloud_map_error: str | None = None
 
     # -- reloj y simulación ----------------------------------------------------------------------------------------
     def ahora(self) -> datetime:
@@ -486,15 +488,29 @@ class Sesion:
             "sqs": self.sqs,
             "application-autoscaling": Escalado(mundo),
             "cloudwatch": CloudWatch(mundo),
-            "servicediscovery": type(
-                "Sd",
-                (),
-                {"get_instances_health_status": lambda self, ServiceId: {"Status": {"i-1": "HEALTHY"}}},
-            )(),
+            "servicediscovery": CloudMap(mundo),
         }
 
     def client(self, servicio):
         return self.clientes[servicio]
+
+
+class CloudMap:
+    """Cloud Map: como en `dev`, responde `InstanceNotFound` mientras ECS aún no registró la tarea de `embedding`
+    (las primeras `mundo.cloud_map_sin_instancia` llamadas), o el error fijo `mundo.cloud_map_error`."""
+
+    def __init__(self, mundo: Mundo) -> None:
+        self.mundo = mundo
+        self.llamadas = 0
+
+    def get_instances_health_status(self, ServiceId):
+        assert ServiceId == "srv-emb"
+        self.llamadas += 1
+        if self.mundo.cloud_map_error:
+            raise _client_error(self.mundo.cloud_map_error)
+        if self.llamadas <= self.mundo.cloud_map_sin_instancia:
+            raise _client_error("InstanceNotFound")
+        return {"Status": {"i-1": "HEALTHY"}}
 
 
 @pytest.fixture
@@ -584,6 +600,27 @@ def test_fuera_de_horario_es_codigo_3_sin_encender_nada(entorno_dev):
     assert codigo == 3
     assert "antes de las 21:00" in _detalle(informe, "P4")
     assert mundo.cambios_embedding == [] and mundo.videos == {}
+
+
+def test_cloud_map_sin_instancia_al_arrancar_es_seguir_esperando(entorno_dev):
+    """`dev`, 2026-10-25 (c5917bd): Cloud Map respondió `InstanceNotFound` mientras la tarea arrancaba y P6 terminó con
+    código 3. Es «todavía no»: se sigue esperando hasta que la instancia está sana."""
+    mundo = Mundo(embedding_encendido=False)
+    mundo.cloud_map_sin_instancia = 3
+    codigo, sesion, informe, _ = entorno_dev(mundo, "--solo", "C1a")
+    assert codigo == 0, informe
+    assert _estados(informe)["P6"] == "pasa" and "embedding encendido en" in _detalle(informe, "P6")
+    assert sesion.clientes["servicediscovery"].llamadas > 3  # lo intentó otra vez tras los InstanceNotFound
+
+
+def test_cloud_map_sin_permiso_es_codigo_3_y_apaga_lo_encendido(entorno_dev, capsys):
+    mundo = Mundo(embedding_encendido=False)
+    mundo.cloud_map_error = "AccessDeniedException"
+    codigo, _, informe, _ = entorno_dev(mundo)
+    assert codigo == 3
+    assert "sin permiso para servicediscovery get-instances-health-status" in _detalle(informe, "P6")
+    assert "embedding apagado (lo encendió el validador)" in capsys.readouterr().out
+    assert mundo.deseado["embedding"] == 0
 
 
 def test_sin_inf21_es_codigo_2(entorno_dev):

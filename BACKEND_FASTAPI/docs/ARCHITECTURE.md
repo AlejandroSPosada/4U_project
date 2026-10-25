@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.9.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.9.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
 | Estado | En construcción: hay código de BE-1.1 a BE-2.2 (`project/`; BE-2.2 sin validar en `dev`); lo de lotes posteriores es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -1712,13 +1712,13 @@ BE-2.4, BE-3.2 y BE-4.1 las reutilizan):
 
 | Elemento | Qué hace |
 |---|---|
-| `EmbeddingDev(sesion, dormir=time.sleep, reloj=…, avisar=…)` | El contrato de encendido de infra §5.10, reescrito aquí (las carpetas no comparten código de validación; el `embedding.py` de infra hace lo mismo). `comprobar_inf21()` → detalle (objetivos escalables de `embedding` y `worker`, política `campus-locator-dev-worker-cola`, acción `campus-locator-dev-embedding-apagar-noche`; si falta, `PrecondicionNoCumplida` «INF-2.1»). `servicio(nombre)` → el `describe-services`. `latido()` → `PutMetricData` de `EmbeddingEncendidos` = 1 (`Count`, sin dimensiones, con `Timestamp` explícito) en `campus-locator/dev`. `encender(listo_en_api)` → segundos: rango 0-1 de `embedding` y `worker`, latido, hasta 5 min a que `GetMetricStatistics` (`Sum`, periodo 60 s, ±2 min de la marca) lo vea, 60 s más, hasta que la alarma `campus-locator-dev-embedding-inactivo` no esté en `ALARM` (dentro de los mismos 5 min), `desiredCount = 1`, hasta 10 min desde el principio a despliegue `PRIMARY` `COMPLETED` con una tarea `HEALTHY` (`list-tasks` + `describe-tasks`) e instancia `HEALTHY` en Cloud Map (`servicediscovery get-instances-health-status` del `registryArn` del servicio), y hasta 2 min más a que `listo_en_api()` sea cierto; si no, `Falla`. `apagar()`: rango 0-0 y `desiredCount = 0` de `embedding` y `worker` (no espera). `poner(servicio, n)`: solo `update-service`. Permisos: `application-autoscaling:Describe*` y `RegisterScalableTarget`, `cloudwatch:PutMetricData`, `GetMetricStatistics`, `DescribeAlarms`, `ecs:DescribeServices`, `ListTasks`, `DescribeTasks`, `UpdateService`, `servicediscovery:GetInstancesHealthStatus`; los errores de AWS se traducen como en el resto (`ErrorConfiguracion` si es un permiso, si no `Falla`) |
+| `EmbeddingDev(sesion, dormir=time.sleep, reloj=…, avisar=…)` | El contrato de encendido de infra §5.10, reescrito aquí (las carpetas no comparten código de validación; el `embedding.py` de infra hace lo mismo). `comprobar_inf21()` → detalle (objetivos escalables de `embedding` y `worker`, política `campus-locator-dev-worker-cola`, acción `campus-locator-dev-embedding-apagar-noche`; si falta, `PrecondicionNoCumplida` «INF-2.1»). `servicio(nombre)` → el `describe-services`. `latido()` → `PutMetricData` de `EmbeddingEncendidos` = 1 (`Count`, sin dimensiones, con `Timestamp` explícito) en `campus-locator/dev`. `encender(listo_en_api)` → segundos: rango 0-1 de `embedding` y `worker`, latido, hasta 5 min a que `GetMetricStatistics` (`Sum`, periodo 60 s, ±2 min de la marca) lo vea, 60 s más, hasta que la alarma `campus-locator-dev-embedding-inactivo` no esté en `ALARM` (dentro de los mismos 5 min), `desiredCount = 1`, hasta 10 min desde el principio a despliegue `PRIMARY` `COMPLETED` con una tarea `HEALTHY` (`list-tasks` + `describe-tasks`) e instancia `HEALTHY` en Cloud Map (`servicediscovery get-instances-health-status` del `registryArn` del servicio), y hasta 2 min más a que `listo_en_api()` sea cierto; si no, `Falla`. Durante esas esperas, `InstanceNotFound` de Cloud Map (la tarea aún sin registrar) y los límites de peticiones son «todavía no» y se sigue esperando (`_sondear`, `CODIGOS_TODAVIA_NO`; trampa del arranque, abajo). `apagar()`: rango 0-0 y `desiredCount = 0` de `embedding` y `worker` (no espera). `poner(servicio, n)`: solo `update-service`. Permisos: `application-autoscaling:Describe*` y `RegisterScalableTarget`, `cloudwatch:PutMetricData`, `GetMetricStatistics`, `DescribeAlarms`, `ecs:DescribeServices`, `ListTasks`, `DescribeTasks`, `UpdateService`, `servicediscovery:GetInstancesHealthStatus`; los errores de AWS se traducen como en el resto (`ErrorConfiguracion` si es un permiso, si no `Falla`) |
 | `embedding_en_api(api)` → `"ok" \| "no_disponible" \| None` | El campo `embedding` de `GET /v1/health/ready` (`None` si no da 200) |
 | `hora_bogota(ahora=None)`, `ZONA_BOGOTA`, `HORA_APAGADO_NOCHE` (22) | America/Bogota como UTC−5 fijo (Colombia no tiene horario de verano; no depende de `tzdata`) |
 | `mensajes_cola(sqs, url)` → `(visibles, en_vuelo)` | `ApproximateNumberOfMessages` y `…NotVisible` (aproximados y con retraso de hasta ~1 min) |
 | `enviar_mensaje(sqs, url, cuerpo)` → `MessageId` | `SendMessage` con el cuerpo en JSON |
 | `eventos_worker(logs, imagen_id, desde)` → `list[dict]` | Las líneas JSON de `/campus-locator/dev/worker` con ese `imagen_id` desde `desde` (`filter-log-events` con el id entre comillas, todas las páginas). Sirve para saber que el `worker` consumió un mensaje concreto sin fiarse de los contadores de SQS |
-| Constantes | `SERVICIO_EMBEDDING`, `SERVICIO_WORKER`, `ALARMA_INACTIVIDAD`, `POLITICA_WORKER_COLA`, `ACCION_NOCHE_EMBEDDING`, `METRICA_ESPACIO`, `METRICA_ENCENDIDOS`, `LIMITE_ALARMA_S` (300), `LIMITE_ENCENDIDO_S` (600), `PAUSA_SONDEO_S` (15), `LOG_WORKER`; `recurso_ecs(servicio)` → `service/campus-locator-dev/<servicio>` |
+| Constantes | `SERVICIO_EMBEDDING`, `SERVICIO_WORKER`, `ALARMA_INACTIVIDAD`, `POLITICA_WORKER_COLA`, `ACCION_NOCHE_EMBEDDING`, `METRICA_ESPACIO`, `METRICA_ENCENDIDOS`, `LIMITE_ALARMA_S` (300), `LIMITE_ENCENDIDO_S` (600), `PAUSA_SONDEO_S` (15), `LOG_WORKER`, `CODIGOS_TODAVIA_NO` (0.9.1: `InstanceNotFound`, `ThrottlingException`, `Throttling`, `TooManyRequestsException`, `RequestLimitExceeded`); `recurso_ecs(servicio)` → `service/campus-locator-dev/<servicio>` |
 
 `validate22.py` es el ejemplo de un validador que enciende `embedding` (P6 con `asegurar_embedding`: si ya está
 encendido y `/v1/health/ready` dice `ok`, solo un `latido()`; si no, `encender`), marca `encendido_por_mi` **antes**
@@ -1745,11 +1745,31 @@ con su fila en la tabla de arriba):
   `http_s3`, `dormir`, `ahora` y `sello`.
 
 Trampas de BE-2.2: `--sin-limpieza` también se salta dejar `embedding` como estaba (queda encendido si lo encendió el
-validador: se apaga con `embedding.py apagar` de infra, `validation-2-2` §5 paso 7). En `EmbeddingDev`, los errores de
-`list-tasks`, `describe-tasks` y `servicediscovery` no se traducen: llegan como excepción de botocore (en P6, código
-3 «error inesperado»), igual que los de `describe-tasks` en `lanzar_tarea`. `EmbeddingDev.servicio` lanza
+validador: se apaga con `embedding.py apagar` de infra, `validation-2-2` §5 paso 7). `EmbeddingDev.servicio` lanza
 `PrecondicionNoCumplida` (INF-1.3) si el servicio no existe. La DLQ se compara con `ApproximateNumberOfMessages` +
 `…NotVisible`, aproximados: un mensaje ajeno que llegue a la DLQ durante la ejecución haría fallar C2 o C3b.
+
+**Trampa del arranque de `embedding` (Cloud Map `InstanceNotFound`, 0.9.1).** Mientras la tarea de `embedding`
+arranca, ECS puede dar el despliegue por `COMPLETED` con la tarea `HEALTHY` antes de registrarla en Cloud Map, y
+`servicediscovery get-instances-health-status` responde **error** `InstanceNotFound` («Instance(s) not found for
+service …»), no una lista vacía. Visto en `dev` el 2026-10-25 con `validate22.py` sobre `c5917bd`: P6 terminó con código
+3 («error inesperado: InstanceNotFound») y la limpieza apagó `embedding`. Desde 0.9.1, todas las llamadas de AWS que
+`EmbeddingDev.encender` repite mientras espera (`describe-services`, `list-tasks`, `describe-tasks`,
+`get-instances-health-status`, `get-metric-statistics`, `describe-alarms`) pasan por `EmbeddingDev._sondear(que,
+llamada)` → `(respuesta, None)` o `(None, motivo)`: los códigos de `CODIGOS_TODAVIA_NO` (`InstanceNotFound`,
+`ThrottlingException`, `Throttling`, `TooManyRequestsException`, `RequestLimitExceeded`) son «todavía no» y se sigue
+esperando hasta `LIMITE_ENCENDIDO_S` (o el límite de la alarma); un permiso que falta es `ErrorConfiguracion` (código
+3) y cualquier otro error, `Falla` (en P6, código 2), nunca una excepción de botocore sin traducir. Una tarea que para
+entre `list-tasks` y `describe-tasks` no es un error: va en `failures` y cuenta como «sin tarea `HEALTHY`». Las
+llamadas sueltas fuera de esa espera (`servicio()` en C3a, `register-scalable-target`, `update-service`,
+`put-metric-data`) siguen traduciéndose con `_errores_aws` (un *throttling* ahí es `Falla`). Prueba:
+`tests/ops/test_validate22.py` (`test_cloud_map_sin_instancia_al_arrancar_es_seguir_esperando`, con un Cloud Map falso
+que responde `InstanceNotFound` las primeras veces, y `test_cloud_map_sin_permiso_es_codigo_3_y_apaga_lo_encendido`).
+El doble es la clase `CloudMap(mundo)` (cliente `servicediscovery` de la `Sesion` falsa): `get_instances_health_status`
+exige `ServiceId = "srv-emb"` (el `registryArn` que da el ECS falso), cuenta las llamadas en `llamadas`, lanza
+`InstanceNotFound` en las primeras `mundo.cloud_map_sin_instancia` (por defecto 0) y siempre el código de
+`mundo.cloud_map_error` si no es `None`; si no, `{"Status": {"i-1": "HEALTHY"}}`. Un validador de BE-2.4 o BE-3.2 que
+copie ese mundo falso hereda el caso.
 
 `validate21.py` es el ejemplo de un validador que sube a S3, montado sobre esas ayudas: un `RecorridoPrueba` por video
 y, en su `Contexto`, `asegurar_video`, `asegurar_registro` (guarda la respuesta de C1b: C3a usa su URL de la foto 4) y

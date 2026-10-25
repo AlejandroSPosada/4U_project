@@ -1363,6 +1363,11 @@ LIMITE_ALARMA_S = 300  # paso 3 del contrato: hasta 5 min a la muestra y a la al
 LIMITE_ENCENDIDO_S = 600  # paso 5: hasta 10 min desde el paso 1
 PAUSA_SONDEO_S = 15.0
 LOG_WORKER = "/campus-locator/dev/worker"
+#: Errores de AWS que, mientras `embedding` arranca, significan «todavía no» y no un fallo (BE-2.2, 0.9.1):
+#: Cloud Map responde `InstanceNotFound` hasta que ECS registra la tarea; y los límites de peticiones.
+CODIGOS_TODAVIA_NO = frozenset(
+    {"InstanceNotFound", "ThrottlingException", "Throttling", "TooManyRequestsException", "RequestLimitExceeded"}
+)
 
 
 def hora_bogota(ahora: datetime | None = None) -> datetime:
@@ -1408,7 +1413,8 @@ class EmbeddingDev:
       esperar a que `GetMetricStatistics` lo vea, un minuto más y la alarma `embedding-inactivo` fuera de `ALARM`
       —hasta 5 min—, `desiredCount = 1`, y hasta 10 min desde el paso 1 a tarea `HEALTHY`, despliegue `COMPLETED` e
       instancia sana en Cloud Map) y, además, hasta 2 min más a que `listo_en_api()` sea cierto (`api` lo ve por DNS).
-      Si no llega: `Falla`.
+      Si no llega: `Falla`. Mientras espera, `InstanceNotFound` de Cloud Map (la tarea aún no está registrada) y los
+      límites de peticiones de AWS (`CODIGOS_TODAVIA_NO`) son «todavía no», no un error (`_sondear`).
     - `apagar()`: rango 0-0 y `desiredCount = 0` de `embedding` y `worker` (no espera a que paren).
     - `poner(nombre, n)`: solo `UpdateService` (C3a de BE-2.2 apaga `embedding` así, sin tocar los rangos).
     """
@@ -1466,24 +1472,64 @@ class EmbeddingDev:
             raise PrecondicionNoCumplida(f"INF-2.1: falta la acción programada `{ACCION_NOCHE_EMBEDDING}`")
         return f"objetivos de embedding y worker, {POLITICA_WORKER_COLA} y {ACCION_NOCHE_EMBEDDING}"
 
+    @staticmethod
+    def _sondear(que: str, llamada: Callable[[], Any]) -> tuple[Any, str | None]:
+        """Una llamada de AWS mientras se espera a que `embedding` quede sano: `(respuesta, None)`, o `(None, motivo)`
+        si la respuesta significa «todavía no» (`InstanceNotFound` de Cloud Map: la tarea aún no se registró; o un
+        límite de peticiones de AWS) y hay que seguir esperando. Un permiso que falta → `ErrorConfiguracion`; otro
+        error → `Falla` (nunca una excepción de botocore sin traducir)."""
+        try:
+            return llamada(), None
+        except Exception as exc:
+            codigo = codigo_error_aws(exc)
+            if codigo in CODIGOS_TODAVIA_NO:
+                return None, f"{que}: {codigo} (aún no)"
+            raise _errores_aws(exc, que) from None
+
     def _sano_en_ecs(self) -> str | None:
         """`None` si `embedding` tiene una tarea `HEALTHY`, el despliegue `PRIMARY` `COMPLETED` y una instancia sana en
-        Cloud Map; si no, lo que falta."""
-        datos = self.servicio(SERVICIO_EMBEDDING)
+        Cloud Map; si no, lo que falta. Lo que AWS responde mientras la tarea arranca (`InstanceNotFound` de Cloud Map,
+        *throttling*) es «falta», no un error (`_sondear`)."""
+        ecs = self.aws("ecs")
+        respuesta, pendiente = self._sondear(
+            "ecs describe-services embedding",
+            lambda: ecs.describe_services(cluster=CLUSTER, services=[SERVICIO_EMBEDDING]),
+        )
+        if pendiente:
+            return pendiente
+        if not respuesta.get("services"):
+            raise PrecondicionNoCumplida(f"INF-1.3: no existe el servicio `{SERVICIO_EMBEDDING}` en `{CLUSTER}`")
+        datos = respuesta["services"][0]
         primario = next((d for d in datos.get("deployments", []) if d.get("status") == "PRIMARY"), {})
         if primario.get("rolloutState") != "COMPLETED" or int(datos.get("runningCount", 0)) < 1:
             return f"despliegue {primario.get('rolloutState')} con {datos.get('runningCount', 0)} tareas"
-        ecs = self.aws("ecs")
-        tareas = ecs.list_tasks(cluster=CLUSTER, serviceName=SERVICIO_EMBEDDING, desiredStatus="RUNNING")["taskArns"]
+        respuesta, pendiente = self._sondear(
+            "ecs list-tasks embedding",
+            lambda: ecs.list_tasks(cluster=CLUSTER, serviceName=SERVICIO_EMBEDDING, desiredStatus="RUNNING"),
+        )
+        if pendiente:
+            return pendiente
+        tareas = respuesta.get("taskArns") or []
         if not tareas:
             return "sin tareas RUNNING"
-        estados = [t.get("healthStatus") for t in ecs.describe_tasks(cluster=CLUSTER, tasks=tareas)["tasks"]]
+        respuesta, pendiente = self._sondear(
+            "ecs describe-tasks embedding", lambda: ecs.describe_tasks(cluster=CLUSTER, tasks=tareas)
+        )
+        if pendiente:
+            return pendiente
+        estados = [t.get("healthStatus") for t in respuesta.get("tasks", [])]  # una tarea ya parada va en `failures`
         if "HEALTHY" not in estados:
             return f"tareas {estados}"
         registros = datos.get("serviceRegistries") or []
         if registros:
             servicio_id = registros[0]["registryArn"].rsplit("/", 1)[-1]
-            salud = self.aws("servicediscovery").get_instances_health_status(ServiceId=servicio_id).get("Status", {})
+            respuesta, pendiente = self._sondear(
+                "servicediscovery get-instances-health-status",
+                lambda: self.aws("servicediscovery").get_instances_health_status(ServiceId=servicio_id),
+            )
+            if pendiente:
+                return pendiente
+            salud = respuesta.get("Status", {})
             if "HEALTHY" not in salud.values():
                 return f"Cloud Map {sorted(set(salud.values())) or 'sin instancias'}"
         return None
@@ -1519,18 +1565,29 @@ class EmbeddingDev:
         return marca
 
     def _muestra_vista(self, marca: datetime) -> bool:
-        datos = self.aws("cloudwatch").get_metric_statistics(
-            Namespace=METRICA_ESPACIO,
-            MetricName=METRICA_ENCENDIDOS,
-            StartTime=marca - timedelta(minutes=2),
-            EndTime=marca + timedelta(minutes=2),
-            Period=60,
-            Statistics=["Sum"],
+        datos, pendiente = self._sondear(
+            "cloudwatch get-metric-statistics",
+            lambda: self.aws("cloudwatch").get_metric_statistics(
+                Namespace=METRICA_ESPACIO,
+                MetricName=METRICA_ENCENDIDOS,
+                StartTime=marca - timedelta(minutes=2),
+                EndTime=marca + timedelta(minutes=2),
+                Period=60,
+                Statistics=["Sum"],
+            ),
         )
+        if pendiente:
+            return False
         return any(float(p.get("Sum", 0)) >= 1 for p in datos.get("Datapoints", []))
 
     def _alarma_en_alarm(self) -> bool:
-        alarmas = self.aws("cloudwatch").describe_alarms(AlarmNames=[ALARMA_INACTIVIDAD]).get("MetricAlarms", [])
+        datos, pendiente = self._sondear(
+            "cloudwatch describe-alarms",
+            lambda: self.aws("cloudwatch").describe_alarms(AlarmNames=[ALARMA_INACTIVIDAD]),
+        )
+        if pendiente:
+            return True  # sin respuesta, se sigue esperando como si siguiera en ALARM
+        alarmas = datos.get("MetricAlarms", [])
         return bool(alarmas) and alarmas[0].get("StateValue") == "ALARM"
 
     def _esperar(self, condicion: Callable[[], bool], hasta: datetime) -> bool:
