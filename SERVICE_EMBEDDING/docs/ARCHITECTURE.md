@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.6.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.7.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: código de EMB-1.1 (servicio base e imagen) y EMB-2.1 (vectorización por lotes); el resto de lotes, pendiente |
+| Estado | En construcción: código de EMB-1.1 (servicio base e imagen), EMB-2.1 (vectorización por lotes) y EMB-3.1 (benchmark y su validador; las latencias de `dev` de §5.7, pendientes de medir); el resto de lotes, pendiente |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Servicio HTTP interno que convierte fotos en **vectores de 384 dimensiones** con **DINOv2 ViT-S/14** sobre CPU
@@ -96,11 +96,13 @@ SERVICE_EMBEDDING/
     │   └── ops/                  validate<fase><n>.py y comun.py: validadores de los lotes EMB-x.y (§5.8)
     ├── tools/
     │   ├── descargar_modelo.py   Se ejecuta en el build: baja la revisión fija a /opt/modelo y deja revision.json
-    │   ├── benchmark.py          EMB-3.1: latencia por tamaño de lote (va dentro de la imagen, §5.8)
+    │   ├── benchmark.py          EMB-3.1: latencia de POST /v1/embed por tamaño de lote (va dentro de la
+    │   │                         imagen; §4.4, uso y salida en §5.9)
     │   ├── dorados.py            EMB-2.1: imágenes de referencia y vectores esperados de tests/golden/ (§5.4)
     │   └── evaluacion/           EMB-3.2: recuperación sobre un conjunto etiquetado
-    ├── tests/                    contrato HTTP, configuración, modelo, preproceso, planificador, validadores y
-    │                             vectores dorados (golden/: cinco imágenes y esperados.json, §5.4)
+    ├── tests/                    contrato HTTP, configuración, modelo, preproceso, planificador, validadores
+    │                             (test_ops_comun, test_validate31 con dobles de AWS), benchmark y vectores
+    │                             dorados (golden/: cinco imágenes y esperados.json, §5.4)
     ├── .dockerignore             solo entra a la imagen lo de §5.5
     ├── .gitignore                incluye .validacion/ (informes de los validadores) y .modelo/ (pesos para dorados)
     ├── Dockerfile                tres etapas (§4.2)
@@ -181,12 +183,84 @@ espera sin bloquear el bucle de eventos; al detenerse el proceso, lo que esperab
 vectores dorados (§5.4) y dónde se calculan: ADR-EMB-12.
 
 ### 4.4 EMB-3.1 — Rendimiento en CPU
-`project/tools/benchmark.py` mide p50 y p95 para lotes de 1, 5 y 8 imágenes en una tarea igual a la de `dev` (2 vCPU,
-§5.8). Objetivo: lote de 5 en p95 ≤ 800 ms, para que `POST /v1/localize` quede en p95 ≤ 1 s (infra §5.10; el resto
-se va en el backend y en la búsqueda en RDS, backend §4.10). Estimación previa, sin medir: 0,5–1,5 s (ADR-EMB-11). Si
-no se alcanza, en este orden: ajustar hilos; exportar a ONNX Runtime; subir la tarea a 4 vCPU (duplica el costo por
-hora encendida, infra §3.10); cuantizar a int8. Exportar o cuantizar cambia los vectores: exige una `version_vector`
-nueva (ADR-EMB-08), así que conviene decidirlo antes de indexar el dataset real.
+Objetivo: lote de 5 en p95 ≤ 800 ms en `dev` (2 vCPU), para que `POST /v1/localize` quede en p95 ≤ 1 s (infra §5.10;
+el resto se va en el backend y en la búsqueda en RDS, backend §4.10). Estimación previa, sin medir: 0,5–1,5 s
+(ADR-EMB-11). Los números de `dev` van a §5.7 (**pendientes de medir**).
+
+**Qué mide `tools/benchmark.py`** (ADR-EMB-13; argumentos, salida y códigos en §5.9):
+1. Genera las imágenes en memoria: JPEG sintéticos de 1024 × 768 px y calidad 85 (como las fotos de `/v1/localize`,
+   backend §5.3), con semilla fija: fondo suave, 40 bloques y ruido (~129 KiB de media; una foto real de 1024 px suele
+   pesar algo más, así que decodificarla tarda algo más).
+2. Arranca el servicio como **subproceso** con el comando de la imagen (`uvicorn app.main:app`, un proceso), pero
+   solo en `127.0.0.1:8080` y con `TORCH_NUM_THREADS` = `--hilos` (por defecto, la variable de la tarea: 2 en `dev`).
+   Sus logs salen por la salida de error. Espera a `GET /health/ready` = 200 (máx. 300 s) y lee `GET /v1/info`
+   (`commit`, `version_vector`).
+3. Para cada lote (por defecto 1, 4, 5 y 8 imágenes; 40, 30, 60 y 30 repeticiones medidas, más 3 de calentamiento
+   que se descartan) envía **en serie** el mismo `POST /v1/embed` con `X-Prioridad: alta`, por una conexión HTTP
+   persistente, y mide en el cliente desde que empieza a enviarlo hasta tener la respuesta completa: subida en
+   *loopback*, multipart, cola (vacía), pp-v1, modelo y JSON. Guarda también `tiempos_ms.inferencia` y `.cola` de
+   cada respuesta. El lote de 4 no lo pide el PLAN: es el del `worker` (backend §5.10), el que una localización puede
+   tener que esperar.
+4. Lee la memoria del proceso del servicio (`VmRSS` y el pico `VmHWM` de `/proc/<pid>/status`), lo detiene y, ya
+   sin servicio, mide pp-v1 por imagen en su propio proceso, el modelo de CPU (`/proc/cpuinfo`) y la ruta SIMD de
+   PyTorch (`torch.backends.cpu.get_cpu_capability()`).
+5. Escribe una sola línea `BENCHMARK_JSON {…}` (o una tabla con `--salida texto`). Percentiles por rango más cercano:
+   p95 de 60 repeticiones = la 57.ª más rápida.
+
+**Cómo se mide en `dev`** (`validate31.py`, §5.8): una **tarea suelta** con la misma revisión de
+`campus-locator-dev-embedding` y la misma red que el servicio `embedding` (hoy la subred `publica-a`, que es el output
+`subredes_tareas`, el grupo `campus-locator-dev-embedding` y `assignPublicIp = ENABLED`, sin la cual no llegaría a ECR
+ni a CloudWatch porque no hay NAT, infra §3.2), con el comando sobrescrito a
+`python tools/benchmark.py --salida json`. No necesita el servicio encendido ni lo toca (infra §5.11): no entra en
+Cloud Map, así que nadie le envía tráfico, y como su `group` es `family:…` y no `service:embedding`, su parada no
+dispara la regla de EventBridge (infra §3.8). Su log va a `/campus-locator/dev/embedding`, stream
+`embedding/app/<id-de-la-tarea>`. El *health check* de la definición (infra §5.7) también corre: pasa en cuanto el
+servicio del benchmark queda listo en el puerto 8080.
+
+**Imagen.** Hasta `f2ddc42` (EMB-2.1, la desplegada al escribir esto) la imagen trae un `tools/benchmark.py`
+provisional que termina con código 1 sin medir (comprobado con `docker run`): para medir hay que desplegar antes un
+commit con EMB-3.1. `validate31.py` P1 lo detecta leyendo con `git` el `tools/benchmark.py` del SHA de la imagen
+desplegada.
+
+**Ensayo local** (solo prueba de humo: la CPU y la forma de repartirla no son las de Fargate; **no vale para §5.7**).
+Imagen `f2ddc42` con el `benchmark.py` de EMB-3.1 encima, `--memory 4g`, `TORCH_NUM_THREADS=2`, AMD Ryzen 7 6800HS
+(AVX2), 2026-10-25:
+
+| Ensayo | Lote 1 p50 / p95 | Lote 4 p50 / p95 | Lote 5 p50 / p95 | Lote 8 p50 / p95 |
+|---|---|---|---|---|
+| `--cpus 2`, repeticiones por defecto | 129 / 150 ms | 468 / 567 ms | 605 / 846 ms | 1063 / 1158 ms |
+| `--cpus 2`, 30 / 40 / 20 repeticiones | 147 / 172 ms | — | 641 / 699 ms | 1053 / 1129 ms |
+| `--cpuset-cpus 2,3`, 30 / 40 / 20 | 158 / 195 ms | — | 658 / 695 ms | 1035 / 1135 ms |
+| `--cpus 2`, **1 hilo**, 10 repeticiones | 195 / 210 ms | — | 943 / 967 ms | — |
+
+En el primer ensayo: listo a los 12,6 s, memoria del proceso 477 MiB en reposo y 541 MiB de pico, pp-v1 12,3 ms por
+imagen (p50) y `tiempos_ms.inferencia` a 10 ms o menos del total en p50 y en p95 de todos los lotes (el HTTP en
+*loopback* casi no pesa). La dispersión del primer p95 del lote de 5 (846 ms frente a ~700 en los otros dos) es ruido de la máquina
+anfitriona: por eso `dev` mide con 60 repeticiones.
+
+**Palancas si el lote de 5 pasa de 800 ms en p95** (C3: la decide quien cierra el lote y la registra como ADR
+nuevo; **sin decidir**). Se prueban en este orden; los efectos son estimaciones generales, no medidas de este
+proyecto, salvo donde se dice:
+
+| Orden | Palanca | Qué cambia | Efecto esperado | Costo | ¿`version_vector` nueva? |
+|---|---|---|---|---|---|
+| 1 | Ajustar hilos y el trabajo fuera del modelo | Probar `TORCH_NUM_THREADS` de 1 a 4 con `benchmark.py --hilos N` (en local, 1 → 2 hilos bajó el lote de 5 de 943 a ~640 ms); decodificar y preprocesar las imágenes del lote en paralelo (hoy van en serie en el hilo de inferencia: ~12 ms × 5 en la CPU de ensayo) | Pequeño: como mucho lo que pesa pp-v1 en el lote (`preproceso_ms_por_imagen` × lote) más lo que ganen los hilos | Ninguno en AWS. Cambiar `TORCH_NUM_THREADS` en `dev` es infra §5.4; paralelizar pp-v1, código del servicio (`preprocesar_lote`, que hoy llama el hilo de inferencia, §4.3) | No: los hilos no cambian un bit (ADR-EMB-12, medido con 1 y 2) y pp-v1 da el mismo tensor sea cual sea el orden |
+| 2 | ONNX Runtime (float32) | Exportar `Dinov2Model` a ONNX y servirlo con `onnxruntime` en lugar de PyTorch | Del orden de 1,2–2× en CPU para ViT pequeños (sin medir aquí) | Un lote de código: exportación, dependencia nueva, dorados nuevos; imagen distinta. Sin costo de AWS | **Sí** (ADR-EMB-08). Sin vectores indexados todavía, no obliga a re-indexar si se decide antes de la primera ingesta real (BE-2.2 + FE-2.1) |
+| 3 | 4 vCPU | Tarea de 4 vCPU / 8 GB (el mínimo de memoria de Fargate con 4 vCPU) y `TORCH_NUM_THREADS = 4` | Menos de 2×: escala la parte del modelo, no pp-v1 ni el HTTP (sin medir) | ~0,197 USD/h encendido frente a ~0,099 (el doble): +4 USD/mes con 40 h y +16 USD/mes con 160 h (tarifas de infra §3.10). Lo cambia infra (§3.4, §5.4, ADR-INF-14) | No, pero hay que pasar los dorados con 4 hilos (ADR-EMB-12 solo midió 1 y 2) |
+| 4 | int8 (cuantización dinámica de las capas lineales) | `torch.ao.quantization.quantize_dynamic` o int8 en ONNX Runtime | Del orden de 1,5–2,5× en las capas lineales (sin medir), con pérdida de precisión en la recuperación que tendría que medir EMB-3.2 | Un lote de código y su evaluación | **Sí** (ADR-EMB-08) |
+
+Exportar o cuantizar cambia los vectores, así que conviene decidirlo antes de indexar el dataset real.
+
+**Lo que los lotes siguientes (BE-3.2, EMB-3.2) deben saber de estas cifras.**
+- Son de `POST /v1/embed` con el servicio **ocioso** y en *loopback*: no incluyen la red de la VPC ni la subida de 5
+  fotos desde `api`, ni el trabajo del backend.
+- Con ingesta en curso, una localización espera a que termine el lote `baja` que se está calculando (§4.3): el peor
+  caso de embeddings es ≈ p95 del lote de 4 + p95 del lote de 5. Por eso el benchmark mide también el de 4.
+- Fargate puede dar a cada tarea una generación de CPU distinta (sin comprobar aquí): cada medida guarda `cpu` y
+  `capacidad_cpu_torch`; si dos medidas difieren mucho, mirar eso primero.
+- El *health check* (cada 30 s) arranca un `python` dentro del contenedor y roba unos milisegundos de CPU: puede
+  producir algún valor alto suelto, igual que en el servicio real.
+- En local, `docker run --cpus 2` reparte por cuota, no da dos núcleos: sirve para ensayar, no para comparar con `dev`.
 
 ### 4.5 EMB-3.2 — Conjunto de evaluación y calibración
 - Conjunto: fotos de consulta tomadas en puntos conocidos del campus (no usadas en el dataset), con su coordenada.
@@ -332,11 +406,11 @@ de la tolerancia de §5.4) exige una versión nueva (ADR-EMB-08).
 | Comando (`CMD`) | `uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers 1 --no-server-header` |
 | Puerto | `8080` |
 | Pesos | En la imagen, `/opt/modelo` (descargados en el build por `tools/descargar_modelo.py`, que deja `revision.json` con el modelo y la revisión; si no coinciden con §5.3, el servicio no arranca) |
-| Contenido | `src/app/` (como paquete `app`) y `tools/benchmark.py`; `src/ops/`, `tests/`, `tools/dorados.py` y `tools/evaluacion/` quedan fuera |
+| Contenido | `src/app/` (como paquete `app`, en `/srv/app`) y `tools/benchmark.py` (en `/srv/tools/`; el directorio de trabajo es `/srv`); `src/ops/`, `tests/`, `tools/dorados.py` y `tools/evaluacion/` quedan fuera. Las imágenes anteriores a EMB-3.1 (`44fdff8`, `f2ddc42`) traen un `benchmark.py` provisional que sale con código 1 sin medir |
 | Variables fijadas en el `Dockerfile` | `MODELO_DIR=/opt/modelo`, `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `HF_HOME=/tmp/huggingface` (el usuario de la imagen no tiene carpeta personal) y `GIT_COMMIT` (argumento de build con el SHA del commit, por defecto `desconocido`; `/v1/info` publica sus 7 primeros caracteres como `commit`) (la aplicación además aplica `TORCH_NUM_THREADS` a PyTorch y a OpenMP al arrancar) |
 | Variables que inyecta la infraestructura | `TORCH_NUM_THREADS`, `LOG_LEVEL`, `APP_ENV` (infra §5.4) |
 | Tamaño esperado | ~1,8 GB (PyTorch CPU + transformers + pesos de ~90 MB) |
-| Memoria en ejecución | ~1 GB en reposo (estimado; se mide en EMB-3.1); la tarea tiene 4 GB para lotes de 8 |
+| Memoria en ejecución | Medida en local (ensayo de EMB-3.1, §4.4): 477 MiB de RSS en reposo y 541 MiB de pico tras lotes de hasta 8. En `dev`, **pendiente de medir** (campo `memoria_proceso_mb` del benchmark, §5.7). La tarea tiene 4 GB |
 
 ### 5.6 Códigos de error
 
@@ -367,10 +441,33 @@ inferencia, `IMAGEN_INVALIDA`.
 | `COLA_MAX_IMAGENES` | 40 | Imágenes esperando, sumando todas las peticiones; no cuenta el lote que se está calculando. Debe ser ≥ `LOTE_MAX` (si no, el servicio no arranca: un lote completo nunca entraría) |
 | `RETRY_AFTER_S` | 5 | En `503 SATURADO` |
 | Hilos de PyTorch | `TORCH_NUM_THREADS` (valor en infra §5.4) | Igual a los vCPU de la tarea (2) |
-| Latencia objetivo | En `dev` (2 vCPU): lote de 5 p95 ≤ 800 ms; lote de 1 p95 ≤ 250 ms | Para `POST /v1/localize` en p95 ≤ 1 s (infra §5.10). **A medir en EMB-3.1**; estimación previa en ADR-EMB-11 |
+| Latencia objetivo | En `dev` (2 vCPU): lote de 5 p95 ≤ 800 ms; lote de 1 p95 ≤ 250 ms | Para `POST /v1/localize` en p95 ≤ 1 s (infra §5.10). Lo medido, en «Latencias medidas» abajo; estimación previa en ADR-EMB-11 |
 | Formato de log | JSON por línea en la salida estándar: siempre `ts` (UTC, ms), `nivel` y `evento`; además, según el evento, `request_id`, `prioridad`, `n_imagenes`, `cola_ms`, `inferencia_ms` (vectorización, EMB-2.1: en el evento `peticion` de `POST /v1/embed`), `metodo`, `ruta`, `estado_http`, `duracion_ms` (cada petición), `carga_ms`, `calentamiento_ms`, `revision`, `version_vector`, `hilos`, `commit` (arranque) y `traza` (errores) | Nunca bytes de imagen. Eventos: `arranque`, `modelo_listo`, `carga_del_modelo_fallida`, `peticion`, `error_no_previsto` y los de uvicorn; los avisos de Python (`warnings`, logger `py.warnings`) también salen en JSON, con el aviso en `evento`. Las peticiones a `/health` y `/health/ready` van en nivel `DEBUG` (el *health check* llama cada 30 s) |
 
 Cada parámetro tiene su valor por defecto en `config.py` y se puede sobrescribir con una variable de entorno del mismo nombre; si alguna se vuelve necesaria en `dev`, se añade antes a infra §5.4.
+
+**Latencias medidas en `dev`** (EMB-3.1: `tools/benchmark.py` en una tarea suelta con la definición de
+`campus-locator-dev-embedding`, 2 vCPU / 4 GB, `TORCH_NUM_THREADS = 2`; qué mide cada columna en §4.4 y §5.9). Las
+copia quien cierra el lote del detalle de C1b de `validate31.py` y del JSON que guarda (C2), y sube la versión.
+
+| Lote | p50 | p95 | `inferencia` p95 | Repeticiones |
+|---|---|---|---|---|
+| 1 | pendiente de medir en `dev` | pendiente | pendiente | 40 |
+| 4 (el del `worker`) | pendiente | pendiente | pendiente | 30 |
+| 5 | pendiente | pendiente | pendiente | 60 |
+| 8 | pendiente | pendiente | pendiente | 30 |
+
+| Dato de la medida | Valor |
+|---|---|
+| Fecha, commit de la imagen y tarea | pendiente |
+| CPU (`cpu`, `capacidad_cpu_torch`) | pendiente |
+| Memoria del proceso (reposo / pico) | pendiente |
+| pp-v1 por imagen (p50) | pendiente |
+| Peor caso de embeddings en `/v1/localize` con ingesta en curso (≈ p95 del lote de 4 + p95 del lote de 5, §4.4) | pendiente |
+| ¿Lote de 5 en p95 ≤ 800 ms? Si no, palanca elegida (C3, ADR) | pendiente |
+
+Son tiempos de `POST /v1/embed` con el servicio ocioso, medidos en *loopback* dentro de la tarea: lo que el backend
+añada (red de la VPC, subida de las fotos, su propio trabajo) va aparte (§4.4).
 
 ### 5.8 Validadores del servicio
 
@@ -401,10 +498,31 @@ poder ejecutarlo como tarea suelta en `dev` con el comando `python tools/benchma
 la máquina de quien valida, lee el conjunto de `evaluacion/` del bucket (infra §5.5) y obtiene los vecinos del dataset
 con el endpoint de diagnóstico del backend (§5.9).
 
+**Tareas sueltas en `dev`** (`validate11.py` C1b y `validate31.py` C1a). `ecs run-task` con: `cluster` =
+`campus-locator-dev`; `taskDefinition` = la revisión que usa el servicio `embedding` (`describe-services` →
+`taskDefinition`: la última que registró `embedding.yml`), no la última de la familia; `launchType = FARGATE`;
+`networkConfiguration` = la del servicio, copiada tal cual (hoy subred `publica-a` = output `subredes_tareas`, grupo
+`campus-locator-dev-embedding` y `assignPublicIp = ENABLED`; sin IP pública no descarga la imagen, infra §3.2);
+`startedBy = validacion-emb<fase><n>`; y, si se mide, `overrides.containerOverrides = [{"name": "app", "command":
+[…]}]`. No se usa `sg_migrate` (el grupo `-api`, infra §5.7): el de `embedding` es el del servicio y también sale a
+todo. La tarea termina sola (el benchmark) o la detiene la limpieza; su log queda en el stream
+`<awslogs-stream-prefix>/app/<id>` (`embedding/app/<id>`; el prefijo se lee de la definición).
+
+**`validate31.py`** (EMB-3.1, solo `dev`): P3 credenciales → P2 INF-1.3 (clúster, familia, log group) → P1 EMB-2.1
+«Hecho» en PLAN §3 y la imagen del servicio es de CI (`…/campus-locator/embedding:<SHA de 40>`) y su
+`tools/benchmark.py`, leído con `git` en ese SHA, contiene `BENCHMARK_JSON` (si no, código 2 sin lanzar nada). C1a
+lanza el benchmark como tarea suelta y espera `STOPPED` (cada 15 s, máx. 30 min): pasa con salida 0, familia
+`campus-locator-dev-embedding` y tamaño `2048` / `4096`. C1b lee el stream (paginado, reintenta 2 min si el log
+llega tarde), toma la última línea `BENCHMARK_JSON` y exige `version_vector` = la de §5.3, `commit` = los 7 primeros
+del SHA desplegado y, en los lotes 1, 5 y 8, `0 < p50_ms ≤ p95_ms` con ≥ 20 repeticiones; guarda el JSON en
+`project/.validacion/EMB-3.1-benchmark-<id>.json` y dice en el detalle si C3 aplica (p95 del lote de 5 > 800 ms). C2
+y C3 son manuales. Detalle completo en `validation-3-1.md`.
+
 **Datos de prueba**: imágenes sintéticas generadas por el propio validador y las cinco imágenes de
 `project/tests/golden/`; el servicio no guarda nada, así que no hay limpieza más allá de detener las tareas sueltas.
 
-**`src/ops/comun.py`** (desde EMB-1.1) reúne lo que comparten los validadores de esta carpeta:
+**`src/ops/comun.py`** (desde EMB-1.1) reúne lo que comparten los validadores de esta carpeta. No es el `comun.py`
+de infraestructura (su §5.11 describe el suyo, con otra API): las carpetas comparten el contrato, no el código.
 - Los nombres del contrato (cuenta, clúster, servicio, familia, log group, contenedor y repositorio de infra §5.1;
   puerto, `version_vector` y comando del *health check* de infra §5.7) y la lectura del SHA anotado en §5.3.
 - `ejecutar(lote)`: argumentos, orden, estados, códigos de salida e informe de infra §5.11. Las precondiciones se
@@ -415,25 +533,91 @@ con el endpoint de diagnóstico del backend (§5.9).
   `--solo` con un ID inexistente o un error inesperado en una precondición → **3**; `PrecondicionNoCumplida` → **2**;
   una comprobación que falla o lanza un error inesperado → **1**, y se siguen ejecutando las demás.
 - `--solo C1` incluye las subcomprobaciones (`C1a`, `C1b`).
-- `imagen_local()` (desde EMB-2.1): `EMBEDDING_IMAGEN` descargada (tras `docker login` si es de ECR) y de plataforma
-  `linux/amd64`, o los códigos de error de §5.11; `en_marcha(contenedor)`. La usan `validate11.py` (P4) y
-  `validate21.py` (P2).
 - Docker se usa por su CLI y AWS con boto3 desde `AWS_PROFILE` (región `us-east-1`); para una imagen de ECR hace
   `docker login` con el token de `ecr:GetAuthorizationToken`, sin imprimirlo.
-- Necesita en la máquina de quien valida: Docker (`local`), credenciales de AWS (`dev`) y `git` (commit del informe).
+- Necesita en la máquina de quien valida: Docker (`local`), credenciales de AWS (`dev`) y `git` (commit del informe y,
+  desde EMB-3.1, `archivo_en_commit`).
+
+API (basta para escribir un validador nuevo sin leer el código; si cambia, esta tabla cambia en el mismo commit):
+
+| Elemento | Qué hace |
+|---|---|
+| `Lote(lote=, validacion=, entornos=, precondiciones=[Paso…], comprobaciones=[Paso…], manuales=[Manual…], limpiar=fn, descripcion=)` | Declaración del validador. `precondiciones` y `comprobaciones` van en orden de ejecución; el informe ordena las precondiciones por ID y deja las comprobaciones en ese orden |
+| `Paso(id, entornos, funcion)`; `Manual(id, instruccion, entornos=ambos)`; `entornos("dev", …)` → `frozenset` | Un paso solo corre en sus entornos (en los demás queda `omitida`). `funcion(ctx)` devuelve el texto del detalle |
+| `Contexto` (`ctx`) | `ctx.entorno`, `ctx.aws` (la sesión que deje una precondición), `ctx.datos` (diccionario libre entre pasos), `ctx.sin_limpieza`, `ctx.limpiar_restos()` (llama a `limpiar` una sola vez; cada validador lo llama en la primera precondición que ya puede limpiar) |
+| `ejecutar(lote, argv=None)` → código | `--entorno`, `--informe`, `--solo`, `--sin-limpieza`; imprime `[PASA] …`, ejecuta la limpieza al final (sus errores solo dan `[AVISO]`) y escribe el informe en `DIR_INFORMES/<lote>-<AAAAMMDD-HHMMSS>.json` (UTC) |
+| `Falla` (1), `PrecondicionNoCumplida` (2), `ErrorConfiguracion` (3) | En una precondición: 2, 3, y cualquier otra excepción → 3. En una comprobación: `Falla` o una excepción inesperada → `falla` (1) y sigue; `ErrorConfiguracion` o credenciales de boto3 → 3 y las siguientes quedan `omitida` |
+| `revision_architecture()` → SHA | El de la fila «Revisión» de §5.3 (`Falla` si no está) |
+| `estado_lote("EMB-2.1")` → `"Hecho"`… | Estado de un lote en la tabla §3 de `PLAN.md`; si no está, `ErrorConfiguracion` (EMB-3.1) |
+| `archivo_en_commit(commit, ruta)` → texto o `None` | `git show <commit>:./<ruta>` desde `project/`; `None` si el commit no tiene esa ruta; `ErrorConfiguracion` sin `git` o si el commit no está en el clon (hay que `git fetch`) (EMB-3.1) |
+| `sesion_aws(region=REGION)` | `boto3.Session` con `AWS_PROFILE`; sin la variable, con credenciales inválidas o de otra cuenta → `ErrorConfiguracion` |
+| `imagen_local()` → imagen | `EMBEDDING_IMAGEN` descargada (con `login_ecr` si es de ECR) y `linux/amd64`, o 3 / 2 (EMB-2.1) |
+| `docker(*args, entrada=, timeout=900)`, `borrar_contenedores(*nombres)`, `en_marcha(nombre)`, `logs_contenedor(nombre, lineas=15)`, `puerto_ocupado(puerto)`, `es_imagen_ecr(imagen)`, `login_ecr(imagen)` | CLI de Docker sin imprimir nada (devuelve `CompletedProcess`; sin `docker` → `ErrorConfiguracion`) |
+| `CUENTA_AWS`, `REGION`, `CLUSTER`, `SERVICIO_ECS`, `FAMILIA_TAREA`, `LOG_GROUP`, `CONTENEDOR`, `REPOSITORIO_ECR`, `PUERTO`, `URL_LOCAL`, `MODELO_ID`, `VERSION_VECTOR`, `PLAZO_ARRANQUE_S` (180), `COMANDO_SALUD` | Nombres del contrato |
+| `DIR_PROYECTO`, `ARCHITECTURE`, `PLAN`, `DIR_INFORMES` | Rutas: `project/`, `docs/ARCHITECTURE.md`, `docs/PLAN.md`, `project/.validacion/` |
+
+Forma de un validador: `from comun import …` (el script se ejecuta como `python src/ops/validate<fase><n>.py`), un
+`LOTE = Lote(…)` a nivel de módulo (las pruebas comprueban que sus IDs son los de su `validation-<fase>-<n>.md`) y
+`raise SystemExit(ejecutar(LOTE))`. `validate11.py` es el ejemplo de tarea suelta que espera `HEALTHY`;
+`validate31.py`, el de tarea suelta con comando sobrescrito que lee su log; `validate21.py`, el de contenedor local.
+Sus pruebas sin AWS usan dobles de los clientes de boto3 (`tests/test_validate31.py`).
 
 ### 5.9 Formatos de las herramientas, de los vectores dorados y del conjunto de evaluación
 
-**Salida de `tools/benchmark.py --salida json`**: una sola línea en la salida estándar (y por tanto en el log),
-precedida de `BENCHMARK_JSON ` para poder encontrarla:
+**`tools/benchmark.py`** (EMB-3.1, §4.4, ADR-EMB-13). Dentro de la imagen, desde `/srv`:
+`python tools/benchmark.py [opciones]`; desde `project/`, `MODELO_DIR=.modelo uv run python tools/benchmark.py` (los
+pesos de `project/.modelo/`, cómo copiarlos en «Vectores dorados», más abajo; con `--puerto` si el 8080 está ocupado).
+Solo usa la biblioteca estándar, NumPy, Pillow y el paquete `app`.
+
+| Opción | Por defecto | Qué hace |
+|---|---|---|
+| `--salida texto\|json` | `texto` | `json`: una sola línea `BENCHMARK_JSON {…}` en la salida estándar; `texto`: una tabla |
+| `--lotes 1,4,5,8` | `1,4,5,8` | Tamaños de lote, cada uno entre 1 y `LOTE_MAX` (8) |
+| `--repeticiones N` o `N1,N2,…` | 40, 30, 60 y 30 (otro lote: 30) | Repeticiones medidas: una cifra para todos o una por lote |
+| `--calentamiento N` | 3 | Peticiones de cada lote que se envían y no se cuentan |
+| `--hilos N` | `TORCH_NUM_THREADS` o 1 | `TORCH_NUM_THREADS` del servicio que arranca (para probar la palanca 1 de §4.4) |
+| `--prioridad alta\|baja` | `alta` | `X-Prioridad` de las peticiones (la de `/v1/localize`) |
+| `--puerto N` | 8080 | Puerto del servicio en `127.0.0.1`; si ya está ocupado, termina con 1 (no mediría este servicio) |
+| `--plazo-arranque S` | 300 | Segundos máximos hasta `/health/ready` = 200 |
+| `--url http://anfitrion:puerto` | — | Mide un servicio ya en marcha en vez de arrancar uno: `hilos`, `arranque_s` y `memoria_proceso_mb` salen `null`, y `cpu`, `vcpu` y `memoria_mb` describen la máquina del benchmark |
+
+Códigos de salida: **0** medido; **1** el servicio no quedó listo, terminó o una petición no dio `200` con tantos
+vectores como imágenes (lo dice el evento `benchmark_fallido`); **2** uso. Progreso en la salida de error, en JSON por
+línea como el log del servicio (§5.7): `benchmark_inicio`, `benchmark_listo`, `benchmark_lote` (cada lote) y
+`benchmark_fallido`; los logs del servicio arrancado van también a la salida de error. En la tarea suelta el
+benchmark es el PID 1 y atiende `SIGTERM` (`stop-task`): detiene el servicio y sale con 143.
+
+**Salida de `--salida json`**: una sola línea, de menos de 4 KiB (se escribe de una vez en el log), precedida de
+`BENCHMARK_JSON ` para poder encontrarla. Ejemplo **real del ensayo local** de §4.4 (no de `dev`):
 ```json
-{ "version_vector": "dinov2-vits14/pp-v1", "commit": "a1b2c3d", "hilos": 2, "vcpu": 2, "memoria_mb": 4096,
-  "resultados": [ { "lote": 1, "repeticiones": 30, "p50_ms": 160, "p95_ms": 210 },
-                  { "lote": 5, "repeticiones": 20, "p50_ms": 650, "p95_ms": 760 },
-                  { "lote": 8, "repeticiones": 10, "p50_ms": 1000, "p95_ms": 1150 } ] }
+{ "version_vector": "dinov2-vits14/pp-v1", "commit": "f2ddc42", "hilos": 2, "vcpu": 2, "memoria_mb": 4096,
+  "limites_de": "cgroup", "cpu": "AMD Ryzen 7 6800HS with Radeon Graphics", "capacidad_cpu_torch": "AVX2",
+  "imagen": { "ancho": 1024, "alto": 768, "calidad_jpeg": 85, "bytes_media": 132139 },
+  "prioridad": "alta", "calentamiento": 3, "arranque_s": 12.6,
+  "memoria_proceso_mb": { "reposo": 477, "final": 502, "pico": 541 }, "preproceso_ms_por_imagen": 12.3,
+  "resultados": [
+    { "lote": 1, "repeticiones": 40, "p50_ms": 129, "p95_ms": 150, "max_ms": 154,
+      "inferencia_p50_ms": 126, "inferencia_p95_ms": 146, "cola_max_ms": 1 },
+    { "lote": 4, "repeticiones": 30, "p50_ms": 468, "p95_ms": 567, "max_ms": 573,
+      "inferencia_p50_ms": 462, "inferencia_p95_ms": 562, "cola_max_ms": 0 },
+    { "lote": 5, "repeticiones": 60, "p50_ms": 605, "p95_ms": 846, "max_ms": 980,
+      "inferencia_p50_ms": 598, "inferencia_p95_ms": 838, "cola_max_ms": 2 },
+    { "lote": 8, "repeticiones": 30, "p50_ms": 1063, "p95_ms": 1158, "max_ms": 1175,
+      "inferencia_p50_ms": 1055, "inferencia_p95_ms": 1148, "cola_max_ms": 0 } ] }
 ```
-(Los números del ejemplo son ilustrativos, no medidos.) Cada repetición usa imágenes sintéticas de 1024 px, mide desde
-que la petición entra en la cola hasta que sale la respuesta y descarta las 3 primeras como calentamiento.
+| Campo | Significado |
+|---|---|
+| `p50_ms`, `p95_ms`, `max_ms` | Tiempo de la petición visto por el cliente, en ms enteros: de empezar a enviar el `POST /v1/embed` a tener la respuesta completa (subida en *loopback*, multipart, cola, pp-v1, modelo y JSON). Percentil por rango más cercano: el valor en la posición ⌈p/100 · n⌉ de los n ordenados |
+| `inferencia_p50_ms`, `inferencia_p95_ms`, `cola_max_ms` | Los mismos percentiles de `tiempos_ms.inferencia` (pp-v1 + modelo, §5.2) y el máximo de `tiempos_ms.cola` (≈ 0: las peticiones van en serie) |
+| `repeticiones`, `calentamiento` | Peticiones medidas por lote y las descartadas antes |
+| `commit`, `version_vector` | De `GET /v1/info` del servicio medido |
+| `hilos` | `TORCH_NUM_THREADS` con que se arrancó el servicio |
+| `vcpu`, `memoria_mb`, `limites_de` | Límites del contenedor: de los metadatos de la tarea de ECS (`ECS_CONTAINER_METADATA_URI_V4` → `Limits`, `ecs`; en `dev`, **a verificar** que salga 2 / 4096 por esta vía), del cgroup v2 o v1 (`cgroup`) o de la máquina (`sistema`, sin memoria) |
+| `cpu`, `capacidad_cpu_torch` | Modelo de CPU (`/proc/cpuinfo`) y ruta SIMD de PyTorch (`AVX2`, `AVX512`…) |
+| `imagen` | Las imágenes enviadas: tamaño, calidad JPEG y bytes de media |
+| `arranque_s` | Segundos desde lanzar el servicio hasta `/health/ready` = 200 (carga y calentamiento; sin la descarga de la imagen) |
+| `memoria_proceso_mb` | RSS del proceso del servicio en MiB: tras quedar listo (`reposo`), al terminar (`final`) y el pico de toda su vida (`pico`, `VmHWM`, incluye la carga) |
+| `preproceso_ms_por_imagen` | p50 de pp-v1 por imagen (decodificar, redimensionar, recortar, normalizar), medido en el proceso del benchmark con el servicio ya detenido |
 
 **Vectores dorados** (§5.4, ADR-EMB-12), en `project/tests/golden/`: las cinco imágenes `validacion-0<n>-<nombre>.jpg`
 o `.png` y `esperados.json`:
@@ -594,16 +778,32 @@ la tolerancia (no hace falta). *Consecuencias:* si una CPU futura (otra familia 
 antes de indexar con ella. Actualizar Pillow puede cambiar el `sha256` del tensor sin salir de 1e-5: se mide con
 `tools/dorados.py comparar` y, si cabe, se recalculan con `tools/dorados.py vectores`.
 
+**ADR-EMB-13 — El benchmark arranca el servicio dentro de su propia tarea y lo mide por HTTP en *loopback*
+(aceptada, 0.7.0, EMB-3.1).**
+EMB-3.1 debe medir en la definición de tarea de `dev` (2 vCPU / 4 GB) lo que tarda embeddings en atender a
+`/v1/localize`. *Decisión:* `tools/benchmark.py` corre como tarea suelta con esa definición y el comando
+sobrescrito; arranca `uvicorn app.main:app` como subproceso en `127.0.0.1:8080` (el mismo código y los mismos hilos que
+el servicio) y le envía en serie lotes de JPEG sintéticos de 1024 px, midiendo desde el cliente toda la petición
+(multipart, cola, pp-v1, modelo y JSON). El resultado sale en una línea `BENCHMARK_JSON` del log (§5.9), que
+`validate31.py` lee de CloudWatch. *Alternativas descartadas:* medir `modelo.inferir` en el mismo proceso (deja fuera
+pp-v1, multipart y la cola, que el backend sí paga); medir el servicio `embedding` encendido desde otra tarea (exige
+encenderlo, otra definición con permisos de red hacia él y mezcla la red de la VPC, que es del backend); un cliente en
+otro contenedor de la misma tarea (otra definición de tarea, que es de infra). *Consecuencias:* no hace falta encender
+`embedding` ni cambiar la infraestructura; el cliente comparte los 2 vCPU con el servicio, pero solo trabaja mientras el
+servicio espera (sube el cuerpo y lee la respuesta: el total queda a 10 ms o menos de `tiempos_ms.inferencia` en el
+ensayo local); los números no incluyen la red ni el backend (§4.4); y la imagen tiene que traer el benchmark, así que
+para medir hay que desplegar antes (las imágenes anteriores a EMB-3.1 traen uno provisional).
+
 ---
 
 ## 7. Riesgos
 
 | ID | Riesgo | Prob. | Impacto | Mitigación |
 |---|---|---|---|---|
-| R1 | Latencia por encima del objetivo (lote de 5 > 800 ms en 2 vCPU) | Media | Medio | EMB-3.1; palancas de §4.4 |
+| R1 | Latencia por encima del objetivo (lote de 5 > 800 ms en 2 vCPU) | Media | Medio | EMB-3.1 (`benchmark.py` en `dev`, §5.7; en el ensayo local, p95 de 695–846 ms); palancas de §4.4, decisión en C3 |
 | R2 | Calidad de recuperación insuficiente (luz, oclusiones, recorte central, lugares parecidos; ViT-S/14 discrimina algo menos que ViT-B/14) | Media | Alto | EMB-3.2; EMB-5.1 si una variante gana (incluido volver a ViT-B/14 con más vCPU o con GPU) |
 | R3 | Imagen grande (~1,8 GB): 2–3 min desde el encendido | Alta | Bajo | *Start period* de 180 s; el `worker` espera a `/health/ready`; encender antes de probar (infra R6) |
 | R4 | Una actualización de librerías cambia los vectores sin avisar | Media | Alto | Versiones fijadas en `uv.lock`; vectores dorados en CI (con los pesos y `DORADOS_OBLIGATORIOS=1`) y en `validate21` (ADR-EMB-12) |
 | R5 | Ingesta masiva satura el servicio | Media | Bajo | Prioridad; `503 SATURADO`; el `worker` reintenta |
-| R6 | Falta de memoria con lotes grandes | Baja | Medio | `LOTE_MAX = 8`; 4 GB de tarea; medir en EMB-3.1 |
+| R6 | Falta de memoria con lotes grandes | Baja | Medio | `LOTE_MAX = 8`; 4 GB de tarea; en el ensayo local de EMB-3.1, 541 MiB de pico con lotes de 8 (en `dev`, `memoria_proceso_mb` del benchmark, §5.7) |
 | R7 | La revisión fijada desaparece de Hugging Face | Baja | Medio | Las imágenes ya publicadas en ECR conservan los pesos; guardar una copia de los pesos fuera de Hugging Face si se vuelve crítico |

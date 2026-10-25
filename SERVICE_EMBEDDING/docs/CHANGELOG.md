@@ -23,6 +23,73 @@ re-indexar el dataset.
 
 ---
 
+## [0.7.0] — 2026-10-25
+
+- **Lote que la motivó:** EMB-3.1 (rendimiento en CPU), antes de su validación en `dev`.
+- **Qué cambió:**
+  - Código: `tools/benchmark.py` deja de ser el provisional de EMB-1.1 (salía con 1 sin medir): arranca el servicio
+    como subproceso en `127.0.0.1:8080`, envía en serie lotes de 1, 4, 5 y 8 JPEG sintéticos de 1024 × 768 (calidad
+    85), mide cada petición desde el cliente y escribe una línea `BENCHMARK_JSON`; atiende `SIGTERM` como PID 1.
+    Nuevo `src/ops/validate31.py`. `comun.py` añade `PLAN`, `estado_lote()` y `archivo_en_commit()`. Pruebas nuevas
+    `test_benchmark.py` y `test_validate31.py`. No cambian el `Dockerfile` (ya copiaba `tools/benchmark.py`), el
+    `.dockerignore`, `pyproject.toml` ni `uv.lock`.
+  - §4.4 describe lo construido: qué mide el benchmark, cómo se corre en `dev`, que la imagen desplegada aún trae el
+    provisional, el ensayo local, la tabla de palancas (orden, efecto esperado, costo y si exige `version_vector`
+    nueva; **sin decidir**: es C3) y lo que BE-3.2 y EMB-3.2 deben saber de las cifras (servicio ocioso y en
+    *loopback*; peor caso con ingesta ≈ p95 del lote de 4 + p95 del lote de 5; CPU de Fargate variable; *health
+    check*; `--cpus` en local).
+  - Nuevo ADR-EMB-13: el benchmark arranca el servicio en su propia tarea y lo mide por HTTP en *loopback*.
+  - §4.1 (benchmark y pruebas), R1 y R6 con lo medido en local.
+  - `validation-3-1.md` reescrito con la forma de `validation-1-1` y `validation-2-1`: orden de las precondiciones
+    (P3 → P2 → P1) y su código; P1 comprueba con `git` que la imagen desplegada trae el benchmark y, si no, termina
+    con 2 sin lanzar nada; C1b exige además el `commit` desplegado y ≥ 20 repeticiones y guarda el JSON; C1 no falla
+    por pasar de 800 ms (eso es C3); §4 con el costo; §5 con variables y permisos, preparación en cuatro pasos con su
+    salida esperada, ejecución con su salida esperada y cómo explorar palancas. IDs y criterios no cambian.
+  - PLAN: alineado con 0.7.0; EMB-3.1 «En curso».
+- **Contratos tocados (§5):**
+  - §5.5: «Contenido» (rutas `/srv/app` y `/srv/tools`; las imágenes `44fdff8` y `f2ddc42` traen el provisional) y
+    «Memoria en ejecución» (antes «~1 GB estimado»; medido en local: 477 MiB en reposo y 541 MiB de pico; `dev`,
+    pendiente).
+  - §5.7: tablas nuevas «Latencias medidas en `dev`», con la estructura lista y los valores **pendientes de medir
+    en `dev`**; la fila «Latencia objetivo» remite a ellas.
+  - §5.8: parámetros exactos de las tareas sueltas de `dev` (revisión y red del servicio; por qué no `sg_migrate`;
+    stream del log), `validate31.py` y la API de `comun.py` en una tabla.
+  - §5.9: opciones y códigos de salida de `benchmark.py`; salida JSON ampliada (campos nuevos `limites_de`, `cpu`,
+    `capacidad_cpu_torch`, `imagen`, `prioridad`, `calentamiento`, `arranque_s`, `memoria_proceso_mb`,
+    `preproceso_ms_por_imagen` y, por lote, `max_ms`, `inferencia_p50_ms`, `inferencia_p95_ms`, `cola_max_ms`), lote
+    de 4 y repeticiones 40/30/60/30 por defecto, con un ejemplo real del ensayo local en lugar del ilustrativo.
+  - La `version_vector` **no** cambia.
+- **Contradicciones corregidas:**
+  - §5.9 decía que cada repetición se mide «desde que la petición entra en la cola hasta que sale la respuesta»: el
+    benchmark (ADR-EMB-13) mide toda la petición desde el cliente; ahora §5.9 lo define así, con el percentil.
+  - `validation-3-1` C2 pedía quitar «aún sin datos» de §5.7, texto que §5.7 no tenía («A medir en EMB-3.1»); ahora
+    remite a las tablas nuevas.
+  - `validation-3-1` daba P1 por cumplida con EMB-2.1 «Hecho» («la imagen desplegada trae `tools/benchmark.py`»),
+    pero la imagen de EMB-2.1 (`f2ddc42`) trae el provisional; P1 lo comprueba.
+  - `validation-3-1` no decía en qué orden se evalúan las precondiciones (infra §5.11 pide las de credenciales
+    primero); duración de 10–20 min estimada de nuevo en 6–10 min.
+- **Cómo se verificó:** en WSL (AMD Ryzen 7 6800HS, Docker 29, uv 0.13): `ruff check` y `ruff format --check`
+  limpios y 135 pruebas en verde con `DORADOS_OBLIGATORIOS=1` (entre ellas, el bucle completo de `benchmark.py`
+  contra el servicio HTTP con un modelo falso, cuya salida acepta `validate31.revisar_resultado`, y `validate31` de
+  punta a punta con dobles de ECS y Logs: pasa, bloquea con `bootstrap` o con el provisional sin lanzar tareas, falla
+  con la tarea en salida 1 o de otro tamaño). `benchmark.py` dentro de la imagen `f2ddc42` con el benchmark nuevo
+  encima (lo mismo que copia la última etapa del `Dockerfile`; la imagen no se construyó desde cero): código 0 en
+  115 s y la línea `BENCHMARK_JSON` (números en §4.4 y §5.9); `--salida texto`; `docker stop` lo detiene en 1 s con
+  salida 143 y el servicio se apaga ordenadamente; desde `project/` con `MODELO_DIR=.modelo`; la imagen `f2ddc42`
+  sin cambios sale con 1 («pendiente de EMB-3.1»), y `git show` confirma el provisional en `44fdff8` y `f2ddc42`.
+  `validate31.py` contra AWS real con un gancho de botocore que bloquea `RunTask`, `StopTask`, `UpdateService` y
+  `RegisterTaskDefinition`: código 3 sin `AWS_PROFILE` y código 2 con él (P3 y P2 pasan; P1: «la imagen desplegada
+  (f2ddc42) trae el tools/benchmark.py provisional…»), sin intentar ninguna escritura. Lecturas de AWS: el servicio
+  `embedding` usa `campus-locator-dev-embedding:4` (imagen `f2ddc42`, 2048 / 4096, `TORCH_NUM_THREADS = 2`, *health
+  check* de infra §5.7, prefijo de log `embedding`) con la subred `campus-locator-dev-publica-a`, el grupo
+  `campus-locator-dev-embedding` y `assignPublicIp = ENABLED`, y 0 réplicas. **Sin comprobar en `dev`:** la medida
+  (C1), que `limites_de` salga `ecs` y la duración real de la tarea.
+- **Pendiente:** llevar EMB-3.1 a `main` para que `embedding.yml` publique y registre su imagen (la desplegada no
+  puede medir); `validate31.py --entorno dev`; C2 (copiar los números a §5.7 y §5.5, versión 0.8.0 por «parámetros
+  medidos»); C3 si el p95 del lote de 5 pasa de 800 ms; la fila de PLAN §3.
+
+---
+
 ## [0.6.1] — 2026-10-25
 
 - **Lote que la motivó:** EMB-2.1, al cerrarlo: ARCHITECTURE debe bastar para operar el servicio sin leer el código, y

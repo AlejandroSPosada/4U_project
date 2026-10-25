@@ -48,6 +48,7 @@ COMANDO_SALUD = (
 
 DIR_PROYECTO = Path(__file__).resolve().parents[2]
 ARCHITECTURE = DIR_PROYECTO.parent / "docs" / "ARCHITECTURE.md"
+PLAN = DIR_PROYECTO.parent / "docs" / "PLAN.md"
 DIR_INFORMES = DIR_PROYECTO / ".validacion"
 
 ENTORNOS = ("local", "dev")
@@ -356,6 +357,54 @@ def revision_architecture() -> str:
                 return shas[0]
             break
     raise Falla("ARCHITECTURE §5.3 no tiene anotado el SHA de la revisión del modelo")
+
+
+def estado_lote(lote: str) -> str:
+    """Estado de `lote` («Hecho», «En curso»…) en la tabla §3 de docs/PLAN.md.
+
+    Lee las filas `| <lote> | <fase> | <estado> | …`; si el lote no está → `ErrorConfiguracion`.
+    """
+    try:
+        texto = PLAN.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ErrorConfiguracion(f"no se pudo leer {PLAN}: {error}") from error
+    for linea in texto.splitlines():
+        celdas = [c.strip() for c in linea.strip().strip("|").split("|")]
+        if len(celdas) >= 3 and celdas[0] == lote and celdas[1].isdigit():
+            return celdas[2]
+    raise ErrorConfiguracion(f"{lote} no está en la tabla de estado (§3) de {PLAN.name}")
+
+
+# --- Git -----------------------------------------------------------------------------------------
+
+
+def archivo_en_commit(commit: str, ruta: str) -> str | None:
+    """Contenido de `ruta` (relativa a project/) en `commit`, o None si ese commit no la tiene.
+
+    Sin `git` o si el commit no está en este clon (falta `git fetch`) → `ErrorConfiguracion`.
+    """
+    if shutil.which("git") is None:
+        raise ErrorConfiguracion("no se encuentra el comando git")
+    existe = subprocess.run(
+        ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
+        cwd=DIR_PROYECTO,
+        capture_output=True,
+        timeout=30,
+    )
+    if existe.returncode != 0:
+        raise ErrorConfiguracion(
+            f"el commit {commit[:7]} no está en este clon: git fetch origin y repite"
+        )
+    salida = subprocess.run(
+        ["git", "show", f"{commit}:./{ruta}"],
+        cwd=DIR_PROYECTO,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+    return salida.stdout if salida.returncode == 0 else None
 
 
 # --- AWS -----------------------------------------------------------------------------------------

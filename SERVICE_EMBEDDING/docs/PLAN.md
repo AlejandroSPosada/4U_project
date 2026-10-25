@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.6.1**.
+Alineado con `ARCHITECTURE.md` **v0.7.0**.
 
 ---
 
@@ -101,7 +101,7 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 |---|---|---|---|---|---|---|
 | EMB-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `44fdff8` 2026-10-24 | 0.5.1 | `validate11.py` con código 0 en `dev` (C1b: `HEALTHY` a los 52 s de `startedAt`) y en `local` (C2: listo a los 11 s; C3: sin red, a los 12 s) sobre la imagen `44fdff8`. `uv.lock` versionado en `083d6ff`; `embedding.yml` no estaba en el repositorio y se añadió en `44fdff8` (primera ejecución en verde) |
 | EMB-2.1 | 2 | Hecho | [2-1](./validation/validation-2-1.md) | `f2ddc42` 2026-10-25 | 0.6.1 | `validate21.py` con código 0 en `local` sobre la imagen `f2ddc42` (C1: 0,0 frente a los dorados; C4: la `alta` esperó 722 ms con un lote de 8 de 1794 ms en curso; C5c: 2 × `503 SATURADO` al primer intento). Dorados calculados en la CPU de validación; entre CPU, ≤ 6,3e-7 (ADR-EMB-12). `embedding.yml` corre los dorados con los pesos en caché |
-| EMB-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | Latencias de §5.7 sin medir |
+| EMB-3.1 | 3 | En curso | [3-1](./validation/validation-3-1.md) | — | — | `benchmark.py` y `validate31.py` hechos y probados en `local` (0.7.0). Falta desplegar su imagen (la de `f2ddc42` trae el benchmark provisional: `validate31` da 2 en P1), medir en `dev` y C2/C3 |
 | EMB-3.2 | 3 | Pendiente | [3-2](./validation/validation-3-2.md) | — | — | Necesita un dataset real indexado (FE-2.1 + BE-2.2) |
 | EMB-5.1 | 5 | Diferido | — | — | — | |
 
