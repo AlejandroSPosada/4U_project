@@ -3,7 +3,8 @@
 - Si el comando de la tarea contiene «app.cli» (tareas migrate), imprime «imagen de prueba: nada que migrar» y sale
   con 0.
 - Con cualquier otro comando (api, worker, embedding) sirve en los puertos 8000 y 8080: 200 en GET /v1/health,
-  /health y /health/ready; 404 en lo demás. Termina limpio con SIGTERM (ECS lo envía al detener la tarea).
+  /health y /health/ready; 404 en cualquier otro GET o HEAD; 501 en los demás métodos (POST incluido: http.server
+  responde así a lo que no implementa). Termina limpio con SIGTERM (ECS lo envía al detener la tarea).
 """
 
 import json

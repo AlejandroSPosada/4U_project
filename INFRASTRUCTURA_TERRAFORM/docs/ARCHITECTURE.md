@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.11.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.11.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
 | Estado | Diseño propuesto. **INF-0.1 a INF-1.3 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba). **INF-1.4 escrito** (borde HTTPS), pendiente de `apply` y validación; el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
@@ -129,6 +129,11 @@ Detalle funcional de cada flujo: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §4.
   registra con SRV (IP + puerto 8000).
 - Etapa `$default` con despliegue automático. *Throttling* por ruta (§5.10): la cuota general en `ANY /{proxy+}` y
   otra más estricta en `POST /v1/auth/login`.
+- El *throttling* es aproximado: AWS lo aplica «best effort» y reparte el límite entre sus nodos, así que un solo
+  cliente pasa bastante más de lo configurado. Medido el 2026-10-24 contra login (2 req/s, ráfaga 5) desde una sola
+  máquina: a 5 req/s, 1 de 100 recibió 429; a 10, 20 y 50 req/s, el 23 %, el 34 % y el 57 % (pasaron ~8, ~13 y ~21
+  req/s). Sirve para frenar abusos de volumen (R10), **no** como límite de intentos de inicio de sesión: ese lo tendría
+  que poner el backend.
 - Límites que heredan los servicios: **30 s** de tiempo máximo de integración y **10 MB** de carga útil por petición.
   Por eso las fotos del dataset no pasan por la API (van directo a S3 con URL prefirmada).
 - La autenticación **no** se valida en API Gateway: el JWT es propio (HS256) y lo verifica FastAPI
@@ -655,7 +660,7 @@ llaves de AWS en GitHub. Formato: `SUBREDES_TAREAS` = IDs de subred separados po
 | Encendido de `embedding` | Apagado por defecto; a mano con `embedding.py encender`; se apaga tras 45 min sin peticiones a `POST /v1/localize` ni mensajes en `ingesta` o `purga`, y a las 22:00 `America/Bogota` |
 | Latencia objetivo de `POST /v1/localize` | p95 de `integrationLatency` (*access logs*) ≤ 1000 ms con `embedding` encendido |
 | Escalado de `worker` | sube a 1 con ≥ 1 mensaje visible en `ingesta` o `purga` y `embedding` encendido; baja a 0 tras 15 min en 0, y también con `embedding.py apagar` o a las 22:00 |
-| Throttling API Gateway | general: 20 req/s, ráfaga 40 · `POST /v1/auth/login`: 2 req/s, ráfaga 5 |
+| Throttling API Gateway | general: 20 req/s, ráfaga 40 · `POST /v1/auth/login`: 2 req/s, ráfaga 5 (valores configurados; AWS los aplica de forma aproximada, §3.3) |
 | Formato de los *access logs* | JSON por línea: `requestId`, `ip`, `requestTime`, `httpMethod`, `routeKey`, `path`, `status`, `responseLength`, `integrationLatency`, `integrationStatus` (`requestId` es el encabezado `apigw-requestid` de la respuesta). Todos los valores son **cadenas** (`"status":"200"`; API Gateway escribe `"-"` si un dato no existe, p. ej. `integrationLatency` en un 429), así toda línea es JSON válido; quien calcule con `integrationLatency` la convierte a número |
 | Retención de logs | 14 días (todos los log groups) |
 | Copias de RDS | 7 días; ventana 07:00–07:30 UTC (02:00 en Bogotá, de madrugada) |
@@ -755,7 +760,8 @@ falla porque faltan credenciales, herramientas o variables da **3**, no 2: el 2 
 
 **Recursos de apoyo que crea esta carpeta**
 - **Imagen de prueba** (`project/pruebas/imagen-prueba/`): imagen mínima que responde 200 en `GET /v1/health` (puerto
-  8000) y en `GET /health/ready` (puerto 8080). Se publica en los dos repositorios de ECR con la etiqueta `bootstrap`
+  8000) y en `GET /health/ready` (puerto 8080), 404 en cualquier otro `GET` y 501 en los demás métodos (`POST` incluido).
+  Se publica en los dos repositorios de ECR con la etiqueta `bootstrap`
   (la de `imagen_inicial_tag`), así los servicios pueden arrancar y validarse antes de que exista el código real. Su
   `ENTRYPOINT` ignora el comando de la definición de tarea, salvo si contiene `app.cli` (tareas `migrate`): en ese caso
   imprime `imagen de prueba: nada que migrar` y sale con 0. Con cualquier otro comando (`api`, `worker`, `embedding`)
@@ -1144,7 +1150,7 @@ optimización (INF-6.1).
 | R7 | Límite de 30 s y 10 MB de API Gateway | Media | Medio | Fotos del dataset directo a S3; `/v1/localize` limitado a 5 fotos de ≤ 1,5 MB (contrato del backend) |
 | R8 | La URL de la API cambia si se recrea la HTTP API, y `ApiConfig.kt` queda desactualizado | Baja | Medio | `prevent_destroy` en la API; dominio propio en Fase 6 |
 | R9 | Cuotas por defecto de una cuenta nueva (vCPU de Fargate, etc.) | Baja | Medio | El sistema usa ~2,5 vCPU con todo encendido; solicitar aumento si un `apply` falla por cuota. Sin GPU desde 0.9.0: el cupo de instancias G de la cuenta es 0 (ADR-INF-14) |
-| R10 | `/v1/localize` es público: abuso que dispara costos | Baja | Medio | *Throttling*; alarma de 5xx; en `prod`, WAF o clave de app |
+| R10 | `/v1/localize` es público: abuso que dispara costos; `/v1/auth/login` admite fuerza bruta | Baja | Medio | *Throttling* (aproximado: frena volumen, no intentos sueltos, §3.3); alarma de 5xx; en `prod`, WAF o clave de app. Límite de intentos de inicio de sesión: pendiente de proponer al backend (`BACKEND_FASTAPI`) |
 | R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y pueden chocar con nombres de §5.1 (sobre todo el *namespace* de Cloud Map `campus-locator.local`, con INF-1.3) | Alta | Medio | Revisado el 2026-10-24: no había otra VPC `campus-locator-dev-vpc` (C2a de INF-1.1) ni nada que choque con INF-1.2 (el bucket del dataset ya no existe; sin instancias, *snapshots*, grupos de parámetros ni de subredes de RDS; sin colas; `campus-locator-dev/jwt-secret` está en borrado programado y su nombre no choca). Antes de INF-1.3, inventariar y limpiar el resto: clúster y servicios de ECS, ECR `campus-locator-dev/*`, *namespace* de Cloud Map, *target group*, *log groups* `/ecs/…`, roles `campus-locator-dev-backend-*` y `-embedding-*` y los buckets `campus-locator-dev-scans-648617469176` y `4uproject-eafit-tfstate` (CHANGELOG 0.3.0). Revisado de nuevo antes de INF-1.3 (`.validacion/inventario-r11b.txt`): ya no quedan roles `campus-locator-dev-*` ni buckets del intento anterior; antes del `apply` de INF-1.3 se confirma que no hay *namespace* `campus-locator.local`, clúster `campus-locator-dev` ni repositorios `campus-locator/*` (`servicediscovery list-namespaces`, `ecs describe-clusters`, `ecr describe-repositories`) |
 | R12 | El repositorio es público: los logs de Actions y los comentarios del `plan` los puede leer cualquiera | Alta | Bajo | Terraform oculta los valores `sensitive` (contraseñas, secretos) en el `plan` y en los logs; ningún paso imprime el estado ni credenciales; todo output con un dato sensible se declara `sensitive`; los PR desde *forks* no ejecutan el `plan`. Lo que queda visible (IDs, ARN, URL) no da acceso por sí solo |
 | R13 | El apagado automático de `embedding` falla y queda encendido (~2,5 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas) y presupuesto con avisos |

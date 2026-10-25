@@ -29,15 +29,17 @@ en esa copia); el resto, de las API de AWS.
 | C1a | `apigatewayv2 get-apis` (la de nombre `campus-locator-dev-api`, cuyo `ApiEndpoint` = `api_base_url`), `apigatewayv2 get-routes`, `get-integrations` y `get-vpc-links` | Exactamente dos rutas, `ANY /{proxy+}` y `POST /v1/auth/login`, con `Target` a la misma integración `HTTP_PROXY`; `ConnectionType = VPC_LINK` hacia `campus-locator-dev-vpclink` (`VpcLinkStatus = AVAILABLE`, subredes públicas, grupo `campus-locator-dev-vpclink`); `IntegrationUri` = ARN del servicio Cloud Map `api` |
 | C1b | Si `api` tiene `desiredCount = 0`, comprueba que existe `campus-locator/backend:bootstrap`, lo sube a 1 con `ecs update-service`, espera `services-stable`, una tarea `HEALTHY` (hasta 5 min) y que `servicediscovery discover-instances --namespace-name campus-locator.local --service-name api --health-status HEALTHY` lo devuelva. Hace `GET {api_base_url}/v1/health` con `httpx` desde la máquina de quien ejecuta (fuera de AWS), con reintentos durante 2 min, y guarda la cabecera `apigw-requestid` | Responde 200 por HTTPS con el certificado de AWS (verificación TLS activa) |
 | C2a | `apigatewayv2 get-stage --api-id <id> --stage-name '$default'` | `AutoDeploy = true`; `RouteSettings` de `POST /v1/auth/login` con `ThrottlingRateLimit = 2` y `ThrottlingBurstLimit = 5`; la ruta general con 20 y 40 (en su `RouteSettings` o en `DefaultRouteSettings`) |
-| C2b | Envía 100 `POST {api_base_url}/v1/auth/login` con cuerpo `{}` a 5 req/s durante 20 s (el cuerpo no llega a validar credenciales); espera 10 s y envía 100 `GET {api_base_url}/v1/health` a 10 req/s durante 10 s; cuenta los códigos | Al menos el 25 % de las peticiones a login reciben 429; las 100 de `/v1/health` responden 200 y ninguna 429 |
+| C2b | Envía 200 `POST {api_base_url}/v1/auth/login` con cuerpo `{}` a 20 req/s durante 10 s (el cuerpo no llega a validar credenciales); espera 10 s y envía 100 `GET {api_base_url}/v1/health` a 10 req/s durante 10 s; cuenta los códigos | Al menos el 10 % de las peticiones a login (20 de 200) reciben 429; las 100 de `/v1/health` responden 200 y ninguna 429 |
 | C3a | `AccessLogSettings` de la etapa (`get-stage` de C2a) y `logs describe-log-groups` | `DestinationArn` = ARN del log group `/campus-locator/dev/apigw` (sin el `:*` final que añade `describe-log-groups`), retención 14 días, y `Format` es un objeto JSON con exactamente los diez campos de §5.10 y `requestId = $context.requestId` |
 | C3b | `logs filter-log-events --log-group-name /campus-locator/dev/apigw --start-time <inicio de C1b> --filter-pattern '{ $.requestId = "<apigw-requestid>" }'` cada 15 s, hasta 3 min | Aparece un evento JSON con el `requestId` de C1b y los diez campos del formato de ARCHITECTURE §5.10 (`routeKey = ANY /{proxy+}`, `status = "200"`: todos los valores son cadenas) |
 
 `--solo` admite los alias `C1`, `C2` y `C3`. C1b, C2b y C3b comparten el encendido de `api`: se sube a 1 una sola vez
 por ejecución. Si C1b se excluye con `--solo` o falla, C3b hace su propia petición a `/v1/health`. C2b envía las
-peticiones a ritmo constante en paralelo (la latencia desde Colombia no frena el ritmo); con 2 req/s y ráfaga 5 se
-esperan ~45 respuestas que no son 429 y ~55 con 429 (las que no son 429 dan 404 con la imagen `bootstrap`, que no
-tiene esa ruta, o 422 con la de BE-1.1). El script no imprime cuerpos de respuesta.
+peticiones a ritmo constante en paralelo (la latencia desde Colombia no frena el ritmo). API Gateway aplica el
+*throttling* de forma aproximada (ARCHITECTURE §3.3): a 5 req/s, como pedía la primera versión de C2b, solo 1 de 100
+recibió 429. Medido el 2026-10-24 contra login: 23 % de 429 a 10 req/s, 34 % a 20 y 57 % a 50; C2b usa 20 req/s y
+exige el 10 %, con margen. Las que no son 429 dan **501** con la imagen `bootstrap` (`http.server` no implementa POST)
+y 422 con la de BE-1.1. El script no imprime cuerpos de respuesta.
 
 ## 3. Comprobaciones manuales
 
@@ -129,5 +131,5 @@ uv run --group ops python src/ops/validate14.py --entorno dev
 
 Esperado: `[PASA]` en P3, P1, P2, C1a, C1b, C2a, C2b, C3a y C3b y `Resultado: pasa (código 0)`; en stderr,
 `limpieza hecha: devolver el servicio api a 0 réplicas` si estaba en 0. C2b imprime algo como
-`login {'404': 45, '429': 55}; /v1/health {'200': 100}`. Sirve con la imagen `bootstrap` o con la de BE-1.1. Duración
+`login {'501': 132, '429': 68}; /v1/health {'200': 100}`. Sirve con la imagen `bootstrap` o con la de BE-1.1. Duración
 aproximada: 5–8 min (hasta 12 si hay que arrancar `api`).

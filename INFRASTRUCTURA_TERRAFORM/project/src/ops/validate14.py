@@ -55,7 +55,9 @@ ESPERA_SANA_S = 300  # tarea HEALTHY tras estabilizarse
 ESPERA_CLOUD_MAP_S = 120  # instancia devuelta como sana por Cloud Map
 ESPERA_HEALTH_S = 120  # reintentos de GET /v1/health (C1b)
 ESPERA_LOG_S = 180  # aparición del access log (C3b)
-LOGIN = {"total": 100, "por_s": 5, "minimo_429": 0.25}  # C2b
+# C2b. API Gateway aplica el throttling de forma aproximada (lo reparte entre nodos): a 5 req/s casi nada recibe 429.
+# Medido el 2026-10-24 contra login (2/5): 23 % de 429 a 10 req/s, 34 % a 20 y 57 % a 50 (ARCHITECTURE §3.3).
+LOGIN = {"total": 200, "por_s": 20, "minimo_429": 0.10}
 HEALTH = {"total": 100, "por_s": 10}  # C2b
 PAUSA_C2B_S = 10
 

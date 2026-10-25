@@ -20,6 +20,29 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.11.1] — 2026-10-24
+
+- **Lote que la motivó:** INF-1.4 (Borde HTTPS), primera ejecución de `validate14.py` en `dev`.
+- **Qué cambió:**
+  - §3.3: el *throttling* de API Gateway es aproximado («best effort», repartido entre nodos), con la medición contra
+    login; sirve para frenar volumen, no como límite de intentos de inicio de sesión. §5.10 y R10 lo anotan; R10 añade
+    la fuerza bruta contra `/v1/auth/login` y deja pendiente proponer un límite de intentos al backend.
+  - §5.11: la imagen de prueba responde 404 en otros `GET` y **501** en los demás métodos (`POST` incluido); decía solo
+    «404 en lo demás». También el docstring de `pruebas/imagen-prueba/servidor.py` (comentario; la imagen publicada no
+    cambia).
+  - PLAN INF-1.4 C2, `validation-1-4.md` C2b y `validate14.py`: login a 20 req/s durante 10 s con al menos el 10 % de
+    429 (antes, 5 req/s durante 20 s con el 25 %). Con 5 req/s la primera ejecución dio 1 de 100 con 429 aunque la
+    etapa tenía 2/5 (C2a pasó) y las 100 peticiones entraron por `POST /v1/auth/login` (Logs Insights sobre
+    `/campus-locator/dev/apigw`). Medido después: 23 % a 10 req/s, 34 % a 20 y 57 % a 50.
+- **Contratos tocados (§5):** ninguno; aclaraciones de §5.10 y §5.11 (valores configurados y respuestas de la imagen
+  de prueba sin cambios). Sube el parche.
+- **Cómo se verificó:** `stats count(*) by routeKey, status` en Logs Insights (`POST /v1/auth/login` 501 × 99, 429 × 1;
+  `ANY /{proxy+}` 200 × 101); `get-stage` con `DefaultRouteSettings` 20/40 y `RouteSettings` de login 2/5; medición
+  puntual a 10, 20 y 50 req/s con `.validacion/medir429.py` (no versionado). `validate14.py` con ruff.
+- **Pendiente:** volver a ejecutar `validate14.py` sobre el commit de este cambio y cerrar INF-1.4 (PLAN §3).
+
+---
+
 ## [0.11.0] — 2026-10-24
 
 - **Lote que la motivó:** INF-1.4 (Borde HTTPS).

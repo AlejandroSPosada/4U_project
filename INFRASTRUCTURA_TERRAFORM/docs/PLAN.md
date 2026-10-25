@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.11.0**.
+Alineado con `ARCHITECTURE.md` **v0.11.1**.
 
 ---
 
@@ -158,7 +158,9 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
   `envs/dev`, el output `api_base_url` (§5.2); `src/ops/validate14.py`.
 - **Criterios de cierre:**
   - C1. `GET {api_base_url}/v1/health` devuelve 200 desde fuera de AWS (imagen de prueba o la de BE-1.1).
-  - C2. Más de 2 req/s sostenidas a `POST /v1/auth/login` reciben 429; la ruta general no.
+  - C2. `POST /v1/auth/login` tiene su throttling de §5.10 en la etapa, y a 20 req/s sostenidas recibe 429 (al menos el
+    10 %); la ruta general, a 10 req/s, no recibe ninguno. (API Gateway aplica los límites de forma aproximada: a pocas
+    req/s por encima de 2 casi no hay 429; ARCHITECTURE §3.3.)
   - C3. Los *access logs* aparecen en `/campus-locator/dev/apigw`.
 - **Historias:** HU-09, HU-10.
 
