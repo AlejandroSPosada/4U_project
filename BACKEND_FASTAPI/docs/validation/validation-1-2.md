@@ -39,8 +39,8 @@ C2, `containerOverrides` sobre el contenedor `app`; luego `ecs wait tasks-stoppe
 `ecs describe-tasks` y su log: `logs get-log-events` del stream `migrate/app/<id de la tarea>` en
 `/campus-locator/dev/migrate`, con reintentos mientras el log no ha llegado. **SQL** = lo mismo con
 `campus-locator-dev-validacion` y comando `["psql", "-tAc", "<consulta>"]`; la salida se lee del stream
-`validacion/app/<id>` en `/campus-locator/dev/validacion` (infra §5.11). Las ayudas `lanzar_tarea`, `leer_log` y
-`red_tareas` de `src/ops/comun.py` hacen esto y las reutilizan los lotes siguientes. En `local`:
+`validacion/app/<id>` en `/campus-locator/dev/validacion` (infra §5.11). Las ayudas de tareas sueltas de
+`src/ops/comun.py` hacen esto y las reutilizan los lotes siguientes (ARCHITECTURE §5.11, «Código común»). En `local`:
 `docker compose run --rm -T api python -m app.cli …` y `docker compose exec -T db psql -U campus_app -d campus_locator
 -tAc "<consulta>"`; en C1 se comparan dos ejecuciones de `migrar` (no hay revisión ni servicio).
 

@@ -20,6 +20,48 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.6.1] — 2026-10-25
+
+- **Lote que la motivó:** BE-1.2, al cerrarlo. Una auditoría del documento contra el código (otra sesión, leyéndolo
+  como quien hará BE-1.3, sin abrir el código) encontró frases que no coincidían con el código y cosas que solo se
+  sabían leyéndolo.
+- **Qué cambió:**
+  - §4.3, «Para los lotes siguientes» (nuevo): lo que BE-1.2 ofrece al código. Conexión (`crear_motor`, `conectar`,
+    `comprobar_conexion`, `es_fallo_de_conexion`, `describir`, `app.state.motor`), modelos, el tipo `Vector`,
+    enumerados, hash de contraseñas (formato y parámetros) y normalización del correo. Cómo escribir una migración
+    nueva: archivo y revisión, una sentencia por `op.execute`, `downgrade`, sin `alembic.ini`, archivos que cambian
+    juntos, qué comprueban las pruebas, compatibilidad con la imagen anterior y nombre del índice HNSW de otra versión.
+  - §4.3, `migrar`: las revisiones pendientes van en una transacción y el admin inicial en otra, después (si el admin
+    falla, la base ya queda migrada); con el bloqueo ocupado más de 5 min termina con 1; clave del bloqueo. Con la
+    conexión abierta, también son «base no disponible» 57P01, 57P03, el tiempo agotado y las conexiones perdidas.
+    Pruebas con base: formato de `PRUEBAS_DB_URL`, permisos, cuándo se omiten y cuándo fallan, fixtures.
+  - §4.4: BE-1.3 añade la dependencia de acceso a la base (abierta con `conectar`) y el manejador que convierte
+    `BaseNoDisponible` en `503 BASE_NO_DISPONIBLE` (hoy acabaría en `500`); el correo se normaliza quitando solo los
+    espacios de alrededor.
+  - §4.1: `.dockerignore` también deja pasar `migrations/`; remite a §4.3 para lo que ofrecen `db/`, `dominio/` y
+    `hash.py`.
+  - §4.2: `asyncio` también queda en `WARNING`.
+  - §5.11: el código común de los validadores (`Validador`, excepciones, ayudas de AWS y de tareas sueltas).
+  - `validation/validation-1-2.md`: remite a §5.11 en lugar de nombrar funciones.
+  - PLAN: alineado con 0.6.1.
+- **Contratos tocados (§5):** ninguno cambia; se corrige cómo estaban escritos.
+  - §5.7 `usuarios.nombre`: el `CHECK` es `btrim(nombre) <> ''`, así que tampoco admite solo espacios; decía «no
+    vacío».
+  - §5.9: el código 2 de `verificar-esquema` también llega con `verificacion_fallida`; un error de argumentos (3) escribe
+    el uso y el error en stderr, sin evento; `migrar` también termina con 1 si espera más de 5 min el bloqueo; valores
+    admitidos y por defecto de `DB_SSLMODE` y `DB_PORT`, y qué pasa con un valor no válido.
+  - §5.10: `migracion_fallida` incluye la espera agotada del bloqueo.
+- **Cómo se verificó:** cada afirmación nueva, contra el código validado (`684f233`), por quien la escribió y por una
+  segunda revisión independiente, que encontró ocho imprecisiones en el borrador (manejo de excepciones de los
+  validadores, qué reconoce `es_fallo_de_conexion` al abrir, alcance de la prueba de contrato, reintentos del log,
+  entre otras), corregidas antes de entregar. Las pruebas de contrato (§5.7 del documento frente a `esquema.py`) y
+  `pytest` sin base pasan con el documento nuevo.
+- **Pendiente:** nada. Lo que la 0.6.0 dejaba pendiente quedó hecho: `backend.yml` en `main` con CI en verde sobre
+  `684f233` (PostgreSQL 17 confirma los textos de `esquema.py`) y `validate12.py --entorno dev` con código 0 el
+  2026-10-25.
+
+---
+
 ## [0.6.0] — 2026-10-24
 
 - **Lote que la motivó:** BE-1.2 (Base de datos y migraciones).

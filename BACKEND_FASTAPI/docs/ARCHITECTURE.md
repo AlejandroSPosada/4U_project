@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.6.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-24 |
+| Versión del documento | **0.6.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-25 |
 | Estado | En construcción: hay código de BE-1.1 y BE-1.2 (`project/`); lo de lotes posteriores es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
@@ -105,11 +105,11 @@ BACKEND_FASTAPI/
     │   │   ├── errores.py       ErrorApi; excepciones → formato de §5.1 con los códigos de §5.6
     │   │   ├── api/v1/          Routers: health, auth, localize, places, alerts, collect, admin_*
     │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5)
-    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2); localizacion.py, geo.py, rumbo.py
+    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2; qué ofrecen, en §4.3); localizacion.py, geo.py, rumbo.py
     │   │   ├── servicios/       Casos de uso: migracion (BE-1.2), localizar, recolectar, ingerir, purgar, alertas, lugares, estadisticas
-    │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor async), esquema.py (§5.7 comprobable); consultas (incluida la búsqueda vectorial)
+    │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor y conexiones), esquema.py (§5.7 comprobable), qué ofrecen en §4.3; consultas (incluida la búsqueda vectorial)
     │   │   ├── clientes/        embedding.py (httpx), s3.py y sqs.py (boto3 en hilos de anyio)
-    │   │   ├── seguridad/       jwt.py, hash.py (argon2id), dependencias requiere_admin / usuario_opcional
+    │   │   ├── seguridad/       jwt.py, hash.py (argon2id, §4.3), dependencias requiere_admin / usuario_opcional
     │   │   ├── worker.py        Bucle de consumo de las colas (python -m app.worker)
     │   │   └── cli.py           python -m app.cli: migrar y verificar-esquema (BE-1.2), crear-usuario y desactivar-usuario (BE-1.3), limpiar-validacion (BE-2.1)
     │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes BE-x.y (§5.11)
@@ -117,7 +117,7 @@ BACKEND_FASTAPI/
     ├── tests/                   unitarias, de API, de contrato (vs §5), con base (`base`: PostgreSQL efímero, §4.3) y de los validadores
     ├── docker-compose.yml       entorno `local` (§5.11)
     ├── Dockerfile               python:3.12-slim, usuario sin privilegios, puerto 8000 (§5.9)
-    ├── .dockerignore            la imagen solo recibe src/app/, pyproject.toml, uv.lock y .python-version
+    ├── .dockerignore            la imagen solo recibe src/app/, migrations/, pyproject.toml, uv.lock y .python-version
     ├── pyproject.toml           uv; ruff; pytest; grupo `ops` para los validadores
     └── uv.lock, .python-version dependencias fijadas y Python 3.12: imagen y CI instalan con `uv sync --frozen`
 ```
@@ -140,7 +140,8 @@ base ni embeddings (lo usan la app y el *health check* del contenedor); `/v1/hea
 **Logs.** uvicorn también escribe en JSON y su log de acceso se desactiva: lo reemplaza `peticion`, que lleva el
 `request_id`. Las respuestas correctas de `/v1/health` se registran en `DEBUG`, porque el *health check* llama cada 30 s
 y en `dev` `LOG_LEVEL = INFO`. Los loggers de `httpx`, `httpcore`, `botocore`, `boto3`, `urllib3` y `s3transfer` quedan
-en `WARNING`: en niveles más bajos escriben URLs completas, que podrían ser prefirmadas (§4.1).
+en `WARNING`: en niveles más bajos escriben URLs completas, que podrían ser prefirmadas (§4.1). `asyncio` también,
+por ruido.
 
 **`worker` provisional.** `backend.yml` despliega `api` y `worker` con la misma imagen (infra §5.9). Para que una tarea
 de `worker` no falle al arrancar, en BE-1.1 `python -m app.worker` solo registra un latido cada 60 s (`evento = latido`,
@@ -181,7 +182,9 @@ SQLAlchemy 2 asíncrono sobre `asyncpg` (`app/db/sesion.py`): un motor por proce
 (`require` en AWS, porque RDS lo exige) y `DB_CONNECT_TIMEOUT_S` para abrir cada conexión (§5.10). `api` crea el suyo
 al arrancar, sin conectarse: arranca aunque la base no responda, y lo informa `GET /v1/health/ready` (§5.3). Cualquier
 fallo al **abrir** una conexión (red, DNS, TLS, credenciales, falta de permiso `CONNECT`, base inexistente, tiempo
-agotado) es «base no disponible»; después, solo lo son los de red y los de la clase 08 de PostgreSQL. Los motores usan
+agotado) es «base no disponible», si se abre con `conectar` (abajo); después, solo lo son los de red (un `OSError`
+que no sea de archivos), el tiempo agotado, la clase 08 de PostgreSQL, el servidor que se apaga o aún no acepta
+conexiones (57P01, 57P03) y las conexiones que SQLAlchemy da por perdidas. Los motores usan
 `hide_parameters` (los errores no llevan los valores de la sentencia) y las trazas de los logs omiten el `DETAIL` de
 PostgreSQL, que puede copiar la fila rechazada: un hash de contraseña o un correo (§5.10). Alembic
 aplica el esquema de §5.7; las migraciones están en `project/migrations/` (SQL explícito; `0001` crea la extensión
@@ -189,34 +192,50 @@ aplica el esquema de §5.7; las migraciones están en `project/migrations/` (SQL
 
 **`python -m app.cli migrar`** (tarea `migrate`, paso 2 de `backend.yml`). Es idempotente: se ejecuta en cada
 despliegue.
-1. Toma un bloqueo consultivo de sesión (`pg_advisory_lock`; espera hasta 5 min): dos `migrate` a la vez (un despliegue
-   y un validador) se ejecutan en fila.
-2. `alembic upgrade head` en una transacción: el DDL de PostgreSQL es transaccional, así que una migración que falla no
-   deja nada a medias.
-3. Si no hay **ninguna** fila con rol `admin` (activa o no), crea el admin inicial: `ADMIN_INICIAL_CORREO` normalizado
-   (§4.4), `ADMIN_INICIAL_PASSWORD` con argon2id y nombre «Administrador». Si ya hay uno, no toca nada: desactivar al
-   admin a propósito no lo revive. Si el correo ya es de un usuario `user`, falla (código 1) en lugar de cambiarle el
-   rol; para eso está `crear-usuario --rol admin` (BE-1.3).
+1. Toma un bloqueo consultivo de sesión (`pg_advisory_lock` con la clave `7242031220260001`, la misma en todo el
+   proyecto): dos `migrate` a la vez (un despliegue y un validador) se ejecutan en fila. Espera hasta 5 min; si no lo
+   consigue, termina con 1 (`migracion_fallida`, motivo `LockNotAvailableError`).
+2. `alembic upgrade head`: todas las revisiones pendientes en una sola transacción. El DDL de PostgreSQL es
+   transaccional, así que una migración que falla no deja nada a medias.
+3. En otra transacción, después de confirmar las migraciones: si no hay **ninguna** fila con rol `admin` (activa o
+   no), crea el admin inicial: `ADMIN_INICIAL_CORREO` normalizado (§4.3, «Contraseñas y correo»),
+   `ADMIN_INICIAL_PASSWORD` con argon2id y nombre «Administrador». Si ya hay uno, no toca nada: desactivar al admin a
+   propósito no lo revive. Si el correo ya es de un usuario `user`, falla (código 1) en lugar de cambiarle el rol; para
+   eso está `crear-usuario --rol admin` (BE-1.3). Si este paso falla (1, o 3 porque faltan `ADMIN_INICIAL_*`), la base
+   **ya queda** en la revisión nueva; en `backend.yml`, `api` y `worker` siguen con la imagen anterior sobre ese
+   esquema hasta un despliegue que pase.
 
 Registra `migracion_iniciada` y `migracion_terminada` (revisión anterior y nueva, si aplicó algo y qué pasó con el admin
 inicial); los errores, con los eventos y códigos de salida de §5.9 y §5.10.
 
 **`python -m app.cli verificar-esquema`** (tarea suelta con la definición de `migrate`; la lanza el validador de BE-1.2).
 En una transacción de solo lectura toma el mismo bloqueo consultivo en modo compartido (si hay un `migrar` en curso,
-espera hasta 5 min a que termine en lugar de leer un esquema a medio migrar), lee el catálogo del esquema `public` y lo
+espera hasta 5 min a que termine en lugar de leer un esquema a medio migrar; si no termina, sale con 2 y `verificacion_fallida`), lee el catálogo del esquema `public` y lo
 compara con `app/db/esquema.py`, la forma comprobable de §5.7. Cada diferencia es un evento `esquema_diferencia` (objeto, aspecto, esperado y encontrado) y el
 resultado, `esquema_verificado`. Su código de salida distingue «difiere» (1) de «no se pudo verificar» (2, §5.9).
 
 **Coherencia del esquema.** La migración, los modelos (`app/db/modelos.py`) y `esquema.py` describen lo mismo: las
 pruebas aplican la migración y `create_all` de los modelos a bases vacías y comprueban que las dos coinciden exactamente
 con `esquema.py`. Cambiar el esquema es una revisión nueva en `migrations/versions/` más esos dos archivos y §5.7, en el
-mismo cambio. Los textos de `esquema.py` (restricciones, índices) son los del catálogo de PostgreSQL 17, la versión de
-RDS y de CI (riesgo R11).
+mismo cambio (cómo, abajo, en «Migraciones nuevas»). Los textos de `esquema.py` (restricciones, índices) son los del
+catálogo de PostgreSQL 17, la versión de RDS y de CI (riesgo R11; confirmados con 17.9 en `dev` al validar BE-1.2).
 
-**Pruebas con base.** Las marcadas `base` (`tests/base/`) crean una base nueva por prueba en el PostgreSQL de
-`PRUEBAS_DB_URL` y la borran al terminar. En `backend.yml` es un servicio `pgvector/pgvector:pg17` (la imagen del
-`docker-compose.yml`) y `PRUEBAS_DB_OBLIGATORIA=1` hace que fallen, en lugar de omitirse, si no hay base; en una máquina
-sin PostgreSQL se omiten. El job de pruebas instala también el grupo `ops`, para probar los validadores.
+**Pruebas con base.** Las marcadas `base` (`tests/base/`, marca de pytest `base`) crean una base nueva por prueba en el
+PostgreSQL de `PRUEBAS_DB_URL` y la borran al terminar. La URL es `postgresql://usuario:contraseña@host:puerto/base`,
+con `?sslmode=…` opcional para las bases de prueba (por defecto, `disable`); esa `base` solo sirve para crear y borrar
+las de prueba, con una conexión que usa el modo TLS por defecto de asyncpg. El usuario necesita permiso para crear
+bases, roles (una prueba crea uno sin permiso `CONNECT`) y la extensión `vector`: en CI y en `docker-compose.yml` es el usuario de la imagen
+`pgvector/pgvector:pg17`, que es superusuario. En local, con el `db` de `docker compose`:
+`postgresql://campus_app:local-solo-desarrollo@localhost:5432/campus_locator` (o el puerto de `DB_PUERTO_LOCAL`). Sin
+`PRUEBAS_DB_URL` se omiten; si está y el servidor no responde, fallan. En `backend.yml` el servidor es un servicio
+`pgvector/pgvector:pg17` y `PRUEBAS_DB_OBLIGATORIA=1` hace que fallen, en lugar de omitirse, si falta `PRUEBAS_DB_URL`.
+El job de pruebas instala también el grupo `ops`, para probar los validadores.
+
+Fixtures de `tests/conftest.py` para las pruebas `base`: `base_vacia` crea una base vacía (`pruebas_<12 hex>`, sin
+extensión ni tablas), devuelve los `Settings` que apuntan a ella, con `ADMIN_INICIAL_*` =
+`admin.pruebas@campus.edu.co` / `Pruebas-admin-123`, y la borra al terminar (`DROP DATABASE … WITH (FORCE)`);
+`base_migrada` es `base_vacia` después de `python -m app.cli migrar` (esquema de §5.7 y ese admin). `logs_json` (de
+BE-1.1) captura las líneas JSON de los logs de la prueba (`.lineas`).
 
 **Paso `migrate` de `backend.yml`** (infra §5.9, paso 2). Registra la revisión nueva de `campus-locator-dev-migrate`
 junto con las de `api` y `worker` (§4.2), la lanza con `run-task` (Fargate, `SUBREDES_TAREAS`, `SG_MIGRATE`, IP
@@ -225,9 +244,79 @@ falla si el contenedor `app` no sale con 0; entonces `api` y `worker` no se actu
 y el siguiente despliegue parte de ellas). Solo usa permisos de `gha-deploy` (infra §5.8): `run-task` sin etiquetas
 (que pedirían `ecs:TagResource`), `describe-tasks` y `logs:GetLogEvents` sobre ese log group.
 
+**Para los lotes siguientes: qué ofrece BE-1.2 al código.**
+
+*Conexión* (`app.db.sesion`):
+- `crear_motor(ajustes, proceso, *, pool=None, desborde=0)` devuelve un `AsyncEngine` de SQLAlchemy sin conectarse.
+  `pool=None` es sin pool (una conexión por uso, para la CLI); con `pool`, usa `pool_pre_ping`. Lanza
+  `ConfiguracionIncompleta` (atributos `faltan` e `invalidas`, con nombres de variables) si falta `DB_HOST`,
+  `DB_NAME`, `DB_USER` o `DB_PASSWORD`, o si `DB_SSLMODE` no es válido (§5.9); `DB_SSLMODE` se comprueba primero,
+  así que, si además faltan variables, solo informa de ella. Cada conexión aparece en `pg_stat_activity` con
+  `application_name = campus-locator-<proceso>`.
+- `conectar(motor)`: gestor de contexto asíncrono que entrega una `AsyncConnection` y la cierra al salir; cualquier
+  fallo al abrirla llega como `BaseNoDisponible`. `comprobar_conexion(motor, timeout_s)` hace `SELECT 1` y lanza
+  `BaseNoDisponible` si no puede (lo usa `/v1/health/ready`).
+- `es_fallo_de_conexion(exc)` dice si un error con la conexión ya abierta es «base no disponible» (las reglas de
+  arriba; sigue `orig` y `raise … from`, no el contexto implícito). Por sí sola no reconoce todos los fallos al abrir
+  (credenciales, base inexistente, falta de `CONNECT`…): esos solo cuentan si llegan como `BaseNoDisponible`, así que
+  las conexiones se abren con `conectar`. `describir(exc)` da el motivo corto y sin secretos que llevan los eventos:
+  `<clase de la causa original>: <primera línea de su mensaje>` (sigue `orig` y `raise … from`), como mucho 300
+  caracteres.
+- En `api`, el motor está en `app.state.motor` (pool `DB_POOL_API` + `DB_POOL_API_DESBORDE`, §5.10) y se cierra al
+  parar; vale `None` si la configuración está incompleta, y entonces `app.state.motivo_sin_motor` dice por qué. El
+  `worker` creará el suyo con `DB_POOL_WORKER` (BE-2.2), y cada comando de la CLI usa uno sin pool.
+- Todavía no hay sesión por petición ni manejador de `BaseNoDisponible`: un router que la deje escapar respondería
+  `500 ERROR_INTERNO`. Los añade BE-1.3 (§4.4).
+
+*Modelos, vectores y enumerados*:
+- `app.db.modelos` (SQLAlchemy 2 declarativo; `Base.metadata` es §5.7): `Usuario` (`usuarios`), `Lugar` (`lugares`),
+  `Alerta` (`alertas`), `Video` (`videos`), `Imagen` (`imagenes`), `Embedding` (`embeddings`), `EventoLocalizacion`
+  (`eventos_localizacion`) y `Auditoria` (`auditoria`). `actualizado_en` lo pone el `onupdate` de SQLAlchemy (ORM o
+  `update()` de Core); un `UPDATE` escrito como texto tiene que poner `actualizado_en = now()` él mismo.
+- `embeddings.vector` usa un tipo de columna propio, `Vector(384)`, sin el paquete `pgvector` (que arrastraría numpy a
+  la imagen). Recibe cualquier secuencia de números y devuelve `list[float]`; viaja como texto `[x1,x2,…]`. En SQL
+  escrito a mano, el parámetro va como ese texto con `CAST(:v AS vector)`.
+- `app.dominio.enumerados`: un `StrEnum` por tipo enumerado de §5.7 (`RolUsuario`, `CategoriaLugar`, `TipoAlerta`,
+  `PrioridadAlerta`, `EstadoVideo`, `EstadoImagen`, `CalidadImagen`) y uno por cada columna de texto con valores fijos
+  de `eventos_localizacion` (`OrigenLocalizacion`, `ResultadoLocalizacion`, `NivelConfianza`). El nombre de cada
+  miembro es su valor. Hoy solo los usan los modelos, y solo los siete de §5.7 (`origen`, `resultado` y `nivel` son
+  `text` con `CHECK`); los esquemas Pydantic y la lógica de los lotes siguientes los importan de aquí.
+
+*Contraseñas y correo*:
+- `app.seguridad.hash`: `calcular(password)` devuelve el hash argon2id, con sal aleatoria, en formato PHC
+  (`$argon2id$v=19$m=65536,t=3,p=4$…`: los parámetros por defecto de argon2-cffi 25.1, 64 MiB, 3 pasadas y 4 hilos).
+  `verificar(hash, password)` devuelve `True` o `False`; un hash mal formado da `False` (salvo uno con caracteres no
+  ASCII, que lanza `UnicodeEncodeError`; los de `calcular` siempre son ASCII). El hash guarda sus parámetros: si un
+  día cambian, los hashes viejos se siguen verificando. Ni la contraseña ni el hash se registran.
+- `app.dominio.validaciones.normalizar_correo(correo)`: quita los espacios de alrededor y pasa a minúsculas; no toca
+  los espacios internos ni valida el formato. Así se guarda (`usuarios_correo_check`) y así se busca.
+
+*Migraciones nuevas* (un lote que cambie el esquema):
+1. Un archivo `migrations/versions/NNNN_<descripcion>.py` con `revision = "NNNN"` (cuatro dígitos, la siguiente) y
+   `down_revision` = la anterior. SQL explícito, **una sentencia por `op.execute`** (asyncpg prepara cada sentencia y
+   no admite varias juntas), con `upgrade()` y `downgrade()`: las pruebas bajan hasta la base vacía y vuelven a subir.
+2. No hay `alembic.ini`: `alembic revision`, `alembic upgrade` y los demás comandos de Alembic no sirven (`env.py`
+   exige la conexión que le entrega `migrar` y rechaza el modo *offline*). Se aplica con `python -m app.cli migrar` (en local,
+   `docker compose run --rm api python -m app.cli migrar`; en las pruebas, con `base_migrada`).
+3. En el mismo cambio: `app/db/modelos.py`, `app/db/esquema.py` y §5.7 (versión menor de este documento, con
+   CHANGELOG). En `esquema.py`, restricciones, índices y valores por defecto van con el texto que devuelve el catálogo
+   de PostgreSQL 17 (p. ej. `CHECK ((btrim(nombre) <> ''::text))`). La revisión que exige `verificar-esquema` es la
+   última de `migrations/versions/`: no se escribe a mano.
+4. Las pruebas comprueban que la migración y los modelos dejan exactamente `esquema.py`. Con §5.7 la comparación es
+   parcial: las columnas (tipo, nulo y valor por defecto) de sus tablas «Columna | Tipo | Nulo | Por defecto», los
+   valores del párrafo de tipos enumerados, que existan las restricciones, índices y secuencias que cita y que aparezca
+   el nombre de todo índice. Las definiciones (el texto de un `CHECK`, el `USING`, `WITH` o `WHERE` de un índice) no se
+   comparan: se revisan a mano. El formato de §5.7 se conserva.
+5. `migrate` corre antes de actualizar `api` y `worker`, y si el despliegue falla después, la imagen anterior sigue
+   sobre el esquema nuevo: una migración no quita ni renombra nada que use la imagen anterior (eso va en una migración
+   posterior).
+6. Una versión de vector nueva lleva su índice parcial, `embeddings_hnsw_<versión con cada carácter que no sea letra
+   ni dígito cambiado por _>` (para `dinov2-vits14/pp-v1`, `embeddings_hnsw_dinov2_vits14_pp_v1`), con el `USING` y el
+   `WITH` de §5.7 y `WHERE version_vector = '<versión>'`.
+
 ### 4.4 BE-1.3 — Autenticación
-`POST /v1/auth/login` busca el usuario por correo normalizado (sin espacios, minúsculas), verifica la contraseña con
-argon2id y emite un JWT HS256 (§5.2). Respuesta idéntica para «no existe», «contraseña incorrecta» e «inactivo», para
+`POST /v1/auth/login` busca el usuario por correo normalizado (`normalizar_correo`: sin espacios alrededor y en
+minúsculas, §4.3), verifica la contraseña con argon2id (`hash.verificar`, §4.3) y emite un JWT HS256 (§5.2). Respuesta idéntica para «no existe», «contraseña incorrecta» e «inactivo», para
 no revelar qué correos existen. Devuelve el token **también** a usuarios `user`: es la app la que decide no abrir el
 panel (comportamiento ya implementado en `LoginViewModel`). Cada intento se registra en `auditoria`
 (`usuario.login`, con éxito o fallo, sin la contraseña). La dependencia `requiere_admin` valida firma, expiración y
@@ -237,6 +326,13 @@ validar el token).
 Usuarios por línea de comandos (§5.9): `crear-usuario` crea o, si el correo ya existe, actualiza nombre, rol y
 contraseña y lo reactiva; `desactivar-usuario` lo desactiva (sus tokens dejan de valer, §5.2). No hay borrado de
 usuarios: la fila queda por la auditoría.
+
+**Acceso a la base.** BE-1.3 es el primer lote con endpoints que usan la base, así que añade lo que BE-1.2 dejó para
+después (§4.3): una dependencia de FastAPI que abre la conexión del motor de `app.state.motor` con `sesion.conectar`
+(o una sesión ORM sobre esa conexión), para que cualquier fallo al abrirla llegue como `BaseNoDisponible`, y un
+manejador que convierte `BaseNoDisponible`, y los errores para los que `es_fallo_de_conexion` es cierto, en
+`503 BASE_NO_DISPONIBLE` (§5.6) con el evento `base_no_disponible`; también cuando `app.state.motor` es `None`. Sin
+eso, esos errores acaban en `500 ERROR_INTERNO`.
 
 ### 4.5 BE-2.1 — Recolección (subida del dataset)
 La app graba sin conexión y sube al terminar (vista 7.5 de la app). Secuencia:
@@ -754,7 +850,7 @@ valor por defecto), restricciones e índices con sus nombres, secuencias y la re
 |---|---|---|---|---|
 | `id` | `uuid` | | `gen_random_uuid()` | PK |
 | `correo` | `text` | | | único (`usuarios_correo_key`); guardado sin espacios alrededor y en minúsculas: `correo = lower(btrim(correo))` y no vacío (`usuarios_correo_check`) |
-| `nombre` | `text` | | | no vacío (`usuarios_nombre_check`) |
+| `nombre` | `text` | | | no vacío ni solo espacios: `btrim(nombre) <> ''` (`usuarios_nombre_check`) |
 | `rol` | `rol_usuario` | | `user` | |
 | `hash_password` | `text` | | | argon2id (§4.4) |
 | `activo` | `boolean` | | `true` | |
@@ -945,26 +1041,31 @@ y `tests/` quedan fuera. El contenedor se llama `app` (infra §5.1).
 |---|---|---|---|
 | `api` (por defecto, `CMD` de la imagen) | `uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --no-server-header` | 8000 | `GET /v1/health` |
 | `worker` | `python -m app.worker` | — | proceso vivo; registra un latido cada 60 s (en BE-1.1 solo eso, §4.2) |
-| `migrate` | `python -m app.cli migrar` (§4.3) | — | código de salida 0 = migrado y admin inicial en orden; 1 = falló una migración o el admin inicial; 2 y 3, abajo |
+| `migrate` | `python -m app.cli migrar` (§4.3) | — | código de salida 0 = migrado y admin inicial en orden; 1 = falló una migración o el admin inicial, o esperó más de 5 min a otro `migrar`; 2 y 3, abajo |
 | Verificación de esquema (tarea suelta con la definición de `migrate`) | `python -m app.cli verificar-esquema` (compara la base con §5.7 en una transacción de solo lectura) | — | código de salida 0 = coincide; 1 = difiere (un evento `esquema_diferencia` por diferencia); 2 = no se pudo verificar (base no disponible o error al leer el catálogo); 3, abajo |
 | Usuarios (tarea suelta con la definición de `migrate`) | `python -m app.cli crear-usuario --correo X --nombre Y [--rol admin\|user]` (contraseña desde la terminal o `CREAR_USUARIO_PASSWORD`). Si el correo existe, actualiza nombre, rol y contraseña y lo reactiva; imprime `creado` o `actualizado` | — | código 0 = hecho |
 | | `python -m app.cli desactivar-usuario --correo X` | — | 0 = desactivado (también si ya lo estaba), 1 = no existe |
 | Limpieza de pruebas (tarea suelta con la definición de `worker`) | `python -m app.cli limpiar-validacion [--video ID …]` (§4.5): sin `--video`, todos los videos `validacion-`; con `--video`, solo esos, y se niega (código 1) si alguno no lleva el prefijo. Imprime `LIMPIEZA {"videos": n, "objetos": m}` | — | código 0 = hecho |
 
 **Códigos de salida de `python -m app.cli`**, comunes a todos los comandos. Sus logs son líneas JSON de §5.10 con
-`proceso = migrate`; `migrar` y `verificar-esquema` informan su resultado (y las diferencias) solo como eventos de log:
+`proceso = migrate`; `migrar` y `verificar-esquema` informan su resultado (y las diferencias) solo como eventos de log.
+La excepción es un error en los argumentos: argparse escribe el uso y el error en texto por stderr, sin evento.
 
 | Código | Significado |
 |---|---|
 | 0 | Hecho (en `verificar-esquema`, la base coincide) |
 | 1 | Resultado negativo: el que diga cada comando arriba (difiere, falló, no existe) |
-| 2 | No se pudo trabajar con la base: no se pudo abrir la conexión (red, DNS, TLS, credenciales, permiso `CONNECT`, base inexistente, tiempo agotado) o se perdió después (evento `base_no_disponible`) |
-| 3 | Uso o configuración: argumentos (argparse daría 2; aquí es 3), una variable con un valor no válido (p. ej. `DB_PORT=abc`), `DB_*` que faltan o `ADMIN_INICIAL_*` cuando hay que crear el admin (evento `configuracion_incompleta`) |
+| 2 | No se pudo trabajar con la base: no se pudo abrir la conexión (red, DNS, TLS, credenciales, permiso `CONNECT`, base inexistente, tiempo agotado) o se perdió después (evento `base_no_disponible`). En `verificar-esquema`, también un error que impide comparar sin ser de conexión: al leer el catálogo, al cargar las migraciones o al esperar más de 5 min a un `migrar` en curso (evento `verificacion_fallida`) |
+| 3 | Uso o configuración: argumentos (argparse daría 2; aquí es 3; escribe el uso y el error en texto por stderr, sin evento), una variable con un valor no válido (p. ej. `DB_PORT=abc`), `DB_*` que faltan o `ADMIN_INICIAL_*` cuando hay que crear el admin (evento `configuracion_incompleta`) |
 
 Variables que lee: las de infra §5.4 para `api`, `worker` y `migrate`, y `APP_COMMIT`, que fija la imagen. Ningún
 otro valor es obligatorio; los parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescribirse con
 una variable del mismo nombre (si se vuelve necesario, se añade antes a infra §5.4). Ninguna variable es obligatoria
-para arrancar: cada lote exige las suyas al usarlas (por ejemplo, `DB_*` desde BE-1.2).
+para arrancar: cada lote exige las suyas al usarlas (por ejemplo, `DB_*` desde BE-1.2). De las `DB_*` de conexión
+(infra §5.4), tienen valor por defecto `DB_PORT` (5432) y `DB_SSLMODE` (`require`). `DB_SSLMODE` admite `disable`, `allow`, `prefer`, `require`,
+`verify-ca` y `verify-full` (sin distinguir mayúsculas ni espacios alrededor); con otro valor, la CLI termina con 3 y
+`api` no crea el motor (`/v1/health/ready` responde `503 BASE_NO_DISPONIBLE`). Una variable de `config.py` con un valor
+que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que `api` no arranque.
 
 ### 5.10 Parámetros operativos
 
@@ -1014,7 +1115,7 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `configuracion_incompleta` | `migrate` | `faltan`, `invalidas` (nombres de variables), `motivo` (sin el valor recibido) | Faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), o una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT` (`ERROR`); la CLI termina con 3 |
 | `migracion_iniciada` | `migrate` | `version`, `commit`, `entorno`, `revision_objetivo` | Al empezar `migrar` |
 | `migracion_terminada` | `migrate` | `revision_anterior`, `revision`, `aplicada`, `admin_inicial` (`creado` \| `ya_habia_admin`), `usuario_id` (si lo creó), `duracion_ms` | `migrar` terminó con 0. Los mensajes de Alembic (`Running upgrade  -> 0001, …`) salen antes como `evento = log` |
-| `migracion_fallida` | `migrate` | `motivo` (y la traza en `excepcion`) | Falló una migración o el admin inicial (`ERROR`); la CLI termina con 1 |
+| `migracion_fallida` | `migrate` | `motivo` (y la traza en `excepcion`) | Falló una migración o el admin inicial, o esperó más de 5 min a otro `migrar` (`LockNotAvailableError`) (`ERROR`); la CLI termina con 1 |
 | `esquema_diferencia` | `migrate` | `objeto` (p. ej. `columna alertas.radio_m`), `aspecto` (`falta`, `sobra`, `tipo`, `nulo`, `defecto`, `generada`, `definicion`, `valores`, `propietaria`, `revision`), `esperado`, `encontrado` | Una por diferencia de `verificar-esquema` (`WARNING`) |
 | `esquema_verificado` | `migrate` | `resultado` (`coincide` \| `difiere`), `diferencias`, `revision`, `revision_esperada`, `servidor`, `pgvector` | Al terminar `verificar-esquema` (`INFO` si coincide; si no, `WARNING`) |
 | `verificacion_fallida` | `migrate` | `motivo` (y la traza en `excepcion`) | Error que impide comparar y no es de conexión: al leer el catálogo, al cargar las migraciones o al esperar más de 5 min a un `migrar` en curso (`LockNotAvailableError`) (`ERROR`); la CLI termina con 2 |
@@ -1054,6 +1155,33 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
 - La localización (BE-3.2) usa el conjunto de consulta de `evaluacion/` (infra §5.5) que prepara EMB-3.2.
 - Lo que devuelve el índice para una foto concreta (por ejemplo, que un video borrado ya no aparece) se ve con
   `POST /v1/admin/diagnostico/vecinos` (§5.5).
+
+**Código común (`project/src/ops/comun.py`)**. Lo usan todos los `validate<fase><n>.py`:
+- `Validador(lote="BE-x.y", validacion="validation-x-y", entornos=("dev", …), descripcion=__doc__)`. `iniciar()` lee
+  `--entorno local|dev`, `--informe <ruta>`, `--solo C1,C3` y `--sin-limpieza`; un error de uso o un entorno que el
+  validador no admite terminan con 3. `ejecutar(precondiciones=[("P1", f), …], comprobaciones=[("C1", f), …],
+  manuales=[("M1", "instrucción"), …], limpieza=f)` sigue el orden del contrato común, imprime una línea por
+  precondición y comprobación (`[PASA] C1 …`), escribe el informe JSON (por defecto en
+  `project/.validacion/<lote>-<AAAAMMDD-HHMMSS>.json`, que git ignora) y devuelve el código de salida.
+- Cada `f` devuelve el detalle (un texto corto) o lanza una excepción. En una precondición, `PrecondicionNoCumplida`
+  (otro lote no está listo) termina con 2 y cualquier otra (`ErrorConfiguracion`, `Falla` o una inesperada), con 3;
+  en ambos casos no se ejecutan las comprobaciones. En una comprobación, cualquier excepción la deja en `falla`
+  (código 1): `Falla` con su mensaje (`exigir(condición, mensaje)` la lanza) y las demás como «error inesperado: …».
+- AWS e infraestructura: `sesion_aws()` (perfil de `AWS_PROFILE`, `us-east-1`), `verificar_cuenta(sesion)` (exige la
+  cuenta del proyecto), `outputs_terraform()` (`terraform output -json` de `INFRASTRUCTURA_TERRAFORM/project/envs/dev`,
+  con `terraform init` ya hecho), `url_api(outputs)` (`VALIDACION_API_URL`, o `api_base_url` + `/v1`),
+  `ejecutar_proceso([...])` (un comando externo; devuelve el resultado con su código) y `commit_local()`.
+- Tareas sueltas de ECS (BE-1.2): `red_tareas(outputs)` arma la red de `run-task` (`subredes_tareas`, `sg_migrate`, IP
+  pública; sin esos outputs, `PrecondicionNoCumplida`). `lanzar_tarea(ecs, logs, definicion=…, red=…, familia=…,
+  comando=None, iniciada_por="validacion")` lanza la definición (familia o ARN de una revisión) en Fargate, en
+  `campus-locator-dev` y sin etiquetas; `comando` sustituye el del contenedor `app`, y `familia` (`FAMILIA_MIGRATE` o
+  `FAMILIA_VALIDACION`) elige el log group y el prefijo del stream. Espera hasta 900 s a que la tarea pare y devuelve
+  un `ResultadoTarea`: `id`, `arn`, `definicion` (ARN de la revisión), `codigo` (salida del contenedor `app`; `None` si
+  no llegó a correr), `motivo`, `lineas` (el log) y `eventos(nombre)` (las líneas JSON de §5.10, todas o las de un
+  evento). `leer_log(logs, grupo, stream)` lee un stream desde el principio y, mientras no exista o esté vacío, lo
+  intenta hasta 12 veces, con 5 s entre intentos (`[]` si nunca llega). Al lanzar la tarea o leer el log, un error de
+  AWS por falta de permiso es `ErrorConfiguracion` y cualquier otro, `Falla`; un error mientras espera a que pare
+  también es `Falla` («no se detuvo en 900 s»), y uno de `describe-tasks` llega sin convertir.
 
 **Datos de prueba**: videos con `ref_cliente` y `nombre` que empiezan por `validacion-` (con coordenadas fuera del
 campus, para no mezclarse con el dataset real), lugares cuyo nombre empieza por `validacion-`, alertas cuyo mensaje
