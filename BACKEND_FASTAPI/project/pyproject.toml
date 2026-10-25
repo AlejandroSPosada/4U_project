@@ -18,6 +18,8 @@ dependencies = [
     "pyjwt>=2.10,<3",
     # BE-2.1: S3 del dataset (firmar PUT y HEAD en `api`; borrar en `limpiar-validacion`, §4.5). Va en la imagen.
     "boto3>=1.35,<2",
+    # BE-2.2: el `worker` decodifica y valida el JPEG, corrige EXIF y genera la miniatura y la copia reducida (§4.6)
+    "pillow>=11,<13",
 ]
 
 [dependency-groups]

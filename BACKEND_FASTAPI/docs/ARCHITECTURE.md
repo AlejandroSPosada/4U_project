@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.8.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.9.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.1 (`project/`); lo de lotes posteriores es diseño propuesto |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.2 (`project/`; BE-2.2 sin validar en `dev`); lo de lotes posteriores es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -62,7 +62,7 @@ Un cambio de interfaz se hace primero en el §5 del dueño, con entrada en su `C
 | Proceso | Responsabilidad | Toca |
 |---|---|---|
 | `api` | Endpoints HTTP, autenticación, firma de URLs, localización síncrona, encolar purgas y re-procesados, reconciliador de purgas | RDS, S3 (firmar y `HEAD`), SQS (enviar), embedding |
-| `worker` | Ingesta (miniatura + vector + estado) y purga (borrar objetos y filas) | RDS, S3 (leer, escribir, borrar), SQS (recibir), embedding |
+| `worker` | Ingesta (miniatura + vector + estado, BE-2.2) y purga (borrar objetos y filas, BE-4.1) | RDS, S3 (leer, escribir, borrar), SQS (recibir, borrar, devolver), embedding |
 | `migrate` | Migraciones Alembic y creación del admin inicial | RDS |
 
 Los tres salen de **la misma imagen** con distinto comando (§5.9).
@@ -107,12 +107,12 @@ BACKEND_FASTAPI/
     │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_cola_hash (BE-1.3, §4.4); obtener_almacen (BE-2.1, §4.5)
     │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: localize, places, alerts, admin_*
     │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5)
-    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); localizacion.py, geo.py, rumbo.py
-    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); localizar, ingerir, purgar, alertas, lugares, estadisticas
+    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); localizacion.py, geo.py, rumbo.py
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); localizar, purgar, alertas, lugares, estadisticas
     │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas (incluida la búsqueda vectorial)
-    │   │   ├── clientes/        embedding.py (httpx); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5); sqs.py
+    │   │   ├── clientes/        embedding.py (httpx: `esta_listo` desde BE-1.1, `vectorizar` desde BE-2.2); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5; `descargar` y `escribir` desde BE-2.2); sqs.py (BE-2.2, §4.6)
     │   │   ├── seguridad/       hash.py (argon2id, §4.3), tokens.py (JWT, §5.2) y dependencias.py (requiere_admin), BE-1.3 (§4.4)
-    │   │   ├── worker.py        Bucle de consumo de las colas (python -m app.worker)
+    │   │   ├── worker.py        Bucle de consumo de `ingesta` (python -m app.worker, BE-2.2, §4.6); `purga` llega con BE-4.1
     │   │   └── cli.py           python -m app.cli: migrar y verificar-esquema (BE-1.2), crear-usuario y desactivar-usuario (BE-1.3), limpiar-validacion (BE-2.1)
     │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes BE-x.y (§5.11)
     ├── migrations/              Alembic: env.py y versions/ (SQL explícito; 0001 = esquema inicial de §5.7)
@@ -120,7 +120,7 @@ BACKEND_FASTAPI/
     ├── docker-compose.yml       entorno `local` (§5.11)
     ├── Dockerfile               python:3.12-slim, usuario sin privilegios, puerto 8000 (§5.9)
     ├── .dockerignore            la imagen solo recibe src/app/, migrations/, pyproject.toml, uv.lock y .python-version
-    ├── pyproject.toml           uv; ruff; pytest; grupo `ops` para los validadores; boto3 en las dependencias de la imagen desde BE-2.1
+    ├── pyproject.toml           uv; ruff; pytest; grupo `ops` para los validadores; boto3 en las dependencias de la imagen desde BE-2.1 y Pillow (12.3) desde BE-2.2
     └── uv.lock, .python-version dependencias fijadas y Python 3.12: imagen y CI instalan con `uv sync --frozen`
 ```
 
@@ -145,11 +145,11 @@ y en `dev` `LOG_LEVEL = INFO`. Los loggers de `httpx`, `httpcore`, `botocore`, `
 en `WARNING`: en niveles más bajos escriben URLs completas, que podrían ser prefirmadas (§4.1). `asyncio` también,
 por ruido.
 
-**`worker` provisional.** `backend.yml` despliega `api` y `worker` con la misma imagen (infra §5.9). Para que una tarea
-de `worker` no falle al arrancar, en BE-1.1 `python -m app.worker` solo registra un latido cada 60 s (`evento = latido`,
-`modo = sin_consumo`) y termina limpio con SIGTERM: **no consume las colas**. La ingesta llega con BE-2.2 (§4.6) y la
-purga con BE-4.1 (§4.11). Hasta entonces, si el autoescalado lo enciende por mensajes en `ingesta` o `purga`, esos
-mensajes siguen en la cola (igual que con la imagen de prueba de infra).
+**`worker` provisional (hasta BE-2.2).** `backend.yml` despliega `api` y `worker` con la misma imagen (infra §5.9).
+Para que una tarea de `worker` no fallara al arrancar, en BE-1.1 `python -m app.worker` solo registraba un latido cada
+60 s (`evento = latido`, `modo = sin_consumo`) y terminaba limpio con SIGTERM, sin consumir las colas. Desde BE-2.2
+consume `ingesta` (§4.6); ese modo queda solo para cuando falta configuración (§4.6, «Arranque»). La purga llega con
+BE-4.1 (§4.11): hasta entonces los mensajes de `purga` siguen en la cola.
 
 **Despliegue con `backend.yml`** (`.github/workflows/` de la raíz del monorepo). Sigue la secuencia de infra §5.9; el
 paso `migrate`, desde BE-1.2, está en §4.3. Lo propio del backend:
@@ -266,7 +266,8 @@ y el siguiente despliegue parte de ellas). Solo usa permisos de `gha-deploy` (in
   caracteres.
 - En `api`, el motor está en `app.state.motor` (pool `DB_POOL_API` + `DB_POOL_API_DESBORDE`, §5.10) y se cierra al
   parar; vale `None` si la configuración está incompleta, y entonces `app.state.motivo_sin_motor` dice por qué. El
-  `worker` creará el suyo con `DB_POOL_WORKER` (BE-2.2), y cada comando de la CLI usa uno sin pool.
+  `worker` crea el suyo desde BE-2.2 (`crear_motor(ajustes, "worker", pool=DB_POOL_WORKER)`, §4.6; aparece como
+  `campus-locator-worker`), y cada comando de la CLI usa uno sin pool.
 - Cómo lo usa un router (dependencia `obtener_motor`, `sesion.transaccion` y el `503` de `BaseNoDisponible`): lo añadió
   BE-1.3, en §4.4.
 
@@ -499,43 +500,185 @@ fila de la imagen a partir de la clave sin otra consulta (`dominio.recoleccion.i
 | `app.servicios.recoleccion` (casos de uso) | `crear_video(motor, usuario_id=, datos=VideoCrear)` → `(VideoResumen, creado)`; `registrar_imagenes(motor, almacen, ajustes, video_id=, imagenes=[ImagenRegistro])` → `ImagenesRegistradas`; `completar_subida(motor, almacen, video_id=)` → `SubidaCompletada`; `validar_lote(imagenes, ajustes)`. `almacen` puede ser `None`: se exige después de comprobar el video. Excepciones: `VideoNoEncontrado`, `VideoEliminado` (de `servicios.videos`), `AlmacenNoConfigurado` (→ `500`), `DatosNoValidos(campos)` (→ `422`, `campos` = `detalle.campos`) y `FalloS3` al firmar |
 | `app.servicios.videos` | `listar(motor, q=, orden=, direccion=, pagina=, por_pagina=)` → `Pagina[VideoResumen]`; `detalle(motor, video_id)` → `VideoDetalle` (`VideoNoEncontrado` si no existe o está `eliminado`); `resumen(conexion, video_id)` → `VideoResumen \| None` (también de un eliminado) y `contar(conexion, video_id)` → `Conteo`, dentro de una transacción abierta. BE-4.1 añade aquí renombrar y borrar, y rellena `url`, `url_miniatura` y `url_expira_en` de `ImagenAdmin` en `detalle` |
 | `app.servicios.limpieza.limpiar_validacion(motor, almacen, video_ids=None, *, simular=False)` → `ResultadoLimpieza` | Lo que hace `limpiar-validacion` (arriba): `ResultadoLimpieza(videos, objetos, video_ids, simulada, restos_s3, motivo_restos)`. `video_ids=None` = todos los de validación; `[]` = nada. Lanza `LimpiezaRechazada(inexistentes, sin_prefijo)`, `FalloS3` (primera pasada, o el recuento al simular) y los errores de la base. La purga de BE-4.1 puede copiar su orden (S3 → filas → S3) |
-| `app.clientes.s3` | `AlmacenS3(bucket, region="us-east-1", cliente=None, reloj=…)` (síncrono): `firmar_put(clave, ttl_s)` → `UrlFirmada(url, expira_en)`; `consultar(clave)` (HEAD) → `ObjetoS3(bytes, etag)` o `None` si 404/403; `borrar_prefijo(prefijo)` → objetos borrados (lista y borra de 1000 en 1000); `contar_prefijo(prefijo)` → objetos bajo el prefijo (solo lista). Todo error → `FalloS3` (mensaje sin URL). Desde código asíncrono: `await firmar_puts(almacen, claves, ttl_s)` → `{clave: UrlFirmada}` (un hilo) y `await consultar_varios(almacen, claves, concurrencia=8)` → `{clave: ObjetoS3 \| FalloS3 \| None}` (nunca lanza por una clave). `crear_cliente(region)` da el cliente de boto3 configurado. **Falta** (se añade aquí, con su prueba con `Stubber`): para BE-2.2, `descargar(clave)` → `bytes` (`get_object`; el original de `dataset/`) y `subir(clave, datos, content_type="image/jpeg")` (`put_object` con `ContentType`; la miniatura en `thumbs/`), ambos con el rol `tarea-worker`, que tiene `s3:GetObject` y `s3:PutObject` sobre `dataset/*` y `thumbs/*` (infra §5.8); para BE-4.1 (URLs GET de 1 h) y BE-3.1 (foto de lugar), `firmar_get(clave, ttl_s)` |
+| `app.clientes.s3` | `AlmacenS3(bucket, region="us-east-1", cliente=None, reloj=…)` (síncrono): `firmar_put(clave, ttl_s)` → `UrlFirmada(url, expira_en)`; `consultar(clave)` (HEAD) → `ObjetoS3(bytes, etag)` o `None` si 404/403; `borrar_prefijo(prefijo)` → objetos borrados (lista y borra de 1000 en 1000); `contar_prefijo(prefijo)` → objetos bajo el prefijo (solo lista). Todo error → `FalloS3` (mensaje sin URL). Desde código asíncrono: `await firmar_puts(almacen, claves, ttl_s)` → `{clave: UrlFirmada}` (un hilo) y `await consultar_varios(almacen, claves, concurrencia=8)` → `{clave: ObjetoS3 \| FalloS3 \| None}` (nunca lanza por una clave). `crear_cliente(region)` da el cliente de boto3 configurado. Desde BE-2.2, `descargar(clave, max_bytes)` y `escribir(clave, datos, content_type="image/jpeg")` (§4.6; se llama `escribir`, no `subir` como se había previsto, para no chocar con `almacen_falso.subir`). **Falta** (se añade aquí, con su prueba con `Stubber`): para BE-4.1 (URLs GET de 1 h) y BE-3.1 (foto de lugar), `firmar_get(clave, ttl_s)` |
 | `app.api.dependencias.obtener_almacen(request)` → `AlmacenS3`; `almacen_o_none(request)`; `sin_almacen(request)` → `ErrorApi` | El de `app.state.almacen`; sin él, `obtener_almacen` lanza el `500 ERROR_INTERNO` de `sin_almacen` (que registra `configuracion_incompleta`). La recolección usa `almacen_o_none` y traduce `AlmacenNoConfigurado` con `sin_almacen`, para responder antes el 404/409 del video |
 | `app.main.crear_app(ajustes=None, *, almacen=None)` | `almacen` sustituye al cliente de S3 (las pruebas pasan un doble); sin él, el ciclo de vida lo crea si hay `S3_BUCKET_DATASET` |
 | `app.esquemas.comun` | `FechaUtc` (fecha de **salida**: UTC con `Z` y sin fracciones), `FechaConZona` (de **entrada**: con zona, devuelta en UTC; sin zona, o fuera de los años 1–9999 al pasarla a UTC —p. ej. `0001-01-01T00:00:00+05:00`—, → `422`; sin esa conversión asyncpg lanzaba `OverflowError` al guardarla y la API respondía `500`), `Referencia` (`{id, nombre}`), `Pagina[T]` (`items`, `total`, `pagina`, `por_pagina`; PEP 695: `Pagina[VideoResumen]`) y `texto_admitido(valor)` (la regla de §4.4 en un `field_validator`). BE-3.1 los usa para `LugarAdmin`, `AlertaAdmin` (`creado_por`) y sus listados |
 | `app.esquemas.videos` | Los modelos de §5.4 y §5.5: `VideoCrear`, `InicioRecorrido`, `ImagenRegistro`, `ImagenesRegistrar`, `SubidaPut`, `ImagenRegistrada`, `ImagenesRegistradas`, `ConteoFotos`, `SubidaCompletada`, `VideoResumen`, `ImagenAdmin`, `VideoDetalle`; constantes `NOMBRE_VIDEO_MAX` (40), `REF_CLIENTE_MAX` (40), `DISPOSITIVO_MAX` (200), `APP_VERSION_MAX` (40), `ENTERO_MAX`, `Q_MAX` (100) y `LOTE_TOPE` (50: `ImagenesRegistrar.imagenes` tiene `max_length` fijo, así Pydantic no valida cuerpos enormes; `REC_MAX_LOTE` solo puede bajarlo). Las peticiones ignoran campos de más; las respuestas los prohíben |
-| Fixtures de prueba | `almacen_falso` (`tests/conftest.py`): doble de `AlmacenS3` con los objetos en memoria; `subir(clave, n_bytes)` simula el `PUT` de la app, `fallar_head` y `fallar_firma` provocan `FalloS3`, `contar_prefijo` cuenta, `consultadas` y `firmadas` registran las llamadas y sus URL llevan `FIRMA_FALSA` para comprobar que no llegan a los logs. Para la CLI: `monkeypatch.setattr(cli, "crear_almacen", lambda ajustes: almacen_falso)`. Ejemplos en `tests/base/test_recoleccion_base.py` y `test_limpieza_base.py`; botocore simulado con `Stubber` en `tests/unit/test_s3.py` |
+| Fixtures de prueba | `almacen_falso` (`tests/conftest.py`): doble de `AlmacenS3` con los objetos en memoria; `subir(clave, n_bytes=1234, datos=None)` simula el `PUT` de la app y devuelve el ETag (`etag0`, `etag1`… distinto en cada subida; con `datos`, guarda esos bytes y `n_bytes = len(datos)`), `fallar_head` y `fallar_firma` provocan `FalloS3`, `contar_prefijo` cuenta, `consultadas` y `firmadas` registran las llamadas y sus URL llevan `FIRMA_FALSA` para comprobar que no llegan a los logs. Desde BE-2.2: `descargar`/`escribir` como los reales, `datos` (bytes por clave), `descargadas`, `escritas`, `fallar_descarga` (claves) y `fallar_escritura`. Para la CLI: `monkeypatch.setattr(cli, "crear_almacen", lambda ajustes: almacen_falso)`. Ejemplos en `tests/base/test_recoleccion_base.py` y `test_limpieza_base.py`; botocore simulado con `Stubber` en `tests/unit/test_s3.py` |
 
 Trampas: un `rumbo` de 359,9999999 pasa `< 360` como `float` pero se guarda como 360,0 en `real` y violaría el
 `CHECK`: los esquemas comprueban el rango sobre `como_real(x)`. Un `ImagenRegistro.orden` mayor que 200 lo rechaza el
 `CHECK` de §5.7 aunque se suba `REC_MAX_FOTOS_VIDEO`: el servicio usa `min(REC_MAX_FOTOS_VIDEO, 200)`.
 
 ### 4.6 BE-2.2 — Worker de ingesta
-Bucle con espera larga sobre `ingesta` (hasta 10 mensajes). Antes de recibir comprueba que `embedding` esté listo
-(`GET /health/ready`); si no lo está, espera y no toma mensajes (evita que se agoten los 5 reintentos y caigan en la
-DLQ mientras el modelo carga). Por cada objeto:
-1. Decodifica la clave (las claves de los eventos S3 vienen codificadas como URL) y busca la imagen
-   (`dominio.recoleccion.ids_de_clave`, §4.5). Si no existe o su video está `eliminado`, borra el mensaje (la purga se
-   ocupará del objeto). La imagen puede estar en `pendiente_subida` o ya en `subida` (la pasó `complete` o una
-   repetición de `images` con su `HEAD`, §4.5, con `bytes` y `etag` ya rellenos): las dos se procesan.
-2. Si la imagen ya está `procesada` con el mismo ETag, borra el mensaje (idempotencia ante eventos repetidos). El ETag
-   de `imagenes.etag` se guarda sin comillas, como el `eTag` del evento.
-3. Descarga, valida (JPEG decodificable, ≤ 4 MB, lado menor ≥ 320 px), corrige la orientación EXIF, genera la
-   miniatura en `thumbs/…` y una copia reducida en memoria (lado mayor `WORKER_LADO_EMBEDDING_PX`, JPEG calidad 90)
-   para el modelo: así cada lote queda muy por debajo del límite de 16 MB de embeddings.
-4. Agrupa hasta `WORKER_LOTE_EMBEDDING` (4) imágenes reducidas por llamada a `POST /v1/embed` (prioridad `baja`) y
-   guarda cada vector en `embeddings` con la `version_vector` que devuelve el servicio. Lotes pequeños acotan lo que
-   espera una localización que llega mientras se procesa un lote (embeddings no interrumpe un lote en curso). Si no
-   coincide con la esperada (§5.10), no guarda y lo registra como
-   error de configuración.
-5. Marca la imagen `procesada` y recalcula el estado del video, en una transacción que respeta el orden de bloqueo
-   de §4.5 (video → imágenes): `recoleccion.bloquear_video` (si devuelve `None` o `eliminado`, descarta), `UPDATE` de la
-   foto y `recoleccion.recalcular_estado`. Lo mismo al pasar una foto a `subida` (paso 1) o a `error`.
+`python -m app.worker` (`app/worker.py`) consume la cola `ingesta` (`SQS_URL_INGESTA`) y cada lote lo procesa
+`servicios.ingesta.procesar_lote` (ADR-BE-15). Probado en local con PostgreSQL real, S3 (`almacen_falso`), SQS y
+embeddings simulados (`tests/base/test_ingesta_base.py`, `tests/unit/test_worker.py`); **sin comprobar en `dev`**
+hasta que pase `validate22.py`.
 
-Errores **permanentes** (imagen corrupta, demasiado grande): imagen en `error` con el motivo, mensaje borrado.
-Errores **transitorios** (embedding caído, base no disponible): el mensaje no se borra y vuelve a la cola tras la
-visibilidad; al quinto intento va a la DLQ y la alarma avisa. Mensajes `reprocesar_imagen` (§5.8) siguen el mismo
-camino a partir del paso 3.
+**Arranque.** Lee `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` y `DB_*` (infra §5.4; `worker_iniciado` con
+`modo = ingesta`). Si falta alguna (o `DB_SSLMODE` no vale), registra `configuracion_incompleta` (`ERROR`, `faltan`) y
+sigue vivo solo con latidos (`modo = sin_consumo`), sin salir: así ECS no lo reinicia en bucle y `docker compose`
+local (que no tiene SQS) arranca igual. Crea un motor con pool `DB_POOL_WORKER` (2), un `AlmacenS3` y una `ColaSqs`
+(en hilos). SIGTERM termina el bucle tras la recepción en curso (≤ 20 s; ECS espera 30 s) y registra
+`worker_detenido`.
+
+**Bucle** (`worker.consumir`):
+1. Cada 60 s, `latido` (`modo = ingesta`, `embedding_listo`).
+2. `GET {EMBEDDING_URL}/health/ready` (`embedding.esta_listo`, plazo `EMBEDDING_CONNECT_TIMEOUT_S`). Si no responde
+   200, **no recibe**: espera `WORKER_ESPERA_EMBEDDING_S` (15 s) y vuelve a mirar. Así, con `embedding` apagado o
+   cargando, los mensajes esperan visibles en la cola sin gastar recepciones y no llegan a la DLQ (C3). Registra
+   `embedding_listo` / `embedding_no_listo` solo cuando cambia.
+3. `ReceiveMessage` con espera larga de 20 s, hasta `WORKER_MAX_MENSAJES` (10).
+4. Si tras recibir `embedding` ya no está listo (se apagó durante la espera larga) o el proceso se detiene, devuelve
+   los mensajes con visibilidad 0 (`ChangeMessageVisibility`; cuenta una recepción) y registra `mensajes_devueltos`.
+5. `procesar_lote` decide por mensaje: lo borra (`DeleteMessage`) si todo lo que nombra terminó (procesado,
+   descartado o error permanente) y lo deja si algo falló de forma transitoria: vuelve a ser visible tras la
+   visibilidad de la cola (180 s, infra §5.6) y, a la sexta recepción, SQS lo pasa a la DLQ (5 reintentos) y la alarma
+   avisa. Registra `lote_ingesta` (`mensajes`, `borrados`, `retenidos`, `duracion_ms`); con algún retenido, espera
+   15 s antes de seguir. Un error de SQS (`FalloSqs`) se registra como `cola_fallida` y el bucle sigue.
+
+**Un lote** (`procesar_lote(deps, mensajes)` → `list[Decision]`). Cada mensaje se interpreta con
+`dominio.mensajes.interpretar` (§5.8): `s3:TestEvent` → se borra (`mensaje_descartado`, `motivo = prueba_s3`); un
+cuerpo que no encaja → se borra (`mensaje_no_reconocido`, `WARNING`); cada `Record` `ObjectCreated:*` es una foto, con
+la clave decodificada (`unquote_plus`) y el ETag sin comillas; una clave que no es `dataset/{uuid}/{uuid}.jpg`
+(`recoleccion.ids_de_clave`) se descarta (`clave_no_reconocida`). Dos mensajes del lote que nombran la misma foto
+comparten el trabajo (se procesa una vez y los dos se borran o se quedan juntos; si una es un evento de S3 y otra
+`reprocesar_imagen`, manda la primera que aparece). El lote va **por fases y en serie**, una foto detrás de otra en
+cada fase (sin descargas en paralelo: así en memoria solo hay un original decodificado a la vez; de cada foto se
+guardan solo la miniatura y la copia reducida, cientos de KB): transacción 1 de todas → descarga + Pillow + miniatura
+de las que siguen → embeddings de las que siguen, en grupos → transacción 2 de cada una con vector → transacción de
+error de las que quedaron en error permanente. Por foto:
+1. **Transacción 1** (orden de bloqueo de §4.5): `recoleccion.bloquear_video`; video inexistente → descartar
+   (`video_no_existe`), `eliminado` → descartar (`video_eliminado`: la purga se ocupa del objeto); foto con
+   `SELECT … FOR UPDATE` (inexistente → `imagen_no_existe`). Evento de S3 con el mismo ETag que una foto ya `procesada`
+   o en `error` → descartar (`duplicado`: idempotencia ante eventos repetidos, C4). Foto `pendiente_subida` → pasa a
+   `subida` con `etag` y `bytes` del evento (`bytes` nulo si pasa de 2 147 483 647) y `recalcular_estado` (ADR-BE-14).
+   Una foto ya en `subida` (por `complete` o por el `HEAD` de `images`, §4.5) se procesa igual. `reprocesar_imagen`
+   lee primero el `video_id` de la foto (sin bloqueo), después bloquea video y foto, y no aplica la regla del ETag.
+2. **S3 y Pillow** (fuera de la base): `AlmacenS3.descargar(s3_key, REC_MAX_BYTES_FOTO)`; objeto que no está (404) →
+   descartar (`objeto_no_existe`; la foto queda como esté); más grande → error permanente.
+   `dominio.imagenes.preparar` (en un hilo): JPEG decodificable (formato `JPEG` o `MPO` según Pillow y `load()` sin
+   error; más de ~89,5 MP es «no decodificable»; de un `MPO` —JPEG multi-imagen, abajo— solo se usa la primera
+   imagen), orientación EXIF aplicada (`ImageOps.exif_transpose`), lado menor ≥
+   `REC_LADO_MIN_PX` (320) y lado mayor ≤ 32 767 (cabe en `smallint`); da `ancho` y `alto` ya orientados, la miniatura
+   (lado mayor `MINIATURA_LADO_PX` = 320, calidad `MINIATURA_CALIDAD` = 80, LANCZOS) y una copia reducida en memoria
+   (lado mayor `WORKER_LADO_EMBEDDING_PX` = 1024, calidad 90, RGB y **sin EXIF**: embeddings vuelve a aplicar la
+   orientación EXIF, §5.3 de su documento, y una copia con la marca la giraría dos veces). Una foto más pequeña no se
+   amplía. `AlmacenS3.escribir(thumbs/{video_id}/{imagen_id}.jpg, miniatura)` (`ContentType: image/jpeg`).
+3. **Embeddings**: `POST /v1/embed` con grupos de hasta `WORKER_LOTE_EMBEDDING` (4) copias reducidas, `X-Prioridad:
+   baja` (`embedding.vectorizar`). Lotes pequeños acotan lo que espera una localización que llega mientras se procesa
+   uno (embeddings no interrumpe un lote en curso; 4 imágenes ≈ 331 ms p95 en `dev`, embeddings §5.7). Una imagen
+   rechazada (`400 IMAGEN_INVALIDA`, `413`, `415` con `detalle.indice`) queda en error permanente y el grupo se repite
+   sin ella. `EmbeddingNoDisponible` (apagado, `503 NO_LISTO`/`SATURADO`, `5xx`, sin respuesta en
+   `EMBEDDING_TIMEOUT_S`) o una respuesta que no cumple el contrato → transitorio para lo que falte del lote. Si la
+   `version_vector` devuelta no es `EMBEDDING_VERSION_VECTOR`, no guarda nada, registra `version_vector_distinta`
+   (`ERROR`, `esperada`, `recibida`) y queda transitorio (el mensaje acaba en la DLQ si no se corrige: es un error de
+   configuración, no de la foto). El `worker` compara con la `version_vector` de cada respuesta de `/v1/embed`; no usa
+   `GET /v1/info` (la regla «primera llamada y cada 10 min» de §5.10 es la de `api`).
+4. **Transacción 2**: `bloquear_video`, foto `FOR UPDATE` (si ya no existen o el video está `eliminado`, descartar),
+   `INSERT INTO embeddings … ON CONFLICT (imagen_id, version_vector) DO UPDATE SET vector, creado_en = now()` (una sola
+   fila por foto y versión: reprocesar renueva el vector y su `creado_en`, C5), foto `procesada` con `error = NULL`,
+   `bytes` (los descargados), `etag` (el del `GetObject`), `ancho`, `alto` e `intentos + 1`, y `recalcular_estado`.
+   Evento `imagen_procesada`.
+
+**Errores permanentes** (el mensaje se borra, C2): en una transacción con el mismo orden de bloqueo, la foto pasa a
+`error` con el motivo, `intentos + 1`, `bytes` y `etag` si se conocen, `ancho` y `alto` si se decodificó, y se borran
+**todos** sus vectores (una foto que se sube de nuevo mal no debe seguir saliendo en la búsqueda con los píxeles
+viejos); `recalcular_estado`; evento `imagen_con_error` (`WARNING`). Motivos posibles (`imagenes.error`, el `error` de
+`ImagenAdmin`):
+
+| Motivo | Cuándo |
+|---|---|
+| `no es un JPEG decodificable` | Pillow no lo abre, no es formato `JPEG` ni `MPO` (un PNG, un texto), está truncado o es una bomba de descompresión |
+| `demasiado grande: <n> bytes (máximo 4194304)` | El objeto pasa de `REC_MAX_BYTES_FOTO` (no se descarga) |
+| `lado menor <n> px (mínimo 320)` | Tras corregir EXIF |
+| `lado mayor <n> px (máximo 32767)` | No cabe en `imagenes.ancho`/`alto` (`smallint`) |
+| `embeddings la rechazó (<codigo>)` | `IMAGEN_INVALIDA`, `LOTE_DEMASIADO_GRANDE` o `TIPO_NO_SOPORTADO` con índice |
+
+**Errores transitorios** (el mensaje se queda): S3 (`FalloS3`, también un **403** al descargar: el rol `tarea-worker`
+tiene `s3:ListBucket` solo con `s3:prefix`, así que un 403 puede ser un permiso que falta y no se toma como «no está»;
+qué responde S3 en `dev` al `GetObject` de una clave que no existe, **sin comprobar**), base no disponible
+(`BaseNoDisponible`), embeddings, `version_vector` distinta y cualquier excepción imprevista (con la traza en
+`excepcion`). Evento `ingesta_transitoria` (`WARNING`; `ERROR` si es imprevista o una respuesta no válida), con
+`motivo`, `origen`, `imagen_id` y `video_id`. Lo ya hecho antes del fallo se conserva (el paso a `subida`, una
+miniatura escrita): el reintento lo repite sin daño.
+
+`intentos` (§5.7) cuenta las veces que el `worker` terminó una foto (`procesada` o `error`); no cuenta los fallos
+transitorios ni los descartes. Una foto en `error` que la app vuelve a subir (otro ETag) se procesa de nuevo y, si
+vale, pasa a `procesada` (`error = NULL`). Si el video se borra (`limpiar-validacion` o BE-4.1) mientras el `worker`
+procesa, la miniatura puede quedar escrita: `limpiar-validacion` hace una segunda pasada por S3 por eso (§4.5) y la
+purga de BE-4.1 también.
+
+**Nombres internos** (para depurar o extender sin abrir el código):
+- `servicios/ingesta.py`: `Unidad` (una foto: `imagen_id`, `video_id` —`None` en `reprocesar` hasta la transacción
+  1—, `origen` `s3` | `reprocesar`, `etag_evento`, `bytes_evento`, `resultado`, `motivo`, `s3_key`, `datos_bytes`,
+  `etag`, `preparada`, `inicio`); `Decision(mensaje, borrar, unidades)`; `Resultado` (`procesada`, `error`,
+  `descartado`, `transitorio`); constantes de motivo `VIDEO_NO_EXISTE`, `VIDEO_ELIMINADO`, `IMAGEN_NO_EXISTE`,
+  `CLAVE_NO_RECONOCIDA`, `DUPLICADO`, `OBJETO_NO_EXISTE` (los textos de `mensaje_descartado`) y `ENTERO_MAX`
+  (2 147 483 647). Fases: `_unidades_de` (mensaje → unidades), `_preparar_en_base` (transacción 1, con
+  `_foto_bloqueada`, que bloquea video y foto y descarta si no hay qué procesar), `_descargar_y_preparar` (paso 2),
+  `_vectorizar` (paso 3; acota el grupo a 1–8 aunque `WORKER_LOTE_EMBEDDING` diga otra cosa), `_guardar`
+  (transacción 2), `_guardar_error` y `_con_errores_controlados` (cualquier excepción de una fase deja esa unidad
+  `transitorio` sin tumbar el lote). Sus eventos salen con `logger = app.worker`.
+- `worker.py`: `INTERVALO_LATIDO_S` (60), `ESPERA_COLA_S` (20), `MODO_INGESTA`, `MODO_SIN_CONSUMO`;
+  `ejecutar(detener, intervalo_s)` es el modo `sin_consumo` (solo latidos); `consumir(…)` el de ingesta;
+  `_principal` crea motor, `AlmacenS3` y `ColaSqs` y cierra el motor al salir. Un fallo al devolver un mensaje
+  (`mensajes_devueltos`) se ignora en silencio (el mensaje vuelve igual al vencer su visibilidad).
+- `dominio/imagenes.py`: `ImagenNoValida(motivo)` (atributo `motivo`), `ImagenPreparada`, `MOTIVO_NO_JPEG`,
+  `LADO_MAX_ESQUEMA` (32 767), `CALIDAD_REDUCIDA` (90), `FORMATOS_ADMITIDOS` (`("JPEG", "MPO")`),
+  `motivo_demasiado_grande(n, max)`. La miniatura y la copia
+  salen de la imagen ya orientada y convertida a RGB; las dos se reducen con `Image.thumbnail` (LANCZOS, proporción
+  conservada) solo si su lado mayor pasa del límite.
+- `dominio/mensajes.py`: `ObjetoSubido(clave, etag, bytes)` (`etag` sin comillas o `None` si falta o queda vacío;
+  `bytes` solo si `size` es un entero ≥ 0, no un booleano), `EventosS3(objetos, ignorados)` (`ignorados` = `Records`
+  que no son `ObjectCreated:*` o no traen `s3.object.key`), `Reprocesar(imagen_id: UUID)`, `PruebaS3()`,
+  `NoReconocido(motivo)` (motivos cortos: `cuerpo que no es JSON`, `ni Records ni tipo`, `tipo desconocido: …`,
+  `versión no admitida de reprocesar_imagen: …`, `reprocesar_imagen sin imagen_id válido`…), `TIPO_REPROCESAR`,
+  `VERSIONES_REPROCESAR`.
+- `clientes/sqs.py`: `ColaSqs`, `MensajeSqs`, `FalloSqs` (mensaje `<operación>: <clase>: <código de AWS>`, nunca el
+  cuerpo), `crear_cliente(region)` (reintentos `standard` × 3, conexión 3 s, lectura 30 s). `recepciones` sale de
+  `ApproximateReceiveCount` (1 si no viene).
+- `clientes/embedding.py`: `RUTA_PREPARADO` (`/health/ready`), `RUTA_EMBED` (`/v1/embed`), `PRIORIDADES`
+  (`alta`, `baja`).
+
+**Para los lotes siguientes: qué ofrece BE-2.2 al código.**
+
+| Elemento | Qué hace |
+|---|---|
+| `app.clientes.embedding.vectorizar(ajustes, imagenes, *, prioridad="baja", transporte=None, request_id=None)` → `Vectores` | `POST {EMBEDDING_URL}/v1/embed` con cada `bytes` como parte `imagenes` (`image/jpeg`) y `X-Prioridad`; `Vectores(version_vector, dim, vectores, tiempos_ms)` en el orden de las imágenes (comprueba que haya uno por imagen y `dim` componentes). Plazo `EMBEDDING_TIMEOUT_S` (conexión `EMBEDDING_CONNECT_TIMEOUT_S`); un reintento solo si la conexión fue **rechazada** (`ConnectionRefusedError` en la cadena). Excepciones: `EmbeddingNoDisponible` (sin URL, sin conexión, sin respuesta, `5xx`: en `api` corresponde a `503 EMBEDDING_NO_DISPONIBLE`, §5.3), `ImagenRechazada(indice, codigo)` (`400`/`413`/`415` con `detalle.indice`; cómo lo responde `api` lo decide BE-2.4 en §5.5 —propuesta: `400 FOTOS_INVALIDAS` con ese índice—) y `RespuestaNoValida` (otro `4xx` o un `200` mal formado). **BE-2.4** la llama con `prioridad="baja"` (§4.8) y **BE-3.2** con `"alta"` (§4.10); los dos comparan `version_vector` con `EMBEDDING_VERSION_VECTOR` (la regla de §5.10 para `api`, «primera llamada y cada 10 min» con `GET /v1/info`, sigue sin código). `transporte` (un `httpx.MockTransport`) es para las pruebas: ejemplos en `tests/unit/test_cliente_embedding.py`. Detalles: cada parte va como `("imagenes", ("<i>.jpg", bytes, "image/jpeg"))`; `request_id` añade `X-Request-Id` (embeddings lo respeta, §5.1 de su documento: `api` debería pasar el de la petición para correlacionar); `ValueError` si `prioridad` no es `alta`/`baja` o la lista está vacía; **no** comprueba el máximo de 8 imágenes ni los 4 MB/16 MB de embeddings (§5.2 de su documento): lo hace quien llama (si no, `413` → `ImagenRechazada` o `RespuestaNoValida`). Abre un `httpx.AsyncClient` por llamada con `trust_env=False` (sin proxies del entorno). `httpx.Timeout(EMBEDDING_TIMEOUT_S, connect=EMBEDDING_CONNECT_TIMEOUT_S)` limita **cada fase** (escritura, lectura, espera del pool), no el total: una respuesta que llega a trozos puede tardar más; para un tope total de la petición (p. ej. los 30 s de API Gateway en BE-3.2), quien llama la envuelve en `anyio.fail_after` |
+| `app.clientes.embedding.esta_listo(ajustes, transporte=None)` → `bool` | (BE-1.1) `GET /health/ready` en `EMBEDDING_CONNECT_TIMEOUT_S` |
+| `app.clientes.s3.AlmacenS3.descargar(clave, max_bytes)` → `ObjetoDescargado(datos, etag) \| None` | `GetObject`; `None` si 404; `ObjetoDemasiadoGrande(bytes)` si `ContentLength` > `max_bytes` (no lo lee); otro error, también 403 → `FalloS3` |
+| `app.clientes.s3.AlmacenS3.escribir(clave, datos, content_type="image/jpeg")` | `PutObject` con `ContentType`. BE-3.1 puede usarlo para `lugares/{id}.jpg` (el rol `tarea-api` tiene `s3:PutObject` en `lugares/*`, infra §5.8) |
+| `app.clientes.sqs.ColaSqs(url, region="us-east-1", cliente=None)` | Síncrona (boto3; llamarla con `anyio.to_thread`): `recibir(maximo, espera_s)` → `list[MensajeSqs(id, recibo, cuerpo, recepciones)]` (topes 10 y 20 s; `MessageSystemAttributeNames=["ApproximateReceiveCount"]`), `borrar(recibo)`, `devolver(recibo)` (visibilidad 0). Todo error → `FalloSqs`. `crear_cliente(region)` usa `read_timeout` 30 s (más que la espera larga). Para enviar (`api`: `reprocesar_imagen` de BE-4.1, `purgar_*`) falta `enviar(cuerpo)`; el rol `tarea-api` tiene `sqs:SendMessage` en `ingesta` y `purga` |
+| `app.dominio.imagenes.preparar(datos, *, max_bytes, lado_min, lado_miniatura, calidad_miniatura, lado_embedding)` → `ImagenPreparada(ancho, alto, miniatura, reducida)` | Lo de arriba; `ImagenNoValida(motivo)` con los motivos de la tabla. `motivo_demasiado_grande(n, max)`. BE-2.4/BE-3.2 validan las fotos de consulta con otras reglas (§5.3: tipo y ≤ `LOC_MAX_BYTES_FOTO`) y no necesitan miniatura |
+| `app.dominio.mensajes.interpretar(cuerpo)` → `EventosS3(objetos, ignorados) \| Reprocesar(imagen_id) \| PruebaS3() \| NoReconocido(motivo)` | Los mensajes de `ingesta` de §5.8; `ObjetoSubido(clave, etag, bytes)`. `VERSIONES_REPROCESAR = {1}`. BE-4.1 añade aquí los de `purga` (`purgar_video`, `purgar_imagen`) |
+| `app.servicios.ingesta.procesar_lote(Dependencias(motor, almacen, ajustes, vectorizar=None), mensajes)` → `list[Decision(mensaje, borrar, unidades)]` | El lote de arriba. `vectorizar` sustituye a `embedding.vectorizar` (las pruebas pasan un doble). `Unidad.resultado` ∈ `Resultado` (`procesada`, `error`, `descartado`, `transitorio`) |
+| `app.worker.consumir(detener, ajustes, *, cola, deps, esta_listo=…, espera_cola_s=20)` y `faltan_para_ingesta(ajustes)` | El bucle; las pruebas pasan cola, `esta_listo` y `procesar_lote` falsos (`tests/unit/test_worker.py`). BE-4.1 añade el consumo de `purga` |
+| Pruebas con base | `tests/base/test_ingesta_base.py`: la clase `Mundo(ajustes, almacen)` con `video(n_fotos, completa=True)` → `(video_id, [imagen_id…])` (inserta por SQL un video `validacion-22` del primer usuario y sus fotos `pendiente_subida` en `1.0, -100.0`), `subir(video_id, imagen_id, datos=None)` → `MensajeSqs` (el `PUT` en `almacen_falso` y su evento de S3; sin `datos`, un JPEG de 1024×768 hecho con Pillow), `evento(clave, etag, size)`, `mensaje(cuerpo)`, `reprocesar(imagen_id)`, `procesar(mensajes, ajustes=None)` → decisiones (motor con pool 2), `fotos(video_id)`, `vectores(imagen_id)`, `estado_video(video_id)` y `sql(sentencia, **parametros)`. `Embeddings` es el doble de `vectorizar`: `version` (por defecto `dinov2-vits14/pp-v1`), `lotes` (tamaño de cada llamada), `fallos` (excepciones que lanza en las siguientes llamadas) y vectores de 384 con un único 1,0 en la posición `(llamada × 10 + i) mod 384` (no dependen de la imagen: para BE-2.4, que necesita «la misma foto da el mismo vector», hace falta otro doble, p. ej. un vector derivado del hash de los bytes). BE-2.4 puede partir de ahí para tener vectores en el índice sin `embedding` |
+| Validador falso | `tests/ops/test_validate22.py`: un `Mundo` con la API (`/health/ready` incluido), S3, SQS, ECS (`embedding` y `worker` que arrancan con 60 y 30 s de retraso), Application Auto Scaling, CloudWatch (métrica y alarma), Cloud Map, CloudWatch Logs del `worker` y las tareas `psql` y `limpiar-validacion`, con reloj falso (`dormir` avanza de 5 en 5 s y simula un `worker` que consume `ingesta` cuando `embedding` está en marcha). BE-3.2 puede copiarlo para su validador, que también enciende `embedding` |
+
+**JPEG multi-imagen (MPO).** Algunas cámaras guardan un JPEG con varias imágenes (extensión MPF: la foto más una
+previsualización o un mapa de profundidad); empieza por `FF D8` como cualquier JPEG, pero Pillow lo abre como formato
+`MPO`, no `JPEG`. `preparar` acepta los dos (`FORMATOS_ADMITIDOS`) y de un `MPO` usa solo la **primera** imagen (la
+foto), como un JPEG normal: misma orientación EXIF, mismas reglas de tamaño y lado, y `ancho`/`alto` los de esa imagen.
+La miniatura y la copia reducida que va a embeddings salen como JPEG de una sola imagen, así embeddings nunca recibe un
+`MPO`. Probado en local con un MPO de 2 imágenes hecho con Pillow 12.3 (1024×768 + 512×384; también con orientación
+EXIF 6) en `tests/unit/test_imagenes.py`. Si la app (CameraX) produce esos archivos: **sin comprobar**.
+
+Trampas:
+- Pillow lanza `DecompressionBombWarning` (no error) entre ~89,5 y ~179 MP: `preparar` lo convierte en error con
+  `warnings.catch_warnings`, que **no es seguro entre hilos**: vale porque el `worker` prepara una foto a la vez; si
+  otro lote llama a `preparar` desde varios hilos a la vez, los filtros de avisos pueden mezclarse.
+- El `jpeg_sintetico` de los validadores (escala de grises) es válido para el `worker` (prueba en
+  `tests/unit/test_imagenes.py`).
+- El ETag de un `PUT` simple es el MD5 del contenido: subir los mismos bytes otra vez da el mismo ETag y el evento se
+  descarta como duplicado (correcto: no cambió nada).
+- En las pruebas del bucle, `worker.consumir` importa `servicios.ingesta.procesar_lote` al llamarse (no al importar
+  el módulo): para sustituirlo, `monkeypatch.setattr(ingesta, "procesar_lote", …)` sobre el módulo `ingesta`.
+- `Settings(...)` en las pruebas también lee variables del entorno de quien prueba (`pydantic-settings`): una
+  `SQS_URL_INGESTA` o `DB_HOST` exportada cambia lo que devuelve `faltan_para_ingesta`.
 
 ### 4.7 BE-2.3 — Resumen del panel
 `GET /v1/admin/stats` agrega totales en una consulta (fotos procesadas, lugares, alertas activas, último video). Las
@@ -1180,7 +1323,7 @@ valor por defecto), restricciones e índices con sus nombres, secuencias y la re
 | `ancho`, `alto` | `smallint` | sí | | > 0; tras corregir EXIF |
 | `estado` | `estado_imagen` | | `pendiente_subida` | índice `imagenes_estado_idx` |
 | `error` | `text` | sí | | motivo legible; no nulo si y solo si `estado = 'error'` (`imagenes_error_check`) |
-| `intentos` | `smallint` | | `0` | ≥ 0 |
+| `intentos` | `smallint` | | `0` | ≥ 0; veces que el `worker` terminó la foto (`procesada` o `error`), §4.6 |
 | `calidad` | `calidad_imagen` | | `normal` | |
 | `lugar_id` | `uuid` | sí | | FK `lugares` (`ON DELETE SET NULL`); índice `imagenes_lugar_id_idx` |
 | `notas` | `text` | sí | | ≤ 500 |
@@ -1267,7 +1410,12 @@ Entrega «al menos una vez»: todo consumidor es idempotente. Colas, visibilidad
 ```
 
 El `worker` distingue por la presencia de `Records` o de `tipo`. Un mensaje que no encaja en ninguno se registra y se
-borra.
+borra (`mensaje_no_reconocido`). Desde BE-2.2 (§4.6): de un evento de S3 solo cuentan los `Record` con `eventName`
+`ObjectCreated:*` y `s3.object.key`; `eTag` y `size` son opcionales (sin ellos, no hay regla de duplicado ni `bytes`
+del evento); una clave que no es `dataset/{video_id}/{imagen_id}.jpg` (UUID en minúsculas) se descarta.
+`reprocesar_imagen` solo exige `tipo`, `version` = 1 (entero) e `imagen_id` (UUID); `solicitado_por` y
+`solicitado_en` son informativos. Un evento repetido de una foto ya `procesada` o en `error` con el mismo ETag se borra
+sin hacer nada.
 
 **Cola `purga`** (la llena `api`):
 ```json
@@ -1301,7 +1449,7 @@ y `tests/` quedan fuera. El contenedor se llama `app` (infra §5.1).
 | Proceso | Comando | Puerto | Salud |
 |---|---|---|---|
 | `api` (por defecto, `CMD` de la imagen) | `uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --no-server-header` | 8000 | `GET /v1/health` |
-| `worker` | `python -m app.worker` | — | proceso vivo; registra un latido cada 60 s (en BE-1.1 solo eso, §4.2) |
+| `worker` | `python -m app.worker` | — | proceso vivo; registra un latido cada 60 s. Desde BE-2.2 consume `ingesta` (§4.6); sin `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` o `DB_*`, solo latidos (`modo = sin_consumo`) y `configuracion_incompleta`, sin salir |
 | `migrate` | `python -m app.cli migrar` (§4.3) | — | código de salida 0 = migrado y admin inicial en orden; 1 = falló una migración o el admin inicial, o esperó más de 5 min a otro `migrar`; 2 y 3, abajo |
 | Verificación de esquema (tarea suelta con la definición de `migrate`) | `python -m app.cli verificar-esquema` (compara la base con §5.7 en una transacción de solo lectura) | — | código de salida 0 = coincide; 1 = difiere (un evento `esquema_diferencia` por diferencia); 2 = no se pudo verificar (base no disponible o error al leer el catálogo); 3, abajo |
 | Usuarios (tarea suelta con la definición de `migrate`; BE-1.3) | `python -m app.cli crear-usuario --correo X --nombre Y [--rol admin\|user]`. Si el correo existe, actualiza nombre, contraseña y, si se pasa `--rol`, rol (sin `--rol` conserva el suyo), y lo reactiva; un usuario nuevo sin `--rol` es `user`. Resultado: evento `usuario_guardado` (`resultado` = `creado` \| `actualizado`) | — | 0 = hecho; 1 = dejaría sin ningún admin activo (`usuario_rechazado`) u otro error de la base (`comando_fallido`); 2 y 3, abajo |
@@ -1354,7 +1502,9 @@ protegidas: sin ella arranca, pero esas rutas responden `500` (§5.2); con menos
 (`InsecureKeyLengthWarning`, en texto por stderr). Desde BE-2.1, `api` usa `S3_BUCKET_DATASET` y `AWS_REGION` para el
 cliente de S3 (sin el bucket arranca, pero `images` y `complete` responden `500`, §5.4) y `limpiar-validacion` los
 mismos (sin el bucket, código 3). Las credenciales de AWS son las del rol de tarea (infra §5.8): no hay variables de
-llaves. boto3 está en la imagen desde BE-2.1 (dependencias de `pyproject.toml`; antes solo en el grupo `ops`). Ningún otro valor es obligatorio; los parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescribirse con
+llaves. boto3 está en la imagen desde BE-2.1 (dependencias de `pyproject.toml`; antes solo en el grupo `ops`). Desde
+BE-2.2, `worker` usa `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL`, `AWS_REGION` y `DB_*` (§4.6), y la imagen
+lleva Pillow (12.3; comprobado: `import PIL` en la imagen construida en local). Ningún otro valor es obligatorio; los parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescribirse con
 una variable del mismo nombre (si se vuelve necesario, se añade antes a infra §5.4). Ninguna variable es obligatoria
 para arrancar: cada lote exige las suyas al usarlas (por ejemplo, `DB_*` desde BE-1.2). De las `DB_*` de conexión
 (infra §5.4), tienen valor por defecto `DB_PORT` (5432) y `DB_SSLMODE` (`require`). `DB_SSLMODE` admite `disable`, `allow`, `prefer`, `require`,
@@ -1380,12 +1530,12 @@ que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que 
 | `LOC_DISPERSION_RUMBO_MAX` | 30° | Para devolver `correccion_rumbo_grados` |
 | `LOC_LUGAR_CERCANO_M` / `LOC_REFERENCIAS_M` / `LOC_REFERENCIAS_MAX` | 60 / 150 / 3 | |
 | `REC_MAX_FOTOS_VIDEO` / `REC_MAX_LOTE` | 200 / 50 | 200 coincide con `MAX_FOTOS_VIDEO` de la app. `images` (BE-2.1) rechaza con `422` un `orden` > `min(REC_MAX_FOTOS_VIDEO, 200)` (200 es el `CHECK` de §5.7) y un lote de más de `REC_MAX_LOTE` |
-| `REC_MAX_BYTES_FOTO` / `REC_LADO_MIN_PX` | 4 194 304 (4 MB) / 320 | `images` rechaza un `bytes` declarado mayor (`422`); el tamaño real lo valida el `worker` (una URL PUT no limita tamaño) |
+| `REC_MAX_BYTES_FOTO` / `REC_LADO_MIN_PX` | 4 194 304 (4 MB) / 320 | `images` rechaza un `bytes` declarado mayor (`422`); el tamaño real (sin descargar lo que pasa del máximo) y el lado menor tras EXIF los valida el `worker` (BE-2.2, §4.6; una URL PUT no limita tamaño) |
 | `PRESIGN_PUT_TTL_S` / `PRESIGN_GET_TTL_S` | 900 / 3600 | Vida de las URL `PUT` de `images` (BE-2.1) y de las GET (BE-4.1). C3a de la validación espera 900 s + 10 s |
-| `MINIATURA_LADO_PX` / `MINIATURA_CALIDAD` | 320 / 80 | |
-| `WORKER_MAX_MENSAJES` / `WORKER_LOTE_EMBEDDING` | 10 / 4 | Embeddings admite hasta 8; se usan 4 para no retrasar la localización |
+| `MINIATURA_LADO_PX` / `MINIATURA_CALIDAD` | 320 / 80 | Lado mayor y calidad JPEG de `thumbs/…` (BE-2.2, §4.6) |
+| `WORKER_MAX_MENSAJES` / `WORKER_LOTE_EMBEDDING` | 10 / 4 | Mensajes por `ReceiveMessage` (máx. de SQS: 10) e imágenes por `POST /v1/embed`. Embeddings admite hasta 8; se usan 4 para no retrasar la localización (el código acota a 1–8) |
 | `WORKER_LADO_EMBEDDING_PX` | 1024 | Copia reducida que se envía al modelo (el original y la miniatura no cambian) |
-| `WORKER_ESPERA_EMBEDDING_S` | 15 | Pausa entre comprobaciones de `/health/ready` |
+| `WORKER_ESPERA_EMBEDDING_S` | 15 | Pausa entre comprobaciones de `/health/ready` con `embedding` no listo, tras un error de SQS y tras un lote con mensajes retenidos |
 | `RECONCILIADOR_CADA_MIN` | 10 | Purgas pendientes |
 | `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api` |
 | `PAGINA_POR_DEFECTO` / `PAGINA_MAX` | 24 / 100 | 24 coincide con `FOTOS_POR_PAGINA` de la Galería. Los usa `GET /v1/admin/videos` desde BE-2.1 |
@@ -1408,9 +1558,19 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `error_no_controlado` | `api` | `metodo`, `ruta` (y la traza en `excepcion`) | Excepción que llega al middleware (`ERROR`); la respuesta es `500 ERROR_INTERNO` |
 | `error_api` | `api` | `estado`, `codigo` | Un error de §5.6 con estado ≥ 500 (`ERROR`) |
 | `api_iniciada` / `api_detenida` | `api` | `version`, `commit`, `entorno` (solo al iniciar) | Arranque y parada de la aplicación |
-| `worker_iniciado` / `latido` / `worker_detenido` | `worker` | Al iniciar: `version`, `commit`, `entorno`, `modo`; en cada latido: `modo` | Arranque, cada 60 s y parada. `modo = sin_consumo` hasta BE-2.2 |
+| `worker_iniciado` / `latido` / `worker_detenido` | `worker` | Al iniciar: `version`, `commit`, `entorno`, `modo`; en cada latido: `modo` y, en `ingesta`, `embedding_listo` (`null` antes de la primera comprobación) | Arranque, cada 60 s y parada. `modo` = `ingesta` desde BE-2.2, o `sin_consumo` si falta configuración (§4.6) |
+| `embedding_listo` / `embedding_no_listo` | `worker` | — | `GET /health/ready` de embeddings pasa a responder 200 / deja de hacerlo (solo al cambiar). Sin `embedding`, el `worker` no recibe mensajes (BE-2.2) |
+| `lote_ingesta` | `worker` | `mensajes`, `borrados`, `retenidos`, `duracion_ms` | Tras procesar cada recepción con mensajes (BE-2.2) |
+| `mensajes_devueltos` | `worker` | `mensajes` | `embedding` dejó de estar listo durante la espera larga (o el proceso se detiene): devueltos con visibilidad 0 |
+| `imagen_procesada` | `worker` | `origen` (`s3` \| `reprocesar`), `imagen_id`, `video_id`, `version_vector`, `ancho`, `alto`, `bytes`, `duracion_ms` | Foto `procesada` con su vector (BE-2.2) |
+| `imagen_con_error` | `worker` | `origen`, `imagen_id`, `video_id`, `motivo` (los de §4.6) | Error permanente: foto en `error`, mensaje borrado (`WARNING`) |
+| `mensaje_descartado` | `worker` | `motivo` (`prueba_s3`, `clave_no_reconocida`, `video_no_existe`, `video_eliminado`, `imagen_no_existe`, `duplicado`, `objeto_no_existe`), `origen`, `imagen_id`, `video_id` (o `mensaje_id` en los dos primeros) | Nada que procesar; el mensaje se borra (`INFO`) |
+| `mensaje_no_reconocido` | `worker` | `motivo`, `mensaje_id` | Cuerpo que no es ninguno de §5.8; se borra (`WARNING`) |
+| `ingesta_transitoria` | `worker` | `motivo` (`s3: …`, `base: …`, `embedding: …`, `version_vector distinta…`, `imprevisto: …`), `origen`, `imagen_id`, `video_id` (y la traza en `excepcion` si es imprevista) | Fallo transitorio: el mensaje se queda (`WARNING`; `ERROR` si es imprevisto o una respuesta no válida de embeddings) |
+| `version_vector_distinta` | `worker` | `esperada`, `recibida` | `/v1/embed` devolvió otra `version_vector` que `EMBEDDING_VERSION_VECTOR`: no se guarda nada (`ERROR`) |
+| `cola_fallida` | `worker` | `operacion` (`recibir` \| `borrar`), `motivo` | Error de SQS; el bucle sigue (`WARNING`) |
 | `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` y, desde BE-1.3, en cualquier endpoint que la use (`WARNING`; responde `503`); en `migrate` (toda la CLI, también `limpiar-validacion`), la CLI termina con 2 (`ERROR`) |
-| `configuracion_incompleta` | `migrate`, `api` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, falta o no vale la contraseña de `crear-usuario`, o falta `S3_BUCKET_DATASET` en `limpiar-validacion` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida; desde BE-2.1, falta `S3_BUCKET_DATASET` (o no se pudo crear el cliente de S3) en `images` o `complete` (`ERROR`; responde `500`) |
+| `configuracion_incompleta` | `migrate`, `api`, `worker` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, falta o no vale la contraseña de `crear-usuario`, o falta `S3_BUCKET_DATASET` en `limpiar-validacion` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida; desde BE-2.1, falta `S3_BUCKET_DATASET` (o no se pudo crear el cliente de S3) en `images` o `complete` (`ERROR`; responde `500`). En `worker` (BE-2.2), al arrancar sin `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` o `DB_*` (`faltan`; `motivo = la ingesta no puede empezar`), y sigue con latidos sin consumir (`ERROR`) |
 | `video_creado` | `api` | `video_id`, `numero`, `nuevo` (`false` si ya existía con ese `ref_cliente`) | `POST /v1/collect/videos` con `201` o `200` (BE-2.1) |
 | `imagenes_registradas` | `api` | `video_id`, `recibidas`, `nuevas`, `actualizadas` (pendientes con metadatos nuevos y URL), `marcadas_subida` (pendientes que el `HEAD` encontró en S3), `sin_cambios` (ya `subida`, `procesada` o `error`), `urls` | `POST …/images` con `200` (BE-2.1). Nunca las URL |
 | `subida_completada` | `api` | `video_id`, `comprobadas` (pendientes con `HEAD`), `encontradas`, `fallidas`, `estado`, `conteo` | `POST …/complete` con `200` (BE-2.1) |
@@ -1462,9 +1622,10 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
   (`campus-locator-dev-validacion`, `psql -tAc "<consulta>"`) y leen su log. Solo consultas `SELECT`: lo que se escribe
   pasa por la API o por los comandos de §5.9.
 - La comprobación de disco de BE-3.2 usa ECS Exec sobre la tarea de `api` (infra §3.4).
-- Los que necesitan `embedding` (ingesta, localización) lo encienden si está apagado, esperan hasta 10 min a
-  `"embedding": "ok"` en `/v1/health/ready` y al terminar lo dejan como lo encontraron (infra §5.11). Como a las 22:00
-  (hora de Bogotá) se apaga solo, cada uno declara la hora límite para empezar.
+- Los que necesitan `embedding` (ingesta, localización) lo encienden si está apagado con el contrato de infra §5.10
+  (`comun.EmbeddingDev`, abajo), esperan hasta 10 min a que esté sano y a `"embedding": "ok"` en `/v1/health/ready` y
+  al terminar lo dejan como lo encontraron (infra §5.11). Como a las 22:00 (hora de Bogotá) se apaga solo, cada uno
+  declara la hora límite para empezar.
 - Los mensajes y objetos se comprueban con las APIs de SQS y S3; los logs, con CloudWatch Logs.
 - La localización (BE-3.2) usa el conjunto de consulta de `evaluacion/` (infra §5.5) que prepara EMB-3.2.
 - Lo que devuelve el índice para una foto concreta (por ejemplo, que un video borrado ya no aparece) se ve con
@@ -1546,6 +1707,50 @@ Ayudas de BE-2.1 (para los validadores que suben fotos o borran videos de prueba
 | `jpeg_sintetico(ancho=1024, alto=768, semilla=0)` → `bytes` | JPEG *baseline* en escala de grises hecho a mano, sin Pillow (bloques de 8×8 de tono uniforme: solo coeficientes DC, AC con un EOB de un bit). La misma semilla da los mismos bytes; semillas distintas, ETag distintos. 1024×768 ocupa ~12 KB. Decodificado con Pillow (libjpeg) en `local` el 2026-10-25: `JPEG (1024, 768) L` (`tests/ops/test_comun_recoleccion.py`, que se omite sin Pillow). Sirve como foto válida para el `worker` (lado menor 768 ≥ `REC_LADO_MIN_PX`) |
 | `Validador.ejecutar(…, preparacion=f)` | Arriba: limpieza de restos al empezar |
 
+Ayudas de BE-2.2 (para los validadores que necesitan `embedding` encendido o miran las colas y el log del `worker`;
+BE-2.4, BE-3.2 y BE-4.1 las reutilizan):
+
+| Elemento | Qué hace |
+|---|---|
+| `EmbeddingDev(sesion, dormir=time.sleep, reloj=…, avisar=…)` | El contrato de encendido de infra §5.10, reescrito aquí (las carpetas no comparten código de validación; el `embedding.py` de infra hace lo mismo). `comprobar_inf21()` → detalle (objetivos escalables de `embedding` y `worker`, política `campus-locator-dev-worker-cola`, acción `campus-locator-dev-embedding-apagar-noche`; si falta, `PrecondicionNoCumplida` «INF-2.1»). `servicio(nombre)` → el `describe-services`. `latido()` → `PutMetricData` de `EmbeddingEncendidos` = 1 (`Count`, sin dimensiones, con `Timestamp` explícito) en `campus-locator/dev`. `encender(listo_en_api)` → segundos: rango 0-1 de `embedding` y `worker`, latido, hasta 5 min a que `GetMetricStatistics` (`Sum`, periodo 60 s, ±2 min de la marca) lo vea, 60 s más, hasta que la alarma `campus-locator-dev-embedding-inactivo` no esté en `ALARM` (dentro de los mismos 5 min), `desiredCount = 1`, hasta 10 min desde el principio a despliegue `PRIMARY` `COMPLETED` con una tarea `HEALTHY` (`list-tasks` + `describe-tasks`) e instancia `HEALTHY` en Cloud Map (`servicediscovery get-instances-health-status` del `registryArn` del servicio), y hasta 2 min más a que `listo_en_api()` sea cierto; si no, `Falla`. `apagar()`: rango 0-0 y `desiredCount = 0` de `embedding` y `worker` (no espera). `poner(servicio, n)`: solo `update-service`. Permisos: `application-autoscaling:Describe*` y `RegisterScalableTarget`, `cloudwatch:PutMetricData`, `GetMetricStatistics`, `DescribeAlarms`, `ecs:DescribeServices`, `ListTasks`, `DescribeTasks`, `UpdateService`, `servicediscovery:GetInstancesHealthStatus`; los errores de AWS se traducen como en el resto (`ErrorConfiguracion` si es un permiso, si no `Falla`) |
+| `embedding_en_api(api)` → `"ok" \| "no_disponible" \| None` | El campo `embedding` de `GET /v1/health/ready` (`None` si no da 200) |
+| `hora_bogota(ahora=None)`, `ZONA_BOGOTA`, `HORA_APAGADO_NOCHE` (22) | America/Bogota como UTC−5 fijo (Colombia no tiene horario de verano; no depende de `tzdata`) |
+| `mensajes_cola(sqs, url)` → `(visibles, en_vuelo)` | `ApproximateNumberOfMessages` y `…NotVisible` (aproximados y con retraso de hasta ~1 min) |
+| `enviar_mensaje(sqs, url, cuerpo)` → `MessageId` | `SendMessage` con el cuerpo en JSON |
+| `eventos_worker(logs, imagen_id, desde)` → `list[dict]` | Las líneas JSON de `/campus-locator/dev/worker` con ese `imagen_id` desde `desde` (`filter-log-events` con el id entre comillas, todas las páginas). Sirve para saber que el `worker` consumió un mensaje concreto sin fiarse de los contadores de SQS |
+| Constantes | `SERVICIO_EMBEDDING`, `SERVICIO_WORKER`, `ALARMA_INACTIVIDAD`, `POLITICA_WORKER_COLA`, `ACCION_NOCHE_EMBEDDING`, `METRICA_ESPACIO`, `METRICA_ENCENDIDOS`, `LIMITE_ALARMA_S` (300), `LIMITE_ENCENDIDO_S` (600), `PAUSA_SONDEO_S` (15), `LOG_WORKER`; `recurso_ecs(servicio)` → `service/campus-locator-dev/<servicio>` |
+
+`validate22.py` es el ejemplo de un validador que enciende `embedding` (P6 con `asegurar_embedding`: si ya está
+encendido y `/v1/health/ready` dice `ok`, solo un `latido()`; si no, `encender`), marca `encendido_por_mi` **antes**
+de encender (la limpieza lo apaga aunque el encendido falle a medias) y, en la limpieza, lo deja como lo encontró
+antes de borrar sus videos. Para saber que el `worker` consumió un mensaje inyectado espera su evento en el log
+(`eventos_worker`), y lee `embeddings` con `extract(epoch FROM creado_en)` para comparar instantes como números.
+
+Lo que tiene `validate22.py` y no está en `comun.py` (un lote siguiente que lo necesite lo copia o lo sube a `comun.py`
+con su fila en la tabla de arriba):
+- `lote_hecho(texto, lote)` → `bool`: ¿la fila `| <lote> | … | Hecho |` de la tabla de estado (§3) de un PLAN dice
+  «Hecho» en la tercera columna? (P3 la usa con `SERVICE_EMBEDDING/docs/PLAN.md`; una fila de §2.1 con el mismo id no
+  cuenta).
+- Constantes: `VERSION_VECTOR` (`dinov2-vits14/pp-v1`), `MINIATURA_LADO_PX` (320), `LIMITE_PROCESADO_S` (20 min),
+  `LIMITE_CONSUMO_S` (5 min, espera de un evento del `worker`), `LIMITE_APAGADO_S` (5 min), `GUARDA_APAGADO_S` (45 s),
+  `MUESTREO_C3_S` (6 min), `PAUSA_MUESTREO_S` (30 s), `PAUSA_SONDEO_S` (15 s), `HORA_LIMITE` (21, Bogotá) y
+  `MARGEN_C3_MIN` (25 min antes de las 22:00).
+- `Contexto`: `asegurar_video()` (el `RecorridoPrueba` de 6 fotos), `fotos()` (`orden → ImagenAdmin` del detalle),
+  `esperar_estados(ordenes, estado, limite_s, que)` (sondea cada 15 s; una foto en `error` cuando no se espera es
+  `Falla` inmediata), `asegurar_procesadas(ordenes)`, `sql(consulta)` (líneas de `psql -tA` partidas por `|`),
+  `leer_vectores(ids)` → `{imagen_id: [(version, epoch)]}` (los ids pasan por `uuid.UUID` antes de ir al SQL),
+  `vector_de(orden)`, `dlq()` (visibles + en vuelo de la DLQ), `esperar_evento(imagen_id, desde, aceptar, que)` (busca
+  desde 60 s antes de `desde`, por si el reloj local va adelantado), `evento_s3(orden)` (el evento de §5.8 con el ETag
+  y el tamaño reales de `head-object`), `asegurar_embedding()` y `limpiar()`. Las pruebas sustituyen `http`,
+  `http_s3`, `dormir`, `ahora` y `sello`.
+
+Trampas de BE-2.2: `--sin-limpieza` también se salta dejar `embedding` como estaba (queda encendido si lo encendió el
+validador: se apaga con `embedding.py apagar` de infra, `validation-2-2` §5 paso 7). En `EmbeddingDev`, los errores de
+`list-tasks`, `describe-tasks` y `servicediscovery` no se traducen: llegan como excepción de botocore (en P6, código
+3 «error inesperado»), igual que los de `describe-tasks` en `lanzar_tarea`. `EmbeddingDev.servicio` lanza
+`PrecondicionNoCumplida` (INF-1.3) si el servicio no existe. La DLQ se compara con `ApproximateNumberOfMessages` +
+`…NotVisible`, aproximados: un mensaje ajeno que llegue a la DLQ durante la ejecución haría fallar C2 o C3b.
+
 `validate21.py` es el ejemplo de un validador que sube a S3, montado sobre esas ayudas: un `RecorridoPrueba` por video
 y, en su `Contexto`, `asegurar_video`, `asegurar_registro` (guarda la respuesta de C1b: C3a usa su URL de la foto 4) y
 `asegurar_todas_subidas` (`RecorridoPrueba.asegurar_subidas`), así `--solo C4` sube la foto 4 con una URL nueva sin
@@ -1583,9 +1788,10 @@ el log no trae la línea `LIMPIEZA`, no es un fallo. Para comprobar que la orden
 `EVENTOS_RETENCION_DIAS` (§5.10).
 
 Los `PUT` de un validador generan eventos de S3 en la cola `ingesta` (infra §5.5). El validador no los borra: recibir
-mensajes ajenos para buscar los suyos subiría su `ApproximateReceiveCount` y podría mandarlos a la DLQ. Con BE-2.2 el
-`worker` los descarta (la imagen ya no existe, §4.6 paso 1); antes de BE-2.2 esperan hasta la retención de la cola
-(4 días, infra §5.6). Mientras haya mensajes visibles en `ingesta`, la alarma `embedding-inactivo` no apaga
+mensajes ajenos para buscar los suyos subiría su `ApproximateReceiveCount` y podría mandarlos a la DLQ. Con BE-2.2
+desplegado, el `worker` los consume cuando `embedding` está encendido: procesa las fotos que aún existen y descarta
+las borradas (`imagen_no_existe` o `video_no_existe`, §4.6); con `embedding` apagado esperan en la cola hasta la
+retención (4 días, infra §5.6). Mientras haya mensajes visibles en `ingesta`, la alarma `embedding-inactivo` no apaga
 `embedding` por inactividad (sí a las 22:00) y, con `embedding` encendido, el autoescalado puede subir `worker` (R13).
 
 ---
@@ -1674,6 +1880,31 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 - *Consecuencias:* `complete` cuesta un `HEAD` por foto pendiente (8 a la vez; 200 fotos ≈ 25 rondas, muy por debajo
   de los 30 s de API Gateway; sin medir en `dev`). La imagen del backend lleva boto3.
 
+**ADR-BE-15 — Worker de ingesta: no recibir sin `embedding`, transitorio = el mensaje se queda, idempotencia por ETag
+(aceptada, BE-2.2).**
+- **Puerta de `embedding` antes de recibir.** Cada `ReceiveMessage` cuenta una recepción y a la sexta el mensaje va a
+  la DLQ: si el `worker` recibiera con `embedding` apagado o cargando, las fotos válidas acabarían en la DLQ. Por eso
+  comprueba `/health/ready` antes de cada recepción y, si `embedding` se apaga durante la espera larga, devuelve los
+  mensajes con visibilidad 0 en lugar de retenerlos 180 s (C3 exige 0 en vuelo con `embedding` apagado).
+- **Transitorio: no se toca el mensaje.** Un fallo dentro del procesado (embeddings saturado, S3, base) deja el
+  mensaje en vuelo hasta que vence la visibilidad (180 s): así un servicio que falla de forma intermitente no quema las
+  5 recepciones en un minuto. *Alternativa descartada:* devolverlo con visibilidad 0 (reintento inmediato, DLQ en
+  ~75 s si el fallo sigue).
+- **Permanente: la foto en `error`, el mensaje se borra.** Una foto que no vale nunca va a valer; ir a la DLQ solo
+  haría ruido en la alarma. La foto vuelve a procesarse si la app la sube otra vez (otro ETag) o con
+  `reprocesar_imagen`.
+- **Idempotencia por ETag** del evento contra `imagenes.etag` de una foto ya terminada, y `ON CONFLICT … DO UPDATE` en
+  `embeddings`: un evento repetido no descarga ni vectoriza; uno que se cuela (p. ej. dos copias en vuelo a la vez) no
+  crea un segundo vector.
+- **Versión del vector**: se compara la `version_vector` de cada respuesta de `/v1/embed` (viene en todas), sin
+  `GET /v1/info`; distinta = error de configuración transitorio (no se guarda un vector incomparable).
+- **Copia reducida sin EXIF**: el `worker` ya aplicó la orientación; embeddings la vuelve a aplicar (pp-v1), así que
+  la copia que se envía no lleva la marca.
+- *Consecuencias:* con `embedding` apagado no hay ingesta (las fotos se quedan en `pendiente_subida`, o en `subida`
+  si `complete` las vio en S3); el `worker` necesita
+  Pillow en la imagen; un error de configuración (versión distinta) llena la DLQ en ~15 min y la alarma lo hace
+  visible.
+
 ---
 
 ## 7. Riesgos
@@ -1692,5 +1923,6 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 | R10 | Formatos de error distintos cuando responde API Gateway | Alta | Bajo | §5.1 lo documenta; la app decide por código HTTP |
 | R11 | El texto del catálogo (restricciones, índices) cambia con una versión mayor de PostgreSQL y `verificar-esquema` da diferencias que no lo son | Baja | Bajo | RDS actualiza por su cuenta solo la versión menor (infra §3.5); CI usa la misma mayor (`pg17`) y prueba que la migración deja exactamente `esquema.py`; un cambio de mayor actualiza `esquema.py` en el mismo cambio |
 | R12 | argon2id en 0,25 vCPU: login lento, falta de memoria o el *health check* sin CPU con varios a la vez | Media | Medio | Como mucho `LOGIN_HASH_CONCURRENTES` (2) a la vez, fuera de la base, 64 MiB cada uno; como mucho 8 más esperando y 10 s de espera (luego `503 SERVICIO_OCUPADO`, §4.4). En `local` tarda ~92 ms; en `dev`, 1,1–1,2 s por login, uno a la vez (C2 de `validate13.py`, 2026-10-25), así que con 2 verificando a la vez los 8 que esperan pueden pasar de los 10 s y recibir el 503 (sin medir). **Riesgo que queda:** con un flujo sostenido de logins, las dos verificaciones argon2 (t = 3, 64 MiB, p = 4) pueden ocupar los 0,25 vCPU y retrasar `GET /v1/health`; si el *health check* del contenedor (cada 30 s, 5 s de plazo, 3 fallos, infra §5.7) falla, ECS reinicia la tarea. Sin comprobar. Palancas: `LOGIN_HASH_CONCURRENTES = 1`, bajar los parámetros de argon2 (los hashes viejos siguen verificándose, §4.3) o el límite por cuenta de R7 |
-| R13 | Eventos de S3 de los validadores (y de subidas reales con `embedding` apagado) esperan en `ingesta` sin consumidor | Alta hasta BE-2.2 | Bajo | Antes de BE-2.2 el `worker` no consume (§4.2) y `validate21.py` deja 6 mensajes por ejecución que caducan a los 4 días (infra §5.6). Mientras estén visibles, `embedding` no se apaga por inactividad (sí a las 22:00) y, encendido, sube `worker`, que no hace nada (costo acotado por el apagado nocturno). Con BE-2.2 los consume y descarta (§4.6 paso 1). No se purgan desde el validador (§5.11) |
+| R13 | Eventos de S3 de los validadores (y de subidas reales con `embedding` apagado) esperan en `ingesta` sin consumidor | Media | Bajo | Antes de BE-2.2 el `worker` no consumía (§4.2) y `validate21.py` dejaba 6 mensajes por ejecución que caducan a los 4 días (infra §5.6). Mientras estén visibles, `embedding` no se apaga por inactividad (sí a las 22:00). Con BE-2.2 el `worker` los consume en cuanto `embedding` está encendido y descarta los de fotos borradas (§4.6); con `embedding` apagado siguen esperando (es lo que mide C3 de BE-2.2). No se purgan desde el validador (§5.11) |
+| R15 | Un fallo transitorio repetido (embeddings saturado, `version_vector` distinta, S3 o base caídos) manda a la DLQ eventos de fotos válidas | Baja | Medio | El `worker` no recibe sin `embedding` listo (§4.6); un mensaje retenido vuelve cada 180 s y va a la DLQ a la sexta recepción (~15 min de fallos seguidos); la alarma de DLQ avisa (infra §5.10). Se re-encola con *redrive* de la DLQ o, con BE-4.1, `POST /v1/admin/images/{id}/reprocesar`. La foto queda en `subida` (no en `error`) |
 | R14 | boto3 en `api` (0,25 vCPU, 0,5 GB): memoria y tiempo de arranque | Media | Bajo | El cliente se crea una vez, en un hilo, al arrancar (§4.5); argon2id ya usa hasta 128 MiB (R12). Sin medir en `dev`: anotar la memoria de la tarea tras desplegar BE-2.1 |

@@ -20,6 +20,68 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.9.0] — 2026-10-25
+
+- **Lote que la motivó:** BE-2.2 (Worker de ingesta).
+- **Qué cambió:**
+  - §4.6 reescrita con lo construido: arranque (sin configuración, latidos sin consumir), bucle (puerta de
+    `/health/ready` antes de recibir, mensajes devueltos si `embedding` se apaga durante la espera larga, borrar o
+    retener por mensaje), las dos transacciones por foto con el orden de bloqueo de §4.5, validación y derivados con
+    Pillow (EXIF, miniatura, copia reducida sin EXIF), lotes de 4 a `/v1/embed`, comparación de `version_vector` con
+    cada respuesta, errores permanentes (tabla de motivos de `imagenes.error`) y transitorios, `intentos`, y la tabla
+    «qué ofrece BE-2.2 al código» para BE-2.4, BE-3.1, BE-3.2 y BE-4.1 (`embedding.vectorizar`,
+    `AlmacenS3.descargar`/`escribir`, `ColaSqs`, `dominio.imagenes`, `dominio.mensajes`, `servicios.ingesta`,
+    `worker.consumir`, el `Mundo` de las pruebas con base).
+  - §4.1 y §2: módulos nuevos (`dominio/imagenes.py`, `dominio/mensajes.py`, `servicios/ingesta.py`,
+    `clientes/sqs.py`) y Pillow 12.3 en la imagen. §4.2: el `worker` provisional queda como historia. §4.5: el `subir`
+    previsto se llama `escribir` (no choca con `almacen_falso.subir`); la fixture `almacen_falso` gana `descargar`,
+    `escribir` y bytes por clave.
+  - ADR-BE-15 (no recibir sin `embedding`; transitorio = el mensaje se queda; permanente = foto en `error`;
+    idempotencia por ETag y `ON CONFLICT`; versión por respuesta; copia sin EXIF). R13 actualizado; R15 nuevo
+    (fallos transitorios repetidos → DLQ).
+  - §5.11: ayudas de `comun.py` para BE-2.2 (`EmbeddingDev` con el contrato de encendido de infra §5.10,
+    `embedding_en_api`, `hora_bogota`, `mensajes_cola`, `enviar_mensaje`, `eventos_worker`) y `validate22.py` como
+    ejemplo de validador que enciende `embedding`.
+  - `validation/validation-2-2.md` reescrito: P6 (encendido), P4 con la hora de Bogotá (código 3 fuera de hora),
+    C1 hasta 20 min (la subida de `worker` tarda de 2 a 15 min, infra ADR-INF-15), C4 y C5 esperan el evento del
+    `worker` en su log en vez de los contadores de SQS, C3a espera 45 s tras el apagado antes de subir, C3b enciende
+    con el contrato y §5 completo. `validation-2-1.md` §5: con Pillow en las dependencias ya no se omite ninguna prueba.
+  - PLAN: alineado con 0.9.0; fila BE-2.2 «En curso».
+  - Repaso de los docs contra el código (antes de publicar 0.9.0): §4.6 añade el orden por fases y en serie del lote,
+    los nombres internos de `ingesta.py`, `worker.py`, `imagenes.py`, `mensajes.py`, `sqs.py` y `embedding.py`, los
+    detalles de `vectorizar` (partes, `X-Request-Id`, sin tope de 8 imágenes, plazo por fase y no total), la API del
+    `Mundo` y del doble `Embeddings` de las pruebas con base, el validador falso de `test_validate22.py` y trampas
+    nuevas (`catch_warnings` no seguro entre hilos, `monkeypatch` de `procesar_lote`, `Settings` que lee el entorno);
+    §5.11, lo que `validate22.py` tiene fuera de `comun.py` (`lote_hecho`, constantes, `Contexto`) y sus trampas
+    (`--sin-limpieza` no restaura `embedding`, errores sin traducir en `EmbeddingDev`); §4.3 y §5.10 al día
+    (`DB_POOL_WORKER` ya en uso; `REC_LADO_MIN_PX` lo valida el `worker`).
+  - JPEG multi-imagen (`MPO`): el repaso destapó que `preparar` rechazaba un JPEG con varias imágenes (Pillow lo abre
+    como `MPO`; quedaba en `error` con «no es un JPEG decodificable»). Ahora `preparar` acepta `JPEG` y `MPO`
+    (`FORMATOS_ADMITIDOS`) y de un `MPO` procesa solo la primera imagen como un JPEG normal (EXIF incluido); la
+    miniatura y la copia para embeddings salen como JPEG de una sola imagen (§4.6, «JPEG multi-imagen»). Pruebas en
+    `tests/unit/test_imagenes.py` con un MPO de 2 imágenes hecho con Pillow (con y sin orientación EXIF 6).
+  - Contradicciones corregidas: `validation-2-2.md` exigía `procesada` en 10 min, pero la subida de `worker` puede
+    tardar hasta 15 (infra §5.10, ADR-INF-15); C3b volvía a 1 con `update-service`, que según el contrato de infra
+    §5.10 no basta; P3 mezclaba «EMB-2.1 Hecho» con el encendido; §4.8 dice que BE-2.4 vectoriza con prioridad
+    `baja` (el docstring de `clientes/embedding.py` de BE-1.1 no lo decía).
+- **Contratos tocados (§5):** §5.8 precisa qué acepta el `worker` (Records `ObjectCreated:*`, `eTag`/`size`
+  opcionales, clave con UUID, `reprocesar_imagen` versión 1) y que un evento repetido se borra; §5.9 (`worker` consume
+  `ingesta`; sin configuración, solo latidos; variables que lee); §5.10: eventos nuevos `embedding_listo`,
+  `embedding_no_listo`, `lote_ingesta`, `mensajes_devueltos`, `imagen_procesada`, `imagen_con_error`,
+  `mensaje_descartado`, `mensaje_no_reconocido`, `ingesta_transitoria`, `version_vector_distinta`, `cola_fallida`;
+  `worker_iniciado` con `modo = ingesta`; `configuracion_incompleta` también en `worker`; notas de `MINIATURA_*` y
+  `WORKER_*`. §5.7: qué cuenta `imagenes.intentos` (sin cambio de esquema). Ningún contrato existente cambia de forma.
+- **Cómo se verificó:** en local (WSL), `ruff check`, `ruff format --check` y `pytest` con `PRUEBAS_DB_URL` y
+  `PRUEBAS_DB_OBLIGATORIA=1` (todas pasan; las nuevas: `tests/base/test_ingesta_base.py` con PostgreSQL real,
+  `almacen_falso` y embeddings simulados para C1–C5; `tests/unit/test_worker.py`, `test_sqs.py`, `test_imagenes.py`,
+  `test_mensajes.py`, y `test_cliente_embedding.py` y `test_s3.py` ampliados; `tests/ops/test_validate22.py` con
+  AWS, la API y un `worker` simulados). `docker build` de la imagen en local: `import PIL` (12.3.0) y
+  `python -m app.worker` sin configuración arranca en `sin_consumo` y para limpio con SIGTERM.
+- **Pendiente:** `validate22.py --entorno dev` sobre un commit de `main` desplegado (lo corre el maestro;
+  `validation-2-2.md` §5). Sin comprobar en `dev`: qué responde S3 al `GetObject` de una clave inexistente con el rol
+  `tarea-worker` (404 o 403), el tiempo real de subida de `worker`, la memoria del `worker` con Pillow y si la app
+  (CameraX) produce JPEG multi-imagen (`MPO`; el `worker` ya los acepta).
+
 ## [0.8.0] — 2026-10-25
 
 - **Lote que la motivó:** BE-2.1 (Recolección).

@@ -105,8 +105,9 @@ enciende ni lo toca.
    PRUEBAS_DB_URL=postgresql://campus_app:local-solo-desarrollo@localhost:5432/campus_locator \
      PRUEBAS_DB_OBLIGATORIA=1 uv run --group ops pytest -q
    ```
-   Esperado: `All checks passed!`, `… files already formatted` y todas las pruebas pasan; solo se omite la de Pillow
-   (`test_jpeg_sintetico_se_decodifica_con_pillow`), que no está en las dependencias.
+   Esperado: `All checks passed!`, `… files already formatted` y todas las pruebas pasan. Hasta BE-2.2 se omitía la
+   de Pillow (`test_jpeg_sintetico_se_decodifica_con_pillow`); desde BE-2.2 (ARCHITECTURE 0.9.0) Pillow está en las
+   dependencias y también corre.
 2. Llevar el commit a `main`. `backend.yml` pasa las pruebas, publica `…/campus-locator/backend:<SHA>`, ejecuta
    `migrate` (sin migraciones nuevas: `aplicada = false`) y actualiza `api` y `worker` (ARCHITECTURE §4.2). Esperado:
    el workflow en verde.

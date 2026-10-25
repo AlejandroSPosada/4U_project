@@ -40,7 +40,7 @@ import time
 import traceback
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -1346,3 +1346,279 @@ def desactivar_usuario_validacion(backend: EntornoBackend, *, tolerar_inexistent
     evento = next(iter(resultado.eventos("usuario_desactivado")), {})
     previo = " (ya lo estaba)" if evento.get("ya_estaba_inactivo") else ""
     return f"{USUARIO_VALIDACION} desactivado{previo}"
+
+
+# --- `embedding` en dev y colas (BE-2.2; infra §5.10 y §5.11) ---------------------------------------------------------
+#: Colombia no tiene horario de verano: America/Bogota es UTC−5 todo el año (sin depender de tzdata en Windows).
+ZONA_BOGOTA = timezone(timedelta(hours=-5), "America/Bogota")
+HORA_APAGADO_NOCHE = 22  # acciones `*-apagar-noche` (infra §5.10)
+SERVICIO_EMBEDDING = "embedding"
+SERVICIO_WORKER = "worker"
+ALARMA_INACTIVIDAD = "campus-locator-dev-embedding-inactivo"
+POLITICA_WORKER_COLA = "campus-locator-dev-worker-cola"
+ACCION_NOCHE_EMBEDDING = "campus-locator-dev-embedding-apagar-noche"
+METRICA_ESPACIO = "campus-locator/dev"
+METRICA_ENCENDIDOS = "EmbeddingEncendidos"
+LIMITE_ALARMA_S = 300  # paso 3 del contrato: hasta 5 min a la muestra y a la alarma
+LIMITE_ENCENDIDO_S = 600  # paso 5: hasta 10 min desde el paso 1
+PAUSA_SONDEO_S = 15.0
+LOG_WORKER = "/campus-locator/dev/worker"
+
+
+def hora_bogota(ahora: datetime | None = None) -> datetime:
+    return (ahora or datetime.now(UTC)).astimezone(ZONA_BOGOTA)
+
+
+def recurso_ecs(servicio: str) -> str:
+    """`ResourceId` de Application Auto Scaling de un servicio del clúster."""
+    return f"service/{CLUSTER}/{servicio}"
+
+
+def embedding_en_api(api: ClienteApi) -> str | None:
+    """El campo `embedding` de `GET /v1/health/ready` (`ok` | `no_disponible`), o `None` si no respondió 200."""
+    try:
+        r = api.pedir("GET", "/health/ready")
+    except Exception:
+        return None
+    if r.status_code != 200:
+        return None
+    try:
+        return r.json().get("embedding")
+    except ValueError:
+        return None
+
+
+def _errores_aws(exc: Exception, que: str) -> Exception:
+    if es_acceso_denegado(exc):
+        return ErrorConfiguracion(f"sin permiso para {que} ({codigo_error_aws(exc)})")
+    return Falla(f"{que}: {type(exc).__name__} {codigo_error_aws(exc)}".strip())
+
+
+class EmbeddingDev:
+    """Encender y apagar `embedding` en `dev` con el contrato de infra §5.10 (lo que hace `embedding.py` de infra,
+    reescrito aquí: las carpetas no comparten código de validación, infra §5.11).
+
+    - `comprobar_inf21()` → detalle: objetivos escalables de `embedding` y `worker`, la política
+      `campus-locator-dev-worker-cola` y la acción `campus-locator-dev-embedding-apagar-noche`; si falta algo,
+      `PrecondicionNoCumplida` (INF-2.1).
+    - `servicio(nombre)` → el `describe-services` de `embedding` o `worker` (`desiredCount`, `runningCount`…).
+    - `latido()`: `PutMetricData` de `EmbeddingEncendidos` = 1 (`Count`, sin dimensiones, con marca de tiempo
+      explícita) en `campus-locator/dev`. Devuelve la marca.
+    - `encender(listo_en_api)` → segundos: pasos 1–5 del contrato (rango 0-1 de `embedding` y `worker`, latido,
+      esperar a que `GetMetricStatistics` lo vea, un minuto más y la alarma `embedding-inactivo` fuera de `ALARM`
+      —hasta 5 min—, `desiredCount = 1`, y hasta 10 min desde el paso 1 a tarea `HEALTHY`, despliegue `COMPLETED` e
+      instancia sana en Cloud Map) y, además, hasta 2 min más a que `listo_en_api()` sea cierto (`api` lo ve por DNS).
+      Si no llega: `Falla`.
+    - `apagar()`: rango 0-0 y `desiredCount = 0` de `embedding` y `worker` (no espera a que paren).
+    - `poner(nombre, n)`: solo `UpdateService` (C3a de BE-2.2 apaga `embedding` así, sin tocar los rangos).
+    """
+
+    def __init__(
+        self,
+        sesion: Any,
+        *,
+        dormir: Callable[[float], None] = time.sleep,
+        reloj: Callable[[], datetime] = lambda: datetime.now(UTC),
+        avisar: Callable[[str], None] | None = None,
+    ) -> None:
+        self.sesion = sesion
+        self.dormir = dormir
+        self.reloj = reloj
+        self.avisar = avisar or (lambda texto: print(texto, file=sys.stderr, flush=True))
+        self._clientes: dict[str, Any] = {}
+
+    def aws(self, servicio: str) -> Any:
+        if servicio not in self._clientes:
+            self._clientes[servicio] = self.sesion.client(servicio)
+        return self._clientes[servicio]
+
+    # -- lectura ---------------------------------------------------------------------------------------------------
+    def servicio(self, nombre: str) -> dict[str, Any]:
+        try:
+            servicios = self.aws("ecs").describe_services(cluster=CLUSTER, services=[nombre])["services"]
+        except Exception as exc:
+            raise _errores_aws(exc, f"ecs describe-services {nombre}") from None
+        if not servicios:
+            raise PrecondicionNoCumplida(f"INF-1.3: no existe el servicio `{nombre}` en `{CLUSTER}`")
+        return servicios[0]
+
+    def comprobar_inf21(self) -> str:
+        escalado = self.aws("application-autoscaling")
+        try:
+            objetivos = escalado.describe_scalable_targets(
+                ServiceNamespace="ecs", ResourceIds=[recurso_ecs(SERVICIO_EMBEDDING), recurso_ecs(SERVICIO_WORKER)]
+            )["ScalableTargets"]
+            politicas = escalado.describe_scaling_policies(
+                ServiceNamespace="ecs", ResourceId=recurso_ecs(SERVICIO_WORKER)
+            )["ScalingPolicies"]
+            acciones = escalado.describe_scheduled_actions(
+                ServiceNamespace="ecs", ResourceId=recurso_ecs(SERVICIO_EMBEDDING)
+            )["ScheduledActions"]
+        except Exception as exc:
+            raise _errores_aws(exc, "application-autoscaling describe-*") from None
+        recursos = {o.get("ResourceId") for o in objetivos}
+        faltan = [s for s in (SERVICIO_EMBEDDING, SERVICIO_WORKER) if recurso_ecs(s) not in recursos]
+        if faltan:
+            raise PrecondicionNoCumplida(f"INF-2.1: sin objetivo escalable de {', '.join(faltan)}")
+        if POLITICA_WORKER_COLA not in {p.get("PolicyName") for p in politicas}:
+            raise PrecondicionNoCumplida(f"INF-2.1: falta la política `{POLITICA_WORKER_COLA}`")
+        if ACCION_NOCHE_EMBEDDING not in {a.get("ScheduledActionName") for a in acciones}:
+            raise PrecondicionNoCumplida(f"INF-2.1: falta la acción programada `{ACCION_NOCHE_EMBEDDING}`")
+        return f"objetivos de embedding y worker, {POLITICA_WORKER_COLA} y {ACCION_NOCHE_EMBEDDING}"
+
+    def _sano_en_ecs(self) -> str | None:
+        """`None` si `embedding` tiene una tarea `HEALTHY`, el despliegue `PRIMARY` `COMPLETED` y una instancia sana en
+        Cloud Map; si no, lo que falta."""
+        datos = self.servicio(SERVICIO_EMBEDDING)
+        primario = next((d for d in datos.get("deployments", []) if d.get("status") == "PRIMARY"), {})
+        if primario.get("rolloutState") != "COMPLETED" or int(datos.get("runningCount", 0)) < 1:
+            return f"despliegue {primario.get('rolloutState')} con {datos.get('runningCount', 0)} tareas"
+        ecs = self.aws("ecs")
+        tareas = ecs.list_tasks(cluster=CLUSTER, serviceName=SERVICIO_EMBEDDING, desiredStatus="RUNNING")["taskArns"]
+        if not tareas:
+            return "sin tareas RUNNING"
+        estados = [t.get("healthStatus") for t in ecs.describe_tasks(cluster=CLUSTER, tasks=tareas)["tasks"]]
+        if "HEALTHY" not in estados:
+            return f"tareas {estados}"
+        registros = datos.get("serviceRegistries") or []
+        if registros:
+            servicio_id = registros[0]["registryArn"].rsplit("/", 1)[-1]
+            salud = self.aws("servicediscovery").get_instances_health_status(ServiceId=servicio_id).get("Status", {})
+            if "HEALTHY" not in salud.values():
+                return f"Cloud Map {sorted(set(salud.values())) or 'sin instancias'}"
+        return None
+
+    # -- escritura -------------------------------------------------------------------------------------------------
+    def _registrar(self, servicio: str, maximo: int) -> None:
+        try:
+            self.aws("application-autoscaling").register_scalable_target(
+                ServiceNamespace="ecs",
+                ResourceId=recurso_ecs(servicio),
+                ScalableDimension="ecs:service:DesiredCount",
+                MinCapacity=0,
+                MaxCapacity=maximo,
+            )
+        except Exception as exc:
+            raise _errores_aws(exc, f"register-scalable-target {servicio}") from None
+
+    def poner(self, servicio: str, replicas: int) -> None:
+        try:
+            self.aws("ecs").update_service(cluster=CLUSTER, service=servicio, desiredCount=replicas)
+        except Exception as exc:
+            raise _errores_aws(exc, f"ecs update-service {servicio}") from None
+
+    def latido(self) -> datetime:
+        marca = self.reloj().astimezone(UTC).replace(microsecond=0)
+        try:
+            self.aws("cloudwatch").put_metric_data(
+                Namespace=METRICA_ESPACIO,
+                MetricData=[{"MetricName": METRICA_ENCENDIDOS, "Value": 1.0, "Unit": "Count", "Timestamp": marca}],
+            )
+        except Exception as exc:
+            raise _errores_aws(exc, "cloudwatch put-metric-data") from None
+        return marca
+
+    def _muestra_vista(self, marca: datetime) -> bool:
+        datos = self.aws("cloudwatch").get_metric_statistics(
+            Namespace=METRICA_ESPACIO,
+            MetricName=METRICA_ENCENDIDOS,
+            StartTime=marca - timedelta(minutes=2),
+            EndTime=marca + timedelta(minutes=2),
+            Period=60,
+            Statistics=["Sum"],
+        )
+        return any(float(p.get("Sum", 0)) >= 1 for p in datos.get("Datapoints", []))
+
+    def _alarma_en_alarm(self) -> bool:
+        alarmas = self.aws("cloudwatch").describe_alarms(AlarmNames=[ALARMA_INACTIVIDAD]).get("MetricAlarms", [])
+        return bool(alarmas) and alarmas[0].get("StateValue") == "ALARM"
+
+    def _esperar(self, condicion: Callable[[], bool], hasta: datetime) -> bool:
+        while True:
+            if condicion():
+                return True
+            if self.reloj() >= hasta:
+                return False
+            self.dormir(PAUSA_SONDEO_S)
+
+    def encender(self, listo_en_api: Callable[[], bool]) -> float:
+        inicio = self.reloj()
+        self.avisar("embedding: encendiendo (contrato de infra §5.10)")
+        self._registrar(SERVICIO_EMBEDDING, 1)
+        self._registrar(SERVICIO_WORKER, 1)
+        marca = self.latido()
+        limite_alarma = self.reloj() + timedelta(seconds=LIMITE_ALARMA_S)
+        exigir(
+            self._esperar(lambda: self._muestra_vista(marca), limite_alarma),
+            f"CloudWatch no devolvió la muestra de {METRICA_ENCENDIDOS} en {LIMITE_ALARMA_S // 60} min",
+        )
+        self.dormir(60.0)
+        exigir(
+            self._esperar(lambda: not self._alarma_en_alarm(), limite_alarma),
+            f"la alarma {ALARMA_INACTIVIDAD} siguió en ALARM {LIMITE_ALARMA_S // 60} min tras el latido",
+        )
+        self.poner(SERVICIO_EMBEDDING, 1)
+        falta: dict[str, str | None] = {"que": None}
+
+        def sano() -> bool:
+            falta["que"] = self._sano_en_ecs()
+            return falta["que"] is None
+
+        exigir(
+            self._esperar(sano, inicio + timedelta(seconds=LIMITE_ENCENDIDO_S)),
+            f"embedding no quedó sano en {LIMITE_ENCENDIDO_S // 60} min: {falta['que']}",
+        )
+        exigir(
+            self._esperar(listo_en_api, self.reloj() + timedelta(minutes=2)),
+            'embedding sano en ECS pero /v1/health/ready no dice "embedding": "ok" tras 2 min',
+        )
+        segundos = (self.reloj() - inicio).total_seconds()
+        self.avisar(f"embedding: encendido en {segundos:.0f} s")
+        return segundos
+
+    def apagar(self) -> None:
+        self._registrar(SERVICIO_EMBEDDING, 0)
+        self._registrar(SERVICIO_WORKER, 0)
+        self.poner(SERVICIO_EMBEDDING, 0)
+        self.poner(SERVICIO_WORKER, 0)
+
+
+def mensajes_cola(sqs: Any, url: str) -> tuple[int, int]:
+    """`(visibles, en vuelo)` de una cola (`ApproximateNumberOfMessages` y `…NotVisible`: aproximados y con retraso)."""
+    try:
+        atributos = sqs.get_queue_attributes(
+            QueueUrl=url, AttributeNames=["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible"]
+        )["Attributes"]
+    except Exception as exc:
+        raise _errores_aws(exc, "sqs get-queue-attributes") from None
+    visibles = int(atributos.get("ApproximateNumberOfMessages", 0))
+    return visibles, int(atributos.get("ApproximateNumberOfMessagesNotVisible", 0))
+
+
+def enviar_mensaje(sqs: Any, url: str, cuerpo: Mapping[str, Any]) -> str:
+    """`SendMessage` con el cuerpo en JSON; devuelve el `MessageId`."""
+    try:
+        return sqs.send_message(QueueUrl=url, MessageBody=json.dumps(cuerpo))["MessageId"]
+    except Exception as exc:
+        raise _errores_aws(exc, "sqs send-message") from None
+
+
+def eventos_worker(logs: Any, imagen_id: str, desde: datetime) -> list[dict[str, Any]]:
+    """Las líneas JSON de `/campus-locator/dev/worker` con `imagen_id` igual al dado, desde `desde`
+    (`filter-log-events` con el id entre comillas; todas las páginas)."""
+    eventos: list[dict[str, Any]] = []
+    argumentos: dict[str, Any] = {
+        "logGroupName": LOG_WORKER,
+        "startTime": int(desde.timestamp() * 1000),
+        "filterPattern": f'"{imagen_id}"',
+    }
+    try:
+        while True:
+            pagina = logs.filter_log_events(**argumentos)
+            eventos += _eventos_de(e.get("message", "") for e in pagina.get("events", []))
+            siguiente = pagina.get("nextToken")
+            if not siguiente:
+                return [e for e in eventos if e.get("imagen_id") == imagen_id]
+            argumentos["nextToken"] = siguiente
+    except Exception as exc:
+        raise _errores_aws(exc, f"logs filter-log-events {LOG_WORKER}") from None

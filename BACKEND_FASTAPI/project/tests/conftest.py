@@ -149,9 +149,45 @@ class AlmacenFalso:
         self.consultadas: list[str] = []
         self.fallar_head: set[str] = set()
         self.fallar_firma = False
+        # BE-2.2 (worker): bytes de los objetos, descargas y escrituras, y fallos de S3 por clave
+        self.datos: dict[str, bytes] = {}
+        self.descargadas: list[str] = []
+        self.escritas: list[str] = []
+        self.fallar_descarga: set[str] = set()
+        self.fallar_escritura = False
+        self._etags = 0
 
-    def subir(self, clave: str, n_bytes: int = 1234) -> None:
-        self.objetos[clave] = self._objeto(bytes=n_bytes, etag=f"etag{len(self.objetos)}")
+    def subir(self, clave: str, n_bytes: int = 1234, datos: bytes | None = None) -> str:
+        """Simula el `PUT` de la app; con `datos`, guarda esos bytes (los descarga el `worker`). Devuelve el ETag
+        (distinto en cada subida, como S3 al cambiar el contenido)."""
+        etag = f"etag{self._etags}"  # etag0, etag1, …
+        self._etags += 1
+        if datos is not None:
+            self.datos[clave] = datos
+            n_bytes = len(datos)
+        self.objetos[clave] = self._objeto(bytes=n_bytes, etag=etag)
+        return etag
+
+    def descargar(self, clave: str, max_bytes: int):
+        from app.clientes.s3 import FalloS3, ObjetoDemasiadoGrande, ObjetoDescargado
+
+        self.descargadas.append(clave)
+        if clave in self.fallar_descarga:
+            raise FalloS3("descargar: ClientError: 500")
+        objeto = self.objetos.get(clave)
+        if objeto is None:
+            return None
+        if objeto.bytes > max_bytes:
+            raise ObjetoDemasiadoGrande(objeto.bytes)
+        return ObjetoDescargado(datos=self.datos.get(clave, b""), etag=objeto.etag)
+
+    def escribir(self, clave: str, datos: bytes, content_type: str = "image/jpeg") -> None:
+        from app.clientes.s3 import FalloS3
+
+        if self.fallar_escritura:
+            raise FalloS3("escribir: ClientError: 500")
+        self.escritas.append(clave)
+        self.subir(clave, datos=datos)
 
     def firmar_put(self, clave: str, ttl_s: int):
         from datetime import UTC, datetime, timedelta

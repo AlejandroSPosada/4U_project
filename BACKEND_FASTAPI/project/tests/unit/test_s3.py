@@ -152,6 +152,43 @@ def test_firmar_varios_y_nada_que_hacer():
     assert set(firmadas) == {"a", "b"}
 
 
+def _cuerpo(datos: bytes):
+    import io
+
+    from botocore.response import StreamingBody
+
+    return StreamingBody(io.BytesIO(datos), len(datos))
+
+
+def test_descargar_existe_no_existe_403_y_demasiado_grande(almacen):
+    from app.clientes.s3 import ObjetoDemasiadoGrande, ObjetoDescargado
+
+    esperado = {"Bucket": BUCKET, "Key": CLAVE}
+    with Stubber(almacen.cliente) as stub:
+        stub.add_response("get_object", {"Body": _cuerpo(b"jpeg"), "ContentLength": 4, "ETag": '"abc123"'}, esperado)
+        stub.add_client_error("get_object", "NoSuchKey", http_status_code=404, expected_params=esperado)
+        stub.add_client_error("get_object", "AccessDenied", http_status_code=403, expected_params=esperado)
+        stub.add_response("get_object", {"Body": _cuerpo(b"x" * 11), "ContentLength": 11, "ETag": '"e"'}, esperado)
+        assert almacen.descargar(CLAVE, 10) == ObjetoDescargado(datos=b"jpeg", etag="abc123")
+        assert almacen.descargar(CLAVE, 10) is None
+        with pytest.raises(FalloS3, match="AccessDenied"):  # 403 no es «no está» al descargar
+            almacen.descargar(CLAVE, 10)
+        with pytest.raises(ObjetoDemasiadoGrande) as error:
+            almacen.descargar(CLAVE, 10)
+        assert error.value.bytes == 11
+
+
+def test_escribir_miniatura_con_content_type(almacen):
+    clave = "thumbs/9c1d0000-0000-4000-8000-000000000001/a91f0000-0000-4000-8000-000000000002.jpg"
+    with Stubber(almacen.cliente) as stub:
+        esperado = {"Bucket": BUCKET, "Key": clave, "Body": b"mini", "ContentType": "image/jpeg"}
+        stub.add_response("put_object", {"ETag": '"e"'}, esperado)
+        stub.add_client_error("put_object", "SlowDown", http_status_code=503)
+        almacen.escribir(clave, b"mini")
+        with pytest.raises(FalloS3, match=r"escribir: .*SlowDown"):
+            almacen.escribir(clave, b"mini")
+
+
 def test_contar_prefijo_solo_lista(almacen):
     with Stubber(almacen.cliente) as stub:
         stub.add_response(

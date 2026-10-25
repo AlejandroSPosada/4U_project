@@ -1,8 +1,9 @@
 """Bucket del dataset en S3 (infra §5.5) con boto3, desde BE-2.1 (ARCHITECTURE §4.5).
 
 `AlmacenS3(bucket, region)` es síncrono (boto3); los servicios asíncronos lo llaman en hilos con `firmar_puts` y
-`consultar_varios`. Lo usan `api` (firmar `PUT` y `HEAD`, con el rol `tarea-api`) y la CLI `limpiar-validacion`
-(listar y borrar, con el rol `tarea-worker`; infra §5.8).
+`consultar_varios`. Lo usan `api` (firmar `PUT` y `HEAD`, con el rol `tarea-api`), la CLI `limpiar-validacion`
+(listar y borrar, con el rol `tarea-worker`; infra §5.8) y, desde BE-2.2, el `worker` (`descargar` el original y
+`escribir` la miniatura, con el rol `tarea-worker`).
 
 Reglas:
 - Nunca se registra una URL prefirmada (§4.1). Los motivos de `FalloS3` llevan la clase y el código del error de AWS,
@@ -43,6 +44,20 @@ class UrlFirmada:
 class ObjetoS3:
     bytes: int
     etag: str | None  # sin comillas, como en los eventos de S3 (§5.8)
+
+
+@dataclass(frozen=True)
+class ObjetoDescargado:
+    datos: bytes
+    etag: str | None  # sin comillas
+
+
+class ObjetoDemasiadoGrande(Exception):
+    """El objeto pasa del máximo pedido a `descargar` (no se lee). `bytes` = su tamaño."""
+
+    def __init__(self, n_bytes: int) -> None:
+        self.bytes = n_bytes
+        super().__init__(f"{n_bytes} bytes")
 
 
 def crear_cliente(region: str) -> Any:
@@ -110,6 +125,50 @@ class AlmacenS3:
             raise FalloS3(f"head: {_motivo(exc)}") from None
         etag = respuesta.get("ETag")
         return ObjetoS3(bytes=int(respuesta.get("ContentLength", 0)), etag=etag.strip('"') if etag else None)
+
+    def descargar(self, clave: str, max_bytes: int) -> ObjetoDescargado | None:
+        """`GetObject` de `clave` (BE-2.2, rol `tarea-worker`): los bytes y el ETag, o `None` si no existe (404). Si el
+        objeto pasa de `max_bytes` no lo lee: `ObjetoDemasiadoGrande(bytes)`. Otro error (también 403) → `FalloS3`.
+
+        A diferencia de `consultar`, un 403 **no** es «no está»: el `worker` tiene `s3:ListBucket` (solo con
+        `s3:prefix`) y un 403 aquí puede ser un permiso que falta; como `FalloS3`, el mensaje vuelve a la cola."""
+        from botocore.exceptions import ClientError
+
+        try:
+            respuesta = self.cliente.get_object(Bucket=self.bucket, Key=clave)
+        except ClientError as exc:
+            codigo = str(exc.response.get("Error", {}).get("Code", ""))
+            estado = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if codigo in {"NoSuchKey", "404", "NotFound"} or estado == 404:
+                return None
+            raise FalloS3(f"descargar: {_motivo(exc)}") from None
+        except Exception as exc:
+            raise FalloS3(f"descargar: {_motivo(exc)}") from None
+        cuerpo = respuesta["Body"]
+        try:
+            tamano = int(respuesta.get("ContentLength", 0))
+            if tamano > max_bytes:
+                raise ObjetoDemasiadoGrande(tamano)
+            datos = cuerpo.read(max_bytes + 1)
+        except ObjetoDemasiadoGrande:
+            raise
+        except Exception as exc:
+            raise FalloS3(f"descargar: {_motivo(exc)}") from None
+        finally:
+            cuerpo.close()
+        if len(datos) > max_bytes:
+            raise ObjetoDemasiadoGrande(len(datos))
+        etag = respuesta.get("ETag")
+        return ObjetoDescargado(datos=datos, etag=etag.strip('"') if etag else None)
+
+    def escribir(self, clave: str, datos: bytes, content_type: str = TIPO_JPEG) -> None:
+        """`PutObject` de `clave` con `ContentType` (BE-2.2: la miniatura en `thumbs/`). Error → `FalloS3`.
+
+        Se llama `escribir` y no `subir` para no confundirse con `almacen_falso.subir` (el `PUT` de la app)."""
+        try:
+            self.cliente.put_object(Bucket=self.bucket, Key=clave, Body=datos, ContentType=content_type)
+        except Exception as exc:
+            raise FalloS3(f"escribir: {_motivo(exc)}") from None
 
     def contar_prefijo(self, prefijo: str) -> int:
         """Cuántos objetos hay bajo `prefijo` (solo lista; lo usa `limpiar-validacion --simular`). Error → `FalloS3`."""
