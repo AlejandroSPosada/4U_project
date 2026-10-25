@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.5.0**.
+Alineado con `ARCHITECTURE.md` **v0.5.1**.
 
 ---
 
@@ -99,7 +99,7 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 
 | Lote | Fase | Estado | Validación | Última validación | Versión de ARCHITECTURE al cerrar | Nota |
 |---|---|---|---|---|---|---|
-| EMB-1.1 | 1 | En curso | [1-1](./validation/validation-1-1.md) | — | — | Código entregado, ya con `dinov2-small` (0.5.0); falta versionar `uv.lock` y validar (`dev` espera INF-1.3) |
+| EMB-1.1 | 1 | En curso | [1-1](./validation/validation-1-1.md) | — | — | Código entregado, ya con `dinov2-small` (0.5.0). INF-1.3 está «Hecho»: `dev` ya se puede validar. Falta la preparación de [`validation-1-1`](./validation/validation-1-1.md) §5 (`uv.lock`, `pytest` con PyTorch, imagen en ECR) y las dos ejecuciones |
 | EMB-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | |
 | EMB-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | Latencias de §5.7 sin medir |
 | EMB-3.2 | 3 | Pendiente | [3-2](./validation/validation-3-2.md) | — | — | Necesita un dataset real indexado (FE-2.1 + BE-2.2) |

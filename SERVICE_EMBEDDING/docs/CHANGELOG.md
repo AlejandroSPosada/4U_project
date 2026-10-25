@@ -23,6 +23,32 @@ re-indexar el dataset.
 
 ---
 
+## [0.5.1] — 2026-10-24
+
+- **Lote que la motivó:** EMB-1.1 (servicio base e imagen), antes de su primera validación: INF-1.3 ya está «Hecho»
+  (`INFRASTRUCTURA_TERRAFORM` 0.10.0, validado en `a0f2dc5`), así que P1 de `validation-1-1` ya se cumple en `dev`.
+- **Qué cambió:**
+  - `validation-1-1.md` sigue la forma de `INFRASTRUCTURA_TERRAFORM/docs/validation/validation-2-1.md`: el encabezado
+    cita el diseño que se valida (§4.2, §5.3, §5.5, ADR-EMB-05, ADR-EMB-09, ADR-EMB-11); §1 dice en qué orden se
+    evalúan las precondiciones en cada entorno y qué código da cada una; §2 abre con el orden de las comprobaciones y
+    lleva a la tabla los detalles que estaban en una lista aparte; §4 deja claro que el validador no toca el servicio
+    `embedding` (vale a cualquier hora, encendido o apagado), que la tarea suelta no entra en Cloud Map ni dispara la
+    regla de EventBridge y lo que cuesta; §5 añade los permisos de AWS, lo que hace falta en la máquina, el orden
+    (`dev` y después `local`), una **preparación** (`uv.lock`, pruebas con PyTorch, despliegue con `embedding.yml`,
+    cómo leer la imagen desplegada para `local`) y el resultado esperado. Criterios, IDs, comandos, nombres y plazos no
+    cambian.
+  - §5.8: las tareas sueltas de `dev` usan la red del servicio y el comando de la imagen o uno sobrescrito (EMB-1.1 C1b
+    no lo sobrescribe; EMB-3.1 sí).
+  - PLAN: nota de EMB-1.1 en §3 (ya no espera INF-1.3).
+- **Contratos tocados (§5):** ninguno; aclaración de §5.8. La `version_vector` **no** cambia. Sube el parche.
+- **Cómo se verificó:** revisión cruzada con `INFRASTRUCTURA_TERRAFORM/docs` 0.11.1 (PLAN §3: INF-1.3 e INF-1.4
+  «Hecho»; ARCHITECTURE §3.4, §3.8, §3.10, §5.1, §5.7, §5.8, §5.9 y §5.11; `validation-1-3` y `validation-2-1`). Solo
+  documentos: no se leyó ni se ejecutó el código.
+- **Pendiente:** la preparación de `validation-1-1` §5 (`uv.lock`, `pytest` con PyTorch, que incluye la coherencia de
+  `validation-1-1` con `validate11.py`, e imagen en ECR) y las dos ejecuciones de `validate11.py`.
+
+---
+
 ## [0.5.0] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; la cuenta tiene cupo 0 de instancias con GPU y el equipo no puede esperar el

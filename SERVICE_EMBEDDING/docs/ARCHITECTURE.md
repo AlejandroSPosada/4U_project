@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.5.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.5.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
 | Estado | En construcción: código de EMB-1.1 (servicio base e imagen); el resto de lotes, pendiente |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -341,7 +341,7 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
 | Entorno | Cómo llega el validador al servicio | Para qué |
 |---|---|---|
 | `local` | Arranca la **misma imagen** que se despliega (`EMBEDDING_IMAGEN`: etiqueta de ECR o construcción local de `project/`) con `docker run -p 8080:8080` y llama a `http://localhost:8080` | Comprobaciones funcionales de la API, vectores dorados, prioridad, arranque sin red (`--network none`) |
-| `dev` | El servicio es privado: el validador lanza **tareas sueltas** con la definición `campus-locator-dev-embedding` (comando sobrescrito, `--launch-type FARGATE`) o consulta ECS (`describe-tasks`, eventos del servicio) y CloudWatch Logs; además puede comprobar `embedding: ok` en `GET /v1/health/ready` del backend | Tiempos de arranque reales, rendimiento en el tamaño de tarea de `dev`, imagen desplegada |
+| `dev` | El servicio es privado: el validador lanza **tareas sueltas** con la definición `campus-locator-dev-embedding` (`--launch-type FARGATE`, la red del servicio y el comando de la imagen o uno sobrescrito) o consulta ECS (`describe-tasks`, eventos del servicio) y CloudWatch Logs; además puede comprobar `embedding: ok` en `GET /v1/health/ready` del backend | Tiempos de arranque reales, rendimiento en el tamaño de tarea de `dev`, imagen desplegada |
 
 **El servicio en `dev`**: las tareas sueltas no lo necesitan. Un validador que necesita el servicio `embedding` en
 marcha lo enciende si está apagado (como `embedding.py encender`, esperando hasta 10 min a que esté sano) y al
