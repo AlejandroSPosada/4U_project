@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.3.2**. Este archivo contiene además el **catálogo único de historias de usuario**
+Alineado con `ARCHITECTURE.md` **v0.4.0**. Este archivo contiene además el **catálogo único de historias de usuario**
 del proyecto (§5), que los planes de las otras carpetas referencian.
 
 ---
@@ -78,7 +78,7 @@ prototipo ya construido sobre datos locales y *stubs*.
 Los lotes FE-0.1 a FE-0.12 están descritos en `ARCHITECTURE.md` (vista correspondiente y §5); aquí solo figuran en §3.
 
 #### FE-1.1 — Cliente HTTP, conexión real y CI
-- **Entregables:** cliente HTTP (Retrofit + OkHttp o Ktor; la elección se registra como ADR), `data/remote/` con DTOs,
+- **Entregables:** cliente HTTP (Retrofit + OkHttp o Ktor; la elección se registra como ADR: Retrofit + OkHttp, ADR-FE-12), `data/remote/` con DTOs,
   `ApiConfig.kt` con `api_base_url` + `/v1`, mapeo de errores y encabezados de ARCHITECTURE §5.10, `X-Request-Id` en
   `AppLog`, `BackendHealth` real contra `GET /v1/health` (reemplaza a `BackendHealthStub`; §5.5, «Inicio»),
   `.github/workflows/frontend.yml` (compilar y pruebas unitarias), `project/pyproject.toml` y `src/ops/comun.py` para
@@ -318,7 +318,7 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
 | FE-0.10 | 0 | Hecho | — | — | 0.1.0 | Local (`assets/`) | Compila y se abre en dispositivo; prueba completa en FE-2.3 |
 | FE-0.11 | 0 | Hecho | — | — | 0.1.0 | Local (`files/recoleccion/`) | Sin pruebas automáticas (FE-2.3) |
 | FE-0.12 | 0 | Hecho | — | — | 0.1.0 | Local (`SharedPreferences`) | ⚠ Pasada completa sin probar (FE-2.3) |
-| FE-1.1 | 1 | Pendiente | [1-1](./validation/validation-1-1.md) | — | — | | Espera BE-1.1 e INF-1.4 para validar |
+| FE-1.1 | 1 | En curso | [1-1](./validation/validation-1-1.md) | — | — | `dev` (`GET /v1/health`) | Código y CI listos (ARCHITECTURE 0.4.0); `validate11.py --entorno local` con código 0 sobre el árbol sin commit. Falta: `dev` con teléfono (C1a, C4b, C1b) y PR en verde (C3) |
 | FE-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | | |
 | FE-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | | |
 | FE-2.2 | 2 | Pendiente | [2-2](./validation/validation-2-2.md) | — | — | | |

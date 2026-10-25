@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.3.2** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-24 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*; sin backend real todavía. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Versión del documento | **0.4.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-25 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; el resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -331,8 +331,12 @@ FRONTEND_KOTLIN/
     ├── app/                       módulo Android (paquete de abajo en app/src/main/java/…; páginas de mapa en app/src/main/assets/)
     ├── src/
     │   └── ops/                   validate<fase><n>.py y comun.py: validadores de los lotes FE-x.y (§5.11)
-    └── pyproject.toml             dependencias de los validadores (grupo `ops`)
+    ├── tests/ops/                 pruebas (pytest) de los validadores; las corre el job «validadores» de frontend.yml
+    ├── pyproject.toml, uv.lock    dependencias de los validadores (grupo `ops`, vacío: solo biblioteca estándar; `dev`: pytest y ruff)
+    └── .validacion/               informes JSON de los validadores (ignorada por Git)
 ```
+
+CI: `.github/workflows/frontend.yml` en la raíz del monorepo (§4.1).
 
 Paquetes del módulo `app`:
 
@@ -369,7 +373,7 @@ com.example.myapplication/
 │   └── fusion/                  # Fusión PDR + posición visual (Kalman/partículas)
 │
 ├── data/                        # Acceso a datos
-│   ├── remote/                  # Retrofit/Ktor, DTOs, API
+│   ├── remote/                  # Cliente HTTP (Retrofit + OkHttp, ADR-FE-12), DTOs, mapeo de errores y datos (§5.10)
 │   ├── repository/              # Implementaciones de repositorios
 │   └── local/                   # Caché local (Room/DataStore), cola de subida offline
 │
@@ -386,8 +390,8 @@ com.example.myapplication/
 > (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video y de la ubicación manual (`ubicacion_manual.html/js`), y la base común `mapa_base.js` (5.9).
 
 > Actualmente en el repo existen `ui/`, `camera/`, `sensors/`, `map/`, `logs/`, `session/`,
-> `data/repository/`, `domain/model/`, `domain/usecase/`, `ApiConfig.kt`, `MyApp.kt` y
-> `MainActivity.kt`; el resto (`domain/fusion/`, `data/remote/`, `data/local/`, `voice/`,
+> `data/remote/` (desde FE-1.1), `data/repository/`, `domain/model/`, `domain/usecase/`, `ApiConfig.kt`, `MyApp.kt` y
+> `MainActivity.kt`; el resto (`domain/fusion/`, `data/local/`, `voice/`,
 > `ui/navigation/`) se crea a medida que se implementa. ⚠ Dentro del paquete Kotlin hay archivos que
 > no son código de la app (`archivos_zip.py`, `crear_archivos.py`, `out.zip`): sacarlos (`PLAN.md`, FE-4.3).
 
@@ -437,7 +441,8 @@ almacenamiento externo.
   Debe declararse en el Manifest con `android:name=".MyApp"`.
 - Cada escaneo abre una sesión (`AppLog.nuevaSesion("scan")`): sus líneas llevan un id como
   `[scan-12345]` para seguir una vuelta completa.
-- Tags usados: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`.
+- Tags usados: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM` y, desde FE-1.1, `Api` (una línea por petición HTTP
+  con su `X-Request-Id`; formato en §5.10).
 - Registrar transiciones y decisiones, **no** cada lectura de sensor (50 por segundo).
 - No registrar datos sensibles (tokens, credenciales).
 
@@ -478,6 +483,55 @@ almacenamiento externo.
 
 Componentes compartidos en `ui/components/`: `BotonGrande.kt`, `MapaCampus.kt`, `MarcadorAlerta.kt`,
 `IndicadorVoz.kt`, `BannerEstado.kt`, `DialogoConfirmacion.kt`, `TopBarAccesible.kt`.
+
+### 4.1 Compilar, probar y CI (FE-1.1)
+
+**Herramientas** (comprobado el 2026-10-25 en la máquina del equipo):
+
+| Dónde | Qué hay | Para qué sirve |
+|---|---|---|
+| Windows | JDK: JBR 21 en `C:\Users\frank\.jdks\jbr-21.0.11` (el de `C:\Program Files\Android\Android Studio\jbr` es Java 25, que **Gradle 8.7 no admite**); Android SDK en `%LOCALAPPDATA%\Android\Sdk` (plataformas `android-35` y `android-37.0`, build-tools 34.0.0 y 36.0.0, `platform-tools` con `adb.exe`, que no está en el `PATH`); Gradle 8.7 por el *wrapper* | Compilar, pruebas unitarias, `installDebug` y `adb` (el teléfono se conecta por USB a Windows) |
+| WSL (Ubuntu-26.04) | `uv`, `gh`, `terraform`, `git`, Python 3.12. **Sin JDK, sin Android SDK y sin `adb`** | Validadores (`uv run`), `terraform output` y `gh`. Gradle y `adb` se llaman en Windows por *interop* (§5.11) |
+| CI (`frontend.yml`) | `ubuntu-24.04` con su Android SDK (`ANDROID_HOME`) y Temurin 21 (`actions/setup-java`, caché de Gradle) | Compilar y pruebas unitarias en cada PR y en `main` |
+
+**Comandos** (desde `FRONTEND_KOTLIN/project/`):
+- Windows (PowerShell): `$env:JAVA_HOME="C:\Users\frank\.jdks\jbr-21.0.11"; .\gradlew.bat testDebugUnitTest assembleDebug`.
+  Resultado esperado: `BUILD SUCCESSFUL`; los XML JUnit quedan en `app/build/test-results/testDebugUnitTest/` y el APK
+  en `app/build/outputs/apk/debug/app-debug.apk`.
+- WSL, llamando al Gradle de Windows: `export JAVA_HOME='C:\Users\frank\.jdks\jbr-21.0.11' WSLENV=JAVA_HOME` y
+  `cmd.exe /c '.\gradlew.bat' testDebugUnitTest` (el `.\` es obligatorio: §5.11, «Trampas»).
+- Linux (CI): `chmod +x gradlew && ./gradlew --no-daemon testDebugUnitTest assembleDebug`.
+- Pruebas unitarias en la JVM: `app/src/test/java/…`. Desde FE-1.1: `data/remote/MapeoErroresApiTest` (14 casos),
+  `MapeoDatosApiTest` (13) y `ClienteApiTest` (7), más el `ExampleUnitTest` de la plantilla. No usan Android: el código
+  probado no llama a `android.util.Log` (el registrador se inyecta, §5.10).
+
+**`frontend.yml`** (raíz del monorepo, `.github/workflows/`):
+
+| Elemento | Valor | Quién depende de él |
+|---|---|---|
+| Disparadores | `pull_request` y `push` a `main` con cambios en `FRONTEND_KOTLIN/project/**` o en el propio `frontend.yml` | Un PR que solo toque `docs/` no lo dispara |
+| Job `app` | nombre del check: **`compilar y pruebas unitarias`**; `actions/setup-java` (Temurin 21, `cache: gradle`); `chmod +x gradlew`; `./gradlew --no-daemon --console=plain --stacktrace testDebugUnitTest assembleDebug`; tabla de casos por clase en el resumen del job | `validation-1-1` §3 (C3) cita el nombre del check |
+| Job `validadores` | nombre del check: **`validadores`**; `astral-sh/setup-uv` (uv `0.11.32`, como `backend.yml`); `uv sync --frozen --group ops`, `ruff check`, `ruff format --check`, `pytest` | `validation-1-1` §3 (C3) |
+| Permisos | `permissions: {}` arriba y `contents: read` por job. No usa AWS ni variables del repositorio | — |
+| Acciones | fijadas por SHA con la versión en un comentario (`checkout` v7.0.1 y `setup-uv` v10.3.2, los mismos de `backend.yml`; `setup-java` v6.1.0 = `b843ebf9…`) | — |
+
+No corre pruebas instrumentadas (`connectedDebugAndroidTest`, necesitan dispositivo) ni `lint` (el código de la fase 0
+no se ha pasado por `lint`: sin comprobar si pasa). Renombrar un job cambia el nombre del check que pide
+`validation-1-1` §3: se actualizan los dos en el mismo cambio. **Sin comprobar** en un runner hasta el primer PR (C3):
+la compilación en Linux con el SDK del runner no se ha ejecutado todavía.
+
+**Trampas conocidas**
+- `Unable to delete directory '…\app\build\…'` al compilar en Windows con un `app/build` que dejó Android Studio:
+  Gradle no pudo borrar esas carpetas (visto el 2026-10-25; la causa exacta, sin comprobar). Solución: borrar
+  `app/build` a mano (`Remove-Item -Recurse -Force app\build`) y repetir.
+- `gradle/gradle-daemon-jvm.properties` pide un *toolchain* 25: Gradle 8.7 lo ignora (esa función es de Gradle 8.8+).
+  Si alguien actualiza el *wrapper*, Gradle intentará usar Java 25 para el *daemon*.
+- `gradlew` está en Git sin el bit de ejecución (modo `100644`): en Linux, `chmod +x gradlew` o `bash gradlew`.
+- `local.properties` (ruta del SDK) no se versiona; en CI Gradle usa `ANDROID_HOME`.
+- En un comentario `/** … */` de Kotlin, el texto `/*` (p. ej. una ruta `admin/` seguida de asterisco) abre un
+  comentario anidado y la compilación falla con «Unclosed comment»: escribirlo de otra forma.
+- La compilación con `--no-daemon` avisa «a single-use Daemon process will be forked» por `org.gradle.jvmargs`: es
+  normal.
 
 ---
 
@@ -531,7 +585,7 @@ Componentes compartidos en `ui/components/`: `BotonGrande.kt`, `MapaCampus.kt`, 
 | `VoiceController` | `ui/inicio/VoiceController.kt` (paquete `ui.inicio`, aunque lo usan 3 vistas) | `VoiceController(context)` · `speak(texto: String, alTerminar: () -> Unit = {})` · `listen(onResult: (String) -> Unit, onFail: () -> Unit)` · `stopListening()` · `stopAll()` · `release()` en `onCleared`. Envuelve `TextToSpeech` y `SpeechRecognizer` en español de Colombia (`es-CO`). **Solo desde el hilo principal.** Un controlador por ViewModel. | Verificado contra el código. Comportamiento exacto:<br>• `speak` usa `QUEUE_FLUSH`: **corta** lo que se esté diciendo y el `alTerminar` anterior **no** se llama. Solo el último `speak` tiene callback.<br>• `alTerminar` se llama al terminar **o si hay un error** de TTS (no se distinguen).<br>• `stopAll()` no dispara `alTerminar` (no se sobreescribe `onStop`), pero un `alTerminar` que ya estaba encolado en el hilo principal sí llega: por eso el token (abajo) sigue siendo necesario.<br>• Si el TTS aún no está listo, `speak` queda pendiente y **solo se guarda el último**. Si el TTS falla al iniciar, `speak` nunca habla ni llama a `alTerminar`: un flujo que encadena `speak → listen` se queda parado. Poner siempre una salida por toque.<br>• Tras `release()` `speak` no hace nada (tampoco llama a `alTerminar`).<br>• `listen` cancela el reconocimiento anterior, **no** detiene el TTS (escuchar mientras habla capta la propia voz: llamar a `listen` desde el `alTerminar`) y **no** comprueba `RECORD_AUDIO` (sin permiso responde `onFail`).<br>• `onResult` recibe hasta **3 hipótesis unidas por espacio** (`"sí no sí"`); esto importa para `InterpretarRespuesta` (5.7).<br>• `onFail` cubre: reconocimiento no disponible (se llama **de forma síncrona**, antes de que `listen` retorne), error, silencio y sin resultados.<br>Candidato a mover a `voice/`. |
 | `Comando` / `ComandoParser` | **Dentro de `ui/inicio/VoiceController.kt`** (no existe `ComandoParser.kt` aparte) | `ComandoParser.parse(texto): Comando` → `UBICARME`, `IR_A_LUGAR` o `NINGUNO`. | Quita tildes y pasa a minúsculas. `UBICARME` si hay la palabra "uno"/"1" o el texto contiene "ubic", "donde estoy", "donde estamos". `IR_A_LUGAR` si hay "dos"/"2" o contiene "ir a", "llevar", "lugar", "destino", "llegar". Si coinciden **ambos** o **ninguno** → `NINGUNO`. Cuidado: "ir a", "ubic" y "lugar" se buscan como *fragmento* del texto, así que también aciona con "salir a", "venir a" o "ubicación". No quita signos de puntuación (`"uno,"` no cuenta como la palabra "uno"). Solo sirve para el menú de Inicio; para nombres de lugares y sí/no, ver 5.7. |
 | `FeedbackCaptura` | `ui/ubicacion/FeedbackCaptura.kt` | `FeedbackCaptura(ctx)` · `confirmar()` (vibra 120 ms + pitido de 120 ms) · `liberar()` | Verificado. Es `internal` (visible en todo el módulo), así que otra vista puede usarla. Liberar en `onCleared`. El pitido sale por el canal de **notificaciones** (volumen 80): con el teléfono en silencio solo vibra. Si el sistema no puede crear el generador de tonos, simplemente no suena (no falla). `liberar()` solo libera el tono; no usarla después de liberar. Necesita `VIBRATE` en el Manifest (§3.2). |
-| `AppLog` | `logs/AppLog.kt` (`object`) | `AppLog.d(TAG, msg)` · `AppLog.i(TAG, msg)` · `AppLog.w(TAG, msg, t = null)` · `AppLog.e(TAG, msg, t = null)` · `AppLog.nuevaSesion(prefijo): String` · `AppLog.sesion` (lectura/escritura) · `AppLog.init(context)` (solo `MyApp`) | Verificado. **`d` e `i` no reciben excepción**: para registrar una usar `w` o `e`. Cada línea va a Logcat (`[sesion] texto`) y a `files/logs/app.log` con hora, nivel, tag, hilo y sesión. Rota a ~1 MB (pasa a `app.log.1`, que pisa al anterior: historial máximo ≈ 2 MB). **Antes de `AppLog.init` solo escribe en Logcat.** La escritura al archivo es **síncrona en el hilo que llama**: no registrar en bucles calientes (el sensor de orientación llega a ~50 Hz). `nuevaSesion` genera `prefijo-NNNNN` con 5 dígitos del reloj: sirve para seguir una vuelta, **no garantiza unicidad**. Los errores de escritura se tragan en silencio. ⚠ El `SimpleDateFormat` interno es compartido y no es seguro entre hilos: con registros simultáneos desde varios hilos la hora de una línea puede salir corrupta. **No hay función de exportar**: el archivo se consulta como dice la §3.2. Tags en uso: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`. Verificado: `InicioViewModel`, `LoginViewModel` y `VideosViewModel` **no registran nada**. No registrar tokens ni lecturas de sensores. Se inicia en `MyApp.onCreate` (`AppLog.init(this)`, que además registra fabricante, modelo y versión de Android con el tag `App`). Las excepciones no capturadas se registran con el tag `CRASH` y luego se pasan al manejador anterior del sistema (la app se cierra igual). |
+| `AppLog` | `logs/AppLog.kt` (`object`) | `AppLog.d(TAG, msg)` · `AppLog.i(TAG, msg)` · `AppLog.w(TAG, msg, t = null)` · `AppLog.e(TAG, msg, t = null)` · `AppLog.nuevaSesion(prefijo): String` · `AppLog.sesion` (lectura/escritura) · `AppLog.init(context)` (solo `MyApp`) | Verificado. **`d` e `i` no reciben excepción**: para registrar una usar `w` o `e`. Cada línea va a Logcat (`[sesion] texto`) y a `files/logs/app.log` con hora, nivel, tag, hilo y sesión. Rota a ~1 MB (pasa a `app.log.1`, que pisa al anterior: historial máximo ≈ 2 MB). **Antes de `AppLog.init` solo escribe en Logcat.** La escritura al archivo es **síncrona en el hilo que llama**: no registrar en bucles calientes (el sensor de orientación llega a ~50 Hz). `nuevaSesion` genera `prefijo-NNNNN` con 5 dígitos del reloj: sirve para seguir una vuelta, **no garantiza unicidad**. Los errores de escritura se tragan en silencio. ⚠ El `SimpleDateFormat` interno es compartido y no es seguro entre hilos: con registros simultáneos desde varios hilos la hora de una línea puede salir corrupta. **No hay función de exportar**: el archivo se consulta como dice la §3.2. Tags en uso: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM` y `Api` (FE-1.1: `RequestIdInterceptor`, §5.10, registra cada petición HTTP con `AppLog.i`, también el sondeo de Inicio cada 15 s). Verificado: `InicioViewModel`, `LoginViewModel` y `VideosViewModel` **no registran nada** por sí mismos. No registrar tokens ni lecturas de sensores. Se inicia en `MyApp.onCreate` (`AppLog.init(this)`, que además registra fabricante, modelo y versión de Android con el tag `App`). Las excepciones no capturadas se registran con el tag `CRASH` y luego se pasan al manejador anterior del sistema (la app se cierra igual). |
 
 **Patrón de flujo hablado con token** (implementado y verificado en `SeleccionDestinoViewModel`: `hablar`, `escuchar`, `detenerVoz`; detalle en 5.5):
 hablar → al terminar, escuchar → interpretar → hablar… Cada interrupción de la persona (toca algo,
@@ -1192,7 +1246,7 @@ Cuidados de estos componentes:
 | `InicioViewModel(app: Application)` | `AndroidViewModel`, sin `Factory`. Crea su propio `VoiceController` y lo libera en `onCleared`. Expone `estado: StateFlow<InicioUiState>` y `eventos: SharedFlow<InicioEvento>` (`extraBufferCapacity = 1`, `tryEmit`, sin `replay`). |
 | `InicioUiState` / `InicioEvento` | `InicioUiState(escuchando = false, backendEnLinea = false)`. `InicioEvento`: `Ubicarme` e `IrALugar` (sin datos). |
 | Acciones | `alAbrir()` · `alPresionarOrbe()` · `ubicarme()` · `irALugar()` · `alPausar()` · `explicarPermisos(alTerminar: () -> Unit)`. `BIENVENIDA` es una constante **pública** (`InicioViewModel.BIENVENIDA`). |
-| `BackendHealth` | `interface` con `suspend estaEnLinea(): Boolean` y `object BackendHealthStub` (siempre `true`); ambos viven en `InicioViewModel.kt`, no en `data/repository/`. El ViewModel usa el stub **fijo** (`private val backend`): para conectar `GET /v1/health` hay que cambiar esa línea (FE-1.1). |
+| `BackendHealth` | Desde FE-1.1: `interface` en `data/repository/BackendHealth.kt` (`suspend estaEnLinea(): Boolean`, no lanza) e implementación real `RemoteBackendHealth(ClienteApi.api)` (`data/remote/`, §5.10), fijada en `private val backend`. `BackendHealthStub` ya no existe. |
 | `InicioScreen` | `(onUbicarme, onIrALugar, onAccesoAdministrador, viewModel = viewModel())`. Recoge `estado` con `collectAsStateWithLifecycle()`. |
 | `InicioContent` | `(escuchando, backendEnLinea, permisosFaltantes: List<String>, onOrbe, onUbicarme, onIrALugar, onAccesoAdministrador, onReintentarPermisos, onIrAAjustes)`. Público, **sin `@Preview` ni `modifier`**. |
 
@@ -1201,7 +1255,7 @@ Flujo:
 - `escuchar()` → `ComandoParser.parse`: `UBICARME` / `IR_A_LUGAR` navegan; `NINGUNO` o fallo → `repetirOpciones()`: dice «No te entendí. …» y vuelve a escuchar. Al **3.er** fallo (`MAX_INTENTOS = 3`) dice «Presiona el botón central cuando quieras hablar.» y deja de escuchar. `intentos` solo vuelve a 0 en `alAbrir` y en `alPresionarOrbe`.
 - `navegar()` (salida común): `voz.stopAll()`, `escuchando = false` y emite el evento.
 - ON_STOP → `alPausar()` (`stopAll` + `escuchando = false`); ON_RESUME solo refresca la lista de permisos y **no** reanuda la escucha.
-- Sondeo de conexión: en el `init`, bucle infinito cada 15 s con `runCatching { estaEnLinea() }` (una excepción cuenta como «sin conexión»). Corre mientras el ViewModel viva, también con la pantalla en segundo plano, y no tiene tiempo máximo: una llamada real que se cuelgue detiene el sondeo. `backendEnLinea` arranca en `false`: hay un instante de «Sin conexión» antes del primer resultado. Con el stub siempre dice «Conectado».
+- Sondeo de conexión: en el `init`, bucle infinito con `runCatching { estaEnLinea() }` (una excepción cuenta como «sin conexión») y `delay(15_000)` entre intentos. Corre mientras el ViewModel viva, también con la pantalla en segundo plano (una petición cada ~15 s, cada una con su línea `Api` en `AppLog`). Cada intento dura como mucho 5 s (`RemoteBackendHealth.LIMITE_MS`), así que el periodo real es de 15 a 20 s; en modo avión falla al instante (sin DNS). `backendEnLinea` arranca en `false`: hay un instante de «Sin conexión» antes del primer resultado. Textos de la barra: «Conectado» / «Sin conexión» (TalkBack: «Conectado. Backend en línea.» / «Sin conexión. Backend no disponible.»).
 
 Pantalla:
 - Orbe de 252 dp (rol botón) con pulso mientras `escuchando`; título de 28 sp que pasa a «Te escucho…»; indicador de señal decorativo; texto fijo «Activa el lector de pantalla»; barra inferior con el punto verde/rojo del backend y «Acceso administrador» (alto ≈ 48 dp).
@@ -1318,7 +1372,7 @@ Cuidados:
 ### 5.6 Datos: repositorios y modelos
 
 Convención: `interface XRepository` + `XRepositoryStub` (o `AssetsX` si lee de `assets/`) + TODO `RemoteX`
-con Retrofit/Ktor y `ApiConfig.kt`. Los ViewModels de hoy crean el stub directamente (verificado: `SeleccionDestinoViewModel` con `LugaresRepositoryStub()`, `InicioViewModel` con `BackendHealthStub`, y las `Factory` de Login y Lista de videos con `AuthRepositoryStub()` y `AssetsVideoRepository`): para pasar al backend se cambian esas líneas, no las pantallas.
+en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean el stub directamente (verificado: `SeleccionDestinoViewModel` con `LugaresRepositoryStub()` y las `Factory` de Login y Lista de videos con `AuthRepositoryStub()` y `AssetsVideoRepository`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1).
 
 | Repositorio | Métodos | Implementación actual | Usado por |
 |---|---|---|---|
@@ -1329,7 +1383,7 @@ con Retrofit/Ktor y `ApiConfig.kt`. Los ViewModels de hoy crean el stub directam
 | `CalibracionPasoRepository` | `guardada(): Double?` · `longitudPasoM(): Double` (la calibrada, o `PdrEngine.LONGITUD_PASO_DEFECTO_M`) · `guardar(Valido, ahoraMs = ahora)` · `restablecer()` (borra todo el archivo) | Local (`CalibracionPasoRepository(context)`, `data/repository/CalibracionPasoRepository.kt`; **sin interfaz**) | `PdrTracker` (valor por defecto del parámetro), `CalibracionViewModel` y `UbicacionManualScreen`. Detalle abajo |
 | `LugaresRepository` | `suspend obtenerLugares(): List<LugarDestino>` (lanza `IOException`, solo documentado en el KDoc) | Stub (`LugaresRepositoryStub`, 300 ms; devuelve `LUGARES_DE_PRUEBA`, 6 lugares) | `SeleccionDestinoViewModel` (lo crea directamente); futuras 6.3 y 7.6/7.7 |
 | `EscaneoBackend` | `suspend analizar(fotos: List<File>)` → `Unit` (lanza `IOException`). Vive en `ui/ubicacion/EscaneoBackend.kt`, **no** en `data/repository/` | Stub (`EscaneoBackendStub`, 2,5 s) | `EscaneoViewModel` (lo instancia directamente). Detalle en 5.2 |
-| `BackendHealth` | `suspend estaEnLinea(): Boolean`. Vive en `ui/inicio/InicioViewModel.kt`, **no** en `data/repository/` | Stub (`BackendHealthStub`, siempre `true`) | `InicioViewModel` (lo fija en una propiedad). Detalle en 5.5 |
+| `BackendHealth` | `suspend estaEnLinea(): Boolean` (no lanza). `data/repository/BackendHealth.kt` | **Real** (`RemoteBackendHealth`, `GET /v1/health`, §5.10) | `InicioViewModel` (lo fija en una propiedad). Detalle en 5.5 |
 
 | Modelo | Archivo | Notas |
 |---|---|---|
@@ -1704,19 +1758,103 @@ Formato de los datos:
 ### 5.10 Consumo de la API del backend
 
 > El contrato de la API (rutas, cuerpos, errores) es del backend: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5. Aquí se
-> fija solo **lo que hace la app** con él. Todo lo de esta sección se implementa a partir de FE-1.1 (`PLAN.md`); hoy los
-> repositorios siguen siendo *stubs* o datos locales (§5.6).
+> fija solo **lo que hace la app** con él. Desde FE-1.1 existen el cliente, el mapeo de errores, el mapeo de datos y
+> `RemoteBackendHealth` (abajo); los demás repositorios siguen siendo *stubs* o datos locales (§5.6) hasta su lote.
 
 **Configuración y cliente**
-- `ApiConfig.kt`: URL base = output `api_base_url` de Terraform (`INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md`
-  §5.2) + `/v1`. Solo HTTPS (Android bloquea HTTP en claro). Si la API se recrea, la URL cambia y hay que actualizar
-  este archivo.
-- Cliente HTTP: Retrofit + OkHttp o Ktor; se decide en FE-1.1 y se registra como ADR. Los nuevos repositorios
-  `Remote*` viven en `data/remote/` y cumplen las mismas interfaces de §5.6, así que las pantallas no cambian.
-- Encabezados: `Authorization: Bearer <token>` desde `SessionManager` en rutas `/v1/admin/*` y `/v1/collect/*`;
-  `X-Request-Id` (UUID por petición) que se escribe en `AppLog` para cruzar con los logs del servidor.
+- `ApiConfig.kt` (`object ApiConfig`, paquete raíz): `API_BASE_URL` = output `api_base_url` de Terraform
+  (`INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` §5.2), sin barra final, hoy
+  `https://fuzq99kddb.execute-api.us-east-1.amazonaws.com`; `BASE_URL = "$API_BASE_URL/v1"`;
+  `TIMEOUT_CONEXION_S = 10`, `TIMEOUT_LECTURA_S = 30`, `TIMEOUT_ESCRITURA_S = 30`. Si la API se recrea, la URL cambia
+  y hay que actualizar `API_BASE_URL` (lo detecta `validate11.py` C4a). El validador lee las dos líneas `const val
+  API_BASE_URL = "…"` y `const val BASE_URL = "$API_BASE_URL/v1"` con una expresión regular: no cambiar su forma.
+- Solo HTTPS: el Manifest declara `android:usesCleartextTraffic="false"` (ADR-FE-13; antes estaba en `true`).
+- Cliente HTTP: **Retrofit 2.11.0 + OkHttp 4.12.0 + Gson 2.10.1** (ADR-FE-12). Los repositorios `Remote*` viven en
+  `data/remote/` y cumplen las mismas interfaces de §5.6, así que las pantallas no cambian.
+- Encabezados: `Authorization: Bearer <token>` solo en rutas `/v1/admin/…` y `/v1/collect/…` y solo si hay token
+  (`AutenticacionInterceptor`); `X-Request-Id` (UUID v4 nuevo por petición, salvo que la petición ya traiga uno) que se
+  escribe en `AppLog` para cruzar con los logs del servidor (`RequestIdInterceptor`). El backend devuelve el mismo id
+  en su respuesta (backend §5.1; visto en `dev` el 2026-10-25).
 - Tiempos máximos: conexión 10 s; lectura 30 s, igual que `TIMEOUT_BACKEND_MS` del escaneo (5.2) y que el límite de
-  API Gateway (`/v1/localize` tarda como máximo ~20 s en el backend).
+  API Gateway (`/v1/localize` tarda como máximo ~20 s en el backend). `RemoteBackendHealth` corta además la llamada
+  entera a 5 s.
+
+**Piezas de `data/remote/` (FE-1.1)** — paquete `com.example.myapplication.data.remote`:
+
+| Pieza | Archivo | Firma y uso |
+|---|---|---|
+| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>`. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
+| `ClienteApi` | `ClienteApi.kt` (`object`) | `ClienteApi.api: CampusApi` (instancia única, `lazy`, contra `ApiConfig.BASE_URL`, registra con `AppLog.i("Api", …)`). `ClienteApi.proveedorToken: () -> String?` (`@Volatile var`, hoy `{ null }`): **FE-1.2 lo asigna** una vez (p. ej. en `MyApp.onCreate`) para leer el token de `SessionManager`. `ClienteApi.crear(urlBase = ApiConfig.BASE_URL, token = { null }, registrar: (String) -> Unit): CampusApi` (añade la barra final que exige Retrofit) y `ClienteApi.okHttp(token, registrar): OkHttpClient` para pruebas (MockWebServer) o clientes propios |
+| `RequestIdInterceptor(registrar)` | `ClienteApi.kt` | Pone `X-Request-Id` y registra **una línea por petición**: `GET /v1/health -> 200 (85 ms) rid=<uuid>` o `GET /v1/health -> falla UnknownHostException (3 ms) rid=<uuid>`. Solo método, ruta sin parámetros, código y duración: nunca encabezados ni cuerpos. `rid` es el de la respuesta si la trae, si no el enviado. `validate11.py` C1a busca esta línea en `files/logs/app.log`: cambiar el formato exige cambiar `PATRON_SALUD` del validador |
+| `AutenticacionInterceptor(token)` | `ClienteApi.kt` | Regex `.*/v1/(admin\|collect)(/.*)?` sobre la ruta; `/v1/administrar` no la cumple |
+| `llamar(peticion): T` | `ErroresApi.kt` (función `suspend` de nivel superior) | `llamar { api.salud() }` devuelve el cuerpo de un 2xx o lanza: `SinConexionException` (red, *timeout*, 5xx de API Gateway), `CredencialesInvalidasException` (la de `data/repository/AuthRepository.kt`), `ApiException` (el resto) o `RespuestaInesperadaException` (2xx sin cuerpo o JSON roto). La cancelación de la corrutina se propaga |
+| `llamarSinCuerpo(peticion)` | `ErroresApi.kt` | Igual, para rutas `204` declaradas `Response<Unit>` (en un 204 Retrofit da `body() == null` y `llamar` lo trataría como respuesta inesperada) |
+| `FalloApi` | `ErroresApi.kt` (`sealed interface`) | `SinConexion`, `CredencialesInvalidas`, `SesionVencida(codigo)`, `SinPermisos`, `DemasiadosIntentos`, `EmbeddingNoDisponible`, `Validacion(http, codigo, mensaje, campos: List<CampoInvalido(campo, motivo)>)`, `Desconocido(http: Int?, codigo: String?)`. Una fila por fila de la tabla de abajo |
+| `ApiException(fallo, http, requestId)` | `ErroresApi.kt` | Lo que lanza `llamar` salvo «sin conexión» y «credenciales». `requestId` = `X-Request-Id` de la respuesta: el ViewModel lo registra en «Algo salió mal» |
+| `SinConexionException(requestId = null, causa = null)` | `ErroresApi.kt` | **Es una `IOException`**: `LoginViewModel` y los demás que ya atrapan `IOException` la tratan como «sin conexión» sin cambios |
+| `RespuestaInesperadaException(mensaje, causa)` | `ErroresApi.kt` | 2xx que no cumple el contrato (falta un campo obligatorio, rol desconocido, JSON roto). Para la UI es «Algo salió mal» |
+| `MapeoErroresApi` | `ErroresApi.kt` (`object`) | `clasificar(http: Int, cuerpo: String?): FalloApi` (lógica pura) · `excepcion(fallo, http, requestId): Exception` · `deExcepcion(t: Throwable): FalloApi` (para un `catch` genérico en un ViewModel) · `CODIGOS_SESION` |
+| DTOs | `DtosApi.kt` | `SaludDto`, `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto`, `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos anulables y con valor por defecto** (trampa abajo) |
+| `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` |
+| `RemoteBackendHealth(api, limiteMs = 5_000)` | `RemoteBackendHealth.kt` | `BackendHealth` real: `true` solo con `200` y `"estado": "ok"`; cualquier otra cosa (sin red, *timeout*, 5xx, otro `estado`) es `false`; nunca lanza salvo cancelación. `LIMITE_MS = 5_000` |
+
+**Cómo se añade una ruta (FE-1.2 en adelante)**: 1) DTO en `DtosApi.kt` (campos anulables); 2) método en `CampusApi`
+que devuelve `Response<Dto>`; 3) `Remote<X>Repository(api: CampusApi = ClienteApi.api)` en `data/remote/` que llama
+`llamar { api.ruta(…) }` y convierte con `MapeoDatosApi`; 4) la `Factory` o el ViewModel cambia el stub por el
+`Remote*`; 5) prueba con MockWebServer (`ClienteApi.crear(urlBase = servidor.url("/v1").toString(), registrar = {})`).
+Para FE-1.2: `POST /v1/auth/login` con cuerpo `{"identificador", "password"}` (backend §5.3) → `LoginRespuestaDto`
+→ `Sesion(token, MapeoDatosApi.usuario(dto.usuario))` + `MapeoDatosApi.expiraEnMs(dto)`; `FalloApi.SesionVencida`
+es el disparador de «cerrar sesión e ir a Login». `503 SERVICIO_OCUPADO` del login hoy cae en `Desconocido`: FE-1.2
+decide si merece mensaje propio (lleva `Retry-After: 5`).
+
+**Detalles internos del cliente (para no abrir `data/remote/`)**
+- Campos de los DTOs (propiedad Kotlin ← clave JSON; todos `T? = null`): `SaludDto(estado, version, commit)` ·
+  `UsuarioDto(id, nombre, correo, rol)` · `LoginRespuestaDto(token, expiraEn ← expira_en, usuario: UsuarioDto?)` ·
+  `LugarPublicoDto(id, nombre, categoria, lat, lng, alias: List<String>?, descripcion, referencias, imagenUrl ←
+  imagen_url, distanciaM ← distancia_m)` · `AlertaDto(id, lat, lng, mensaje, tipo, prioridad, radioM ← radio_m:
+  Int?, activa, vigenciaDesde, vigenciaHasta, actualizadoEn, version: Int?)` · `EstadisticasAdminDto(totalFotos,
+  totalLugares, alertasActivas, ultimoVideo: UltimoVideoDto(numero, creadoEn)?)` · `ReferenciaDto(id, nombre)` ·
+  `ImagenAdminDto(id, videoId, orden, lat, lng, rumbo: Double?, capturadaEn, estado, error, calidad, lugar:
+  ReferenciaDto?, notas, url, urlMiniatura, urlExpiraEn)` · `VideoResumenDto(id, numero, nombre, refCliente, estado,
+  creadoEn, totalFotos, fotos: List<ImagenAdminDto>?)`. `VideoResumenDto` **no** trae todavía `iniciado_en`,
+  `finalizado_en`, `duracion_s`, `distancia_m`, `pasos`, `inicio`, `conteo` ni `creado_por`: el lote que los necesite
+  (FE-2.1, FE-4.1) los añade.
+- Orden de los interceptores en `ClienteApi.okHttp`: primero `AutenticacionInterceptor`, después `RequestIdInterceptor`
+  (el que registra; ve el encabezado `Authorization` pero nunca lo escribe). Sin `HttpLoggingInterceptor`: no lo
+  añadas, imprimiría el token.
+- `ClienteApi.crear(…)` construye un `OkHttpClient` y un `Retrofit` **nuevos** en cada llamada: en la app se usa siempre
+  `ClienteApi.api` (uno solo, con su *pool* de conexiones); `crear` es para pruebas.
+- Convertidor: `GsonConverterFactory.create()` con un `Gson()` por defecto (sin política de nombres y **sin escribir
+  los `null`**). Para los cuerpos que envía la app (p. ej. el login de FE-1.2: `{"identificador", "password"}`), usar
+  un `data class` con `@SerializedName` en cada campo; un campo `null` se omite del JSON (cómo lo trata cada ruta
+  del backend, sin comprobar: verlo en backend §5 antes de enviar `null`).
+- `requestId` en las excepciones: `ApiException` y la `SinConexionException` de un 5xx de API Gateway llevan el
+  `X-Request-Id` de la respuesta; la `SinConexionException` de un fallo de red lleva `requestId = null` (el id enviado
+  solo queda en la línea `Api` de `AppLog`). `CredencialesInvalidasException` no lleva id.
+- `RemoteBackendHealth.estaEnLinea()` atrapa cualquier `Exception` (salvo `CancellationException`, que relanza) y
+  devuelve `false`; `withTimeoutOrNull(limiteMs)` da `false` si se pasa del límite.
+- `MapeoDatosApi.usuario`: `nombre` ausente → `""`; `id`, `correo` y `rol` obligatorios.
+- Pruebas: `ClienteApi.crear(urlBase = servidor.url("/v1").toString(), token = { "t" }, registrar = { lineas += it })`
+  con `MockWebServer` (`okhttp3.mockwebserver`, `testImplementation(libs.okhttp.mockwebserver)`); las corrutinas con
+  `kotlinx.coroutines.runBlocking` (no hay `kotlinx-coroutines-test` en el build). `SocketPolicy.DISCONNECT_AT_START`
+  simula «sin red»; `SocketPolicy.NO_RESPONSE`, un *timeout*.
+
+**Trampas del cliente**
+- **Gson y Kotlin:** Gson crea los objetos sin pasar por el constructor, así que un campo que falta en el JSON queda en
+  `null` aunque el tipo de Kotlin no lo admita, y los valores por defecto no se aplican. Por eso los DTOs son todos
+  anulables y las comprobaciones se hacen en `MapeoDatosApi` (`RespuestaInesperadaException` si falta algo).
+- **JSON roto en un 2xx:** Gson lanza `MalformedJsonException`, que **hereda de `IOException`**; `llamar` la atrapa
+  antes y la convierte en `RespuestaInesperadaException` (si no, se vería como «sin conexión»).
+- **Mayúsculas de los enumerados:** `uppercase(Locale.ROOT)`; con el teléfono en turco, `"biblioteca".uppercase()`
+  daría `BİBLİOTECA` y no coincidiría con el enum (lo prueba `MapeoDatosApiTest`).
+- **Fechas:** `isoAMilis` usa `SimpleDateFormat` en UTC y no `java.time`, porque `minSdk = 24` (`java.time` llega en la
+  API 26 sin *desugaring*). Acepta solo la zona `Z` (la que usa el backend) y descarta las fracciones de segundo.
+- **`EstadoFoto` aún sin `PENDIENTE`:** `estadoFoto("pendiente_subida")` da `null` y `foto()` lo muestra como `SUBIDA`
+  hasta que FE-2.1 añada `EstadoFoto.PENDIENTE` y su caso en `MapeoDatosApi.estadoFoto` (y en el `when` de colores de
+  `GaleriaScreen`, que es exhaustivo).
+- **URLs de fotos:** `url` y `url_miniatura` llegan `null` hasta BE-4.1; `foto()` las deja en `""`.
+- **Registrar:** el registrador por defecto (`AppLog.i`) llama a `android.util.Log`, que en las pruebas de la JVM no
+  existe: las pruebas pasan su propio `registrar`.
 
 **Errores → modelos de la app**
 
@@ -1731,6 +1869,16 @@ Formato de los datos:
 | `409` / `422` | Mensaje del campo afectado (`detalle.campos`) en formularios de admin |
 | Cualquier otro | «Algo salió mal» (`LoginError.Desconocido`, `ErrorDestino.DESCONOCIDO`) y se registra el `X-Request-Id` |
 
+Implementación (FE-1.1): `MapeoErroresApi.clasificar(http, cuerpo)` aplica estas reglas **en este orden** (la primera
+que cumple decide): `429` → `DemasiadosIntentos` (con cualquier cuerpo) · `5xx` con cuerpo `{"message": …}` sin clave
+`error` → `SinConexion` · `401` + `CREDENCIALES_INVALIDAS` → `CredencialesInvalidas` · `401` + `TOKEN_EXPIRADO`,
+`TOKEN_INVALIDO` o `NO_AUTENTICADO` → `SesionVencida(codigo)` · `403` + `SIN_PERMISOS` → `SinPermisos` · `503` +
+`EMBEDDING_NO_DISPONIBLE` → `EmbeddingNoDisponible` · `409` o `422` → `Validacion` (con `detalle.campos` si viene) ·
+el resto → `Desconocido(http, codigo)`. Así, `500 ERROR_INTERNO`, `503 BASE_NO_DISPONIBLE`, `503 SERVICIO_OCUPADO`,
+`404`, un `401`/`403` con otro código o un cuerpo que no es JSON son `Desconocido`. Sin respuesta (DNS, conexión,
+*timeout*) no hay código: `llamar` lanza `SinConexionException` directamente. Lo cubre `MapeoErroresApiTest` fila por
+fila.
+
 **Mapeo de datos**
 
 | Backend (JSON) | App (Kotlin) |
@@ -1742,6 +1890,16 @@ Formato de los datos:
 | `usuario` del login | `Usuario`; `expira_en` se guarda con la sesión |
 | `VideoResumen` / `ImagenAdmin` | `Video` / `Foto`. El `id` del video pasa a ser UUID (hoy es el nombre de la carpeta); `uid` de `Foto` sigue siendo `videoId/id`. `EstadoFoto` necesita un valor `PENDIENTE` para `pendiente_subida` (FE-2.1) |
 | Fechas ISO-8601 | `creadoEn` / `capturadaEn` siguen siendo texto en los modelos actuales; convertir solo donde se ordene o filtre |
+
+Implementación (FE-1.1), por fila: `MapeoDatosApi.enumDe` (desconocido → `null`; en `usuario`, un rol desconocido es
+`RespuestaInesperadaException`) · `lugarDestino` (categoría desconocida → `null`, el lugar se descarta; `distancia_m`
+con `roundToInt`) · `alerta` (`tipo` por defecto `otro`, `prioridad` `normal`, `radio` 15, `activa` `true` si faltan) ·
+`resumenAdmin(dto, fotosPendientes)` · `usuario` + `expiraEnMs` (FE-1.2 añade `expira_en` a `Sesion`; hoy `Sesion` es
+`(token, usuario)`) · `video` (fotos ordenadas por `orden`; `Foto.id` = UUID de la imagen, así `uid` =
+`<uuid video>/<uuid imagen>`; `lugar` = nombre del lugar) y `foto` · `isoAMilis`. Obligatorios (si faltan,
+`RespuestaInesperadaException`): `id`, `correo` del usuario; `id`, `nombre`, `lat`, `lng` del lugar; `id`, `lat`, `lng`,
+`mensaje` de la alerta; los tres totales de `stats`; `id`, `video_id`, `lat`, `lng` de la imagen; `id` del video. Lo
+cubre `MapeoDatosApiTest` con los ejemplos JSON del contrato del backend.
 
 **Rumbo (backend ADR-BE-12)**: todo rumbo que se envía va en grados [0, 360), **norte verdadero**, sentido horario.
 - Recolección (7.4) y `PdrTracker`: ya es norte verdadero; solo normalizar a [0, 360).
@@ -1812,6 +1970,86 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
   videos de prueba); los recorridos reales del campus son dataset y se quedan. En el dispositivo, el validador borra
   los datos de la app con `pm clear` solo si su documento lo indica. La cuenta `validacion+user@campus.edu.co` se crea,
   reactiva y desactiva como en backend §5.11.
+
+**Dónde se ejecutan hoy (FE-1.1)**: en WSL (`uv`, `terraform`, `gh`), llamando por *interop* al Gradle y al `adb` de
+Windows, porque el JDK, el SDK y el USB del teléfono están en Windows (§4.1). Variables:
+
+| Variable | Uso | Valor en la máquina del equipo (WSL) |
+|---|---|---|
+| `VALIDACION_GRADLE` | Comando para Gradle, separado por espacios (no admite rutas con espacios). Por defecto `cmd /c gradlew.bat` en Windows y `bash gradlew` en el resto | `cmd.exe /c .\gradlew.bat` |
+| `JAVA_HOME` + `WSLENV` | JDK del Gradle de Windows; `WSLENV` pasa la variable tal cual al proceso de Windows | `JAVA_HOME='C:\Users\frank\.jdks\jbr-21.0.11'`, `WSLENV=JAVA_HOME:ANDROID_SERIAL` |
+| `VALIDACION_ADB` | Comando para `adb`. Por defecto el `adb` del `PATH` o `$ANDROID_HOME/platform-tools/adb` | `/mnt/c/Users/frank/AppData/Local/Android/Sdk/platform-tools/adb.exe` |
+| `ANDROID_SERIAL` | Elegir dispositivo si hay varios (también lo lee el `installDebug` de Gradle, por eso va en `WSLENV`) | — |
+| `VALIDACION_API_URL` | URL base con `/v1`. Solo se usa si `terraform output` no está disponible (Terraform manda) | — |
+| `AWS_PROFILE` | Leer `terraform output -raw api_base_url` (estado en S3) | `campus-admin` |
+| `UV_PROJECT_ENVIRONMENT` | Opcional: el `.venv` fuera de `/mnt/c` (más rápido) | `/root/.cache/uv-envs/fe-ops` |
+
+**Entornos y códigos (lo propio de la app)**: en `local` las comprobaciones que necesitan teléfono o red se marcan
+`omitida` con el motivo (no cuentan para el código). En las precondiciones, lo que falta en la máquina (Gradle, `adb`,
+dispositivo, URL de la API) da **3**; solo «otro lote no está listo» (borde HTTPS sin respuesta, `GET /v1/health` sin
+`200 ok`) da **2**. Se evalúan primero las de herramientas y después las de otros lotes. Los validadores imprimen las
+manuales también en `local`.
+
+**Ayudas comunes (`project/src/ops/comun.py`, FE-1.1).** Solo biblioteca estándar. Esta tabla basta para escribir un
+validador nuevo sin leer el código; si cambian, se actualiza en el mismo cambio.
+
+| Elemento | Qué hace |
+|---|---|
+| `Validador(lote=, validacion=, descripcion=, comprobaciones=[…], entornos=("local", "dev"), grupos={…})` | Ciclo de vida (infra §5.11). `comprobaciones`: IDs válidos para `--solo`; `grupos`: alias (`{"C4": ["C4a", "C4b"]}`). `v.correr(cuerpo, argv=None)` lee `--entorno`, `--informe`, `--solo`, `--sin-limpieza`, ejecuta `cuerpo(v)`, limpia (orden inverso, también si algo falló), escribe el informe y devuelve el código. Error de uso, entorno no admitido o excepción en `cuerpo` → 3. `v.entorno`, `v.sello` (`AAAAMMDD-HHMMSS` UTC) |
+| `v.precondicion(id, fn)` → `bool` | `fn()` devuelve el detalle. `Bloqueo` o `Falla` → 2; `ErrorConfiguracion` → 3 |
+| `v.precondicion_no_evaluada(id, motivo)`, `v.precondiciones_cumplidas()` | Las que dependen de una que falló; ¿pasaron todas? |
+| `v.comprobacion(id, fn)` | `omitida` si `--solo` la excluye; `Falla` → `falla` (1); `ErrorConfiguracion` o imprevisto → `error` (3, con la traza en stderr). Mide `duracion_ms` |
+| `v.omitir(id, motivo)` | Comprobación que no aplica en este entorno (estado `omitida`) |
+| `v.incluida(id)`, `v.alguna_incluida(*ids)`, `v.manual(id, instruccion)`, `v.al_limpiar(descripcion, fn)` | Como en infra §5.11 |
+| `Falla`, `Bloqueo`, `ErrorConfiguracion` | Excepciones que deciden el código |
+| `ejecutar(comando, entrada=, timeout=300, cwd=PROYECTO, entorno=)` → `Resultado(codigo, salida, error)` (`.texto`) | Programa externo sin imprimir nada; no instalado → `ErrorConfiguracion`; *timeout* → `Falla` |
+| `gradle(*args, timeout=1800)`, `comando_gradle()` | Gradle con `--console=plain` (ver `VALIDACION_GRADLE`) |
+| `resultados_clase(clase, directorio=None)` → `ResultadoClase(clase, pruebas, fallos, errores, omitidas)` (`.ok` = ≥ 1 caso y 0 fallos y errores) o `None`; `archivo_resultados(clase)`, `borrar_resultados(clases)` | XML JUnit de `app/build/test-results/testDebugUnitTest/TEST-*.<clase>.xml` (por nombre simple). Borrar antes de ejecutar evita leer un resultado viejo y obliga a Gradle a repetir la tarea |
+| `adb(*args, timeout=120)`, `comando_adb()` | `adb` con `-s $ANDROID_SERIAL` si está definida |
+| `dispositivos(texto)`, `dispositivo_fisico()` → serial | Lee `adb devices`; sin dispositivo, varios sin `ANDROID_SERIAL`, estado distinto de `device` o emulador (`ro.kernel.qemu = 1`) → `ErrorConfiguracion` |
+| `leer_archivo_app(ruta)` → `str \| None` | `adb exec-out run-as com.example.myapplication cat <ruta>` (solo APK de depuración); `None` si no existe |
+| `url_api_config(ruta=API_CONFIG)` | `ApiConfig.BASE_URL` leída del código, resolviendo `$API_BASE_URL`; otra forma → `Falla` |
+| `url_api_vigente()` → `(url, origen)` | `terraform output -raw api_base_url` + `/v1` o, sin Terraform, `VALIDACION_API_URL`; ninguna → `ErrorConfiguracion`. `comprobar_forma_url(url, origen)` exige `https://…/v1`; `normalizar_url` quita la barra final |
+| `terraform_output_raw(nombre, directorio=DIR_TF_DEV)` | Una lectura del estado; sin `init` o sin credenciales → `ErrorConfiguracion` |
+| `http_get(url, timeout=15)` → `RespuestaHttp(estado, encabezados, cuerpo, duracion_ms)` (`.json()`) | `GET` con `X-Request-Id` propio; 4xx/5xx se devuelven; sin respuesta → `ErrorRed` |
+| `avisar`, `resumir`, `commit_actual()` | Progreso a stderr; recorte; commit corto con `-dirty` si hay cambios en archivos versionados de `project/` (con `core.autocrlf=input`, trampa abajo) |
+| `PROYECTO`, `RAIZ_REPO`, `DIR_INFORMES`, `DIR_TF_DEV`, `API_CONFIG`, `DIR_RESULTADOS_PRUEBAS`, `PAQUETE`, `ACTIVIDAD` (`com.example.myapplication/.MainActivity`), `LOG_APP` (`files/logs/app.log`) | Constantes |
+
+Forma de un validador (`validate11.py` es el ejemplo): `import comun`, `main(argv=None)` crea el `Validador` y devuelve
+`v.correr(cuerpo, argv)`, el módulo termina con `sys.exit(main())`. Sus pruebas (`tests/ops/test_validate11.py`)
+sustituyen `comun.gradle`, `comun.adb`, `comun.http_get`, etc. con `monkeypatch` y recorren `main()` entero; corren en
+el job `validadores` de `frontend.yml`. `uv run --frozen pytest` desde `project/` (29 casos al cerrar FE-1.1).
+
+**Detalles internos de los validadores**
+- `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
+  `PAGER=cat`; decodifica la salida como UTF-8 con `errors="replace"`. `http_get` envía `User-Agent: validacion-app`
+  y un `X-Request-Id` UUID propio.
+- Estados en el informe: precondiciones `pasa`, `falla` o `no evaluada`; comprobaciones `pasa`, `falla`, `error`
+  (código 3: `ErrorConfiguracion` o imprevisto) u `omitida`; manuales en la lista `manuales`. Línea en stdout:
+  `[PASA]`, `[FALLA]`, `[ERROR]`, `[OMITIDA]`, `[NO EVALUADA]`, `[MANUAL]` y al final `Resultado: <resultado> (código N)`.
+  Informe por defecto: `project/.validacion/<lote>-<sello>.json`.
+- `validate11.py`: `CLASES_C2 = ["MapeoErroresApiTest", "MapeoDatosApiTest"]`; `ESPERA_C1A_S = 60` (lee `app.log`
+  cada 3 s); `PATRON_SALUD` = `^(AAAA-MM-DD HH:MM:SS)\.mmm I/Api .*GET /v1/health -> (\S+)(?: \S+)? \((\d+) ms\)
+  rid=(\S+)`; `lineas_salud(texto, desde)` → `[(hora, resultado, rid)]`; IDs `C1a, C2, C4a, C4b` con grupos `C1 →
+  [C1a]` y `C4 → [C4a, C4b]`. Un validador nuevo copia esa forma: `Contexto` con lo que comparten las comprobaciones,
+  una función por precondición y por comprobación.
+- `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
+  ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
+  `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
+  hacen `import comun`). Un validador que necesite una biblioteca la añade al grupo `ops` y regenera `uv.lock`
+  (`uv lock`).
+
+**Trampas de los validadores**
+- **`cmd.exe` desde WSL no busca en el directorio actual** (`NoDefaultCurrentDirectoryInExePath=1`): `cmd.exe /c
+  gradlew.bat` falla con «no se reconoce como un comando»; hay que escribir `.\gradlew.bat`. Y `VALIDACION_GRADLE` se
+  separa por espacios, no con `shlex`, para no comerse la barra invertida.
+- `adb.exe` de Windows se ejecuta desde WSL sin problema; el teléfono debe estar conectado a Windows y con la
+  depuración USB autorizada.
+- La hora de `app.log` es la del teléfono: C1a compara contra `adb shell date`, no contra el reloj de la máquina.
+- **Finales de línea:** la copia de trabajo de esta carpeta la sacó el Git de Windows (`core.autocrlf=true`: archivos
+  con CRLF, índice con LF). El Git de WSL, sin esa opción, ve ~100 archivos de `project/` como modificados (comprobado
+  el 2026-10-25). Por eso `commit_actual()` usa `git -c core.autocrlf=input status …` (así solo cuenta los cambios
+  reales) y **los commits de esta carpeta se hacen con el Git de Windows** o con `-c core.autocrlf=input` en WSL.
 
 ---
 
@@ -1975,7 +2213,7 @@ para elegir.
 | `ui/destino/componentes/` | `PanelesVoz` (barra, micrófono, texto reconocido, confirmación, opciones), `ListaLugares` (chips, buscador, lista, botón Volver) y `Comun` (tarjeta, íconos por categoría) |
 | `domain/usecase/BuscarLugares.kt` | Coincidencia aproximada, filtro del buscador e interpretación de "sí" / "no" |
 | `domain/model/LugarDestino.kt` | `LugarDestino` y `CategoriaLugar` |
-| `data/repository/LugaresRepository.kt` | Contrato (`GET /v1/places`) y stub temporal (**TODO:** reemplazar por Retrofit/Ktor con `ApiConfig.kt`) |
+| `data/repository/LugaresRepository.kt` | Contrato (`GET /v1/places`) y stub temporal (**TODO:** reemplazar por un `Remote*` en `data/remote/` sobre `ClienteApi`, §5.10) |
 
 ---
 
@@ -2106,7 +2344,7 @@ contraseña"); botones y campos de 64 dp o más.
 | `ui/auth/LoginViewModel.kt` | Estado (`LoginUiState`), errores (`LoginError`), evento `IrAlPanel` y lógica del login |
 | `ui/components/BannerEstado.kt` | Banner de error/advertencia reutilizable |
 | `session/SessionManager.kt` | Sesión cifrada: `guardar`, `obtener`, `esAdmin`, `cerrarSesion` |
-| `data/repository/AuthRepository.kt` | Contrato del login (`AuthRepository`) y stub temporal (**TODO:** reemplazar por Retrofit/Ktor con `ApiConfig.kt`) |
+| `data/repository/AuthRepository.kt` | Contrato del login (`AuthRepository`) y stub temporal (**TODO:** reemplazar por un `Remote*` en `data/remote/` sobre `ClienteApi`, §5.10) |
 | `domain/model/Usuario.kt` | `Rol` (USER/ADMIN), `Usuario`, `Sesion` |
 
 **Navegación:** ruta `login` en `AppNav` (`MainActivity.kt`); conexiones en §5.8.
@@ -2749,6 +2987,21 @@ dominio actuales no cambian salvo `EstadoFoto` (nuevo valor `PENDIENTE`).
 
 **ADR-FE-11 — Control de calidad de imagen desactivado temporalmente (aceptada, provisional).**
 `camera/CalidadImagen.kt` se conserva sin uso hasta que el flujo de captura esté estable (6.2, 7.4).
+
+**ADR-FE-12 — Cliente HTTP: Retrofit + OkHttp + Gson (aceptada, 2026-10-25, FE-1.1).**
+Opciones: Retrofit + OkHttp o Ktor Client. Se eligió Retrofit 2.11.0 sobre OkHttp 4.12.0 con el convertidor de Gson
+porque OkHttp y Gson **ya estaban en el build** (no se añade un motor nuevo), las pruebas del cliente usan
+**MockWebServer**, que es de OkHttp (§5.11 ya lo pedía), los encabezados de §5.10 (`X-Request-Id`, `Authorization`) son
+interceptores de OkHttp de pocas líneas, y Retrofit da rutas declarativas con funciones `suspend`. Ktor habría
+añadido su motor, su sistema de *plugins* y kotlinx.serialization (con su *plugin* de compilación) para lo mismo.
+*Consecuencias:* las rutas devuelven `Response<T>` y pasan por `llamar` (§5.10); los DTOs deben ser anulables por cómo
+crea objetos Gson; si algún día se activa R8 (`isMinifyEnabled`), los DTOs ya llevan `@SerializedName`, pero hará
+falta revisar las reglas de Retrofit (sin comprobar).
+
+**ADR-FE-13 — Solo HTTPS (aceptada, 2026-10-25, FE-1.1).**
+El Manifest pasa a `android:usesCleartextTraffic="false"`: la API solo existe por HTTPS (infra §5.13) y las páginas
+de `assets/` solo cargan recursos `https://` (Leaflet, fuentes, teselas). El valor `true` venía de un prototipo que
+llamaba a una IP por `http://` (el antiguo `ApiConfig.PREDICT_URL`).
 
 ### 8.2 Decisiones abiertas
 

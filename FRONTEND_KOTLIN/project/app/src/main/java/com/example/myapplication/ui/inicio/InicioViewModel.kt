@@ -3,6 +3,9 @@ package com.example.myapplication.ui.inicio
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myapplication.data.remote.ClienteApi
+import com.example.myapplication.data.remote.RemoteBackendHealth
+import com.example.myapplication.data.repository.BackendHealth
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,15 +14,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
-/** Reemplaza la implementación por tu llamada real al backend (ej. GET /health). */
-interface BackendHealth {
-    suspend fun estaEnLinea(): Boolean
-}
-
-object BackendHealthStub : BackendHealth {
-    override suspend fun estaEnLinea(): Boolean = true
-}
 
 data class InicioUiState(
     val escuchando: Boolean = false,
@@ -33,7 +27,8 @@ sealed interface InicioEvento {
 
 class InicioViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val backend: BackendHealth = BackendHealthStub
+    /** `GET /v1/health` real (FE-1.1); cada intento queda en `AppLog` con su `X-Request-Id` (tag `Api`). */
+    private val backend: BackendHealth = RemoteBackendHealth(ClienteApi.api)
 
     companion object {
         const val BIENVENIDA =

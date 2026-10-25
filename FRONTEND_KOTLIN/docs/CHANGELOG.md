@@ -23,6 +23,52 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.4.0] — 2026-10-25
+
+- **Lote que la motivó:** FE-1.1 (cliente HTTP, conexión real y CI).
+- **Qué cambió:**
+  - Código: `ApiConfig.kt` apunta a `api_base_url` de `dev` + `/v1` (antes, una IP por `http://` del prototipo);
+    nuevo paquete `data/remote/` (`CampusApi`, `ClienteApi` con `RequestIdInterceptor` y `AutenticacionInterceptor`,
+    `llamar`/`llamarSinCuerpo`, `FalloApi`, `ApiException`, `SinConexionException`, `RespuestaInesperadaException`,
+    `MapeoErroresApi`, DTOs, `MapeoDatosApi`, `RemoteBackendHealth`); `BackendHealth` se muda a
+    `data/repository/BackendHealth.kt` y `BackendHealthStub` desaparece; `InicioViewModel` sondea `GET /v1/health`
+    real; Manifest con `usesCleartextTraffic="false"`; dependencias Retrofit 2.11.0, `converter-gson` y
+    `mockwebserver` 4.12.0 (pruebas). Se quitaron de `app/build.gradle.kts` dos líneas
+    `lifecycle-*-compose:<tu versión>` (plantillas sin versión, duplicadas de las del catálogo; Gradle las ignoraba por
+    resolución de conflictos).
+  - Pruebas: `MapeoErroresApiTest` (14), `MapeoDatosApiTest` (13) y `ClienteApiTest` (7).
+  - CI: `.github/workflows/frontend.yml` (jobs `compilar y pruebas unitarias` y `validadores`).
+  - Validadores: `project/pyproject.toml` + `uv.lock`, `src/ops/comun.py`, `src/ops/validate11.py` y
+    `tests/ops/` (29 casos); `.validacion/` y los cachés de Python en `.gitignore`.
+    `commit_actual()` usa `git -c core.autocrlf=input` porque el Git de WSL ve como modificados los ~100 archivos con
+    CRLF que sacó el Git de Windows (§5.11, «Trampas»).
+  - Documento: nuevo §4.1 (dónde y cómo se compila, `frontend.yml`, trampas); §5.10 con la tabla de piezas de
+    `data/remote/`, el orden exacto de las reglas de errores, las funciones del mapeo de datos, cómo añadir una ruta y
+    las trampas del cliente; §5.11 con dónde corren los validadores (WSL + Gradle y `adb` de Windows), sus variables, la
+    tabla de `comun.py` y sus trampas; §3.2 (estructura con `tests/ops`, `uv.lock`, `.validacion/` y el tag `Api`);
+    §5.2 y §5.5/§5.6 (`BackendHealth` real, tag `Api`); ADR-FE-12 (Retrofit + OkHttp + Gson) y ADR-FE-13 (solo HTTPS).
+    Tras la revisión «solo docs»: «Detalles internos del cliente» (§5.10: campos de cada DTO, orden de interceptores,
+    convertidor Gson, `requestId` por excepción, pruebas con MockWebServer) y «Detalles internos de los validadores»
+    (§5.11: entorno de `ejecutar`, estados del informe, constantes de `validate11.py`, configuración de `pyproject.toml`).
+  - `validation-1-1`: C3 pasa a manual (la coordina el maestro con el PR); C1 se parte en C1a (automática: el teléfono
+    registra `GET /v1/health -> 200` en `app.log`) y C1b (manual: modo avión); C4 en C4a (URL) y C4b (salud por esa
+    URL); precondiciones reordenadas (primero herramientas, código 3; luego otros lotes, código 2); `local` admitido
+    para C2 y C4a; §5 con variables, preparación y salida esperada.
+- **Contratos tocados (§5):** §5.10 (piezas nuevas de `data/remote/`, formato de la línea `Api` de `AppLog`, forma de
+  `ApiConfig.kt` que lee el validador); §5.5 y §5.6 (`BackendHealth` cambia de archivo y de implementación; misma
+  firma, pero pasa del paquete `ui.inicio` a `data.repository`: incompatible para quien lo importe, y solo lo usaba
+  `InicioViewModel`); §5.11 (ayudas de `comun.py`). Piezas nuevas y un cambio incompatible menor: en `0.x`, sube la menor.
+- **Cómo se verificó:** en Windows, `.\gradlew.bat testDebugUnitTest assembleDebug` con JBR 21 → `BUILD SUCCESSFUL`,
+  35 casos sin fallos (34 nuevos + `ExampleUnitTest`). En WSL, `uv run --frozen ruff check .`, `ruff format --check .` y
+  `pytest` (29 casos) en verde; `validate11.py --entorno local` → código 0 (C2 14/14 y 13/13; C4a igual al output
+  `api_base_url` + `/v1`); `validate11.py --entorno dev` sin teléfono → código 3 en P2, como se espera. `GET /v1/health`
+  de `dev` responde `200 {"estado":"ok",…}` con `x-request-id` (curl, 2026-10-25).
+- **Pendiente:** ejecución en `dev` con el teléfono (C1a, C4b, C1b manual) y PR con `frontend.yml` en verde (C3, la
+  primera vez que corre en un runner Linux). El viejo `project/ARCHITECTURE_front.md` (copia anterior a 0.2.0, con
+  datos desactualizados) sigue en el repositorio.
+
+---
+
 ## [0.3.2] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; `embedding` deja de usar GPU y pasa a Fargate con 2 vCPU, con el mismo encendido

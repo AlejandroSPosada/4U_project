@@ -1,0 +1,28 @@
+# Solo para los validadores de los lotes FE-x.y (src/ops/), no para la app: ARCHITECTURE §5.11.
+[project]
+name = "campus-locator-app-ops"
+version = "0.1.0"
+description = "Validadores de los lotes de la app Android (FRONTEND_KOTLIN)"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+# Los validadores solo usan la biblioteca estándar (urllib, xml, subprocess); el grupo existe porque el contrato
+# común ejecuta `uv run --group ops …` (infra §5.11).
+ops = []
+dev = ["pytest>=8.3", "ruff>=0.8"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+include = ["src/ops/**/*.py", "tests/**/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src/ops"]
