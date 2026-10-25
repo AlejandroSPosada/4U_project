@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.11.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.12.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
 | Estado | Diseño propuesto. **INF-0.1 a INF-1.4 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
@@ -98,6 +98,11 @@ Detalle funcional de cada flujo: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §4.
   un `apply` con credenciales de otra cuenta falle.
 - Higiene de la cuenta (fuera de Terraform, se hace a mano una vez): MFA en el usuario raíz y sin llaves de acceso
   para él; un usuario administrador con MFA para el `bootstrap`; *S3 Block Public Access* activado a nivel de cuenta.
+- Roles vinculados a servicios creados a mano (fuera de Terraform; se crean una vez por cuenta y nada los borra):
+  `AWSServiceRoleForAPIGateway` (lo necesita el VPC Link de INF-1.4). Lo creó `root` el 2026-10-24 a las 23:16 UTC,
+  antes del `apply` de INF-1.4 (CloudTrail, `CreateServiceLinkedRole`); el `apply` lo intentó crear a las 23:22 y
+  recibió `InvalidInputException` porque ya existía. Si falta en otra cuenta: `aws iam create-service-linked-role
+  --aws-service-name ops.apigateway.amazonaws.com`.
 
 ### 3.2 Red
 
@@ -135,7 +140,8 @@ Detalle funcional de cada flujo: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §4.
   req/s). Sirve para frenar abusos de volumen (R10), **no** como límite de intentos de inicio de sesión: ese lo tendría
   que poner el backend.
 - Límites que heredan los servicios: **30 s** de tiempo máximo de integración y **10 MB** de carga útil por petición.
-  Por eso las fotos del dataset no pasan por la API (van directo a S3 con URL prefirmada).
+  Por eso las fotos del dataset no pasan por la API (van directo a S3 con URL prefirmada). Las respuestas que genera
+  la propia API Gateway (500 sin instancias de `api`, 429, 413) y lo que recibe `api` están en §5.13.
 - La autenticación **no** se valida en API Gateway: el JWT es propio (HS256) y lo verifica FastAPI
   (`BACKEND_FASTAPI/docs/ARCHITECTURE.md`, ADR-BE-03).
 - *Access logs* de la API a CloudWatch, en el *log group* `/campus-locator/dev/apigw` (lo crea `borde`, 14 días), con
@@ -414,7 +420,7 @@ Inventario de nombres:
 
 | Output | Ejemplo / forma | Quién lo usa |
 |---|---|---|
-| `api_base_url` | `https://abc123.execute-api.us-east-1.amazonaws.com` (sin barra final) | App: `ApiConfig.kt` = este valor + `/v1` |
+| `api_base_url` | `https://fuzq99kddb.execute-api.us-east-1.amazonaws.com` (valor real en `dev`, sin barra final; cambia si se recrea la API, R8) | App: `ApiConfig.kt` = este valor + `/v1`. Lo que ve el cliente en esa URL sin pasar por `api`: §5.13 |
 | `ecr_backend_url` | `648617469176.dkr.ecr.us-east-1.amazonaws.com/campus-locator/backend` | `backend.yml` |
 | `ecr_embedding_url` | `…/campus-locator/embedding` | `embedding.yml` |
 | `ecs_cluster` | `campus-locator-dev` | workflows |
@@ -1040,6 +1046,38 @@ mataría al instante; y con tuberías, si Python muriera, terraform recibiría S
 `comun._entorno_proceso()` para tener el mismo entorno que `ejecutar`. Con esta ya hay dos variantes de la misma idea:
 el próximo validador que lance un `plan` las une en `comun.py` (y actualiza §5.11).
 
+### 5.13 Borde: lo que ve el cliente y lo que recibe `api`
+
+Contrato del borde (§3.3) para `FRONTEND_KOTLIN` (respuestas que no vienen del backend) y `BACKEND_FASTAPI` (qué le
+llega a `api`). Comprobado el 2026-10-24 a las 20:13 (Bogotá) contra `api_base_url` (§5.2), con `api` en 0 réplicas,
+con `curl` y con los *access logs* de `/campus-locator/dev/apigw`. Lo que no se ha comprobado lo dice cada fila.
+
+**Respuestas que genera API Gateway.** No pasan por `api`: no hay log del backend, y el *access log* las registra con
+`integrationStatus = "-"`. Su cuerpo es `{"message": "..."}`, no el formato de error de
+`BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5; el cliente las distingue por eso.
+
+| Situación | Código y cuerpo | Comprobado |
+|---|---|---|
+| `api` sin instancias en Cloud Map (0 réplicas, o ninguna tarea registrada todavía) | `500` `{"message":"Internal Server Error"}` (no 503) | Sí: `GET /v1/health`, `POST /v1/auth/login` y un `POST /v1/localize` de 9 MB con `api` en 0. Con `content-type: application/json` y cabecera `apigw-requestid` |
+| *Throttling* (§5.10; aproximado, §3.3) | `429` `{"message":"Too Many Requests"}` | Sí: 38 de 100 `POST /v1/auth/login` lanzados con 50 en paralelo |
+| Cuerpo de más de 10 MB | `413` `{"message":"Request Entity Too Large"}` | Sí: 11 000 000 bytes dan 413; 9 000 000 pasan (y dieron 500 por no haber `api`) |
+| `api` tarda más de 30 s (tiempo máximo de la integración, R7) | Sin comprobar | No: la imagen de prueba responde al instante. Se comprueba con un endpoint lento del backend |
+| Ruta que no casa con ninguna de las dos | No ocurre: `ANY /{proxy+}` también recoge `/` | Sí: `GET /` dio el 500 de la primera fila y su *access log* dice `routeKey = ANY /{proxy+}`. No hay 404 de API Gateway; un 404 lo da el backend (o la imagen de prueba) |
+
+Que la cabecera `apigw-requestid` y el `content-type: application/json` estén también en los 429 y 413 no se comprobó.
+El `apigw-requestid` de cualquier respuesta es el `requestId` del *access log* (§5.10): sirve para buscar una petición.
+
+**Lo que recibe `api`** (integración `HTTP_PROXY`, `payload_format_version = 1.0`, §5.12):
+
+| Aspecto | Contrato | Comprobado |
+|---|---|---|
+| Ruta | Tal cual llega a API Gateway (`/v1/...`), sin prefijo de etapa: la etapa es `$default` | Sí: con la imagen de prueba, que solo responde 200 a `/v1/health` exacto, `GET {api_base_url}/v1/health` da 200 (INF-1.4 C1b) |
+| Método y cuerpo | Se reenvían tal cual | El método sí: los `POST` de INF-1.4 C2b llegaron a `api` (501 de la imagen de prueba). El cuerpo, no |
+| Cadena de consulta y cabeceras del cliente | Se reenvían | No comprobado |
+| Cabeceras que añade API Gateway (IP del cliente, protocolo) | No hay contrato todavía | **A verificar con la imagen de BE-1.1**. Hasta entonces el backend no puede fiarse de ninguna cabecera para identificar al cliente (R10) |
+| Transporte | El TLS termina en API Gateway; del VPC Link a `api` es HTTP en claro dentro de la VPC, al puerto 8000 (§5.7) | — |
+| Límites | 30 s por petición y 10 MB de cuerpo (§3.3) | 10 MB sí (arriba); 30 s no |
+
 ---
 
 ## 6. Decisiones de diseño (ADR)
@@ -1150,7 +1188,7 @@ optimización (INF-6.1).
 | R7 | Límite de 30 s y 10 MB de API Gateway | Media | Medio | Fotos del dataset directo a S3; `/v1/localize` limitado a 5 fotos de ≤ 1,5 MB (contrato del backend) |
 | R8 | La URL de la API cambia si se recrea la HTTP API, y `ApiConfig.kt` queda desactualizado | Baja | Medio | `prevent_destroy` en la API; dominio propio en Fase 6 |
 | R9 | Cuotas por defecto de una cuenta nueva (vCPU de Fargate, etc.) | Baja | Medio | El sistema usa ~2,5 vCPU con todo encendido; solicitar aumento si un `apply` falla por cuota. Sin GPU desde 0.9.0: el cupo de instancias G de la cuenta es 0 (ADR-INF-14) |
-| R10 | `/v1/localize` es público: abuso que dispara costos; `/v1/auth/login` admite fuerza bruta | Baja | Medio | *Throttling* (aproximado: frena volumen, no intentos sueltos, §3.3); alarma de 5xx; en `prod`, WAF o clave de app. Límite de intentos de inicio de sesión: pendiente de proponer al backend (`BACKEND_FASTAPI`) |
+| R10 | `/v1/localize` es público: abuso que dispara costos; `/v1/auth/login` admite fuerza bruta | Baja | Medio | *Throttling* (aproximado: frena volumen, no intentos sueltos, §3.3); alarma de 5xx; en `prod`, WAF o clave de app. Límite de intentos de inicio de sesión: lo tiene que poner el backend (`BACKEND_FASTAPI`; propuesta en CHANGELOG 0.12.0). Si limita por IP, la cabecera con la IP del cliente está sin verificar (§5.13) |
 | R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y pueden chocar con nombres de §5.1 (sobre todo el *namespace* de Cloud Map `campus-locator.local`, con INF-1.3) | Alta | Medio | Revisado el 2026-10-24: no había otra VPC `campus-locator-dev-vpc` (C2a de INF-1.1) ni nada que choque con INF-1.2 (el bucket del dataset ya no existe; sin instancias, *snapshots*, grupos de parámetros ni de subredes de RDS; sin colas; `campus-locator-dev/jwt-secret` está en borrado programado y su nombre no choca). Antes de INF-1.3, inventariar y limpiar el resto: clúster y servicios de ECS, ECR `campus-locator-dev/*`, *namespace* de Cloud Map, *target group*, *log groups* `/ecs/…`, roles `campus-locator-dev-backend-*` y `-embedding-*` y los buckets `campus-locator-dev-scans-648617469176` y `4uproject-eafit-tfstate` (CHANGELOG 0.3.0). Revisado de nuevo antes de INF-1.3 (`.validacion/inventario-r11b.txt`): ya no quedan roles `campus-locator-dev-*` ni buckets del intento anterior; antes del `apply` de INF-1.3 se confirma que no hay *namespace* `campus-locator.local`, clúster `campus-locator-dev` ni repositorios `campus-locator/*` (`servicediscovery list-namespaces`, `ecs describe-clusters`, `ecr describe-repositories`) |
 | R12 | El repositorio es público: los logs de Actions y los comentarios del `plan` los puede leer cualquiera | Alta | Bajo | Terraform oculta los valores `sensitive` (contraseñas, secretos) en el `plan` y en los logs; ningún paso imprime el estado ni credenciales; todo output con un dato sensible se declara `sensitive`; los PR desde *forks* no ejecutan el `plan`. Lo que queda visible (IDs, ARN, URL) no da acceso por sí solo |
 | R13 | El apagado automático de `embedding` falla y queda encendido (~2,5 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas) y presupuesto con avisos |

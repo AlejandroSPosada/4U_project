@@ -20,6 +20,44 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.12.0] — 2026-10-24
+
+- **Lote que la motivó:** ninguno; cambio aparte antes de INF-2.1. INF-1.4 estaba «Hecho», pero §5 no decía lo que
+  `FRONTEND_KOTLIN` y `BACKEND_FASTAPI` necesitan saber del borde.
+- **Qué cambió:**
+  - Nueva §5.13 «Borde: lo que ve el cliente y lo que recibe `api`»: las respuestas que genera API Gateway (cuerpo
+    `{"message": "..."}`, no el formato de error del backend) y lo que llega a `api`, cada fila con si está comprobada.
+    Lo comprobado contradice dos supuestos: con `api` en 0 la respuesta es **500** `Internal Server Error`, no 503; y
+    no hay 404 de API Gateway, porque `ANY /{proxy+}` también recoge `/`. El corte de los 30 s y las cabeceras que
+    añade API Gateway (IP del cliente) quedan sin comprobar; las cabeceras, «a verificar con la imagen de BE-1.1».
+  - §5.2: `api_base_url` con su valor real (`https://fuzq99kddb.execute-api.us-east-1.amazonaws.com`) y la nota de que
+    cambia si se recrea la API (R8). §3.3 enlaza §5.13.
+  - §3.1: el rol vinculado `AWSServiceRoleForAPIGateway` lo creó `root` a mano antes del `apply` de INF-1.4 (no
+    existía); queda anotado como recurso fuera de Terraform.
+  - R10: el límite de intentos de inicio de sesión lo tiene que poner el backend (propuesta abajo); si limita por IP,
+    depende de la cabecera sin verificar de §5.13.
+- **Contratos tocados (§5):** §5.13 (nueva) y §5.2 (valor real de `api_base_url`). Contrato nuevo: sube la menor.
+- **Cómo se verificó:** el 2026-10-24 a las 20:13 (Bogotá), con `api` en 0 (`desiredCount = runningCount = 0`):
+  `curl` a `/` y a `/v1/health` (500, `content-type: application/json`, `apigw-requestid`); 100 `POST /v1/auth/login`
+  con 50 en paralelo (62 × 500, 38 × 429 `Too Many Requests`); `POST /v1/localize` de 11 000 000 bytes (413
+  `Request Entity Too Large`) y de 9 000 000 (500). `logs filter-log-events` de los dos `requestId` del paso 1: los dos
+  con `routeKey = ANY /{proxy+}`, `status = 500` e `integrationStatus = "-"`, también el de `path = /`. CloudTrail
+  (`lookup-events` de `CreateServiceLinkedRole`): `ops.apigateway.amazonaws.com` creado por `Root` a las 23:16 UTC; el
+  intento del `apply` a las 23:22 UTC dio `InvalidInputException`.
+- **Pendiente:**
+  - Comprobar el corte de los 30 s y las cabeceras que recibe `api` con la imagen de BE-1.1, y completar §5.13.
+  - Proponer a `BACKEND_FASTAPI` un límite de intentos de inicio de sesión (R10). El *throttling* de API Gateway no
+    sirve para eso: es aproximado (a 2 req/s configuradas pasaron ~8 a ~21 req/s de una sola máquina, §3.3) y es uno
+    para todos los clientes de la ruta, así que no distingue cuentas y, si un atacante lo agota, también deja fuera al
+    administrador. 2 req/s ya son ~170 000 intentos al día. Solo el backend sabe a qué cuenta va el intento y si falló.
+    Propuesta: por correo, tras 5 fallos en 15 min, responder 429 con `Retry-After` durante 15 min. La respuesta es la
+    misma exista o no el correo, con el mismo tiempo (hash de comparación aunque el correo no exista). Los fallos se
+    guardan en PostgreSQL, porque la infraestructura no tiene Redis y la memoria de `api` se pierde en cada despliegue.
+    Cada bloqueo queda en el log. El límite por IP, solo cuando se verifique la cabecera con la IP del cliente
+    (§5.13). Va en el §5 del backend (códigos de error de login) y lo consume la app (mensaje para el 429).
+
+---
+
 ## [0.11.1] — 2026-10-24
 
 - **Lote que la motivó:** INF-1.4 (Borde HTTPS), primera ejecución de `validate14.py` en `dev`.
