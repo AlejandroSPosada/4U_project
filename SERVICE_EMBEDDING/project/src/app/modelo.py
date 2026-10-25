@@ -96,16 +96,18 @@ class ModeloDinov2:
         for tamano in LOTES_CALENTAMIENTO:
             self.inferir(torch.zeros((tamano, 3, LADO_ENTRADA_PX, LADO_ENTRADA_PX)))
 
-    def inferir(self, lote: torch.Tensor) -> np.ndarray:
-        """Tensor (n, 3, 224, 224) ya preprocesado → matriz (n, DIM) float32 con norma L2 = 1.
+    def inferir(self, lote: np.ndarray | torch.Tensor) -> np.ndarray:
+        """Lote (n, 3, 224, 224) ya preprocesado → matriz (n, DIM) float32 con norma L2 = 1.
 
+        Acepta el array de NumPy de `preproceso.preprocesar_lote` (se usa sin copiarlo) o un tensor.
         Descriptor: token CLS de la última capa tras la layernorm final (`pooler_output`, §5.3).
         """
         if self._red is None:
             raise ErrorModelo("El modelo no está cargado")
         import torch
 
+        entrada = torch.as_tensor(lote, dtype=torch.float32)
         with torch.inference_mode():
-            salida = self._red(pixel_values=lote.to(torch.float32))
+            salida = self._red(pixel_values=entrada)
             vectores = torch.nn.functional.normalize(salida.pooler_output, p=2.0, dim=1)
         return vectores.to(torch.float32).numpy()

@@ -436,6 +436,40 @@ def logs_contenedor(nombre: str, lineas: int = 15) -> str:
     return _recortar(salida.stdout + salida.stderr, 1500)
 
 
+def en_marcha(nombre: str) -> bool:
+    estado = docker("inspect", "--format", "{{.State.Running}}", nombre, timeout=60)
+    return estado.stdout.strip() == "true"
+
+
+def imagen_local() -> str:
+    """`EMBEDDING_IMAGEN` disponible en Docker y de plataforma linux/amd64 (§5.8, infra §5.9).
+
+    Una imagen de ECR se descarga siempre (tras `docker login`); una local, solo si no está. Sin la
+    variable o si falla la descarga → `ErrorConfiguracion` (3); otra plataforma →
+    `PrecondicionNoCumplida` (2).
+    """
+    imagen = os.environ.get("EMBEDDING_IMAGEN", "").strip()
+    if not imagen:
+        raise ErrorConfiguracion("falta la variable EMBEDDING_IMAGEN (ARCHITECTURE §5.8)")
+    if es_imagen_ecr(imagen):
+        login_ecr(imagen)
+        descargar = True
+    else:
+        descargar = docker("image", "inspect", imagen, timeout=60).returncode != 0
+    if descargar:
+        salida = docker("pull", imagen, timeout=1800)
+        if salida.returncode != 0:
+            raise ErrorConfiguracion(f"docker pull {imagen} falló: {salida.stderr.strip()[-300:]}")
+    plataforma = docker(
+        "image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", imagen, timeout=60
+    ).stdout.strip()
+    if plataforma != "linux/amd64":
+        raise PrecondicionNoCumplida(
+            f"{imagen} es {plataforma or '?'}, se exige linux/amd64 (infra §5.9)"
+        )
+    return imagen
+
+
 def _recortar(texto: str, maximo: int = 400) -> str:
     texto = " ".join(texto.split())
     return texto if len(texto) <= maximo else "…" + texto[-maximo:]

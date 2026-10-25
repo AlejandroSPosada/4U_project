@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.5.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.6.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
-| Estado | En construcción: código de EMB-1.1 (servicio base e imagen); el resto de lotes, pendiente |
+| Estado | En construcción: código de EMB-1.1 (servicio base e imagen) y EMB-2.1 (vectorización por lotes); el resto de lotes, pendiente |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Servicio HTTP interno que convierte fotos en **vectores de 384 dimensiones** con **DINOv2 ViT-S/14** sobre CPU
@@ -97,11 +97,12 @@ SERVICE_EMBEDDING/
     ├── tools/
     │   ├── descargar_modelo.py   Se ejecuta en el build: baja la revisión fija a /opt/modelo y deja revision.json
     │   ├── benchmark.py          EMB-3.1: latencia por tamaño de lote (va dentro de la imagen, §5.8)
+    │   ├── dorados.py            EMB-2.1: imágenes de referencia y vectores esperados de tests/golden/ (§5.4)
     │   └── evaluacion/           EMB-3.2: recuperación sobre un conjunto etiquetado
-    ├── tests/                    contrato HTTP, configuración, modelo, validadores; preproceso y vectores dorados
-    │                             (golden/) desde EMB-2.1
+    ├── tests/                    contrato HTTP, configuración, modelo, preproceso, planificador, validadores y
+    │                             vectores dorados (golden/: cinco imágenes y esperados.json, §5.4)
     ├── .dockerignore             solo entra a la imagen lo de §5.5
-    ├── .gitignore                incluye .validacion/ (informes de los validadores)
+    ├── .gitignore                incluye .validacion/ (informes de los validadores) y .modelo/ (pesos para dorados)
     ├── Dockerfile                tres etapas (§4.2)
     ├── pyproject.toml            uv (PyTorch desde su índice de CPU); ruff; pytest; grupo `ops` para los validadores
     └── uv.lock                   versiones exactas de todas las dependencias (R4); se versiona
@@ -137,7 +138,9 @@ El workflow `embedding.yml` vive en `.github/workflows/` de la raíz del monorep
   (formato en §5.7).
 - `GET /v1/info` publica la versión del vector para que el backend la compruebe.
 - **CI/CD** (`embedding.yml`, contrato de infra §5.9):
-  - En PR: `uv sync --locked`, `ruff check`, `ruff format --check` y `pytest`.
+  - En PR: `uv sync --locked`, `ruff check`, `ruff format --check` y `pytest`, este con los pesos de la revisión fijada
+    (bajados con `tools/descargar_modelo.py` y guardados en la caché de Actions) y `DORADOS_OBLIGATORIOS=1`, para que
+    los vectores dorados no se omitan (ADR-EMB-12).
   - En `main` (o a mano con `workflow_dispatch`, p. ej. tras un cambio de Terraform en la tarea, ADR-INF-09): las
     mismas pruebas; imagen `linux/amd64` con `GIT_COMMIT` = SHA, publicada en ECR solo si esa etiqueta no existe
     (son inmutables); nueva revisión de `campus-locator-dev-embedding` a partir de la última de la familia,
@@ -149,19 +152,33 @@ El workflow `embedding.yml` vive en `.github/workflows/` de la raíz del monorep
     `sub = repo:<github_repo>:ref:refs/heads/main` (infra §5.8).
 
 ### 4.3 EMB-2.1 — Vectorización por lotes
-1. `POST /v1/embed` recibe 1–8 imágenes y valida tipo y tamaño antes de encolar.
+1. `POST /v1/embed` recibe 1–8 imágenes y valida antes de encolar, en este orden: tamaño del cuerpo (lo lee entero con
+   tope; si declara más de `BYTES_MAX_PETICION`, hasta 4 veces ese tamaño lo lee y lo descarta antes de responder `413`,
+   para que el cliente pueda leer la respuesta, y por encima responde sin leerlo), `X-Prioridad`, `multipart/form-data`
+   bien formado, número de partes `imagenes` y, para cada una en orden, tipo y tamaño (§5.6). El multipart se lee en un
+   hilo del *pool* de Starlette, no en el bucle de eventos, sin guardar las partes con otro nombre y cortando en la
+   novena imagen. Después, si el modelo aún carga, `503 NO_LISTO`.
 2. La petición entra en una **cola con prioridad**: `alta` (localización) antes que `baja` (ingesta); dentro de cada
    prioridad, por orden de llegada. La prioridad no interrumpe un lote que ya se está calculando: una petición `alta`
-   espera como máximo a que termine el lote en curso (por eso el `worker` envía lotes pequeños, backend §5.10). Si la
-   cola supera `COLA_MAX_IMAGENES`, responde `503 SATURADO` con `Retry-After`
-   (el `worker` reintenta; la localización casi nunca llega a ese punto porque pasa primero).
-3. El hilo de inferencia toma una petición, aplica el preprocesamiento pp-v1 a cada imagen, corre **un solo lote** con
-   todas las imágenes de esa petición y normaliza cada vector.
+   espera como máximo a que termine el lote en curso (por eso el `worker` envía lotes pequeños, backend §5.10). Si con
+   ella las imágenes en espera superarían `COLA_MAX_IMAGENES` (el lote en curso no cuenta), responde `503 SATURADO` con
+   `Retry-After` (el `worker` reintenta). La prioridad ordena la atención, no la admisión: con la cola llena de `baja`,
+   una `alta` también recibe `503`. Eso solo pasa si el `worker` tiene más de `COLA_MAX_IMAGENES` imágenes en espera a
+   la vez.
+3. El hilo de inferencia toma una petición, aplica el preprocesamiento pp-v1 a cada imagen (decodificación incluida),
+   corre **un solo lote** con todas las imágenes de esa petición y normaliza cada vector. `tiempos_ms.cola` mide desde
+   que la petición entra en la cola hasta que el hilo la toma; `tiempos_ms.inferencia`, desde ahí hasta tener los
+   vectores.
 4. Responde los vectores en el mismo orden de entrada, con los tiempos de cola e inferencia.
 
 Si una sola imagen no se puede decodificar, se rechaza **la petición completa** con `400 IMAGEN_INVALIDA` y el índice
 de la imagen: el que llama decide si reintenta sin ella (el `worker` marca esa imagen en `error` y reintenta el
 resto).
+
+Código: `planificador.py` (dos colas FIFO bajo un `threading.Condition` y un futuro por petición, que la ruta asíncrona
+espera sin bloquear el bucle de eventos; al detenerse el proceso, lo que esperaba recibe `503 NO_LISTO`) y
+`preproceso.py` (función pura sin PyTorch: devuelve un array de NumPy que `modelo.inferir` usa sin copiarlo). Los
+vectores dorados (§5.4) y dónde se calculan: ADR-EMB-12.
 
 ### 4.4 EMB-3.1 — Rendimiento en CPU
 `project/tools/benchmark.py` mide p50 y p95 para lotes de 1, 5 y 8 imágenes en una tarea igual a la de `dev` (2 vCPU,
@@ -241,9 +258,12 @@ Procedimiento previsto para cambiar de modelo o preprocesamiento sin dejar de ub
   argumento. `lote_max` = `LOTE_MAX` (§5.7). `dispositivo` es siempre `cpu` (ADR-EMB-11).
 
 #### `POST /v1/embed`
-- `multipart/form-data` con 1 a `LOTE_MAX` (8) partes llamadas `imagenes`, de tipo `image/jpeg` o `image/png`, cada
-  una ≤ 4 MB y la petición completa ≤ 16 MB.
-- Encabezado opcional `X-Prioridad: alta | baja` (por defecto `baja`). `api` envía `alta`; `worker`, `baja`.
+- `multipart/form-data` con 1 a `LOTE_MAX` (8) partes llamadas `imagenes` (las partes con otro nombre se ignoran), de
+  tipo `image/jpeg` o `image/png` (el `Content-Type` de cada parte), cada una ≤ 4 MB y la petición completa ≤ 16 MB
+  (bytes del cuerpo; MB = 2²⁰ bytes). Los bytes se decodifican como JPEG o PNG sea cual sea, de esos dos, el tipo
+  declarado.
+- Encabezado opcional `X-Prioridad: alta | baja` (por defecto `baja`; no distingue mayúsculas; otro valor →
+  `400 SOLICITUD_INVALIDA`). `api` envía `alta`; `worker`, `baja`.
 
 `200`:
 ```json
@@ -256,6 +276,8 @@ Procedimiento previsto para cambiar de modelo o preprocesamiento sin dejar de ub
 ```
 - `vectores[i]` corresponde a la `i`-ésima parte `imagenes`, en el orden recibido.
 - Cada vector tiene exactamente `dim` números (float32 serializados como números JSON) y norma L2 = 1 (±1e-4).
+- `tiempos_ms.cola`: milisegundos desde que la petición entra en la cola hasta que el hilo de inferencia la toma;
+  `tiempos_ms.inferencia`: desde ahí hasta tener los vectores, preprocesamiento pp-v1 incluido (§4.3).
 
 ### 5.3 Modelo, preprocesamiento y `version_vector`
 
@@ -271,6 +293,13 @@ Procedimiento previsto para cambiar de modelo o preprocesamiento sin dejar de ub
 | 5. Salida del modelo | *Token* CLS de la última capa tras la *layernorm* final (`pooler_output` de `Dinov2Model`) |
 | 6. Normalización del vector | L2 |
 
+Lo que la tabla no detalla lo fija el código igual que el procesador publicado con el modelo
+(`preprocessor_config.json` con `BitImageProcessorPil` de transformers 5.20.2, con el que pp-v1 coincide bit a bit; una
+prueba lo comprueba): Pillow `Image.Resampling.BICUBIC` sin `reducing_gap`; el lado largo se trunca,
+`int(256 · largo / corto)`; el recorte empieza en `(lado − 224) // 2`; la escala multiplica en float64 por 1/255 y pasa
+a float32, y `(x − media) / desviación` se calcula en float32. Lo único que pp-v1 añade a ese procesador es la
+orientación EXIF del paso 1. Los vectores dorados (§5.4) fijan todo esto.
+
 **`version_vector`** = `dinov2-vits14/pp-v1`. Identifica de forma única la combinación modelo + revisión +
 preprocesamiento + extracción. Dos vectores solo son comparables si tienen la misma `version_vector`. Cambiar
 **cualquiera** de las filas de la tabla (incluida la revisión del modelo o una librería que altere los números más allá
@@ -281,10 +310,17 @@ de la tolerancia de §5.4) exige una versión nueva (ADR-EMB-08).
 - Dimensión 384, float32, norma L2 = 1. Métrica prevista: **coseno**; como están normalizados, coseno = producto
   escalar. En pgvector se guardan como `vector(384)` y se buscan con `vector_cosine_ops` (backend §5.7).
 - **Determinismo:** la misma imagen produce el mismo vector en la misma imagen de contenedor, con diferencia máxima
-  por componente ≤ 1e-5. Se verifica con **vectores dorados** (`tests/golden/`): cinco imágenes de referencia y sus
-  vectores esperados. Si una actualización de dependencias rompe esa tolerancia, no se despliega sin versión nueva.
+  por componente ≤ 1e-5. Se verifica con **vectores dorados** (`tests/golden/`): cinco imágenes de referencia generadas
+  por `tools/dorados.py` (sin derechos de terceros: JPEG apaisado, JPEG vertical con orientación EXIF, PNG con alfa, PNG
+  en gris de lados impares y JPEG de 96 × 72) y `esperados.json`, con sus vectores, el `sha256` de cada archivo y del
+  tensor preprocesado, y con qué se calcularon (CPU, hilos, versiones). Los comprueban `tests/test_dorados.py` (en CI,
+  con los pesos de la revisión fijada) y `validate21.py` C1 (contra la imagen). Dónde se calculan y por qué la misma
+  tolerancia vale entre CPU distintas (medido: ≤ 6,3e-7): ADR-EMB-12. Si una actualización de dependencias rompe esa
+  tolerancia, no se despliega sin versión nueva; `tools/dorados.py vectores` no sobrescribe los dorados si algún
+  componente se aleja más de 1e-5.
 - **Independencia del tamaño de lote:** el vector de una imagen no depende de con qué otras imágenes viajó, con la
-  misma tolerancia de 1e-5 (la aritmética float32 en CPU puede variar mínimamente con el tamaño del lote).
+  misma tolerancia de 1e-5 (la aritmética float32 en CPU puede variar mínimamente con el tamaño del lote; medido en
+  EMB-2.1: idéntico bit a bit en lotes de 1, 5 y 8).
 
 ### 5.5 Imagen de contenedor y proceso
 
@@ -296,7 +332,7 @@ de la tolerancia de §5.4) exige una versión nueva (ADR-EMB-08).
 | Comando (`CMD`) | `uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers 1 --no-server-header` |
 | Puerto | `8080` |
 | Pesos | En la imagen, `/opt/modelo` (descargados en el build por `tools/descargar_modelo.py`, que deja `revision.json` con el modelo y la revisión; si no coinciden con §5.3, el servicio no arranca) |
-| Contenido | `src/app/` (como paquete `app`) y `tools/benchmark.py`; `src/ops/`, `tests/` y `tools/evaluacion/` quedan fuera |
+| Contenido | `src/app/` (como paquete `app`) y `tools/benchmark.py`; `src/ops/`, `tests/`, `tools/dorados.py` y `tools/evaluacion/` quedan fuera |
 | Variables fijadas en el `Dockerfile` | `MODELO_DIR=/opt/modelo`, `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `HF_HOME=/tmp/huggingface` (el usuario de la imagen no tiene carpeta personal) y `GIT_COMMIT` (argumento de build con el SHA del commit, por defecto `desconocido`; `/v1/info` publica sus 7 primeros caracteres como `commit`) (la aplicación además aplica `TORCH_NUM_THREADS` a PyTorch y a OpenMP al arrancar) |
 | Variables que inyecta la infraestructura | `TORCH_NUM_THREADS`, `LOG_LEVEL`, `APP_ENV` (infra §5.4) |
 | Tamaño esperado | ~1,8 GB (PyTorch CPU + transformers + pesos de ~90 MB) |
@@ -306,15 +342,19 @@ de la tolerancia de §5.4) exige una versión nueva (ADR-EMB-08).
 
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
-| 400 | `SOLICITUD_INVALIDA` | Sin partes `imagenes` o multipart mal formado |
-| 400 | `IMAGEN_INVALIDA` | Una imagen no se pudo decodificar o mide menos de 64 px de lado; `detalle.indice` = posición |
+| 400 | `SOLICITUD_INVALIDA` | Sin partes `imagenes`, cuerpo que no es `multipart/form-data` o mal formado, o `X-Prioridad` distinto de `alta` y `baja` |
+| 400 | `IMAGEN_INVALIDA` | Una imagen no se pudo decodificar como JPEG o PNG, supera `Image.MAX_IMAGE_PIXELS` de Pillow (~89,5 MP, protección contra bombas de descompresión), mide menos de 64 px de lado o su lado largo pasa de 32 veces el corto (`PROPORCION_MAX`: la redimensión de pp-v1 crearía un intermedio de varios GB); `detalle.indice` = posición de la primera que falla |
 | 404 | `NO_ENCONTRADO` | Ruta inexistente |
 | 405 | `METODO_NO_PERMITIDO` | Método no admitido en una ruta existente |
-| 413 | `LOTE_DEMASIADO_GRANDE` | Más de 8 imágenes, una de más de 4 MB o una petición de más de 16 MB |
-| 415 | `TIPO_NO_SOPORTADO` | Tipo distinto de `image/jpeg` o `image/png` |
-| 503 | `NO_LISTO` | El modelo aún carga |
+| 413 | `LOTE_DEMASIADO_GRANDE` | Más de 8 imágenes o una petición de más de 16 MB (`detalle: null`), o una imagen de más de 4 MB (`detalle.indice` = posición) |
+| 415 | `TIPO_NO_SOPORTADO` | Tipo distinto de `image/jpeg` o `image/png`; `detalle.indice` = posición |
+| 503 | `NO_LISTO` | El modelo aún carga (o el proceso se está deteniendo) |
 | 503 | `SATURADO` | Cola por encima de `COLA_MAX_IMAGENES`; incluye `Retry-After` en segundos |
 | 500 | `ERROR_INTERNO` | Fallo no previsto (incluida falta de memoria) |
+
+En `POST /v1/embed`, si hay varios errores responde el primero en el orden de §4.3: tamaño del cuerpo, `X-Prioridad`,
+multipart, número de imágenes, tipo y tamaño de cada imagen en orden, `NO_LISTO`, `SATURADO` y, ya en el hilo de
+inferencia, `IMAGEN_INVALIDA`.
 
 ### 5.7 Parámetros operativos
 
@@ -323,7 +363,8 @@ de la tolerancia de §5.4) exige una versión nueva (ADR-EMB-08).
 | `LOTE_MAX` | 8 | El `worker` del backend envía lotes de 4 (backend §5.10) |
 | `BYTES_MAX_IMAGEN` / `BYTES_MAX_PETICION` | 4 MB / 16 MB | |
 | `LADO_MIN_PX` | 64 | Antes del preprocesamiento |
-| `COLA_MAX_IMAGENES` | 40 | Imágenes esperando, sumando todas las peticiones; no cuenta el lote que se está calculando |
+| `PROPORCION_MAX` | 32 | Lado largo / lado corto máximo, antes del preprocesamiento; con 32 el intermedio de la redimensión no pasa de 256 × 8192 px |
+| `COLA_MAX_IMAGENES` | 40 | Imágenes esperando, sumando todas las peticiones; no cuenta el lote que se está calculando. Debe ser ≥ `LOTE_MAX` (si no, el servicio no arranca: un lote completo nunca entraría) |
 | `RETRY_AFTER_S` | 5 | En `503 SATURADO` |
 | Hilos de PyTorch | `TORCH_NUM_THREADS` (valor en infra §5.4) | Igual a los vCPU de la tarea (2) |
 | Latencia objetivo | En `dev` (2 vCPU): lote de 5 p95 ≤ 800 ms; lote de 1 p95 ≤ 250 ms | Para `POST /v1/localize` en p95 ≤ 1 s (infra §5.10). **A medir en EMB-3.1**; estimación previa en ADR-EMB-11 |
@@ -349,7 +390,7 @@ terminar lo deja como lo encontró: si lo encendió él, lo apaga; si ya estaba 
 
 **Variables que leen**: `EMBEDDING_IMAGEN` (en `local`), `AWS_PROFILE` (en `dev`) y, para EMB-3.2,
 `VALIDACION_API_URL`, `VALIDACION_ADMIN_CORREO` y `VALIDACION_ADMIN_PASSWORD` (las mismas del backend, su §5.11). Las
-imágenes de referencia de los vectores dorados están en `project/tests/golden/`.
+imágenes de referencia de los vectores dorados y sus vectores esperados están en `project/tests/golden/` (§5.4).
 
 **Lo que la imagen incluye para los validadores**: `tools/benchmark.py` va dentro de la imagen (en `/srv/tools/`) para
 poder ejecutarlo como tarea suelta en `dev` con el comando `python tools/benchmark.py --salida json`; el resultado
@@ -371,6 +412,9 @@ con el endpoint de diagnóstico del backend (§5.9).
   `--solo` con un ID inexistente o un error inesperado en una precondición → **3**; `PrecondicionNoCumplida` → **2**;
   una comprobación que falla o lanza un error inesperado → **1**, y se siguen ejecutando las demás.
 - `--solo C1` incluye las subcomprobaciones (`C1a`, `C1b`).
+- `imagen_local()` (desde EMB-2.1): `EMBEDDING_IMAGEN` descargada (tras `docker login` si es de ECR) y de plataforma
+  `linux/amd64`, o los códigos de error de §5.11; `en_marcha(contenedor)`. La usan `validate11.py` (P4) y
+  `validate21.py` (P2).
 - Docker se usa por su CLI y AWS con boto3 desde `AWS_PROFILE` (región `us-east-1`); para una imagen de ECR hace
   `docker login` con el token de `ecr:GetAuthorizationToken`, sin imprimirlo.
 - Necesita en la máquina de quien valida: Docker (`local`), credenciales de AWS (`dev`) y `git` (commit del informe).
@@ -488,6 +532,28 @@ foto (22 M parámetros frente a 86 M) y en 2 vCPU se estima en 0,5–1,5 s para 
 y índice más pequeños en pgvector y, previsiblemente, algo menos de precisión en la recuperación, que mide EMB-3.2; si
 la latencia no llega al objetivo, palancas de §4.4. Como aún no hay vectores indexados, el cambio no exige re-indexar.
 
+**ADR-EMB-12 — Vectores dorados calculados con la pila de `uv.lock` en la CPU de quien cierra; 1e-5 también entre
+CPU (aceptada, 0.6.0, EMB-2.1).**
+§5.4 promete 1e-5 en la misma imagen de contenedor, pero los dorados se comprueban en sitios con CPU distintas: CI
+(`test_dorados.py`, en el runner de GitHub), la máquina de quien valida (`validate21.py` C1, contra la imagen) y, más
+adelante, Fargate. *Medición* (EMB-2.1, pesos de la revisión fijada, las 5 doradas y 3 sintéticas): AMD Ryzen 7 6800HS
+(AVX2, torch 2.14.1+cpu) frente a un Intel Xeon con AVX-512 y AMX (torch 2.14.1 de PyPI, mismo commit, compilador y
+oneDNN), y en cada uno las rutas AVX2 y SSE de MKL, oneDNN y ATen forzadas, con 1 y 2 hilos: diferencia máxima por
+componente entre dos configuraciones cualesquiera, 6,3e-7; el tamaño del lote (1, 5, 8) y los hilos no cambian ni un
+bit; el tensor preprocesado es idéntico bit a bit en todas, también sin el SIMD de libjpeg-turbo. *Decisión:* se
+mantiene 1e-5 (16 veces lo medido) en las tres comprobaciones. Los dorados se calculan en proceso con
+`tools/dorados.py` (el mismo `preproceso` + `ModeloDinov2` que el servicio, versiones exactas de `uv.lock`, 1 hilo) en
+la CPU de quien cierra el lote, que es donde corre `validate21`; los pesos se copian de la imagen (`/opt/modelo`) a
+`project/.modelo/`, ignorada por Git y por Docker. En CI, `embedding.yml` baja la revisión fijada (con caché) y corre
+`pytest` con `DORADOS_OBLIGATORIOS=1`, para que la prueba falle en vez de omitirse si faltan los pesos.
+`esperados.json` guarda con qué se calcularon y el `sha256` del tensor preprocesado, que separa un cambio de
+decodificación de uno numérico. *Alternativas descartadas:* calcularlos en CI (cada ejecución puede caer en otra CPU) o
+pidiéndolos a la imagen por HTTP (obliga a construirla en local antes de cada cambio y da los mismos números); relajar
+la tolerancia (no hace falta). *Consecuencias:* si una CPU futura (otra familia en Fargate o en los runners) superara
+1e-5, habría que separar la tolerancia entre CPU de la de la misma imagen, como se hizo en 0.4.0 entre dispositivos,
+antes de indexar con ella. Actualizar Pillow puede cambiar el `sha256` del tensor sin salir de 1e-5: se mide con
+`tools/dorados.py comparar` y, si cabe, se recalculan con `tools/dorados.py vectores`.
+
 ---
 
 ## 7. Riesgos
@@ -497,7 +563,7 @@ la latencia no llega al objetivo, palancas de §4.4. Como aún no hay vectores i
 | R1 | Latencia por encima del objetivo (lote de 5 > 800 ms en 2 vCPU) | Media | Medio | EMB-3.1; palancas de §4.4 |
 | R2 | Calidad de recuperación insuficiente (luz, oclusiones, recorte central, lugares parecidos; ViT-S/14 discrimina algo menos que ViT-B/14) | Media | Alto | EMB-3.2; EMB-5.1 si una variante gana (incluido volver a ViT-B/14 con más vCPU o con GPU) |
 | R3 | Imagen grande (~1,8 GB): 2–3 min desde el encendido | Alta | Bajo | *Start period* de 180 s; el `worker` espera a `/health/ready`; encender antes de probar (infra R6) |
-| R4 | Una actualización de librerías cambia los vectores sin avisar | Media | Alto | Versiones fijadas en `uv.lock`; vectores dorados en CI |
+| R4 | Una actualización de librerías cambia los vectores sin avisar | Media | Alto | Versiones fijadas en `uv.lock`; vectores dorados en CI (con los pesos y `DORADOS_OBLIGATORIOS=1`) y en `validate21` (ADR-EMB-12) |
 | R5 | Ingesta masiva satura el servicio | Media | Bajo | Prioridad; `503 SATURADO`; el `worker` reintenta |
 | R6 | Falta de memoria con lotes grandes | Baja | Medio | `LOTE_MAX = 8`; 4 GB de tarea; medir en EMB-3.1 |
 | R7 | La revisión fijada desaparece de Hugging Face | Baja | Medio | Las imágenes ya publicadas en ECR conservan los pesos; guardar una copia de los pesos fuera de Hugging Face si se vuelve crítico |

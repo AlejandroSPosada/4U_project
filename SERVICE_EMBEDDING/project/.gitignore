@@ -5,3 +5,5 @@ __pycache__/
 .ruff_cache/
 # Informes de los validadores (infra §5.11)
 .validacion/
+# Pesos copiados de la imagen para calcular y comprobar los vectores dorados (tools/dorados.py)
+.modelo/

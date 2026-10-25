@@ -23,6 +23,64 @@ re-indexar el dataset.
 
 ---
 
+## [0.6.0] — 2026-10-24
+
+- **Lote que la motivó:** EMB-2.1 (vectorización por lotes, `POST /v1/embed`).
+- **Qué cambió:**
+  - Código: `preproceso.py` (pp-v1 como función pura, sin PyTorch), `planificador.py` (dos colas FIFO, admisión por
+    `COLA_MAX_IMAGENES` y un único hilo de inferencia), `POST /v1/embed` en `main.py` (lectura del cuerpo con tope,
+    validación en orden, errores de §5.6, campos de vectorización en el evento `peticion`) y `modelo.inferir`, que
+    acepta el array de NumPy sin copiarlo. Nuevos `tools/dorados.py` y `tests/golden/` (cinco imágenes sintéticas,
+    ~130 KB, y `esperados.json`); pruebas `test_preproceso`, `test_planificador`, `test_embed_http` y `test_dorados`;
+    `src/ops/validate21.py`. `comun.imagen_local()` reúne lo que hacía P4 de `validate11.py`, que ahora la llama sin
+    cambiar de comportamiento. Dependencias nuevas: `pillow` 13.0.0 y `python-multipart` 0.0.32 (`uv.lock`).
+  - §4.1 (estructura) y §4.3 (orden de las validaciones, multipart leído fuera del bucle de eventos y cortado en la
+    novena imagen, preprocesamiento en el hilo de inferencia, qué mide cada tiempo, piezas del código; la prioridad
+    ordena la atención, no la admisión).
+  - Tras una revisión independiente del código: rechazo de imágenes de más de 32:1 (una de 64 × 500 000 px, de menos
+    de 0,5 MB, llevaba la redimensión a 2,7 GB y una de 89 MP a unos 6 GB); una frontera de multipart de más de 256
+    caracteres daba `500` y ahora `400`; tipos de medio sin distinguir mayúsculas; `config.py` exige
+    `COLA_MAX_IMAGENES` ≥ `LOTE_MAX`; C4 de `validate21.py` descuenta las `baja` que salen de la cola mientras la
+    `alta` todavía sube.
+  - Nuevo ADR-EMB-12: dorados calculados con la pila de `uv.lock` en la CPU de quien cierra, 1e-5 también entre CPU
+    (medido) y pesos en CI con `DORADOS_OBLIGATORIOS=1`. R4 lo cita.
+  - `validation-2-1.md`: C4 lanza la `alta` a mitad del primer lote, con su duración medida en la máquina (antes, 1 s
+    fijo), y repite si quedan menos de 2 `baja` esperando; C5c suelta las 8 peticiones con una barrera y repite si no
+    hubo saturación; C1 comprueba el `sha256` de las doradas; §1 da el código de cada precondición y §5, la
+    preparación. Criterios, IDs y datos de prueba no cambian.
+  - `embedding.yml` (raíz del monorepo): en las pruebas, los pesos de la revisión fijada con `actions/cache` y
+    `pytest` con `MODELO_DIR` y `DORADOS_OBLIGATORIOS=1`; §4.2 lo describe. El resto del workflow no cambia.
+  - PLAN: alineado con 0.6.0.
+- **Contratos tocados (§5):**
+  - §5.2: se ignoran las partes con otro nombre; el tipo es el `Content-Type` de cada parte; los 16 MB son bytes del
+    cuerpo (MB = 2²⁰ bytes); `X-Prioridad` no distingue mayúsculas y otro valor da `400 SOLICITUD_INVALIDA`; qué mide
+    cada campo de `tiempos_ms`.
+  - §5.3: lo que la tabla no detallaba (truncado del lado largo, inicio del recorte, escala en float64 y normalización
+    en float32), igual que el procesador publicado con el modelo. La tabla no cambia.
+  - §5.4: formato de los dorados, quién los comprueba y lo medido entre CPU y entre tamaños de lote.
+  - §5.5: `tools/dorados.py` queda fuera de la imagen.
+  - §5.6: `SOLICITUD_INVALIDA` también por cuerpo que no es multipart o `X-Prioridad` inválido; `IMAGEN_INVALIDA`
+    también por superar `Image.MAX_IMAGE_PIXELS` de Pillow (~89,5 MP) o pasar de 32:1; `detalle.indice` en `413` y
+    `415` cuando los causa una imagen; `NO_LISTO` también al detenerse; orden en que se responden los errores.
+  - §5.7: parámetro nuevo `PROPORCION_MAX` = 32; `COLA_MAX_IMAGENES` debe ser ≥ `LOTE_MAX`.
+  - §5.8: `comun.imagen_local()` y `esperados.json`.
+  - La `version_vector` **no** cambia (`dinov2-vits14/pp-v1`): los dorados son los primeros vectores de esa versión y
+    aún no hay vectores indexados.
+- **Cómo se verificó:** 107 pruebas en verde con `DORADOS_OBLIGATORIOS=1` y los pesos reales (copiados de la imagen
+  `44fdff8`; el SHA-256 de `model.safetensors` coincide con §5.3) en un AMD Ryzen 7 6800HS (torch 2.14.1+cpu) y en un
+  Intel Xeon con AVX-512 (torch 2.14.1 de PyPI); `ruff check` y `ruff format --check` limpios. pp-v1 da los mismos bits
+  que `BitImageProcessorPil` de transformers 5.20.2. Medición entre CPU, hilos y rutas de ISA en ADR-EMB-12 (peor caso,
+  6,3e-7). `validate21.py` C1–C5c pasó contra el servicio arrancado con `uvicorn` (modelo real y
+  `TORCH_NUM_THREADS=1`) y contra el mismo servicio con modelos falsos de 8 s y 0,07 s por lote de 8. La imagen no se
+  construyó aquí (sin Docker ni acceso al índice de PyTorch). `embedding.yml` pasa `actionlint` 1.7.12. Un agente que
+  no escribió el código lo revisó (concurrencia, multipart, límites, validador, coherencia con §5); sus hallazgos están
+  corregidos arriba. Redimensionar solo la zona del recorte (`resize(box=…)`) evitaría el límite de 32:1, pero no da los
+  mismos bits que pp-v1 (1470 de 1512 tamaños probados cambian, hasta 26 niveles en un píxel), así que se descartó.
+- **Pendiente:** `uv lock` con acceso al índice de PyTorch; la primera ejecución de `embedding.yml` con los pesos;
+  imagen del commit en ECR; `validate21.py` en `local` y la fila de PLAN §3.
+
+---
+
 ## [0.5.1] — 2026-10-24
 
 - **Lote que la motivó:** EMB-1.1 (servicio base e imagen), antes de su primera validación: INF-1.3 ya está «Hecho»
