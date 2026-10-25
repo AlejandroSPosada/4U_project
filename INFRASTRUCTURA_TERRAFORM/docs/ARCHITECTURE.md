@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.13.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-24 |
-| Estado | Diseño propuesto. **INF-0.1 a INF-1.4 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS). **INF-2.1 escrito**, pendiente de aplicar y validar (encendido de `embedding` y escalado del `worker`); el resto, sin código todavía |
+| Versión del documento | **0.13.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-25 |
+| Estado | Diseño propuesto. **INF-0.1 a INF-2.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS; encendido de `embedding` y escalado del `worker`); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -103,8 +103,8 @@ Detalle funcional de cada flujo: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §4.
   antes del `apply` de INF-1.4 (CloudTrail, `CreateServiceLinkedRole`); el `apply` lo intentó crear a las 23:22 y
   recibió `InvalidInputException` porque ya existía. Si falta en otra cuenta: `aws iam create-service-linked-role
   --aws-service-name ops.apigateway.amazonaws.com`. `AWSServiceRoleForApplicationAutoScaling_ECSService` (lo usan los
-  objetivos escalables de INF-2.1) no existía: se crea igual, con `--aws-service-name
-  ecs.application-autoscaling.amazonaws.com`, antes del `apply` de INF-2.1 (`validation-2-1` §5, paso 1).
+  objetivos escalables de INF-2.1) no existía: se creó igual, con `--aws-service-name
+  ecs.application-autoscaling.amazonaws.com`, el 2026-10-24 antes del `apply` de INF-2.1 (`validation-2-1` §5, paso 1).
 
 ### 3.2 Red
 
@@ -850,6 +850,14 @@ retrasados) y `acciones_noche()` leen; `registrar(nombre, maximo)` y `poner(nomb
 `desiredCount`; `t_latido` es el momento de la última muestra de `EmbeddingEncendidos`. Lanza `comun.Bloqueo` si falta
 INF-1.3 o INF-2.1 y traduce los errores de AWS como `comun.errores_aws`. `validate21.py` es el ejemplo.
 
+Desde la consola: `uv run --group ops python src/ops/embedding.py {encender|apagar|estado}` (desde `project/`, con
+`AWS_PROFILE`; `--sin-esperar` en `encender` y `apagar` no espera a que quede sano o sin tareas, aunque `encender`
+sí espera a la alarma). Comprueba la cuenta como los validadores. Códigos de salida: 0 hecho; 1 no quedó como se
+pedía en el tiempo de espera (10 min hasta sano, 10 min sin tareas o 5 min a la alarma); 2 falta un lote (INF-1.3 o
+INF-2.1 sin aplicar: no crea objetivos escalables ni alarmas); 3 credenciales, permisos o uso. El progreso va a stderr
+y el resultado a stdout; no imprime secretos. `estado` solo lee: servicios, rango de cada objetivo, estado de las
+cuatro alarmas, mensajes de las dos colas y acciones nocturnas.
+
 ### 5.12 Código de Terraform de `envs/dev` y de los módulos (convenciones)
 
 Lo que un lote necesita saber para añadir infraestructura sin leer el código existente (INF-0.2 dejó el esqueleto).
@@ -1034,6 +1042,22 @@ Detalles que explican un `plan` o un comportamiento:
   proveedor lo guarda como `false`, igual que AWS).
 - Las alarmas no avisan a nadie (INF-3.1 añade las que van al topic); su única acción es la política.
 
+Alarmas de `escalado.tf`, tal como quedan en AWS. Todas tienen umbral 0,5, `treat_missing_data = notBreaching` y
+métricas de 60 s. Ids de las métricas: `embedding` y `worker` = `AWS/ECS` `CPUUtilization` `SampleCount` con
+`ClusterName = campus-locator-dev` y `ServiceName = <servicio>`; `visibles` e `ingesta_visibles`/`purga_visibles` =
+`AWS/SQS` `ApproximateNumberOfMessagesVisible` `Maximum` con `QueueName` de la cola; `ingesta_en_vuelo` y
+`purga_en_vuelo` = `ApproximateNumberOfMessagesNotVisible` `Maximum`; `localize` = `campus-locator/dev`
+`LocalizePeticiones` `Sum`; `encendidos` = `campus-locator/dev` `EmbeddingEncendidos` `Sum`.
+
+| Alarma | Expresión (id que devuelve datos) | Comparación · M de N | Acción |
+|---|---|---|---|
+| `campus-locator-dev-worker-cola-ingesta` y `-worker-cola-purga` (`for_each` sobre la cola) | `subir` = `(FILL(embedding, 0) > 0) AND (FILL(visibles, 0) >= 1)` | `GreaterThanThreshold` · 1 de 10 | `campus-locator-dev-worker-cola` (→ 1) |
+| `campus-locator-dev-worker-colas-vacias` | `mensajes` = `FILL(ingesta_en_vuelo, 0) + FILL(ingesta_visibles, 0) + FILL(purga_en_vuelo, 0) + FILL(purga_visibles, 0) + 0 * worker` | `LessThanThreshold` · 15 de 15 | `campus-locator-dev-worker-colas-vacias` (→ 0) |
+| `campus-locator-dev-embedding-inactivo` | `uso` = `FILL(localize, 0) + FILL(encendidos, 0) + <la suma de las cuatro colas> + 0 * embedding` | `LessThanThreshold` · `inactividad_min` de `inactividad_min` | `campus-locator-dev-embedding-apagar` (→ 0) |
+
+Cambiar una alarma es editar esta tabla, `escalado.tf` y las comprobaciones C2a/C3a de `validate21.py` en el mismo
+cambio. Con 7 métricas, la de inactividad está cerca del máximo de 10 por alarma de expresión.
+
 **Módulo `borde` (INF-1.4)**
 
 | Entrada | Tipo | Valor que le pasa `envs/dev` |
@@ -1097,6 +1121,15 @@ permitido (toma el bloqueo unos segundos); `apply` va por `infra.yml` (§3.9).
 con SIGINT para que suelten el bloqueo, y toma del bloqueo creando el `.tflock` con escritura condicional, porque desde
 Terraform 1.15 `terraform console` ya no lo toma. Si otro validador las necesita, se mueven a `comun.py` y se añaden a
 la tabla de §5.11.
+
+**Ayudas propias de `validate21.py`** (no están en `comun.py`; si otro validador las necesita, se mueven allí y se
+añaden a §5.11): `LectorCola`, que borra de una cola los mensajes de prueba (propios y restos de otra ejecución con más
+de 15 min) y deja ocultos los ajenos hasta devolverlos con visibilidad 0, para que cada ajeno se reciba como mucho una
+vez por lectura; `clasificar(cuerpo, sello)` («propio», «resto» o «ajeno») según el `RequestId` `validacion-2-1-…` de
+los mensajes con forma de `s3:TestEvent`; `vaciar`, que borra los propios, espera a que SQS cuente 0 y devuelve el
+último uso; `actividad_de` y `actividad_esperada`, que buscan en `describe-scaling-activities` la actividad cuya
+`Cause` cita una alarma o política por su nombre completo (`worker-cola` es prefijo de otros nombres), aceptando
+`Pending`, `InProgress` o `Successful`; y el diccionario `T` con todos los tiempos de espera.
 
 `validate11.py` tiene su propia `terraform_plan()`: lanza `terraform` en otra sesión de procesos (otro grupo en
 Windows) con la salida en archivos temporales y, con Ctrl+C, le reenvía la interrupción (SIGINT; CTRL_BREAK en Windows)
@@ -1273,7 +1306,7 @@ de las alarmas y 0,6 por las dos métricas propias (§3.10); los tiempos depende
 | R10 | `/v1/localize` es público: abuso que dispara costos; `/v1/auth/login` admite fuerza bruta | Baja | Medio | *Throttling* (aproximado: frena volumen, no intentos sueltos, §3.3); alarma de 5xx; en `prod`, WAF o clave de app. Límite de intentos de inicio de sesión: lo tiene que poner el backend (`BACKEND_FASTAPI`; propuesta en CHANGELOG 0.12.0). Si limita por IP, la cabecera con la IP del cliente está sin verificar (§5.13) |
 | R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y pueden chocar con nombres de §5.1 (sobre todo el *namespace* de Cloud Map `campus-locator.local`, con INF-1.3) | Alta | Medio | Revisado el 2026-10-24: no había otra VPC `campus-locator-dev-vpc` (C2a de INF-1.1) ni nada que choque con INF-1.2 (el bucket del dataset ya no existe; sin instancias, *snapshots*, grupos de parámetros ni de subredes de RDS; sin colas; `campus-locator-dev/jwt-secret` está en borrado programado y su nombre no choca). Antes de INF-1.3, inventariar y limpiar el resto: clúster y servicios de ECS, ECR `campus-locator-dev/*`, *namespace* de Cloud Map, *target group*, *log groups* `/ecs/…`, roles `campus-locator-dev-backend-*` y `-embedding-*` y los buckets `campus-locator-dev-scans-648617469176` y `4uproject-eafit-tfstate` (CHANGELOG 0.3.0). Revisado de nuevo antes de INF-1.3 (`.validacion/inventario-r11b.txt`): ya no quedan roles `campus-locator-dev-*` ni buckets del intento anterior; antes del `apply` de INF-1.3 se confirma que no hay *namespace* `campus-locator.local`, clúster `campus-locator-dev` ni repositorios `campus-locator/*` (`servicediscovery list-namespaces`, `ecs describe-clusters`, `ecr describe-repositories`) |
 | R12 | El repositorio es público: los logs de Actions y los comentarios del `plan` los puede leer cualquiera | Alta | Bajo | Terraform oculta los valores `sensitive` (contraseñas, secretos) en el `plan` y en los logs; ningún paso imprime el estado ni credenciales; todo output con un dato sensible se declara `sensitive`; los PR desde *forks* no ejecutan el `plan`. Lo que queda visible (IDs, ARN, URL) no da acceso por sí solo |
-| R13 | El apagado automático de `embedding` falla y queda encendido (~2,5 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas) y presupuesto con avisos |
+| R13 | El apagado automático de `embedding` falla y queda encendido (~2,5 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas) y presupuesto con avisos. El apagado por inactividad y el escalado están configurados y revisados (`validate21.py` C2a y C3a), pero observarlos en `dev` es opcional desde 0.13.1: la alarma de INF-3.1 avisa si falla |
 
 ---
 

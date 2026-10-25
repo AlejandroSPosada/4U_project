@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.13.0**.
+Alineado con `ARCHITECTURE.md` **v0.13.1**.
 
 ---
 
@@ -178,11 +178,14 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 - **Criterios de cierre:**
   - C1. `embedding.py encender` deja `embedding` sano en ≤ 10 min; `embedding.py apagar` lo deja en 0 y deja `worker`
     en 0.
-  - C2. Sin peticiones a `/v1/localize` ni mensajes en las colas durante `apagado_embedding.inactividad_min`, `embedding` se
-    apaga solo; la acción de las 22:00 existe con la zona y la hora de §5.3.
-  - C3. Con mensajes de prueba en `ingesta` y `embedding` encendido, `worker` sube a 1 y vuelve a 0 a los ~15 min de
-    vaciarse la cola.
-  - C4. Con `embedding` apagado, `worker` no arranca aunque haya mensajes.
+  - C2. El apagado automático está configurado: el filtro de métricas cuenta solo `POST /v1/localize`; la alarma de
+    inactividad mira ese uso, los encendidos y las colas durante `apagado_embedding.inactividad_min`, y su acción pone
+    `embedding` en 0; las acciones de las 22:00 existen con la zona y la hora de §5.3.
+  - C3. El escalado de `worker` está configurado: sube a 1 con mensajes en `ingesta` o `purga` solo si `embedding`
+    está corriendo, y baja a 0 tras 15 min sin mensajes.
+  - Observar ese comportamiento en `dev` (el apagado tras 45 min sin uso, la subida y bajada de `worker` y que no
+    arranque sin `embedding`) es opcional y no cierra el lote: `validation-2-1` C2b, C3b y C4, ~1,5 h. Decisión del
+    2026-10-25 (CHANGELOG 0.13.1).
 - **Historias:** HU-21.
 
 #### INF-3.1 — Observabilidad y alarmas
@@ -218,7 +221,7 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 | INF-1.2 | 1 | Hecho | [1-2](./validation/validation-1-2.md) | `e5ee713` 2026-10-24 | 0.6.0 | `apply` por `infra.yml` (24 recursos, PostgreSQL 17.9); el «plan vacío» destapó una diferencia perpetua en `rds.force_ssl` (es el valor por defecto en PostgreSQL 17), corregida con `apply_method = "pending-reboot"` |
 | INF-1.3 | 1 | Hecho | [1-3](./validation/validation-1-3.md) | `a0f2dc5` 2026-10-24 | 0.10.0 | `apply` por `infra.yml` (30 recursos) y `plan` vacío después; imagen `bootstrap` publicada a mano en los dos repositorios. La primera ejecución destapó un error del validador (C5 esperaba `t`; `boolean \|\| text` da `true`), corregido en `a0f2dc5`. `embedding` en Fargate con 2 vCPU (ADR-INF-14) |
 | INF-1.4 | 1 | Hecho | [1-4](./validation/validation-1-4.md) | `13d80fe` 2026-10-24 | 0.11.1 | `apply` por `infra.yml` (7 recursos) y `plan` vacío después. La primera ejecución falló en C2b (1 de 100 con 429 a 5 req/s, con la etapa bien configurada): el *throttling* de API Gateway es aproximado; C2b pasó a 20 req/s con ≥ 10 % de 429 (0.11.1) |
-| INF-2.1 | 2 | En curso | [2-1](./validation/validation-2-1.md) | — | — | Código en 0.13.0 (`escalado.tf`, filtro en `borde`, `embedding.py`, `validate21.py`), probado en local; falta el `apply` y la validación en `dev` (1,5–2 h, empezar entre 06:00 y 19:30) |
+| INF-2.1 | 2 | Hecho | [2-1](./validation/validation-2-1.md) | `684f233` 2026-10-25 | 0.13.1 | `apply` por `infra.yml` sobre `6b6b8e7` (12 recursos) y `plan` vacío después; rol vinculado de Application Auto Scaling creado a mano. Cerrado con C1, C2a y C3a (`--solo C1,C2a,C3a`; C1a sano en 5,7 min): el apagado automático y el escalado están configurados, pero observarlos en `dev` (C2b, C3b y C4) es opcional desde 0.13.1 |
 | INF-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | |
 | INF-6.1 | 6 | Diferido | — | — | — | |
 

@@ -20,6 +20,39 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.13.1] — 2026-10-25
+
+- **Lote que la motivó:** INF-2.1, antes de validarlo. Decisión del equipo: observar en `dev` el apagado automático y
+  el escalado de `worker` no es criterio de cierre.
+- **Qué cambió:**
+  - PLAN INF-2.1: C2 y C3 pasan a ser criterios de configuración (lo que comprueban C2a y C3a de `validate21.py`) y C4
+    se une a C3 (la condición de `embedding` está en la alarma de subida). Observar el comportamiento (C2b, C3b y C4,
+    ~1,5 h, casi todo la espera de 45 min de C2b) queda como opcional. El lote se cierra con
+    `validate21.py --entorno dev --solo C1,C2a,C3a` (~8 min, antes de las 21:40). C1a ya ejercita parte del apagado:
+    encender espera a que la alarma de inactividad, en `ALARM` sin uso, vea `EmbeddingEncendidos`.
+  - `validation-2-1.md`: encabezado, nota de cierre, C2b, C3b y C4 marcadas como opcionales, §4 y §5 con las dos
+    ejecuciones (cierre y completa).
+  - ARCHITECTURE: estado «INF-2.1 aplicado», el rol vinculado de §3.1 ya creado y R13 anota que el apagado por
+    inactividad no se observó en `dev` (lo vigila la alarma de INF-3.1).
+  - El Terraform, `embedding.py` y `validate21.py` no cambian: la infraestructura sigue aplicada igual y todas las
+    comprobaciones siguen en el script.
+- **Contratos tocados (§5):** ninguno. Cambian criterios del PLAN y el documento de validación, como en 0.11.1: sube el
+  parche.
+- **Cómo se verificó:** `AWSServiceRoleForApplicationAutoScaling_ECSService` creado a mano el 2026-10-24; `apply` por
+  `infra.yml` sobre `6b6b8e7` (`Apply complete! Resources: 12 added, 0 changed, 0 destroyed.`, 02:34 UTC del 25) y
+  `plan -detailed-exitcode` con código 0 después; `embedding.py estado`: `embedding` y `worker` en 0 con rango 0-0,
+  `embedding-inactivo` y `worker-colas-vacias` en `ALARM` (lo esperado sin uso), las dos de subida en `OK`, colas en 0 y
+  las dos acciones `cron(0 22 * * ? *) America/Bogota`. Una ejecución completa a las 21:36 la detuvo P5 (fuera de
+  horario), sin tocar nada. `--solo C1,C2a,C3a` probado contra la simulación de 0.13.0. En `dev`: `validate21.py
+  --solo C1,C2a,C3a` con código 0 sobre `684f233` (2026-10-25 16:49–16:56 UTC): pasan P4, P5, P1–P3, C2a, C3a, C1a
+  (sano en 5,7 min, con la espera a que la alarma de inactividad, en `ALARM`, viera `EmbeddingEncendidos`) y C1b
+  (0,3 min); C3b, C2b y C4, omitidas.
+- **Pendiente:** ninguno del lote (INF-2.1 «Hecho»). Opcional: la ejecución completa de `validate21.py` (C2b, C3b y
+  C4) o comprobar el apagado por inactividad en el uso normal (`embedding.py estado` y `describe-scaling-activities`
+  una hora después de dejar `embedding` sin uso). Lo de 0.12.0: §5.13 con la imagen de BE-1.1 y la propuesta de R10.
+
+---
+
 ## [0.13.0] — 2026-10-24
 
 - **Lote que la motivó:** INF-2.1 (encendido de `embedding` y escalado del `worker`).
