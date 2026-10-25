@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.6.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-24 |
+| Versión del documento | **0.6.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-25 |
 | Estado | En construcción: código de EMB-1.1 (servicio base e imagen) y EMB-2.1 (vectorización por lotes); el resto de lotes, pendiente |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
@@ -317,7 +317,7 @@ de la tolerancia de §5.4) exige una versión nueva (ADR-EMB-08).
   con los pesos de la revisión fijada) y `validate21.py` C1 (contra la imagen). Dónde se calculan y por qué la misma
   tolerancia vale entre CPU distintas (medido: ≤ 6,3e-7): ADR-EMB-12. Si una actualización de dependencias rompe esa
   tolerancia, no se despliega sin versión nueva; `tools/dorados.py vectores` no sobrescribe los dorados si algún
-  componente se aleja más de 1e-5.
+  componente se aleja más de 1e-5. Uso de la herramienta, formato de `esperados.json` y cómo obtener los pesos: §5.9.
 - **Independencia del tamaño de lote:** el vector de una imagen no depende de con qué otras imágenes viajó, con la
   misma tolerancia de 1e-5 (la aritmética float32 en CPU puede variar mínimamente con el tamaño del lote; medido en
   EMB-2.1: idéntico bit a bit en lotes de 1, 5 y 8).
@@ -368,7 +368,7 @@ inferencia, `IMAGEN_INVALIDA`.
 | `RETRY_AFTER_S` | 5 | En `503 SATURADO` |
 | Hilos de PyTorch | `TORCH_NUM_THREADS` (valor en infra §5.4) | Igual a los vCPU de la tarea (2) |
 | Latencia objetivo | En `dev` (2 vCPU): lote de 5 p95 ≤ 800 ms; lote de 1 p95 ≤ 250 ms | Para `POST /v1/localize` en p95 ≤ 1 s (infra §5.10). **A medir en EMB-3.1**; estimación previa en ADR-EMB-11 |
-| Formato de log | JSON por línea en la salida estándar: siempre `ts` (UTC, ms), `nivel` y `evento`; además, según el evento, `request_id`, `prioridad`, `n_imagenes`, `cola_ms`, `inferencia_ms` (vectorización, EMB-2.1), `metodo`, `ruta`, `estado_http`, `duracion_ms` (cada petición), `carga_ms`, `calentamiento_ms`, `revision`, `version_vector`, `hilos`, `commit` (arranque) y `traza` (errores) | Nunca bytes de imagen. Eventos: `arranque`, `modelo_listo`, `carga_del_modelo_fallida`, `peticion`, `error_no_previsto` y los de uvicorn. Las peticiones a `/health` y `/health/ready` van en nivel `DEBUG` (el *health check* llama cada 30 s) |
+| Formato de log | JSON por línea en la salida estándar: siempre `ts` (UTC, ms), `nivel` y `evento`; además, según el evento, `request_id`, `prioridad`, `n_imagenes`, `cola_ms`, `inferencia_ms` (vectorización, EMB-2.1: en el evento `peticion` de `POST /v1/embed`), `metodo`, `ruta`, `estado_http`, `duracion_ms` (cada petición), `carga_ms`, `calentamiento_ms`, `revision`, `version_vector`, `hilos`, `commit` (arranque) y `traza` (errores) | Nunca bytes de imagen. Eventos: `arranque`, `modelo_listo`, `carga_del_modelo_fallida`, `peticion`, `error_no_previsto` y los de uvicorn; los avisos de Python (`warnings`, logger `py.warnings`) también salen en JSON, con el aviso en `evento`. Las peticiones a `/health` y `/health/ready` van en nivel `DEBUG` (el *health check* llama cada 30 s) |
 
 Cada parámetro tiene su valor por defecto en `config.py` y se puede sobrescribir con una variable de entorno del mismo nombre; si alguna se vuelve necesaria en `dev`, se añade antes a infra §5.4.
 
@@ -388,9 +388,12 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
 marcha lo enciende si está apagado (como `embedding.py encender`, esperando hasta 10 min a que esté sano) y al
 terminar lo deja como lo encontró: si lo encendió él, lo apaga; si ya estaba encendido, no lo toca (infra §5.11).
 
-**Variables que leen**: `EMBEDDING_IMAGEN` (en `local`), `AWS_PROFILE` (en `dev`) y, para EMB-3.2,
+**Variables que leen**: `EMBEDDING_IMAGEN` (en `local`), `AWS_PROFILE` (en `dev`, y en `local` si `EMBEDDING_IMAGEN`
+es de ECR, para el `docker login`) y, para EMB-3.2,
 `VALIDACION_API_URL`, `VALIDACION_ADMIN_CORREO` y `VALIDACION_ADMIN_PASSWORD` (las mismas del backend, su §5.11). Las
 imágenes de referencia de los vectores dorados y sus vectores esperados están en `project/tests/golden/` (§5.4).
+Los validadores no usan la cadena de credenciales por defecto de AWS: sin `AWS_PROFILE` terminan con código 3 aunque
+`aws` funcione en esa terminal; con el perfil por defecto se define `AWS_PROFILE=default`.
 
 **Lo que la imagen incluye para los validadores**: `tools/benchmark.py` va dentro de la imagen (en `/srv/tools/`) para
 poder ejecutarlo como tarea suelta en `dev` con el comando `python tools/benchmark.py --salida json`; el resultado
@@ -419,7 +422,7 @@ con el endpoint de diagnóstico del backend (§5.9).
   `docker login` con el token de `ecr:GetAuthorizationToken`, sin imprimirlo.
 - Necesita en la máquina de quien valida: Docker (`local`), credenciales de AWS (`dev`) y `git` (commit del informe).
 
-### 5.9 Formatos de las herramientas y del conjunto de evaluación
+### 5.9 Formatos de las herramientas, de los vectores dorados y del conjunto de evaluación
 
 **Salida de `tools/benchmark.py --salida json`**: una sola línea en la salida estándar (y por tanto en el log),
 precedida de `BENCHMARK_JSON ` para poder encontrarla:
@@ -431,6 +434,43 @@ precedida de `BENCHMARK_JSON ` para poder encontrarla:
 ```
 (Los números del ejemplo son ilustrativos, no medidos.) Cada repetición usa imágenes sintéticas de 1024 px, mide desde
 que la petición entra en la cola hasta que sale la respuesta y descarta las 3 primeras como calentamiento.
+
+**Vectores dorados** (§5.4, ADR-EMB-12), en `project/tests/golden/`: las cinco imágenes `validacion-0<n>-<nombre>.jpg`
+o `.png` y `esperados.json`:
+```json
+{ "version_vector": "dinov2-vits14/pp-v1", "modelo": "facebook/dinov2-small",
+  "revision": "ed25f3a31f01632728cabb09d1542f84ab7b0056", "dim": 384, "tolerancia": 1e-05,
+  "calculado": { "fecha": "2026-10-25T03:40:07Z", "herramienta": "tools/dorados.py vectores", "hilos": 1,
+                 "cpu": "AMD Ryzen 7 6800HS with Radeon Graphics", "capacidad_cpu_torch": "AVX2", "python": "3.12.15",
+                 "torch": "2.14.1+cpu", "transformers": "5.20.2", "numpy": "2.5.4", "pillow": "13.0.0" },
+  "imagenes": [ { "archivo": "validacion-01-campus.jpg", "tipo": "image/jpeg", "sha256": "…",
+                  "sha256_preprocesado": "…", "vector": [ 0.0123, -0.0456, … ] } ] }
+```
+`sha256` es el del archivo; `sha256_preprocesado`, el de los bytes del array float32 (3, 224, 224) contiguo que
+devuelve pp-v1; `vector`, los 384 componentes con todos sus dígitos.
+
+`tools/dorados.py` se ejecuta desde `project/` con `uv run python tools/dorados.py <orden>`:
+
+| Orden | Qué hace | Código de salida |
+|---|---|---|
+| `imagenes` | Dibuja las cinco imágenes (escenas sintéticas, semilla fija). Solo se usa al estrenar una `version_vector`: con otra versión de Pillow los bytes cambiarían | 0 |
+| `vectores [--modelo DIR] [--hilos N] [--forzar]` | Calcula los vectores en proceso (el mismo `preproceso` + `ModeloDinov2` que el servicio; por defecto 1 hilo) y escribe `esperados.json`. Si ya existe y algún componente cambia más de 1e-5, no lo sobrescribe, salvo con `--forzar` (solo con una `version_vector` nueva) | 0 escrito · 1 no sobrescrito |
+| `comparar [--modelo DIR] [--hilos N]` | Calcula igual que `vectores`, imprime la diferencia máxima de cada imagen y no escribe nada | 0 dentro de 1e-5 · 1 fuera, o sin `esperados.json` |
+
+`--modelo` es la carpeta de los pesos con su `revision.json`; por defecto, `MODELO_DIR` o `project/.modelo/`, que Git
+y Docker ignoran. Se copian de la imagen publicada, que ya los trae, sin salir a Hugging Face:
+```bash
+cd SERVICE_EMBEDDING/project
+IMG=<ecr_embedding_url>:<sha>
+docker create --name validacion-pesos "$IMG" >/dev/null && docker cp validacion-pesos:/opt/modelo ./.modelo
+docker rm validacion-pesos
+sha256sum .modelo/model.safetensors   # el SHA-256 de §5.3
+```
+(con acceso a Hugging Face también vale `PYTHONPATH=src uv run python tools/descargar_modelo.py .modelo`). Las pruebas
+`tests/test_dorados.py` leen la misma carpeta (`MODELO_DIR` o `project/.modelo/`); sin pesos se omiten, salvo con
+`DORADOS_OBLIGATORIOS=1`, que las hace fallar (así corren en `embedding.yml`, §4.2). Se recalculan con `vectores` en dos
+casos: con una `version_vector` nueva (§4.6), o si una actualización de dependencias cambia `sha256_preprocesado` (la
+prueba lo detecta) y `comparar` confirma que los vectores siguen dentro de 1e-5.
 
 **Conjunto de evaluación** (EMB-3.2), en el bucket del dataset bajo `evaluacion/<version_conjunto>/` (infra §5.5):
 ```
@@ -544,8 +584,8 @@ bit; el tensor preprocesado es idéntico bit a bit en todas, también sin el SIM
 mantiene 1e-5 (16 veces lo medido) en las tres comprobaciones. Los dorados se calculan en proceso con
 `tools/dorados.py` (el mismo `preproceso` + `ModeloDinov2` que el servicio, versiones exactas de `uv.lock`, 1 hilo) en
 la CPU de quien cierra el lote, que es donde corre `validate21`; los pesos se copian de la imagen (`/opt/modelo`) a
-`project/.modelo/`, ignorada por Git y por Docker. En CI, `embedding.yml` baja la revisión fijada (con caché) y corre
-`pytest` con `DORADOS_OBLIGATORIOS=1`, para que la prueba falle en vez de omitirse si faltan los pesos.
+`project/.modelo/` (§5.9), ignorada por Git y por Docker. En CI, `embedding.yml` baja la revisión fijada (con caché)
+y corre `pytest` con `DORADOS_OBLIGATORIOS=1`, para que la prueba falle en vez de omitirse si faltan los pesos.
 `esperados.json` guarda con qué se calcularon y el `sha256` del tensor preprocesado, que separa un cambio de
 decodificación de uno numérico. *Alternativas descartadas:* calcularlos en CI (cada ejecución puede caer en otra CPU) o
 pidiéndolos a la imagen por HTTP (obliga a construirla en local antes de cada cambio y da los mismos números); relajar
