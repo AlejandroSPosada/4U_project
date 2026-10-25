@@ -38,8 +38,10 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   de prueba sin cambios). Sube el parche.
 - **Cómo se verificó:** `stats count(*) by routeKey, status` en Logs Insights (`POST /v1/auth/login` 501 × 99, 429 × 1;
   `ANY /{proxy+}` 200 × 101); `get-stage` con `DefaultRouteSettings` 20/40 y `RouteSettings` de login 2/5; medición
-  puntual a 10, 20 y 50 req/s con `.validacion/medir429.py` (no versionado). `validate14.py` con ruff.
-- **Pendiente:** volver a ejecutar `validate14.py` sobre el commit de este cambio y cerrar INF-1.4 (PLAN §3).
+  puntual a 10, 20 y 50 req/s con `.validacion/medir429.py` (no versionado). `validate14.py` con ruff. En `dev`:
+  `validate14.py` con código 0 sobre `13d80fe` (C2b: 127 de 200 con 429 en login; 100 × 200 en `/v1/health`).
+- **Pendiente:** ninguno del lote (INF-1.4 «Hecho»). Proponer a `BACKEND_FASTAPI` un límite de intentos de inicio de
+  sesión (R10).
 
 ---
 
@@ -68,8 +70,9 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
   impide destruir la API); TFLint 0.65.0 con el *ruleset* de AWS 0.50.0 en `envs/dev`, `modules/borde` y
   `modules/computo`, sin avisos; `validate14.py` con ruff, su ruta de credenciales inválidas (código 3), C1a, C2a y C3a
   contra moto server, y la ráfaga de C2b contra un servidor local con *token bucket* 2/5 (56 de 100 con 429; 100 × 200
-  en la ruta general). Pendiente en `dev`: `apply`, `plan` vacío y `validate14.py` con código 0.
-- **Pendiente:** cerrar INF-1.4 (PLAN §3) tras la validación en `dev`.
+  en la ruta general). En `dev`: `apply` por `infra.yml` (7 recursos) y `plan` vacío después; la primera
+  ejecución de `validate14.py` falló en C2b (lo corrige 0.11.1).
+- **Pendiente:** ninguno (INF-1.4 se cerró con 0.11.1).
 
 ---
 
