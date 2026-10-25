@@ -1,12 +1,13 @@
 # Servicio de embeddings (SERVICE_EMBEDDING).
-# PR: uv sync --locked, ruff check, ruff format --check y pytest.
+# PR: uv sync --locked, ruff check, ruff format --check y pytest, este con los pesos de la revisión fijada (en caché) y
+# DORADOS_OBLIGATORIOS=1, para que los vectores dorados se comprueben y no se omitan (ADR-EMB-12).
 # main (push o workflow_dispatch): las mismas pruebas; imagen linux/amd64 con etiqueta = SHA (solo si no existe en
 # ECR: las etiquetas son inmutables); nueva revisión de campus-locator-dev-embedding a partir de la última de la
 # familia, cambiando solo la imagen del contenedor app; update-service. Con réplicas, espera hasta 25 min a que el
 # despliegue quede COMPLETED con la revisión nueva y falla si el circuit breaker revierte; con 0 réplicas (apagado)
 # no espera.
 # Contrato: INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md §3.9, §5.8 y §5.9; SERVICE_EMBEDDING/docs/ARCHITECTURE.md
-# §4.2 y §5.5. El job de despliegue no declara environment: gha-deploy solo confía en ref:refs/heads/main.
+# §4.2, §5.4 y §5.5. El job de despliegue no declara environment: gha-deploy solo confía en ref:refs/heads/main.
 name: embedding
 
 on:
@@ -66,7 +67,25 @@ jobs:
       - name: ruff format --check
         run: uv run --locked ruff format --check .
 
+      # Pesos de la revisión fijada (ARCHITECTURE §5.3) para tests/test_dorados.py. La clave cambia con config.py
+      # (donde está la revisión) y con el script que los baja.
+      - name: Pesos del modelo (caché)
+        id: pesos
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/modelo
+          key: modelo-${{ hashFiles('SERVICE_EMBEDDING/project/src/app/config.py', 'SERVICE_EMBEDDING/project/tools/descargar_modelo.py') }}
+
+      - name: Pesos del modelo (descarga)
+        if: steps.pesos.outputs.cache-hit != 'true'
+        env:
+          PYTHONPATH: src
+        run: uv run --locked python tools/descargar_modelo.py "$RUNNER_TEMP/modelo"
+
       - name: pytest
+        env:
+          MODELO_DIR: ${{ runner.temp }}/modelo
+          DORADOS_OBLIGATORIOS: "1"
         run: uv run --locked pytest
 
   desplegar:

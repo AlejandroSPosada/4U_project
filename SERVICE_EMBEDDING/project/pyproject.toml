@@ -12,6 +12,10 @@ dependencies = [
     "transformers>=4.46,<6",
     "huggingface-hub>=0.26,<3",
     "numpy>=2,<3",
+    # Decodificación y redimensión de pp-v1 (ARCHITECTURE §5.3).
+    "pillow>=12.3,<14",
+    # Lectura de multipart/form-data en POST /v1/embed (§5.2).
+    "python-multipart>=0.0.20,<1",
 ]
 
 [dependency-groups]

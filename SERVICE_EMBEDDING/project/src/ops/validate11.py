@@ -10,7 +10,6 @@ la de `local` con EMBEDDING_IMAGEN = la imagen que identifica C1a.
 
 from __future__ import annotations
 
-import os
 import re
 import time
 from datetime import UTC, datetime
@@ -39,8 +38,7 @@ from comun import (
     docker,
     ejecutar,
     entornos,
-    es_imagen_ecr,
-    login_ecr,
+    imagen_local,
     logs_contenedor,
     puerto_ocupado,
     revision_architecture,
@@ -204,27 +202,9 @@ def p3_docker(ctx) -> str:
 
 
 def p4_imagen(ctx) -> str:
-    imagen = os.environ.get("EMBEDDING_IMAGEN", "").strip()
-    if not imagen:
-        raise ErrorConfiguracion("falta la variable EMBEDDING_IMAGEN (ARCHITECTURE §5.8)")
-    if es_imagen_ecr(imagen):
-        login_ecr(imagen)
-        descargar = True
-    else:
-        descargar = docker("image", "inspect", imagen, timeout=60).returncode != 0
-    if descargar:
-        salida = docker("pull", imagen, timeout=1800)
-        if salida.returncode != 0:
-            raise ErrorConfiguracion(f"docker pull {imagen} falló: {salida.stderr.strip()[-300:]}")
-    plataforma = docker(
-        "image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", imagen, timeout=60
-    ).stdout.strip()
-    if plataforma != "linux/amd64":
-        raise PrecondicionNoCumplida(
-            f"{imagen} es {plataforma or '?'}, se exige linux/amd64 (infra §5.9)"
-        )
+    imagen = imagen_local()
     ctx.datos["imagen"] = imagen
-    return f"{imagen} ({plataforma})"
+    return f"{imagen} (linux/amd64)"
 
 
 def _arrancar(nombre: str, *opciones: str, imagen: str) -> float:

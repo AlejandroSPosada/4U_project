@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -172,6 +173,60 @@ def test_validate11_cubre_lo_que_declara_su_documento():
     assert [p.id for p in validate11.LOTE.comprobaciones] == ["C1a", "C1b", "C2", "C3"]
     for paso in pasos:
         assert f"| {paso.id} |" in documento
+
+
+def test_validate21_cubre_lo_que_declara_su_documento():
+    import validate21
+
+    documento = (comun.DIR_PROYECTO.parent / "docs" / "validation" / "validation-2-1.md").read_text(
+        encoding="utf-8"
+    )
+    filas = re.findall(r"^\| ([PC]\d[a-z]?) \|", documento, flags=re.MULTILINE)
+    assert [p.id for p in validate21.LOTE.precondiciones] == ["P1", "P2", "P3"]
+    assert [p.id for p in validate21.LOTE.comprobaciones] == [
+        "C1", "C2", "C3", "C4", "C5a", "C5b", "C5c",
+    ]  # fmt: skip
+    assert filas == [
+        p.id for p in (*validate21.LOTE.precondiciones, *validate21.LOTE.comprobaciones)
+    ]
+    assert validate21.LOTE.entornos == {"local"}
+
+
+def test_validate21_usa_los_parametros_del_servicio(monkeypatch):
+    import validate21
+
+    from app.config import DIM, VERSION_VECTOR, Settings
+
+    for variable in ("LOTE_MAX", "BYTES_MAX_IMAGEN", "BYTES_MAX_PETICION", "COLA_MAX_IMAGENES"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.delenv("RETRY_AFTER_S", raising=False)
+    settings = Settings()
+    assert settings.lote_max == validate21.LOTE_MAX
+    assert settings.bytes_max_imagen == validate21.BYTES_MAX_IMAGEN
+    assert settings.bytes_max_peticion == validate21.BYTES_MAX_PETICION
+    assert settings.cola_max_imagenes == validate21.COLA_MAX_IMAGENES
+    assert str(settings.retry_after_s) == validate21.RETRY_AFTER_S
+    assert (validate21.DIM, validate21.VERSION_VECTOR) == (DIM, VERSION_VECTOR)
+
+
+def test_imagenes_de_prueba_de_validate21():
+    import validate21
+
+    from app.preproceso import ImagenInvalida, preprocesar
+
+    assert preprocesar(validate21.sintetica(1)).shape == (3, 224, 224)
+    with pytest.raises(ImagenInvalida):
+        preprocesar(validate21.jpeg_truncado())
+    assert validate21.gif().startswith(b"GIF8")
+    # C5a: una de más de 4 MB y cinco de menos de 4 MB que juntas pasan de 16 MB.
+    assert len(validate21.ruido_png(1300, 1)) > validate21.BYTES_MAX_IMAGEN
+    medianas = [len(validate21.ruido_png(1100, s)) for s in range(5)]
+    assert max(medianas) < validate21.BYTES_MAX_IMAGEN
+    assert sum(medianas) > validate21.BYTES_MAX_PETICION
+    # C4: 4 × 8 + 1 = 33 imágenes caben en la cola aunque cuente el lote en curso; C5c no.
+    assert 4 * 8 + 1 <= validate21.COLA_MAX_IMAGENES < 8 * 8 - 8
+    # Las doradas que usan C1 y C2 son las versionadas.
+    assert len(validate21.doradas()) == 5
 
 
 def test_imagenes_de_ecr():

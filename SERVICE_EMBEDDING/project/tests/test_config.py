@@ -24,6 +24,7 @@ VARIABLES = (
     "BYTES_MAX_IMAGEN",
     "BYTES_MAX_PETICION",
     "LADO_MIN_PX",
+    "PROPORCION_MAX",
     "COLA_MAX_IMAGENES",
     "RETRY_AFTER_S",
 )
@@ -64,6 +65,7 @@ def test_parametros_por_defecto(entorno_limpio):
     assert settings.bytes_max_imagen == 4 * 1024 * 1024
     assert settings.bytes_max_peticion == 16 * 1024 * 1024
     assert settings.lado_min_px == 64
+    assert settings.proporcion_max == 32
     assert settings.cola_max_imagenes == 40
     assert settings.retry_after_s == 5
     assert settings.commit_corto == "desconocido"
@@ -79,6 +81,14 @@ def test_variables_que_inyecta_la_infraestructura(entorno_limpio):
     assert (settings.app_env, settings.log_level, settings.torch_num_threads) == ("dev", "DEBUG", 2)
     assert settings.modelo_dir == Path("/tmp/modelo")
     assert settings.commit_corto == "abcdef0"
+
+
+def test_la_cola_admite_al_menos_un_lote_completo(entorno_limpio):
+    entorno_limpio.setenv("COLA_MAX_IMAGENES", "4")
+    with pytest.raises(ValueError, match="COLA_MAX_IMAGENES"):
+        Settings()
+    entorno_limpio.setenv("COLA_MAX_IMAGENES", "8")
+    assert Settings().cola_max_imagenes == 8
 
 
 def test_hilos_invalidos_se_rechazan(entorno_limpio):

@@ -14,7 +14,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SERVICIO = "campus-locator-embedding"
@@ -56,8 +56,18 @@ class Settings(BaseSettings):
     bytes_max_imagen: int = 4 * 1024 * 1024
     bytes_max_peticion: int = 16 * 1024 * 1024
     lado_min_px: int = 64
+    proporcion_max: int = Field(default=32, ge=1)
     cola_max_imagenes: int = 40
     retry_after_s: int = 5
+
+    @model_validator(mode="after")
+    def _un_lote_completo_cabe_en_la_cola(self) -> Settings:
+        if self.cola_max_imagenes < self.lote_max:
+            raise ValueError(
+                f"COLA_MAX_IMAGENES ({self.cola_max_imagenes}) es menor que LOTE_MAX "
+                f"({self.lote_max}): un lote completo recibiría 503 SATURADO con la cola vacía"
+            )
+        return self
 
     @property
     def commit_corto(self) -> str:
