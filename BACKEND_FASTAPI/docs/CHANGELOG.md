@@ -20,6 +20,25 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.7.1] — 2026-10-25
+
+- **Lote que la motivó:** BE-1.3 (Autenticación), cierre con la validación en `dev`.
+- **Qué cambió:** §4.4 y R12 anotan el tiempo del login medido en `dev` (1,1–1,2 s con 0,25 vCPU, una petición a la
+  vez) y que, con dos verificando a la vez, los que esperan pueden pasar de los 10 s y recibir `503 SERVICIO_OCUPADO`
+  (sin medir). PLAN: BE-1.3 «Hecho».
+- **Contratos tocados (§5):** ninguno; aclaración con lo medido. Sube el parche.
+- **Cómo se verificó:** `backend.yml` en verde sobre `78bae6d` (`migrate` sin migraciones nuevas, `api` con ese
+  commit en `GET /v1/health`; login con correo inexistente → 401). `validate13.py --entorno dev` con código 0
+  (2026-10-25 19:51–19:54 UTC, informe `.validacion/BE-1.3-20261025-195440.json`): pasan P1–P5, C1 (HS256, claims de
+  §5.2, `exp − iat` = 43 200 s), C2 (cuerpos idénticos; 1168 y 1116 ms), C5, C3, C4a, C4b y C6 (3 fallidos, 2
+  correctos, 0 con contraseña); la limpieza dejó desactivado `validacion+user@campus.edu.co`.
+- **Pendiente:** el límite de intentos por cuenta (R7, propuesta de infra 0.12.0) espera decisión. `validate13.py`
+  provoca un `501` por ejecución: no llega al umbral de la alarma de 5xx de INF-3.1 (> 5 en 5 min), que todavía no
+  existe. Opcional para `FRONTEND_KOTLIN`: mostrar el `503 SERVICIO_OCUPADO` como «ocupado, reintenta» en lugar de «sin
+  conexión».
+
+---
+
 ## [0.7.0] — 2026-10-25
 
 - **Lote que la motivó:** BE-1.3 (Autenticación).

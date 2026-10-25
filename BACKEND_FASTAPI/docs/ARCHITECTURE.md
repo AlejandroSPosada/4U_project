@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.7.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.7.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
 | Estado | En construcción: hay código de BE-1.1 a BE-1.3 (`project/`); lo de lotes posteriores es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -345,7 +345,8 @@ Devuelve el token **también** a usuarios `user`: la app decide no abrir el pane
 contraseña ni el identificador escrito se guardan ni se registran (un identificador desconocido puede ser una
 contraseña escrita en el campo equivocado). Comprobado en `local` (15 muestras de cada caso, imagen sin límite de
 CPU): mediana de 92–94 ms en los cuatro casos (desconocido, contraseña incorrecta, inactivo y correcto). En `dev`, con
-0,25 vCPU, será más lento (**a verificar en dev**). No hay límite de intentos por cuenta: R7.
+0,25 vCPU, 1,1–1,2 s por login visto desde el cliente, una petición a la vez (C2 de `validate13.py`, 2026-10-25:
+1168 y 1116 ms); con dos a la vez comparten la CPU (sin medir). No hay límite de intentos por cuenta: R7.
 
 **Autorización** (`seguridad/dependencias.py`, ADR-BE-03, ADR-BE-13). `requiere_admin` es una dependencia de los
 routers `/v1/admin` y `/v1/collect` (`app/api/v1/__init__.py`), así que corre antes que cualquier otra cosa de la
@@ -1449,4 +1450,4 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 | R9 | `db.t4g.micro` se queda corto (memoria del índice, conexiones) | Baja | Medio | Pools pequeños; ver infra R4 |
 | R10 | Formatos de error distintos cuando responde API Gateway | Alta | Bajo | §5.1 lo documenta; la app decide por código HTTP |
 | R11 | El texto del catálogo (restricciones, índices) cambia con una versión mayor de PostgreSQL y `verificar-esquema` da diferencias que no lo son | Baja | Bajo | RDS actualiza por su cuenta solo la versión menor (infra §3.5); CI usa la misma mayor (`pg17`) y prueba que la migración deja exactamente `esquema.py`; un cambio de mayor actualiza `esquema.py` en el mismo cambio |
-| R12 | argon2id en 0,25 vCPU: login lento, falta de memoria o el *health check* sin CPU con varios a la vez | Media | Medio | Como mucho `LOGIN_HASH_CONCURRENTES` (2) a la vez, fuera de la base, 64 MiB cada uno; como mucho 8 más esperando y 10 s de espera (luego `503 SERVICIO_OCUPADO`, §4.4). En `local` tarda ~92 ms; en `dev`, **a verificar** (C2 de `validate13.py` informa los tiempos). **Riesgo que queda:** con un flujo sostenido de logins, las dos verificaciones argon2 (t = 3, 64 MiB, p = 4) pueden ocupar los 0,25 vCPU y retrasar `GET /v1/health`; si el *health check* del contenedor (cada 30 s, 5 s de plazo, 3 fallos, infra §5.7) falla, ECS reinicia la tarea. Sin comprobar. Palancas: `LOGIN_HASH_CONCURRENTES = 1`, bajar los parámetros de argon2 (los hashes viejos siguen verificándose, §4.3) o el límite por cuenta de R7 |
+| R12 | argon2id en 0,25 vCPU: login lento, falta de memoria o el *health check* sin CPU con varios a la vez | Media | Medio | Como mucho `LOGIN_HASH_CONCURRENTES` (2) a la vez, fuera de la base, 64 MiB cada uno; como mucho 8 más esperando y 10 s de espera (luego `503 SERVICIO_OCUPADO`, §4.4). En `local` tarda ~92 ms; en `dev`, 1,1–1,2 s por login, uno a la vez (C2 de `validate13.py`, 2026-10-25), así que con 2 verificando a la vez los 8 que esperan pueden pasar de los 10 s y recibir el 503 (sin medir). **Riesgo que queda:** con un flujo sostenido de logins, las dos verificaciones argon2 (t = 3, 64 MiB, p = 4) pueden ocupar los 0,25 vCPU y retrasar `GET /v1/health`; si el *health check* del contenedor (cada 30 s, 5 s de plazo, 3 fallos, infra §5.7) falla, ECS reinicia la tarea. Sin comprobar. Palancas: `LOGIN_HASH_CONCURRENTES = 1`, bajar los parámetros de argon2 (los hashes viejos siguen verificándose, §4.3) o el límite por cuenta de R7 |
