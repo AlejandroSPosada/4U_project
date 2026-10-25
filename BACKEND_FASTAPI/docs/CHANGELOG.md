@@ -20,6 +20,37 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.5.1] — 2026-10-24
+
+- **Lote que la motivó:** BE-1.1. La primera validación en `dev` falló en C1–C3 porque `.github/workflows/backend.yml`
+  no estaba en el repositorio: el servicio `api` nunca se había desplegado (imagen `bootstrap`, 0 réplicas).
+- **Qué cambió:**
+  - §4.2 describe `backend.yml` tal como queda: disparadores (también su propio archivo), pruebas antes de desplegar
+    y sin base hasta BE-1.2, convenciones de `infra.yml` (permisos mínimos, acciones fijadas por SHA, uv 0.11.32),
+    *login* en ECR con los permisos de `gha-deploy`, campos que se quitan al registrar una revisión (incluido
+    `deleteRequestedAt`, que añadió la API de ECS), espera de hasta 2 min a `COMPLETED` y cómo volver a desplegar el
+    mismo commit.
+  - BE-1.1 C3a (`validate11.py` y `validation/validation-1-1.md`): además del último commit que tocó `project/`, acepta
+    un commit posterior de `main` con `project/` idéntico. `backend.yml` se dispara también con su propio archivo, y un
+    commit que solo lo toca despliega el mismo código con otro SHA; antes C3a lo rechazaba.
+  - `validation/validation-1-1.md` §5: `AWS_PROFILE` obligatoria aunque se use el perfil `default`, y cómo se ve una
+    ejecución sin despliegue previo.
+  - PLAN §3: nota de BE-1.1 con el estado real.
+- **Contratos tocados (§5):** ninguno.
+- **Cómo se verificó:** `actionlint` con `shellcheck` sobre `backend.yml`. Los pasos del job de despliegue se
+  ejecutaron con `aws` y `docker` simulados: la entrada de `register-task-definition` se validó contra el modelo de
+  botocore 1.43 y `--query` se aplicó con JMESPath. Escenarios: primer despliegue (`api` de 0 a 1, `worker` conserva
+  su comando), reintento con la imagen ya publicada (no reconstruye ni toca réplicas), *rollback* de `api` (falla),
+  familia sin contenedor `app` (falla antes de registrar) y variable del repositorio ausente (falla sin llamar a AWS).
+  En un entorno aparte: `uv sync --frozen`, `ruff check`, `ruff format --check` y `pytest` (65 pruebas, sin base de
+  datos; 6 nuevas de C3a sobre un repositorio git temporal), los mismos comandos del job de pruebas. C3a contra el
+  historial real: el SHA de `origin/main` (`0990740`, solo infraestructura) y `26db1e2` pasan; `41d1461` (`project/`
+  distinto) y `bootstrap` fallan.
+- **Pendiente:** colocar `.github/workflows/backend.yml` (las herramientas de edición no pueden escribir en
+  `.github/workflows/`), subirlo a `main` y ejecutar `validate11.py` en `dev` cuando el workflow termine en verde.
+
+---
+
 ## [0.5.0] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; sin cupo de GPU, `embedding` corre en Fargate con 2 vCPU y con DINOv2 ViT-S/14

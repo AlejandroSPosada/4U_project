@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.5.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.5.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
 | Estado | En construcción: hay código desde BE-1.1 (`project/`); lo de lotes posteriores es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -146,15 +146,30 @@ de `worker` no falle al arrancar, en BE-1.1 `python -m app.worker` solo registra
 purga con BE-4.1 (§4.11). Hasta entonces, si el autoescalado lo enciende por mensajes en `ingesta` o `purga`, esos
 mensajes siguen en la cola (igual que con la imagen de prueba de infra).
 
-**Despliegue con `backend.yml`.** Sigue la secuencia de infra §5.9, sin el paso `migrate` hasta BE-1.2. Lo propio del
-backend:
+**Despliegue con `backend.yml`** (`.github/workflows/` de la raíz del monorepo). Sigue la secuencia de infra §5.9, sin
+el paso `migrate` hasta BE-1.2. Lo propio del backend:
+- Disparadores: PR y *push* a `main` con cambios en `BACKEND_FASTAPI/project/**` o en el propio `backend.yml` (infra
+  §3.9). En los dos, `uv sync --frozen`, `ruff check`, `ruff format --check` y `pytest`, sin base de datos hasta BE-1.2.
+  En `main`, el despliegue solo empieza si las pruebas pasan.
+- Mismas convenciones que `infra.yml`: `permissions: {}` y los permisos mínimos en cada job, acciones fijadas por SHA
+  con la versión en un comentario, `persist-credentials: false`, `allowed-account-ids` y uv 0.11.32 (el que copia el
+  `Dockerfile`). Una ejecución nueva de un PR cancela la anterior; los despliegues de `main` van en fila.
+- El *login* en ECR usa `aws ecr get-login-password` y la comprobación de la etiqueta, `ecr batch-get-image`: son los
+  permisos que tiene `gha-deploy` (infra §5.8), que no incluyen `ecr:DescribeImages`.
 - La imagen se construye con `--build-arg GIT_COMMIT=${GITHUB_SHA}` (§5.9). Si la etiqueta ya existe en ECR (reintento
   del workflow), no se vuelve a publicar: las etiquetas son inmutables.
 - Cada revisión nueva de `campus-locator-dev-api` y `campus-locator-dev-worker` parte de la última de su familia (la de
-  Terraform o la del despliegue anterior) y solo cambia la imagen del contenedor `app`.
+  Terraform o la del despliegue anterior) y solo cambia la imagen del contenedor `app`; se quitan los campos de solo
+  lectura de `describe-task-definition` (`taskDefinitionArn`, `revision`, `status`, `requiresAttributes`,
+  `compatibilities`, `registeredAt`, `registeredBy`, `deregisteredAt` y `deleteRequestedAt`). Así `worker` conserva
+  su comando (`python -m app.worker`).
 - Si `api` tiene `desiredCount = 0` (primer despliegue), pasa a 1.
 - Tras `wait services-stable`, comprueba que el despliegue `PRIMARY` de `api` sea la revisión nueva con
-  `rolloutState = COMPLETED`; si el *circuit breaker* hizo *rollback*, el workflow falla.
+  `rolloutState = COMPLETED` (espera hasta 2 min más a que llegue a ese estado); si el *circuit breaker* hizo
+  *rollback*, el workflow falla. `worker` se actualiza pero no se espera: escala solo y suele estar en 0.
+- Para volver a desplegar el mismo commit (p. ej. tras un cambio de Terraform en una tarea, infra ADR-INF-09) se usa
+  «Re-run all jobs» en la última ejecución de `main`. Un commit que solo toca `backend.yml` también despliega (con su
+  propio SHA y el mismo `project/`); BE-1.1 C3a lo acepta porque compara el contenido de `project/`, no solo el SHA.
 - El job de despliegue **no** declara `environment:`: el rol `gha-deploy` solo confía en
   `sub = repo:<github_repo>:ref:refs/heads/main` (infra §5.8), y con un entorno el `sub` cambiaría.
 

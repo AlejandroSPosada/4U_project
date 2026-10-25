@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.5.0**.
+Alineado con `ARCHITECTURE.md` **v0.5.1**.
 
 ---
 
@@ -199,7 +199,7 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 
 | Lote | Fase | Estado | Validación | Última validación | Versión de ARCHITECTURE al cerrar | Nota |
 |---|---|---|---|---|---|---|
-| BE-1.1 | 1 | En curso | [1-1](./validation/validation-1-1.md) | — | — | Código entregado; falta validar en `dev` (espera INF-1.3 e INF-1.4) |
+| BE-1.1 | 1 | En curso | [1-1](./validation/validation-1-1.md) | — | — | INF-1.3 e INF-1.4 ya están hechos. Primera ejecución en `dev` (2026-10-24): precondiciones en verde y C1–C3 en rojo porque `backend.yml` no estaba en el repositorio (nunca se desplegó). Falta subirlo a `main`, que despliegue y validar |
 | BE-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | |
 | BE-1.3 | 1 | Pendiente | [1-3](./validation/validation-1-3.md) | — | — | |
 | BE-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | |

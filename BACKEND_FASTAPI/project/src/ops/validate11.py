@@ -277,8 +277,37 @@ def c3a_ultimo_commit(ctx: Contexto) -> str:
     except subprocess.CalledProcessError as exc:
         raise Falla(f"`git log origin/main -- {CARPETA_PROYECTO}` falló ({exc.returncode})") from None
     exigir(ultimo, f"no hay commits en origin/main que toquen {CARPETA_PROYECTO}")
-    exigir(etiqueta == ultimo, f"desplegado {etiqueta} ≠ último commit de main en project/ {ultimo}")
-    return f"desplegado = último commit de main en {CARPETA_PROYECTO} ({ultimo[:12]})"
+    if etiqueta == ultimo:
+        return f"desplegado = último commit de main en {CARPETA_PROYECTO} ({ultimo[:12]})"
+    # backend.yml también se dispara con cambios en su propio archivo (infra §3.9): un commit posterior que no toca
+    # project/ despliega el mismo código con otro SHA. Vale si está en origin/main y project/ es idéntico.
+    exigir(
+        re.fullmatch(r"[0-9a-f]{40}", etiqueta),
+        f"desplegado {etiqueta} ≠ último commit de main en project/ {ultimo}",
+    )
+    exigir(
+        _git_ok("cat-file", "-e", f"{etiqueta}^{{commit}}"),
+        f"desplegado {etiqueta[:12]}: ese commit no está en el historial local de origin/main",
+    )
+    exigir(
+        _git_ok("merge-base", "--is-ancestor", etiqueta, "origin/main"),
+        f"desplegado {etiqueta[:12]}: no está en origin/main",
+    )
+    exigir(
+        _git_ok("diff", "--quiet", etiqueta, ultimo, "--", CARPETA_PROYECTO),
+        f"desplegado {etiqueta[:12]} ≠ último commit de main en project/ {ultimo[:12]}: "
+        f"{CARPETA_PROYECTO} cambió desde entonces",
+    )
+    return f"desplegado {etiqueta[:12]}: mismo {CARPETA_PROYECTO} que el último commit que lo tocó ({ultimo[:12]})"
+
+
+def _git_ok(*argumentos: str) -> bool:
+    """`git <argumentos>` terminó con 0 (sin git en el PATH: ErrorConfiguracion, código 3)."""
+    try:
+        comun.git(*argumentos)
+    except subprocess.CalledProcessError:
+        return False
+    return True
 
 
 def c3b_imagen_ecr(ctx: Contexto) -> str:

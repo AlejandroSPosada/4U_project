@@ -31,7 +31,7 @@ falla por credenciales, permisos, herramientas o variables (`AWS_PROFILE`, `terr
 | C1 | Lee la imagen desplegada: `ecs describe-services` (`api`) → `taskDefinition` → `ecs describe-task-definition` → `image` del contenedor `app` (etiqueta = SHA). Luego `GET {api_base_url}/v1/health` | `200` con `{"estado": "ok", "version": …, "commit": …}` y el SHA de la etiqueta empieza por `commit` |
 | C2a | `GET /v1/validacion-ruta-inexistente` con el encabezado `X-Request-Id: <uuid4 nuevo>` | `404`; el cuerpo solo tiene la clave `error`, con `codigo = "NO_ENCONTRADO"`, `mensaje` no vacío y `detalle` objeto o `null` (§5.1, §5.6); el encabezado `X-Request-Id` de la respuesta es el enviado |
 | C2b | `logs filter-log-events --log-group-name /campus-locator/dev/api --start-time <inicio> --filter-pattern '{ $.request_id = "<uuid>" }'`, cada 10 s hasta 90 s. `<inicio>` = momento de la petición de C2a menos 60 s (tolera relojes desajustados); si C2a se omitió con `--solo`, C2b envía su propia petición | ≥ 1 evento (al menos `peticion`, §5.10), y cada uno es una línea JSON con `ts`, `nivel`, `proceso`, `request_id` y `evento` |
-| C3a | Compara el SHA de C1 con `git log -1 --format=%H origin/main -- BACKEND_FASTAPI/project` | Son iguales: lo desplegado es el último commit de `main` que tocó `project/` |
+| C3a | Compara el SHA de C1 con `git log -1 --format=%H origin/main -- BACKEND_FASTAPI/project`; si no coinciden, `git merge-base --is-ancestor <SHA> origin/main` y `git diff --quiet <SHA> <último> -- BACKEND_FASTAPI/project` | Son iguales, o el desplegado es un commit de `main` posterior con `project/` idéntico (uno que solo tocó `backend.yml`, que también dispara el workflow): lo desplegado es el contenido actual de `project/` en `main` |
 | C3b | `ecr describe-images --repository-name campus-locator/backend --image-ids imageTag=<sha>` | La imagen existe con esa etiqueta (40 caracteres hexadecimales, infra §5.9) |
 | C3c | `ecs describe-services` (`api`): despliegues y réplicas | Un solo despliegue `PRIMARY` con `rolloutState = COMPLETED` sobre la revisión de C1, y `runningCount = desiredCount = 1` |
 
@@ -57,3 +57,17 @@ de admin. Duración aproximada: 2 minutos.
 Herramientas: `git` con acceso a `origin` y, salvo que se pase `VALIDACION_API_URL`, `terraform` con `terraform init`
 hecho en `INFRASTRUCTURA_TERRAFORM/project/envs/dev`. El informe queda en `project/.validacion/BE-1.1-<fecha>.json`
 (o en `--informe RUTA`).
+
+Antes de ejecutarlo:
+- `AWS_PROFILE` tiene que estar definida aunque la CLI de AWS ya funcione con el perfil `default`: en ese caso,
+  `export AWS_PROFILE=default`. Sin la variable, P1 termina con código 3.
+- `backend.yml` tiene que haber terminado en verde en `main` sobre el último commit que tocó `BACKEND_FASTAPI/project/`
+  o uno posterior (C1–C3 miran lo desplegado; `ARCHITECTURE.md` §4.2). Si aún no ha desplegado, el servicio `api`
+  sigue con la imagen `bootstrap` de infra y 0 réplicas, y el resultado es reconocible:
+
+| Comprobación | Lo que se ve sin despliegue |
+|---|---|
+| C1, C2a | `500` de API Gateway (no hay tareas detrás del VPC Link) |
+| C2b | Ningún evento en `/campus-locator/dev/api` |
+| C3a, C3b | Etiqueta desplegada `bootstrap` en lugar de un SHA |
+| C3c | `runningCount = 0`, `desiredCount = 0` |
