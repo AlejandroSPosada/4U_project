@@ -70,7 +70,8 @@ cd SERVICE_EMBEDDING/project
 EMBEDDING_IMAGEN=<ecr_embedding_url>:<sha> uv run --group ops python src/ops/validate21.py --entorno local
 ```
 
-Variables: `EMBEDDING_IMAGEN` (§5.8); `AWS_PROFILE` solo si la imagen es de ECR (`ecr:GetAuthorizationToken`,
+Variables: `EMBEDDING_IMAGEN` (§5.8); `AWS_PROFILE` si la imagen es de ECR, también si es el perfil por defecto
+(`AWS_PROFILE=default`: el script no usa la cadena por defecto de AWS), con `ecr:GetAuthorizationToken`,
 `BatchGetImage` y `GetDownloadUrlForLayer` sobre `campus-locator/embedding`). En la máquina: `uv`, `git` (commit del
 informe) y Docker. No toca AWS más allá de descargar la imagen, así que vale a cualquier hora y con `embedding`
 encendido o apagado. Duración aproximada: 2–5 min (arranque de hasta 3 min y unos 15 lotes de 8 imágenes entre C2, C4 y
@@ -80,7 +81,7 @@ C5c). El informe queda en `project/.validacion/EMB-2.1-<AAAAMMDD-HHMMSS>.json` (
 **Preparación.**
 
 1. Pruebas y estilo, con `uv.lock` al día (Pillow y `python-multipart` entraron en EMB-2.1). Con los pesos en
-   `project/.modelo/` o en `MODELO_DIR` (cómo copiarlos de la imagen: `tools/dorados.py`), `test_dorados.py` compara
+   `project/.modelo/` o en `MODELO_DIR` (cómo copiarlos de la imagen: ARCHITECTURE §5.9), `test_dorados.py` compara
    también los vectores dorados; `DORADOS_OBLIGATORIOS=1` hace que fallen, en vez de omitirse, si no los encuentra:
    ```bash
    cd SERVICE_EMBEDDING/project

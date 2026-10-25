@@ -23,6 +23,30 @@ re-indexar el dataset.
 
 ---
 
+## [0.6.1] — 2026-10-25
+
+- **Lote que la motivó:** EMB-2.1, al cerrarlo: ARCHITECTURE debe bastar para operar el servicio sin leer el código, y
+  parte de lo necesario solo estaba en el código o en la conversación.
+- **Qué cambió:**
+  - §5.9 documenta los vectores dorados: formato de `esperados.json`, órdenes de `tools/dorados.py` (`imagenes`,
+    `vectores`, `comparar`) con sus códigos de salida, cómo copiar los pesos de la imagen a `project/.modelo/`,
+    `MODELO_DIR` y `DORADOS_OBLIGATORIOS` en las pruebas, y cuándo se recalculan. §5.4 y ADR-EMB-12 lo enlazan.
+  - §5.8: `AWS_PROFILE` también en `local` si la imagen es de ECR; los validadores no usan la cadena de credenciales
+    por defecto de AWS (con el perfil por defecto, `AWS_PROFILE=default`).
+  - §5.7: los campos de vectorización van en el evento `peticion`; los avisos de Python también salen en JSON.
+  - `validation-2-1.md` §5 remite a §5.9 para los pesos y aclara `AWS_PROFILE`.
+  - PLAN: alineado con 0.6.1; EMB-2.1 «Hecho».
+- **Contratos tocados (§5):** ninguno; aclaraciones de §5.4, §5.7, §5.8 y §5.9 sobre lo que ya hace el código. La
+  `version_vector` **no** cambia. Sube el parche.
+- **Cómo se verificó:** `validate21.py --entorno local` con código 0 sobre la imagen `f2ddc42` (informe
+  `EMB-2.1-20261025-172923.json`): P3 listo a los 11 s; C1 con diferencia 0,0 frente a los dorados (misma CPU en que se
+  calcularon); C2 0,0 entre lote y solas; C4 con lote de 8 de 1794 ms, la `alta` a 0,9 s, 3 `baja` esperando y 722 ms en
+  cola frente al límite de 2120 ms; C5c con 2 × 503 y 6 × 200 al primer intento. Antes, en la misma máquina: 107
+  pruebas en verde con `DORADOS_OBLIGATORIOS=1`. Los comandos de §5.9 son los que se usaron para copiar los pesos.
+- **Pendiente:** EMB-3.1 (latencias en Fargate) y EMB-3.2 (calibración).
+
+---
+
 ## [0.6.0] — 2026-10-24
 
 - **Lote que la motivó:** EMB-2.1 (vectorización por lotes, `POST /v1/embed`).
