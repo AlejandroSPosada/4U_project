@@ -99,7 +99,7 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 
 | Lote | Fase | Estado | Validación | Última validación | Versión de ARCHITECTURE al cerrar | Nota |
 |---|---|---|---|---|---|---|
-| EMB-1.1 | 1 | En curso | [1-1](./validation/validation-1-1.md) | — | — | Código entregado, ya con `dinov2-small` (0.5.0). INF-1.3 está «Hecho»: `dev` ya se puede validar. Falta la preparación de [`validation-1-1`](./validation/validation-1-1.md) §5 (`uv.lock`, `pytest` con PyTorch, imagen en ECR) y las dos ejecuciones |
+| EMB-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `44fdff8` 2026-10-24 | 0.5.1 | `validate11.py` con código 0 en `dev` (C1b: `HEALTHY` a los 52 s de `startedAt`) y en `local` (C2: listo a los 11 s; C3: sin red, a los 12 s) sobre la imagen `44fdff8`. `uv.lock` versionado en `083d6ff`; `embedding.yml` no estaba en el repositorio y se añadió en `44fdff8` (primera ejecución en verde) |
 | EMB-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | |
 | EMB-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | Latencias de §5.7 sin medir |
 | EMB-3.2 | 3 | Pendiente | [3-2](./validation/validation-3-2.md) | — | — | Necesita un dataset real indexado (FE-2.1 + BE-2.2) |
