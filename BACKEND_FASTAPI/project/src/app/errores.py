@@ -44,6 +44,7 @@ MENSAJE_POR_CODIGO: dict[str, str] = {
     "CREDENCIALES_INVALIDAS": "Correo o contraseña incorrectos.",
     "SIN_PERMISOS": "No tienes permisos para esta operación.",
     "NO_ENCONTRADO": "El recurso no existe.",
+    "VIDEO_ELIMINADO": "El video fue eliminado.",
     "VALIDACION": "Hay campos con valores no válidos.",
     "ERROR_INTERNO": "Error interno del servidor. Indica el X-Request-Id al reportarlo.",
     "NO_IMPLEMENTADO": "Esta operación aún no está disponible.",

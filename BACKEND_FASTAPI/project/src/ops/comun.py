@@ -164,12 +164,20 @@ class Validador:
         comprobaciones: Iterable[tuple[str, Callable[[], str | None]]],
         manuales: Iterable[tuple[str, str]] = (),
         limpieza: Callable[[], str | None] | None = None,
+        preparacion: Callable[[], str | None] | None = None,
     ) -> int:
-        """Orden de §5.11: precondiciones → automáticas → manuales → limpieza (siempre) → informe."""
+        """Orden de §5.11: precondiciones → automáticas → manuales → limpieza (siempre) → informe.
+
+        `preparacion` (BE-2.1) corre una vez si las precondiciones pasan y antes de las comprobaciones (p. ej. borrar
+        restos `validacion-` de una ejecución interrumpida). Imprime `[PREPARACION] <detalle>`; si falla, imprime
+        `[PREPARACION] falló: …` y sigue (no cambia el código de salida).
+        """
         if self.args is None:
             raise RuntimeError("Llama a iniciar() antes de ejecutar()")
         try:
             if self._precondiciones(precondiciones):
+                if preparacion is not None:
+                    self._preparar(preparacion)
                 for id_, funcion in comprobaciones:
                     self._comprobacion(id_, funcion)
                 for id_, instruccion in manuales:
@@ -215,6 +223,12 @@ class Validador:
             resultado.duracion_ms = int((time.perf_counter() - inicio) * 1000)
         self._estado.comprobaciones.append(resultado)
         _imprimir(resultado.estado, id_, resultado.detalle)
+
+    def _preparar(self, preparacion: Callable[[], str | None]) -> None:
+        try:
+            print(f"[PREPARACION] {preparacion() or 'hecha'}", flush=True)
+        except Exception as exc:
+            print(f"[PREPARACION] falló: {_resumen(exc)}", flush=True)
 
     def _limpiar(self, limpieza: Callable[[], str | None] | None) -> None:
         if limpieza is None:
@@ -416,10 +430,12 @@ CLUSTER = "campus-locator-dev"
 CONTENEDOR = "app"
 FAMILIA_MIGRATE = "campus-locator-dev-migrate"
 FAMILIA_VALIDACION = "campus-locator-dev-validacion"
+FAMILIA_WORKER = "campus-locator-dev-worker"  # BE-2.1: `limpiar-validacion` (rol que puede borrar en S3)
 #: Log group y `awslogs-stream-prefix` de cada familia (infra §5.1): el stream es `<prefijo>/app/<id de la tarea>`.
 LOGS_TAREA = {
     FAMILIA_MIGRATE: ("/campus-locator/dev/migrate", "migrate"),
     FAMILIA_VALIDACION: ("/campus-locator/dev/validacion", "validacion"),
+    FAMILIA_WORKER: ("/campus-locator/dev/worker", "worker"),
 }
 ESPERA_TAREA_S = 900
 PAUSA_LOGS_S = 5.0
@@ -481,6 +497,7 @@ def lanzar_tarea(
     espera_s: float = ESPERA_TAREA_S,
     dormir: Callable[[float], None] = time.sleep,
     entorno: Mapping[str, str] | None = None,
+    log_completo: Callable[[int | None, list[str]], bool] | None = None,
 ) -> ResultadoTarea:
     """`ecs run-task` (Fargate) de `definicion` (familia o ARN de una revisión), espera a que pare y lee su log.
 
@@ -529,7 +546,8 @@ def lanzar_tarea(
         motivo=contenedor.get("reason") or descrita.get("stoppedReason", ""),
     )
     grupo, prefijo = LOGS_TAREA[familia]
-    resultado.lineas = leer_log(logs, grupo, f"{prefijo}/{CONTENEDOR}/{resultado.id}", dormir=dormir)
+    completo = None if log_completo is None else (lambda lineas: log_completo(resultado.codigo, lineas))
+    resultado.lineas = leer_log(logs, grupo, f"{prefijo}/{CONTENEDOR}/{resultado.id}", dormir=dormir, completo=completo)
     return resultado
 
 
@@ -541,11 +559,15 @@ def leer_log(
     intentos: int = INTENTOS_LOGS,
     pausa_s: float = PAUSA_LOGS_S,
     dormir: Callable[[float], None] = time.sleep,
+    completo: Callable[[list[str]], bool] | None = None,
 ) -> list[str]:
     """Mensajes de un stream de CloudWatch Logs, desde el principio. El log de una tarea tarda unos segundos en
-    aparecer tras detenerse: reintenta mientras el stream no exista o esté vacío. Devuelve [] si nunca aparece."""
+    aparecer tras detenerse (y sus líneas pueden llegar en varias tandas): reintenta mientras el stream no exista, esté
+    vacío o, con `completo`, mientras `completo(mensajes)` sea falso. Agotados los intentos devuelve lo último leído
+    (`[]` si nunca apareció)."""
     from botocore.exceptions import ClientError
 
+    ultimos: list[str] = []
     for intento in range(intentos):
         mensajes: list[str] = []
         token: str | None = None
@@ -564,10 +586,12 @@ def leer_log(
             if codigo_error_aws(exc) != "ResourceNotFoundException":
                 raise _error_aws_tarea(exc, f"leer {grupo} {stream}") from None
         if mensajes:
-            return mensajes
+            ultimos = mensajes
+            if completo is None or completo(mensajes):
+                return mensajes
         if intento < intentos - 1:
             dormir(pausa_s)
-    return []
+    return ultimos
 
 
 # --- API del backend ---------------------------------------------------------------------------------------------
@@ -754,6 +778,8 @@ class ClienteApi:
 
 # --- Comandos de la CLI y SQL en local o dev (BE-1.3) ---------------------------------------------------------------
 SERVICIO_API = "api"
+#: Servicio de `docker compose` con el que se corre la CLI en `local`, según la familia que se usaría en `dev`.
+SERVICIO_COMPOSE = {FAMILIA_MIGRATE: "api", FAMILIA_WORKER: "worker"}
 CLI_COMPOSE = ["docker", "compose", "run", "--rm", "-T"]
 PSQL_COMPOSE = ["docker", "compose", "exec", "-T", "db", "psql", "-U", "campus_app", "-d", "campus_locator", "-tAc"]
 #: Eventos de la CLI (§5.10) que explican un código distinto de 0, en orden de preferencia.
@@ -765,6 +791,8 @@ EVENTOS_DE_FALLO = (
     "usuario_no_encontrado",
     "migracion_fallida",
     "verificacion_fallida",
+    "limpieza_rechazada",
+    "s3_fallido",
 )
 
 
@@ -788,9 +816,13 @@ class EntornoBackend:
       que el servicio `api`: si no, `Falla`, porque `backend.yml` no terminó) y, para SQL, con
       `campus-locator-dev-validacion` (`psql -tAc`).
 
-    `cli(argumentos, entorno=None)` devuelve un `ResultadoTarea` (`codigo`, `lineas`, `eventos()`); los valores de
-    `entorno` llegan al proceso sin pasar por la línea de comandos en local y como `environment` del *override* en
-    dev. `sql(consulta)` devuelve las líneas de `psql` o lanza `Falla` si `psql` no termina con 0.
+    `cli(argumentos, entorno=None, familia=FAMILIA_MIGRATE)` devuelve un `ResultadoTarea` (`codigo`, `lineas`,
+    `eventos()`); los valores de `entorno` llegan al proceso sin pasar por la línea de comandos en local y como
+    `environment` del *override* en dev. Con `familia=FAMILIA_WORKER` (BE-2.1, `limpiar-validacion`) usa la última
+    revisión de `campus-locator-dev-worker` (también con la imagen de `api`) y, en local, el servicio `worker`.
+    `log_completo(codigo, lineas)` (dev) hace que la lectura del log reintente hasta que sea cierto (p. ej.
+    `fin_limpieza`: la línea `LIMPIEZA {…}` llega después del evento JSON).
+    `sql(consulta)` devuelve las líneas de `psql` o lanza `Falla` si `psql` no termina con 0.
     """
 
     def __init__(
@@ -808,7 +840,7 @@ class EntornoBackend:
         self.iniciada_por = iniciada_por
         self.dormir = dormir
         self._clientes: dict[str, Any] = {}
-        self._revision_migrate: str | None = None
+        self._revisiones: dict[str, str] = {}
 
     def aws(self, servicio: str) -> Any:
         if servicio not in self._clientes:
@@ -822,9 +854,11 @@ class EntornoBackend:
         exigir(CONTENEDOR in contenedores, f"{definicion} no tiene contenedor `{CONTENEDOR}`")
         return datos["taskDefinitionArn"], contenedores[CONTENEDOR].get("image", "")
 
-    def revision_migrate(self) -> str:
-        if self._revision_migrate is None:
-            arn, imagen = self.imagen(FAMILIA_MIGRATE)
+    def revision(self, familia: str = FAMILIA_MIGRATE) -> str:
+        """ARN de la última revisión de `familia`, que debe usar la misma imagen que el servicio `api` (si no,
+        `Falla`: `backend.yml` no terminó)."""
+        if familia not in self._revisiones:
+            arn, imagen = self.imagen(familia)
             servicios = self.aws("ecs").describe_services(cluster=CLUSTER, services=[SERVICIO_API])["services"]
             exigir(servicios, f"el servicio `{SERVICIO_API}` no aparece en `{CLUSTER}`")
             desplegada = self.imagen(servicios[0]["taskDefinition"])[1]
@@ -832,15 +866,26 @@ class EntornoBackend:
                 imagen == desplegada,
                 f"{arn.rsplit('/', 1)[-1]} y el servicio `api` usan imágenes distintas: ¿terminó backend.yml en main?",
             )
-            self._revision_migrate = arn
-        return self._revision_migrate
+            self._revisiones[familia] = arn
+        return self._revisiones[familia]
 
-    def cli(self, argumentos: Sequence[str], *, entorno: Mapping[str, str] | None = None) -> ResultadoTarea:
+    def revision_migrate(self) -> str:
+        return self.revision(FAMILIA_MIGRATE)
+
+    def cli(
+        self,
+        argumentos: Sequence[str],
+        *,
+        entorno: Mapping[str, str] | None = None,
+        familia: str = FAMILIA_MIGRATE,
+        log_completo: Callable[[int | None, list[str]], bool] | None = None,
+    ) -> ResultadoTarea:
         comando = ["python", "-m", "app.cli", *argumentos]
         if self.entorno == "local":
             variables = [parte for nombre in (entorno or {}) for parte in ("-e", nombre)]
+            servicio = SERVICIO_COMPOSE.get(familia, SERVICIO_API)
             proceso = ejecutar_proceso(
-                [*CLI_COMPOSE, *variables, SERVICIO_API, *comando], cwd=RAIZ_PROYECTO, entorno=entorno
+                [*CLI_COMPOSE, *variables, servicio, *comando], cwd=RAIZ_PROYECTO, entorno=entorno
             )
             error = [linea for linea in proceso.stderr.splitlines() if linea.strip()]
             return ResultadoTarea(
@@ -853,13 +898,14 @@ class EntornoBackend:
         return lanzar_tarea(
             self.aws("ecs"),
             self.aws("logs"),
-            definicion=self.revision_migrate(),
+            definicion=self.revision(familia),
             red=red_tareas(self._outputs()),
-            familia=FAMILIA_MIGRATE,
+            familia=familia,
             comando=comando,
             iniciada_por=self.iniciada_por,
             dormir=self.dormir,
             entorno=entorno,
+            log_completo=log_completo,
         )
 
     def sql(self, consulta: str) -> list[str]:
@@ -882,6 +928,389 @@ class EntornoBackend:
             texto = [linea.strip() for linea in (motivo or "\n".join(lineas)).splitlines() if linea.strip()]
             raise Falla(f"psql terminó con {codigo}: {(texto[-1] if texto else 'sin salida')[:200]}")
         return lineas
+
+
+# --- JPEG sintético (BE-2.1) ----------------------------------------------------------------------------------------
+#: Tabla de Huffman DC de luminancia estándar (JPEG, anexo K.3): longitudes 1–16 y símbolos (categorías 0–11).
+_DC_BITS = (0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)
+_DC_VALORES = tuple(range(12))
+
+
+def _codigos_huffman(bits: Sequence[int], valores: Sequence[int]) -> dict[int, tuple[int, int]]:
+    """`{símbolo: (código, longitud)}` canónicos a partir de las longitudes (JPEG, anexo C)."""
+    codigos, codigo, k = {}, 0, 0
+    for longitud, cuantos in enumerate(bits, start=1):
+        for _ in range(cuantos):
+            codigos[valores[k]] = (codigo, longitud)
+            codigo, k = codigo + 1, k + 1
+        codigo <<= 1
+    return codigos
+
+
+def jpeg_sintetico(ancho: int = 1024, alto: int = 768, semilla: int = 0) -> bytes:
+    """JPEG *baseline* en escala de grises, sin Pillow: cada bloque de 8×8 tiene un tono uniforme (solo el coeficiente
+    DC; los AC son cero y se codifican con un EOB de un bit). Decodificable por libjpeg/Pillow; la misma `semilla` da
+    los mismos bytes y semillas distintas, imágenes (y ETag) distintas. 1024×768 ocupa unos 10–20 KB."""
+    import math
+    import random
+
+    azar = random.Random(semilla)  # noqa: S311 (imagen de prueba, no criptografía)
+    fase_x, fase_y = azar.uniform(0, 6.3), azar.uniform(0, 6.3)
+    bloques_x, bloques_y = math.ceil(ancho / 8), math.ceil(alto / 8)
+    dc = _codigos_huffman(_DC_BITS, _DC_VALORES)
+    salida = bytearray()
+    acumulado, n_bits = 0, 0
+
+    def escribir(codigo: int, longitud: int) -> None:
+        nonlocal acumulado, n_bits
+        acumulado, n_bits = (acumulado << longitud) | codigo, n_bits + longitud
+        while n_bits >= 8:
+            n_bits -= 8
+            byte = (acumulado >> n_bits) & 0xFF
+            salida.append(byte)
+            if byte == 0xFF:  # relleno obligatorio dentro de los datos codificados
+                salida.append(0x00)
+        acumulado &= (1 << n_bits) - 1
+
+    anterior = 0
+    for by in range(bloques_y):
+        for bx in range(bloques_x):
+            # Tono del bloque (−128…127 tras restar 128): ondas suaves más ruido de la semilla.
+            tono = 70 * math.sin(bx / 9 + fase_x) + 40 * math.cos(by / 6 + fase_y) + azar.randint(-15, 15)
+            valor = max(-128, min(127, round(tono)))  # con cuantización DC = 8, el coeficiente cuantizado es el tono
+            diferencia, anterior = valor - anterior, valor
+            categoria = abs(diferencia).bit_length()
+            escribir(*dc[categoria])
+            if categoria:
+                escribir(diferencia if diferencia >= 0 else diferencia + (1 << categoria) - 1, categoria)
+            escribir(0, 1)  # EOB con la tabla AC de un solo símbolo (código `0`)
+    if n_bits:
+        escribir((1 << (8 - n_bits)) - 1, 8 - n_bits)  # completar el último byte con unos
+
+    def segmento(marcador: int, datos: bytes) -> bytes:
+        return bytes((0xFF, marcador)) + (len(datos) + 2).to_bytes(2, "big") + datos
+
+    cuantizacion = bytes([0x00, 8] + [1] * 63)
+    return b"".join(
+        [
+            b"\xff\xd8",
+            segmento(0xE0, b"JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"),
+            segmento(0xDB, cuantizacion),
+            segmento(0xC0, bytes([8]) + alto.to_bytes(2, "big") + ancho.to_bytes(2, "big") + bytes([1, 1, 0x11, 0])),
+            segmento(0xC4, bytes([0x00, *_DC_BITS, *_DC_VALORES])),
+            segmento(0xC4, bytes([0x10, 1] + [0] * 15 + [0x00])),
+            segmento(0xDA, bytes([1, 1, 0x00, 0, 63, 0])),
+            bytes(salida),
+            b"\xff\xd9",
+        ]
+    )
+
+
+# --- Recolección: S3, limpieza y recorrido de prueba (BE-2.1) -------------------------------------------------------
+PREFIJO_VALIDACION = "validacion-"
+ENCABEZADOS_PUT = {"Content-Type": "image/jpeg"}
+TIMEOUT_PUT_S = 60.0
+#: Líneas de texto que imprime `limpiar-validacion` al terminar con 0 (§5.9).
+LINEA_LIMPIEZA, LINEA_SIMULACION = "LIMPIEZA ", "SIMULACION "
+
+
+def put_prefirmado(http: Any, subida: Mapping[str, Any], cuerpo: bytes, *, que: str) -> Any:
+    """`PUT` a `subida["url"]` con **exactamente** `subida["encabezados"]` y `cuerpo`; devuelve la respuesta de httpx
+    (`status_code`, `text`). Cualquier excepción → `Falla("PUT de <que>: <clase>")` sin su mensaje, que podría llevar la
+    URL prefirmada. `http` es un `httpx.Client` o, en las pruebas, un objeto con `request()`."""
+    try:
+        return http.request("PUT", subida["url"], headers=dict(subida["encabezados"]), content=cuerpo)
+    except Exception as exc:
+        raise Falla(f"PUT de {que}: {type(exc).__name__} (sin respuesta de S3)") from None
+
+
+def _error_s3(exc: Exception, que: str) -> Exception:
+    if es_acceso_denegado(exc) or codigo_error_aws(exc) in {"403", "Forbidden"}:
+        return ErrorConfiguracion(f"sin permiso para {que}: {codigo_error_aws(exc)}")
+    return Falla(f"{que}: {codigo_error_aws(exc) or _resumen(exc)}")
+
+
+def head_objeto(s3: Any, bucket: str, clave: str) -> dict[str, Any] | None:
+    """`head-object`: la respuesta (`ContentType`, `ContentLength`…) o `None` si no existe (404). 403 →
+    `ErrorConfiguracion` (a quien valida le falta `s3:GetObject` o `s3:ListBucket`); otro error → `Falla`."""
+    from botocore.exceptions import ClientError
+
+    try:
+        return s3.head_object(Bucket=bucket, Key=clave)
+    except ClientError as exc:
+        if codigo_error_aws(exc) in {"404", "NoSuchKey", "NotFound"}:
+            return None
+        raise _error_s3(exc, f"head-object {clave}") from None
+
+
+def claves_s3(s3: Any, bucket: str, prefijo: str) -> list[str]:
+    """Claves bajo `prefijo` (`list-objects-v2`, todas las páginas). Sin permiso → `ErrorConfiguracion`; otro error →
+    `Falla`."""
+    from botocore.exceptions import ClientError
+
+    claves: list[str] = []
+    try:
+        for pagina in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefijo):
+            claves += [objeto["Key"] for objeto in pagina.get("Contents", [])]
+    except ClientError as exc:
+        raise _error_s3(exc, f"list-objects-v2 {prefijo}") from None
+    return claves
+
+
+def comprobar_bucket(s3: Any, bucket: str) -> str:
+    """Precondición de S3 de un validador: `head-bucket`, `list-objects-v2 --max-keys 1` en `dataset/` y `head-object`
+    de una clave que no existe (404 esperado). Bucket inexistente → `PrecondicionNoCumplida` (INF-1.2); permisos →
+    `ErrorConfiguracion`. Devuelve el detalle."""
+    import uuid
+
+    from botocore.exceptions import ClientError
+
+    try:
+        s3.head_bucket(Bucket=bucket)
+    except ClientError as exc:
+        if codigo_error_aws(exc) in {"404", "NoSuchBucket", "NotFound"}:
+            raise PrecondicionNoCumplida(f"INF-1.2: no existe el bucket {bucket}") from None
+        raise _error_s3(exc, f"head-bucket {bucket}") from None
+    try:
+        s3.list_objects_v2(Bucket=bucket, Prefix="dataset/", MaxKeys=1)
+    except ClientError as exc:
+        raise _error_s3(exc, f"list-objects-v2 en {bucket}") from None
+    sonda = f"dataset/{PREFIJO_VALIDACION}sonda-{uuid.uuid4()}.jpg"
+    exigir(head_objeto(s3, bucket, sonda) is None, f"la clave de sonda {sonda} existe")
+    return f"bucket {bucket}: head-bucket, list-objects-v2 y head-object (404) permitidos"
+
+
+def hora_s3(s3: Any, bucket: str) -> datetime:
+    """Hora de S3: el encabezado `Date` (resolución de 1 s) de un `head-bucket`. `Falla` si no viene."""
+    from email.utils import parsedate_to_datetime
+
+    respuesta = s3.head_bucket(Bucket=bucket)
+    fecha = (respuesta.get("ResponseMetadata", {}).get("HTTPHeaders") or {}).get("date")
+    if not fecha:
+        raise Falla("head-bucket no devolvió el encabezado Date")
+    return parsedate_to_datetime(fecha).astimezone(UTC)
+
+
+def desfase_s3_s(s3: Any, bucket: str, ahora: Callable[[], datetime]) -> float:
+    """Segundos que hay que sumar al reloj local para tener la hora de S3 (positivo si el local va atrasado, como pasa
+    en WSL tras suspender el equipo). Precisión ±1 s."""
+    return (hora_s3(s3, bucket) - ahora()).total_seconds()
+
+
+def _eventos_de(lineas: Iterable[str]) -> list[dict[str, Any]]:
+    encontrados = []
+    for linea in lineas:
+        try:
+            datos = json.loads(linea)
+        except ValueError:
+            continue
+        if isinstance(datos, dict):
+            encontrados.append(datos)
+    return encontrados
+
+
+def fin_limpieza(codigo: int | None, lineas: Sequence[str]) -> bool:
+    """¿Está entero el log de un `limpiar-validacion`? Con 0, cuando aparece la línea `LIMPIEZA`/`SIMULACION` (se
+    imprime después del evento JSON); con otro código, cuando aparece su evento de fallo; sin código, ya."""
+    if codigo is None or any(linea.startswith((LINEA_LIMPIEZA, LINEA_SIMULACION)) for linea in lineas):
+        return True
+    return codigo != 0 and any(e.get("evento") in EVENTOS_DE_FALLO for e in _eventos_de(lineas))
+
+
+def limpiar_videos(
+    backend: EntornoBackend, video_ids: Sequence[str] | None = None, *, simular: bool = False
+) -> ResultadoTarea:
+    """`limpiar-validacion [--video ID …] [--simular]` con la definición de `worker` (`backend.cli`), leyendo el log
+    hasta `fin_limpieza`. `video_ids=None` = sin `--video` (todos los `validacion-`); una lista vacía no lanza nada y
+    devuelve un resultado con código 0 y sin líneas (nunca equivale a «todos»)."""
+    if video_ids is not None and not video_ids:
+        return ResultadoTarea(arn="no-lanzada", definicion="", codigo=0, motivo="sin videos")
+    argumentos = ["limpiar-validacion"]
+    for video_id in video_ids or []:
+        argumentos += ["--video", str(video_id)]
+    if simular:
+        argumentos.append("--simular")
+    return backend.cli(argumentos, familia=FAMILIA_WORKER, log_completo=fin_limpieza)
+
+
+def linea_limpieza(tarea: ResultadoTarea, prefijo: str = LINEA_LIMPIEZA) -> dict[str, Any] | None:
+    """El JSON de la línea `LIMPIEZA {…}` (o `SIMULACION {…}`) del log, o `None` si no está o no es JSON."""
+    for linea in tarea.lineas:
+        if linea.startswith(prefijo):
+            try:
+                datos = json.loads(linea.removeprefix(prefijo))
+            except ValueError:
+                return None
+            return datos if isinstance(datos, dict) else None
+    return None
+
+
+def videos_validacion(api: ClienteApi, token: str) -> list[dict[str, Any]]:
+    """Los `VideoResumen` con `nombre` **y** `ref_cliente` que empiezan por `validacion-` (lo mismo que borraría
+    `limpiar-validacion` sin `--video`), recorriendo todas las páginas de `GET /v1/admin/videos?q=validacion-`. Un
+    estado distinto de 200 → `Falla`."""
+    encontrados: list[dict[str, Any]] = []
+    pagina = 1
+    while True:
+        r = api.pedir(
+            "GET", "/admin/videos", token=token, params={"q": PREFIJO_VALIDACION, "pagina": pagina, "por_pagina": 100}
+        )
+        exigir(r.status_code == 200, f"GET /v1/admin/videos?q={PREFIJO_VALIDACION}: {describir_respuesta(r)}")
+        cuerpo = r.json()
+        encontrados += [
+            v
+            for v in cuerpo.get("items", [])
+            if str(v.get("nombre", "")).startswith(PREFIJO_VALIDACION)
+            and str(v.get("ref_cliente", "")).startswith(PREFIJO_VALIDACION)
+        ]
+        if pagina * int(cuerpo.get("por_pagina") or 100) >= int(cuerpo.get("total") or 0):
+            return encontrados
+        pagina += 1
+
+
+def borrar_restos(api: ClienteApi, token: str, backend: EntornoBackend) -> str:
+    """Preparación de los validadores que crean videos: si hay restos `validacion-` (`videos_validacion`), lanza
+    `limpiar-validacion` sin `--video`. Devuelve el detalle; `Falla` si la tarea no termina con 0."""
+    restos = videos_validacion(api, token)
+    if not restos:
+        return "sin restos validacion- de ejecuciones anteriores"
+    tarea = limpiar_videos(backend, None)
+    exigir(tarea.codigo == 0, f"limpiar-validacion terminó con {tarea.codigo}: {motivo_cli(tarea)}")
+    resumen = linea_limpieza(tarea)
+    if resumen is None:
+        return f"restos borrados: {len(restos)} videos (la tarea salió con 0; sin línea LIMPIEZA en el log)"
+    return f"restos borrados: {json.dumps(resumen)}"
+
+
+class RecorridoPrueba:
+    """Un video de prueba `validacion-…` y sus fotos, por la API de §5.4 y los `PUT` prefirmados.
+
+    - `RecorridoPrueba(api, token, nombre, total_fotos=4, http_s3=None, lat=1.0, lng=-100.0, semilla=0)`: `token` es
+      una función que devuelve el token del admin; `nombre` se usa también como `ref_cliente` (lleva el prefijo).
+    - `crear()` → respuesta de `POST /collect/videos` (con 201 o 200 guarda `video`; su `id` en `video_id`).
+    - `registrar(ordenes)` → respuesta de `POST …/images`; con 200 guarda cada elemento en `registro[orden]`.
+    - `subir(orden, subida=None)` → respuesta del `PUT` (por defecto con la `subida` de `registro[orden]` y
+      `foto(orden)`); con 200 añade `orden` a `subidas`. Sin `subida` → `Falla`.
+    - `asegurar_subidas(ordenes)`: registra (pidiendo URL nueva) y sube las que no estén en `subidas`; `Falla` si una
+      respuesta no es 200. Para validadores que solo necesitan fotos subidas (BE-2.2).
+    - `completar()` → respuesta de `POST …/complete`. `foto(orden)` → `jpeg_sintetico` (1024×768, semilla
+      `semilla * 1000 + orden`); `elemento(orden)` → el elemento de `images` (rumbo 0/90/180/270, `bytes` reales).
+    - `cerrar()` cierra el cliente de los `PUT` (lo crea con 60 s si no se pasó `http_s3`).
+    """
+
+    RUMBOS = (0.0, 90.0, 180.0, 270.0)
+
+    def __init__(
+        self,
+        api: ClienteApi,
+        token: Callable[[], str],
+        nombre: str,
+        *,
+        total_fotos: int = 4,
+        http_s3: Any = None,
+        lat: float = 1.0,
+        lng: float = -100.0,
+        semilla: int = 0,
+    ) -> None:
+        exigir(
+            nombre.startswith(PREFIJO_VALIDACION), f"el nombre de un video de prueba empieza por {PREFIJO_VALIDACION}"
+        )
+        self.api, self.token, self.nombre = api, token, nombre
+        self.total_fotos, self.lat, self.lng, self.semilla = total_fotos, lat, lng, semilla
+        self._http_s3 = http_s3
+        self.video: dict[str, Any] | None = None
+        self.registro: dict[int, dict[str, Any]] = {}
+        self.subidas: set[int] = set()
+        self._fotos: dict[int, bytes] = {}
+
+    @property
+    def video_id(self) -> str:
+        exigir(self.video is not None, f"el video {self.nombre} no se ha creado")
+        return str(self.video["id"])
+
+    @property
+    def http_s3(self) -> Any:
+        if self._http_s3 is None:
+            import httpx
+
+            self._http_s3 = httpx.Client(timeout=TIMEOUT_PUT_S, follow_redirects=False)
+        return self._http_s3
+
+    def cuerpo(self) -> dict[str, Any]:
+        return {
+            "ref_cliente": self.nombre,
+            "nombre": self.nombre,
+            "iniciado_en": "2026-10-20T14:00:00Z",
+            "finalizado_en": "2026-10-20T14:02:00Z",
+            "duracion_s": 120,
+            "distancia_m": 85.5,
+            "pasos": 110,
+            "inicio": {"lat": self.lat, "lng": self.lng, "rumbo": 0.0},
+            "total_fotos": self.total_fotos,
+            "dispositivo": "validador",
+            "app_version": "validacion",
+        }
+
+    def crear(self) -> Any:
+        r = self.api.pedir("POST", "/collect/videos", token=self.token(), json=self.cuerpo())
+        if r.status_code in (200, 201):
+            self.video = r.json()
+        return r
+
+    def foto(self, orden: int) -> bytes:
+        if orden not in self._fotos:
+            self._fotos[orden] = jpeg_sintetico(1024, 768, semilla=self.semilla * 1000 + orden)
+        return self._fotos[orden]
+
+    def elemento(self, orden: int) -> dict[str, Any]:
+        return {
+            "orden": orden,
+            "lat": self.lat + orden * 0.0001,
+            "lng": self.lng,
+            "rumbo": self.RUMBOS[(orden - 1) % len(self.RUMBOS)],
+            "capturada_en": f"2026-10-20T14:00:{orden % 60:02d}Z",
+            "bytes": len(self.foto(orden)),
+        }
+
+    def registrar(self, ordenes: Sequence[int]) -> Any:
+        r = self.api.pedir(
+            "POST",
+            f"/collect/videos/{self.video_id}/images",
+            token=self.token(),
+            json={"imagenes": [self.elemento(o) for o in ordenes]},
+        )
+        if r.status_code == 200:
+            for imagen in r.json().get("imagenes", []):
+                self.registro[int(imagen["orden"])] = imagen
+        return r
+
+    def subir(self, orden: int, subida: Mapping[str, Any] | None = None) -> Any:
+        subida = subida if subida is not None else (self.registro.get(orden) or {}).get("subida")
+        exigir(subida, f"la foto {orden} no tiene `subida`")
+        r = put_prefirmado(self.http_s3, subida, self.foto(orden), que=f"la foto {orden} de {self.nombre}")
+        if r.status_code == 200:
+            self.subidas.add(orden)
+        return r
+
+    def asegurar_subidas(self, ordenes: Sequence[int]) -> None:
+        faltan = [o for o in ordenes if o not in self.subidas]
+        if not faltan:
+            return
+        r = self.registrar(faltan)
+        exigir(r.status_code == 200, f"POST …/images: {describir_respuesta(r)}")
+        for orden in faltan:
+            if self.registro[orden].get("subida") is None:  # ya estaba en S3 (HEAD) o procesada
+                self.subidas.add(orden)
+                continue
+            r = self.subir(orden)
+            exigir(r.status_code == 200, f"PUT de la foto {orden}: {r.status_code}, se esperaba 200")
+
+    def completar(self) -> Any:
+        return self.api.pedir("POST", f"/collect/videos/{self.video_id}/complete", token=self.token())
+
+    def cerrar(self) -> None:
+        if self._http_s3 is not None:
+            self._http_s3.close()
 
 
 # --- Usuario de prueba `validacion+user@campus.edu.co` (backend §5.11) ------------------------------------------------

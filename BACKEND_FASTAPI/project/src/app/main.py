@@ -8,6 +8,7 @@ Un solo proceso de uvicorn (la tarea tiene 0,25 vCPU, §4.2).
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -16,6 +17,7 @@ from fastapi import FastAPI
 
 from app import __version__
 from app.api.v1 import router_v1
+from app.clientes.s3 import AlmacenS3
 from app.config import Settings, get_settings
 from app.db import sesion
 from app.errores import registrar_manejadores
@@ -28,7 +30,23 @@ from app.servicios.autenticacion import ColaHash
 log = obtener_logger(__name__)
 
 
-def crear_app(ajustes: Settings | None = None) -> FastAPI:
+async def _crear_almacen(aplicacion: FastAPI, ajustes: Settings) -> AlmacenS3 | None:
+    """BE-2.1: cliente de S3 del bucket del dataset, creado una vez (crear un cliente de boto3 cuesta CPU) y en un hilo.
+    Sin `S3_BUCKET_DATASET`, `None`: las rutas de recolección responden 500 (`obtener_almacen`)."""
+    bucket = (ajustes.s3_bucket_dataset or "").strip()
+    if not bucket:
+        aplicacion.state.motivo_sin_almacen = "falta S3_BUCKET_DATASET"
+        return None
+    try:
+        return await anyio.to_thread.run_sync(lambda: AlmacenS3(bucket, ajustes.aws_region))
+    except Exception as exc:
+        aplicacion.state.motivo_sin_almacen = f"no se pudo crear el cliente de S3: {type(exc).__name__}"
+        registrar(log, "s3_fallido", logging.ERROR, operacion="crear_cliente", motivo=type(exc).__name__)
+        return None
+
+
+def crear_app(ajustes: Settings | None = None, *, almacen: AlmacenS3 | None = None) -> FastAPI:
+    """`almacen` sustituye al cliente de S3 (las pruebas pasan un doble); sin él, se crea al arrancar."""
     ajustes = ajustes or get_settings()
     configurar_logs("api", ajustes.log_level)
 
@@ -46,6 +64,7 @@ def crear_app(ajustes: Settings | None = None) -> FastAPI:
         # la primera petición.
         aplicacion.state.cola_hash = ColaHash.desde(ajustes)
         await anyio.to_thread.run_sync(hash_password.hash_ficticio)
+        aplicacion.state.almacen = almacen if almacen is not None else await _crear_almacen(aplicacion, ajustes)
         registrar(log, "api_iniciada", version=__version__, commit=ajustes.commit_corto, entorno=ajustes.app_env)
         try:
             yield
@@ -69,6 +88,8 @@ def crear_app(ajustes: Settings | None = None) -> FastAPI:
     app.state.motor = None  # lo crea el ciclo de vida (BE-1.2)
     app.state.motivo_sin_motor = "configuracion_incompleta: faltan DB_*"
     app.state.cola_hash = ColaHash.desde(ajustes)  # el ciclo de vida la renueva al arrancar (BE-1.3)
+    app.state.almacen = almacen  # sin doble, lo crea el ciclo de vida (BE-2.1)
+    app.state.motivo_sin_almacen = "falta S3_BUCKET_DATASET"
 
     registrar_manejadores(app)
     app.add_middleware(MiddlewareSolicitud)

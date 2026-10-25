@@ -88,7 +88,7 @@ def test_todos_los_eventos_del_codigo_estan_en_5_10(documento):
         nombre
         for fila in seccion.splitlines()
         if fila.startswith("| `")
-        for nombre in re.findall(r"`([a-z_]+)`", fila.split("|")[1])
+        for nombre in re.findall(r"`([a-z0-9_]+)`", fila.split("|")[1])  # p. ej. `s3_fallido` (BE-2.1)
     }
     usados = set()
     for archivo in (RAIZ / "src" / "app").rglob("*.py"):

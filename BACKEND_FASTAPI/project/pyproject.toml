@@ -16,6 +16,8 @@ dependencies = [
     "argon2-cffi>=23.1,<26",
     # BE-1.3: JWT HS256 de sesión (§5.2, ADR-BE-03)
     "pyjwt>=2.10,<3",
+    # BE-2.1: S3 del dataset (firmar PUT y HEAD en `api`; borrar en `limpiar-validacion`, §4.5). Va en la imagen.
+    "boto3>=1.35,<2",
 ]
 
 [dependency-groups]
@@ -23,7 +25,8 @@ dev = [
     "pytest>=8.3",
     "ruff>=0.8",
 ]
-# Validadores de lotes (src/ops/). No van en la imagen (ARCHITECTURE §5.9, §5.11).
+# Validadores de lotes (src/ops/). No van en la imagen (ARCHITECTURE §5.9, §5.11). boto3 y httpx también son
+# dependencias de la imagen (desde BE-2.1, boto3); se repiten aquí porque los validadores los usan directamente.
 ops = [
     "boto3>=1.35",
     "httpx>=0.27,<1",

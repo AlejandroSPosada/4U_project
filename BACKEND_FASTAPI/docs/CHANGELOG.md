@@ -20,6 +20,89 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.8.0] — 2026-10-25
+
+- **Lote que la motivó:** BE-2.1 (Recolección).
+- **Qué cambió:**
+  - §4.5 reescrita con lo construido: secuencia, paso a `subida` por `HEAD` también en las repeticiones de `images`
+    (sin eso, C2 de la validación no se cumple con el `worker` apagado), estado del video derivado de los conteos,
+    concurrencia (`SELECT … FOR UPDATE` del video; `HEAD` y firmas fuera de las transacciones), cliente de S3
+    (SigV4, direccionamiento virtual, `Content-Type` firmado, credenciales temporales), lectura para el panel,
+    `limpiar-validacion` (orden S3 → filas → S3) y la tabla «qué ofrece BE-2.1 al código» para BE-2.2, BE-3.1 y
+    BE-4.1 (`dominio.recoleccion`, `recalcular_estado`, `servicios.videos`, `clientes.s3`, `obtener_almacen`,
+    `crear_app(almacen=)`, `esquemas.comun`, `esquemas.videos`, fixture `almacen_falso`) y sus trampas.
+  - §4.1: estructura real (`api/v1/collect.py` y `admin_videos.py`, `esquemas/comun.py` y `videos.py`,
+    `dominio/recoleccion.py`, `servicios/recoleccion.py`, `videos.py` y `limpieza.py`, `clientes/s3.py`); boto3 pasa a
+    las dependencias de la imagen. §2: `api` también hace `HEAD` en S3. §4.6 (BE-2.2): la foto puede llegar ya en
+    `subida`, el ETag se guarda sin comillas y el estado se recalcula con `recalcular_estado`.
+  - ADR-BE-14 (S3 confirma la subida con `HEAD`; estado del video derivado de los conteos). R4 ampliado; R13 (eventos
+    de S3 sin consumidor hasta BE-2.2) y R14 (boto3 en `api`) nuevos.
+  - §5.11: `comun.py` añade `FAMILIA_WORKER` (y su log group), `EntornoBackend.cli(…, familia=)`, `revision(familia)`,
+    `jpeg_sintetico` (JPEG válido sin Pillow), `Validador.ejecutar(…, preparacion=)` y dos eventos en `motivo_cli`;
+    cómo se limpian los restos al empezar y por qué el validador no purga la cola `ingesta`.
+  - `validation/validation-2-1.md`: P5 (definición de `worker` y red), preparación con los restos, C2b acepta `subida`
+    o un estado posterior, C5 tolera que el `worker` haya avanzado, C6b exige `limpieza_rechazada`, §4 con los eventos
+    de S3 que quedan en `ingesta` y §5 con variables, preparación y ejecución.
+  - PLAN: alineado con 0.8.0 (sin tocar §3).
+  - Contradicción corregida: §4.1 nombraba `obtener_limitador_hash`, que no existe; la dependencia es
+    `obtener_cola_hash` (como dice §4.4).
+  - Tras una revisión independiente (antes de publicar 0.8.0, así que se corrige aquí): (1) C4 exige también el
+    `estado` que §5.5 deriva del conteo; (2) orden de bloqueo **video → imágenes** documentado y ayuda pública
+    `recoleccion.bloquear_video` para el `worker` de BE-2.2 (evita *deadlocks*); (3) una fecha con zona que al pasar a
+    UTC sale de los años 1–9999 daba `500` (asyncpg, `OverflowError`): ahora `422`; (4) P5 exige que la revisión de
+    `worker` use la imagen de `api` (código 2 antes de crear nada); (5) C3a espera con la hora de S3 (`Date`), no con el
+    reloj local, que en WSL puede ir atrasado; (6) `limpiar_validacion` con una lista vacía ya no puede equivaler a
+    «todos»; (7) un fallo de la segunda pasada por S3, ya sin filas, no hace fallar el comando (evento
+    `limpieza_s3_incompleta` y cómo borrar los huérfanos); (8) los restos se buscan con el mismo criterio que la CLI y
+    en todas las páginas (por eso `VideoResumen` lleva `ref_cliente`); (9) el log de una tarea se relee hasta que llega
+    la línea `LIMPIEZA` (`fin_limpieza`) y la limpieza final no la exige si la tarea salió con 0; (10) P4 prueba
+    también `list-objects-v2` y un `head-object` de una clave inexistente (permisos = código 3 en la precondición);
+    (11) las ayudas reutilizables pasan de `validate21.py` a `comun.py` (`put_prefirmado`, `head_objeto`, `claves_s3`,
+    `comprobar_bucket`, `hora_s3`, `desfase_s3_s`, `fin_limpieza`, `limpiar_videos`, `linea_limpieza`,
+    `videos_validacion`, `borrar_restos`, `RecorridoPrueba`), con su tabla en §5.11; (12) §4.5 lista lo que falta en
+    `AlmacenS3` para BE-2.2 (`descargar`, `subir`) y BE-4.1 (`firmar_get`); (13) la renovación de credenciales queda
+    como hipótesis sin comprobar, con su consecuencia; (14) `S3_BUCKET_DATASET` se exige después de comprobar el video
+    (inexistente → 404 aunque falte) y §4.5 dice bien que el listado hace dos consultas. Además: `limpiar-validacion
+    --simular` (C6b nunca apunta la orden real a un video ajeno) y `max_length` 50 en `images`.
+- **Contratos tocados (§5):**
+  - §5.4 `POST /v1/collect/videos`: `ref_cliente` y `nombre` se recortan; todos los demás campos opcionales con sus
+    rangos (`duracion_s`, `pasos`, `distancia_m` ≤ 1 000 000, `dispositivo` ≤ 200, `app_version` ≤ 40, fechas con
+    zona y `finalizado_en` ≥ `iniciado_en`); el `200` idempotente devuelve el video sin cambiarlo; `409 VIDEO_ELIMINADO`
+    si el de ese `ref_cliente` está eliminado; campos de más ignorados; fecha fuera de los años 1–9999 en UTC →
+    `422`.
+  - §5.4 `…/images`: límites como parámetros de §5.10 (más de 50 elementos, siempre `422`), orden de la respuesta =
+    el de la petición, orden de los errores (`422` → `404`/`409` → `500` por S3), `HEAD` de las
+    repetidas pendientes (pasan a `subida` sin URL), `expira_en` sin fracciones, `403` de una URL vencida con su
+    código, errores `422` (UUID), `500` (sin `S3_BUCKET_DATASET` o firma fallida) y `503`.
+  - §5.4 `…/complete`: `subida_completa_en` la primera vez, estado devuelto, `HEAD` fallido deja la foto pendiente;
+    errores `404`, `409`, `422`, `500`, `503`.
+  - §5.5: `VideoResumen` añade `ref_cliente`; reglas del estado del video; `inicio` y demás `null` si no se enviaron; `url`, `url_miniatura` y
+    `url_expira_en` siempre `null` hasta BE-4.1; detalle de `GET /v1/admin/videos` (`q` literal, órdenes, desempate,
+    paginación, `422`) y de `GET /v1/admin/videos/{id}` (`404` si eliminado).
+  - §5.6: `VIDEO_ELIMINADO` cubre registrar, completar y volver a crear; `500 ERROR_INTERNO` también por configuración
+    que falta en `api`.
+  - §5.7 (solo reglas, sin cambio de esquema ni migración): `subida_completa_en`, `imagenes.bytes` y `etag`.
+  - §5.9: `limpiar-validacion` en detalle (prefijo en `nombre` **y** `ref_cliente`, negativa entera, códigos 0–3,
+    evento y línea `LIMPIEZA`, segunda pasada que no falla, `--simular` con su evento y la línea `SIMULACION`), cómo se lanza en `dev` con la definición de `worker`, variables `S3_BUCKET_DATASET` y
+    `AWS_REGION` en `api`; boto3 en la imagen.
+  - §5.10: eventos `video_creado`, `imagenes_registradas`, `subida_completada`, `s3_fallido`, `limpieza_validacion` y
+    `limpieza_rechazada`, `limpieza_simulada` y `limpieza_s3_incompleta` (`s3_fallido` con operación `listar`);
+    `configuracion_incompleta` y `comando_fallido` amplían su uso; notas de `REC_*`,
+    `PRESIGN_PUT_TTL_S` y `PAGINA_*`.
+- **Cómo se verificó:** en `local` (WSL, uv 0.13.4 con `--frozen`): `ruff check` y `ruff format --check` limpios;
+  `pytest` con PostgreSQL 17.11 + pgvector (`pgvector/pgvector:pg17`, `PRUEBAS_DB_OBLIGATORIA=1`): todo en verde (ver
+  el informe del lote), con S3 simulado (`almacen_falso`, `Stubber` de botocore) y el validador contra un mundo falso
+  (API, S3, ECS y reloj). `uv.lock` regenerado con uv 0.11.32 (solo añade boto3 a las dependencias principales) y
+  `uv sync --frozen --group ops` con 0.11.32 funciona. `docker build` de la imagen y arranque con `S3_BUCKET_DATASET`
+  (cliente de S3 creado). JPEG de `jpeg_sintetico` decodificado con Pillow. En `dev`, solo lecturas: rol `tarea-api`
+  sin `s3:ListBucket` (de ahí el 403 del `HEAD`), rol `tarea-worker` con `DeleteObject` y `ListBucket` por prefijo,
+  definición `campus-locator-dev-worker:4` con `DB_*` y `S3_BUCKET_DATASET`, log group `/campus-locator/dev/worker`.
+  `validate21.py --entorno dev` **sin ejecutar** (lo cierra el maestro tras desplegar).
+- **Pendiente:** ejecutar `validate21.py` en `dev` sobre el commit desplegado y cerrar PLAN §3. Medir en `dev` el
+  tiempo de `complete` con 200 fotos y la memoria de `api` con boto3 (R14). `firmar_get` para BE-4.1 y BE-3.1.
+
+---
+
 ## [0.7.1] — 2026-10-25
 
 - **Lote que la motivó:** BE-1.3 (Autenticación), cierre con la validación en `dev`.

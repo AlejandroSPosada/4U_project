@@ -7,16 +7,23 @@ Comandos que corren como tarea suelta con la definición `campus-locator-dev-mig
 - `crear-usuario` y `desactivar-usuario` (BE-1.3, §4.4): la contraseña de `crear-usuario` llega en
   `CREAR_USUARIO_PASSWORD` o se pide dos veces por la terminal; nunca como argumento.
 
+Con la definición `campus-locator-dev-worker` (la que puede borrar en S3):
+- `limpiar-validacion [--video ID …] [--simular]` (BE-2.1, §4.5): borra los videos `validacion-` con sus filas y sus
+  objetos (con `--simular`, solo comprueba y cuenta).
+
 Todo lo que escriben son líneas JSON (§5.10) con `proceso = migrate`; los resultados son eventos de log.
+`limpiar-validacion` imprime además la línea `LIMPIEZA {"videos": n, "objetos": m}` (o, con `--simular`,
+`SIMULACION {…}`) (§5.9).
 
 Códigos de salida, comunes a todos los comandos de `app.cli` (§5.9):
 - 0: hecho (`verificar-esquema`: la base coincide);
 - 1: resultado negativo (`verificar-esquema`: difiere; `migrar`: falló una migración o el admin inicial;
-  `desactivar-usuario`: no existe; los dos: dejaría sin ningún admin activo o falló);
+  `desactivar-usuario`: no existe; los dos: dejaría sin ningún admin activo o falló; `limpiar-validacion`: algún
+  `--video` no existe o no es de validación, o falló S3);
 - 2: no se pudo trabajar con la base (no conecta, credenciales, TLS, tiempo agotado o se perdió la conexión; en
   `verificar-esquema`, también un error al leer el catálogo);
 - 3: uso o configuración (argumentos, variables con un valor no válido, `DB_*` o `ADMIN_INICIAL_*` que faltan,
-  contraseña de `crear-usuario` que falta o no vale).
+  contraseña de `crear-usuario` que falta o no vale, `S3_BUCKET_DATASET` que falta en `limpiar-validacion`).
 """
 
 from __future__ import annotations
@@ -24,10 +31,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import getpass
+import json
 import logging
 import os
 import sys
 import time
+import uuid
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, NoReturn, TextIO
 
@@ -39,7 +48,7 @@ from app.db import sesion
 from app.dominio import validaciones
 from app.dominio.enumerados import RolUsuario
 from app.logs import configurar_logs, obtener_logger, registrar
-from app.servicios import migracion, usuarios
+from app.servicios import limpieza, migracion, usuarios
 
 PROCESO = "migrate"
 SALIDA_OK, SALIDA_NEGATIVA, SALIDA_BASE, SALIDA_CONFIGURACION = 0, 1, 2, 3
@@ -93,7 +102,27 @@ def crear_parser() -> argparse.ArgumentParser:
     )
     desactivar = comandos.add_parser("desactivar-usuario", help="Desactiva un usuario (sus tokens dejan de valer)")
     desactivar.add_argument("--correo", required=True, type=_correo)
+    limpiar = comandos.add_parser(
+        "limpiar-validacion",
+        help="Borra los videos `validacion-` con sus filas y sus objetos de S3 (datos de los validadores)",
+        description="Sin --video, todos los videos cuyo nombre y ref_cliente empiezan por `validacion-`. Con --video, "
+        "solo esos, y se niega (código 1) si alguno no existe o no lleva el prefijo. Con --simular, las mismas "
+        "comprobaciones sin borrar nada.",
+    )
+    limpiar.add_argument("--video", dest="videos", action="extend", nargs="+", type=_uuid, default=None, metavar="ID")
+    limpiar.add_argument(
+        "--simular",
+        action="store_true",
+        help="No borra nada: comprueba, cuenta lo que borraría e imprime `SIMULACION {…}` (o se niega con 1)",
+    )
     return parser
+
+
+def _uuid(valor: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(valor.strip())
+    except ValueError:
+        raise argparse.ArgumentTypeError("se esperaba un UUID") from None
 
 
 def _motor(ajustes: Settings):
@@ -281,11 +310,88 @@ async def comando_desactivar_usuario(ajustes: Settings, argumentos: argparse.Nam
     return SALIDA_OK
 
 
+def crear_almacen(ajustes: Settings):
+    """El `AlmacenS3` del bucket del dataset (las pruebas sustituyen esta función por un doble)."""
+    from app.clientes.s3 import AlmacenS3
+
+    return AlmacenS3(ajustes.s3_bucket_dataset or "", ajustes.aws_region)
+
+
+async def comando_limpiar_validacion(ajustes: Settings, argumentos: argparse.Namespace) -> int:
+    from app.clientes.s3 import FalloS3
+
+    if not (ajustes.s3_bucket_dataset or "").strip():
+        registrar(
+            log,
+            "configuracion_incompleta",
+            logging.ERROR,
+            faltan=["S3_BUCKET_DATASET"],
+            invalidas=[],
+            motivo="falta S3_BUCKET_DATASET: limpiar-validacion corre con la definición de worker",
+        )
+        return SALIDA_CONFIGURACION
+    motor = _motor(ajustes)
+    if motor is None:
+        return SALIDA_CONFIGURACION
+    try:
+        resultado = await limpieza.limpiar_validacion(
+            motor, crear_almacen(ajustes), argumentos.videos, simular=argumentos.simular
+        )
+    except limpieza.LimpiezaRechazada as exc:
+        registrar(
+            log,
+            "limpieza_rechazada",
+            logging.ERROR,
+            inexistentes=exc.inexistentes,
+            sin_prefijo=exc.sin_prefijo,
+            motivo=str(exc),
+        )
+        return SALIDA_NEGATIVA
+    except FalloS3 as exc:
+        operacion = "listar" if argumentos.simular else "borrar"
+        registrar(log, "s3_fallido", logging.ERROR, operacion=operacion, motivo=str(exc))
+        return SALIDA_NEGATIVA
+    except Exception as exc:
+        return _fallo("limpiar-validacion", exc)
+    finally:
+        await motor.dispose()
+    resumen = json.dumps({"videos": resultado.videos, "objetos": resultado.objetos})
+    if resultado.simulada:
+        registrar(
+            log,
+            "limpieza_simulada",
+            videos=resultado.videos,
+            objetos=resultado.objetos,
+            video_ids=resultado.video_ids,
+        )
+        print(f"SIMULACION {resumen}", flush=True)
+        return SALIDA_OK
+    if resultado.restos_s3:
+        # Las filas ya no están: no se falla, pero quedan objetos huérfanos que hay que borrar a mano (§4.5).
+        registrar(
+            log,
+            "limpieza_s3_incompleta",
+            logging.WARNING,
+            prefijos=resultado.restos_s3,
+            motivo=resultado.motivo_restos,
+        )
+    registrar(
+        log,
+        "limpieza_validacion",
+        videos=resultado.videos,
+        objetos=resultado.objetos,
+        video_ids=resultado.video_ids,
+    )
+    print(f"LIMPIEZA {resumen}", flush=True)
+    return SALIDA_OK
+
+
 COMANDOS: dict[str, Callable[[Settings, argparse.Namespace], Awaitable[int]]] = {
     "migrar": comando_migrar,
     "verificar-esquema": comando_verificar_esquema,
     "crear-usuario": comando_crear_usuario,
     "desactivar-usuario": comando_desactivar_usuario,
+    "limpiar-validacion": comando_limpiar_validacion,
 }
 
 

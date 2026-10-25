@@ -129,3 +129,62 @@ def base_migrada(base_vacia: Settings) -> Settings:
 
     assert cli.main(["migrar"], ajustes=base_vacia) == 0
     return base_vacia
+
+
+# --- S3 simulado (BE-2.1) ------------------------------------------------------------------------------------------
+class AlmacenFalso:
+    """Doble de `app.clientes.s3.AlmacenS3` con los objetos en memoria (§4.5). `subir(clave)` simula el `PUT` de la
+    app; `fallar_head` (claves) y `fallar_firma` provocan `FalloS3`. Las URL llevan una firma falsa reconocible
+    (`FIRMA_FALSA`) para comprobar que nunca llegan a los logs."""
+
+    FIRMA_FALSA = "X-Amz-Signature=firma-falsa-de-pruebas"
+
+    def __init__(self) -> None:
+        from app.clientes.s3 import ObjetoS3
+
+        self._objeto = ObjetoS3
+        self.bucket = "bucket-de-pruebas"
+        self.objetos: dict[str, object] = {}
+        self.firmadas: list[str] = []
+        self.consultadas: list[str] = []
+        self.fallar_head: set[str] = set()
+        self.fallar_firma = False
+
+    def subir(self, clave: str, n_bytes: int = 1234) -> None:
+        self.objetos[clave] = self._objeto(bytes=n_bytes, etag=f"etag{len(self.objetos)}")
+
+    def firmar_put(self, clave: str, ttl_s: int):
+        from datetime import UTC, datetime, timedelta
+
+        from app.clientes.s3 import FalloS3, UrlFirmada
+
+        if self.fallar_firma:
+            raise FalloS3("firmar: NoCredentialsError")
+        self.firmadas.append(clave)
+        ahora = datetime.now(UTC).replace(microsecond=0)
+        return UrlFirmada(
+            url=f"https://{self.bucket}.s3.amazonaws.com/{clave}?{self.FIRMA_FALSA}",
+            expira_en=ahora + timedelta(seconds=ttl_s),
+        )
+
+    def consultar(self, clave: str):
+        from app.clientes.s3 import FalloS3
+
+        self.consultadas.append(clave)
+        if clave in self.fallar_head:
+            raise FalloS3("head: ClientError: 500")
+        return self.objetos.get(clave)
+
+    def contar_prefijo(self, prefijo: str) -> int:
+        return sum(1 for clave in self.objetos if clave.startswith(prefijo))
+
+    def borrar_prefijo(self, prefijo: str) -> int:
+        claves = [clave for clave in self.objetos if clave.startswith(prefijo)]
+        for clave in claves:
+            del self.objetos[clave]
+        return len(claves)
+
+
+@pytest.fixture
+def almacen_falso() -> AlmacenFalso:
+    return AlmacenFalso()

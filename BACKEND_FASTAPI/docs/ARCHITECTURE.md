@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.7.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.8.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: hay código de BE-1.1 a BE-1.3 (`project/`); lo de lotes posteriores es diseño propuesto |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.1 (`project/`); lo de lotes posteriores es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -61,7 +61,7 @@ Un cambio de interfaz se hace primero en el §5 del dueño, con entrada en su `C
 
 | Proceso | Responsabilidad | Toca |
 |---|---|---|
-| `api` | Endpoints HTTP, autenticación, firma de URLs, localización síncrona, encolar purgas y re-procesados, reconciliador de purgas | RDS, S3 (firmar), SQS (enviar), embedding |
+| `api` | Endpoints HTTP, autenticación, firma de URLs, localización síncrona, encolar purgas y re-procesados, reconciliador de purgas | RDS, S3 (firmar y `HEAD`), SQS (enviar), embedding |
 | `worker` | Ingesta (miniatura + vector + estado) y purga (borrar objetos y filas) | RDS, S3 (leer, escribir, borrar), SQS (recibir), embedding |
 | `migrate` | Migraciones Alembic y creación del admin inicial | RDS |
 
@@ -104,13 +104,13 @@ BACKEND_FASTAPI/
     │   │   ├── middleware.py    X-Request-Id, evento `peticion` y 500 ante fallos no previstos (§4.2)
     │   │   ├── errores.py       ErrorApi; excepciones → formato de §5.1 con los códigos de §5.6; BaseNoDisponible → 503 (BE-1.3)
     │   │   ├── api/
-    │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_limitador_hash (BE-1.3, §4.4)
-    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: localize, places, alerts, collect, admin_*
-    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3)
-    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); localizacion.py, geo.py, rumbo.py
-    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); localizar, recolectar, ingerir, purgar, alertas, lugares, estadisticas
+    │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_cola_hash (BE-1.3, §4.4); obtener_almacen (BE-2.1, §4.5)
+    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: localize, places, alerts, admin_*
+    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5)
+    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); localizacion.py, geo.py, rumbo.py
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); localizar, ingerir, purgar, alertas, lugares, estadisticas
     │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas (incluida la búsqueda vectorial)
-    │   │   ├── clientes/        embedding.py (httpx), s3.py y sqs.py (boto3 en hilos de anyio)
+    │   │   ├── clientes/        embedding.py (httpx); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5); sqs.py
     │   │   ├── seguridad/       hash.py (argon2id, §4.3), tokens.py (JWT, §5.2) y dependencias.py (requiere_admin), BE-1.3 (§4.4)
     │   │   ├── worker.py        Bucle de consumo de las colas (python -m app.worker)
     │   │   └── cli.py           python -m app.cli: migrar y verificar-esquema (BE-1.2), crear-usuario y desactivar-usuario (BE-1.3), limpiar-validacion (BE-2.1)
@@ -120,7 +120,7 @@ BACKEND_FASTAPI/
     ├── docker-compose.yml       entorno `local` (§5.11)
     ├── Dockerfile               python:3.12-slim, usuario sin privilegios, puerto 8000 (§5.9)
     ├── .dockerignore            la imagen solo recibe src/app/, migrations/, pyproject.toml, uv.lock y .python-version
-    ├── pyproject.toml           uv; ruff; pytest; grupo `ops` para los validadores
+    ├── pyproject.toml           uv; ruff; pytest; grupo `ops` para los validadores; boto3 en las dependencias de la imagen desde BE-2.1
     └── uv.lock, .python-version dependencias fijadas y Python 3.12: imagen y CI instalan con `uv sync --frozen`
 ```
 
@@ -401,37 +401,125 @@ Trampas: `ruff` marca `S105` en constantes con «password» en el nombre (`# noq
 Los logs nunca llevan el token: si hace falta correlacionar, `usuario_id` y el `X-Request-Id`.
 
 ### 4.5 BE-2.1 — Recolección (subida del dataset)
-La app graba sin conexión y sube al terminar (vista 7.5 de la app). Secuencia:
+La app graba sin conexión y sube al terminar (vista 7.5 de la app). Secuencia (contrato en §5.4):
 1. `POST /v1/collect/videos` con los metadatos del recorrido y una referencia local (`ref_cliente`, p. ej.
-   `rec_0003`). Idempotente por (admin, `ref_cliente`): reintentar no duplica el video.
-2. `POST /v1/collect/videos/{id}/images` en lotes de hasta 50: registra cada foto (orden, coordenada, rumbo, hora) y
-   devuelve una **URL prefirmada PUT** por foto pendiente. Las fotos ya subidas no reciben URL. Llamarlo de nuevo
-   regenera URLs vencidas: así se retoma una subida interrumpida.
-3. La app hace `PUT` de cada JPEG directo a S3 con el encabezado firmado `Content-Type: image/jpeg`.
+   `rec_0003`). Idempotente por (admin, `ref_cliente`): reintentar devuelve el mismo video, sin cambiarlo.
+2. `POST /v1/collect/videos/{id}/images` en lotes de hasta `REC_MAX_LOTE` (50): registra cada foto (orden, coordenada,
+   rumbo, hora, tamaño) y devuelve una **URL prefirmada PUT** por foto que siga pendiente. Llamarlo de nuevo regenera
+   URLs vencidas (así se retoma una subida interrumpida); a las fotos repetidas que siguen `pendiente_subida` les hace
+   antes un `HEAD` en S3 y, si el objeto ya está, las pasa a `subida` y no les da URL.
+3. La app hace `PUT` de cada JPEG directo a S3 con **exactamente** el encabezado firmado `Content-Type: image/jpeg`.
 4. S3 avisa a la cola `ingesta`; el `worker` continúa (BE-2.2).
-5. `POST /v1/collect/videos/{id}/complete` marca la subida como terminada y devuelve el conteo por estado. La app
-   consulta `GET /v1/admin/videos/{id}` para la barra de progreso; ese endpoint y `GET /v1/admin/videos` llegan con
-   este lote (el resto de §5.5 sobre videos, con BE-4.1).
+5. `POST /v1/collect/videos/{id}/complete` hace `HEAD` de las que siguen pendientes, marca la subida como terminada y
+   devuelve el conteo por estado. La app consulta `GET /v1/admin/videos/{id}` para la barra de progreso; ese endpoint
+   y `GET /v1/admin/videos` llegan con este lote (el resto de §5.5 sobre videos, con BE-4.1).
 
-**Paso a `subida`.** Una foto pasa de `pendiente_subida` a `subida` cuando el `worker` recibe su evento de S3 (antes
-de procesarla) o cuando `complete` comprueba con `HEAD` que el objeto ya está en S3; lo que ocurra primero. Así el
-conteo es correcto aunque el `worker` esté apagado (con `embedding` apagado).
+**Paso a `subida`** (ADR-BE-14). Una foto pasa de `pendiente_subida` a `subida` cuando el `worker` recibe su evento
+de S3 (BE-2.2, antes de procesarla), cuando `complete` comprueba con `HEAD` que el objeto ya está en S3, o cuando
+una repetición de `images` la incluye y el `HEAD` la encuentra; lo que ocurra primero. Así el conteo es correcto
+aunque el `worker` esté apagado (con `embedding` apagado), y C2 de la validación (repetir no da URL a lo subido) se
+cumple sin `worker`. Con el `HEAD` se guardan `imagenes.bytes` (`ContentLength`; nulo si pasa de 2 147 483 647, que
+no cabe en `integer`: el `worker` la rechazará por tamaño) y `imagenes.etag` (sin comillas, como llega en el evento
+de S3, §5.8). Un `HEAD` que falla por otra causa que «no está» deja la foto pendiente y registra `s3_fallido`
+(`WARNING`); la petición responde igual (la app reintenta `complete`).
 
-**Limpieza de datos de prueba.** `python -m app.cli limpiar-validacion` (§5.9) borra de forma definitiva —filas de
-`videos`, `imagenes` y `embeddings`, y sus objetos de `dataset/` y `thumbs/`— los videos cuyo `nombre` y `ref_cliente`
-empiezan por `validacion-`. Se ejecuta como tarea suelta con la definición de `worker`, que es la que puede borrar en
-S3. Lo usan los validadores mientras no existe el borrado de BE-4.1 (§5.11); nunca toca otros videos.
+**`HEAD` sin `s3:ListBucket` (trampa).** El rol `tarea-api` tiene `s3:GetObject` y `s3:PutObject` sobre los objetos,
+pero no `s3:ListBucket` (infra §5.8; comprobado en `dev` con `iam get-role-policy`, 2026-10-25): S3 responde **403**,
+no 404, al `HEAD` de un objeto que no existe. `AlmacenS3.consultar` toma 404 y 403 como «no está». Consecuencia: si un
+día faltara `s3:GetObject`, todas las fotos quedarían `pendiente_subida` sin error visible (solo el conteo).
+
+**Estado del video** (`dominio.recoleccion.estado_video`, ADR-BE-14). Se deriva siempre del conteo de sus fotos y de
+`subida_completa_en`, y se guarda en `videos.estado` cada vez que cambia una foto (`recalcular_estado`):
+`pendiente` mientras no se haya llamado a `complete` o quede alguna `pendiente_subida`; si no, `procesando` si queda
+alguna `subida`; si no, `con_errores` si hay alguna en `error`; si no, `procesado` (también con 0 fotos). Una foto
+registrada después de `complete` lo devuelve a `pendiente`. `subida_completa_en` se fija la primera vez que se llama a
+`complete` y no cambia después. Un video `eliminado` (BE-4.1) no cambia de estado.
+
+**Concurrencia: orden de bloqueo video → imágenes, siempre.** Toda transacción que cambie fotos de un video bloquea
+primero la fila del video con `recoleccion.bloquear_video(conexion, video_id)` (`SELECT … FOR UPDATE`) y solo después
+las filas de `imagenes`; así dos lotes del mismo video, un lote y un `complete`, o el `worker` de BE-2.2, van en fila y
+no pueden bloquearse entre sí (si una transacción bloqueara una foto y después el video mientras otra hace lo contrario,
+PostgreSQL abortaría una por *deadlock*). El `worker` hace lo mismo: bloquea el video, después toca la foto y, en la
+misma transacción, llama a `recalcular_estado`. Los `HEAD` y las firmas se hacen fuera de las transacciones: `images` lee qué fotos repetidas siguen pendientes (transacción 1), hace los `HEAD`
+(8 a la vez, en hilos), y escribe con el video bloqueado volviendo a leer las filas (transacción 2); al final firma
+las URLs en un hilo. `crear_video` es seguro ante dos peticiones a la vez con el mismo `ref_cliente`
+(`INSERT … ON CONFLICT (creado_por, ref_cliente) DO NOTHING` y vuelve a leer). `numero` sale de la secuencia
+`videos_numero_seq` antes del `INSERT` (para el nombre `video_<numero>`); un `INSERT` que pierde la carrera deja un hueco
+en la numeración, que es aceptable (§5.1: «entero creciente», no consecutivo).
+
+**Cliente de S3** (`clientes/s3.py`). `api` crea un `AlmacenS3` al arrancar (en un hilo: crear un cliente de boto3
+cuesta CPU) si hay `S3_BUCKET_DATASET`. Sin la variable, `images` y `complete` responden `500 ERROR_INTERNO` con el
+evento `configuracion_incompleta` (`faltan = ["S3_BUCKET_DATASET"]`), pero **después** de comprobar el video: un video
+inexistente da `404` y uno eliminado `409` aunque falte el bucket (el router pasa `almacen_o_none(request)` y el
+servicio lanza `AlmacenNoConfigurado` tras mirar el video, antes de escribir nada). El cliente usa SigV4 y direccionamiento virtual:
+las URL quedan `https://<bucket>.s3.amazonaws.com/dataset/…?X-Amz-…` con `X-Amz-SignedHeaders=content-type;host`
+(probado con botocore 1.43.110: por eso el `PUT` tiene que llevar exactamente `Content-Type: image/jpeg`). Las
+credenciales son las del rol de tarea (temporales): una URL deja de valer al caducar las credenciales con que se
+firmó, aunque su `X-Amz-Expires` diga más. **Hipótesis sin comprobar:** botocore renueva esas credenciales unos 15 min
+antes de que caduquen, y entonces una URL de 900 s duraría entera. Si no fuera así, una URL firmada cerca del
+vencimiento de las credenciales duraría menos que su `expira_en`: la app recibiría `403` de S3 al subir y pediría
+otra URL repitiendo `images` (el mismo camino que con una URL vencida, §5.4). `expira_en` se calcula con la hora de antes de firmar, sin fracciones: es una cota inferior del vencimiento
+real (como mucho 1 s antes). Ninguna URL prefirmada llega a un log (los motivos de `FalloS3` llevan la clase y el
+código de AWS, no la URL).
+
+**Lectura para el panel** (`servicios/videos.py`). Dos consultas por página, en una transacción: el `total`
+(`count(*)` con los mismos filtros) y la página (`videos` con el nombre del creador y el conteo por estado, de una
+subconsulta agrupada de `imagenes`); los `eliminado` no salen. El detalle hace otras dos: el resumen y sus fotos. `q` busca en `nombre` sin distinguir
+mayúsculas (`ILIKE`, con `%`, `_` y `\` escapados: son literales). Los `real` de la base (`distancia_m`, rumbos) se
+devuelven con las menos cifras que los representan como float32 (`real_legible`: 340.3 y no 340.29998779296875). Las
+URLs de foto y miniatura de `ImagenAdmin` son `null` hasta BE-4.1 (§5.5).
+
+**Limpieza de datos de prueba.** `python -m app.cli limpiar-validacion` (§5.9, `servicios/limpieza.py`) borra de
+forma definitiva —filas de `videos` (y en cascada `imagenes` y `embeddings`) y sus objetos de `dataset/{id}/` y
+`thumbs/{id}/`— los videos cuyo `nombre` **y** `ref_cliente` empiezan por `validacion-`. Orden: objetos de S3 →
+filas → otra pasada por S3 (una miniatura que el `worker` escribiera entretanto). Si S3 falla en la primera
+pasada, las filas quedan, el comando termina con 1 y repetirlo termina el trabajo. Si falla en la segunda, las filas
+ya no están: el comando **no** falla (sale con 0 y su línea `LIMPIEZA`), pero registra `limpieza_s3_incompleta`
+(`WARNING`, con los prefijos) porque pueden quedar objetos huérfanos (miniaturas) que ya ningún comando encuentra; se
+borran a mano con un perfil de administración: `aws s3 rm --recursive s3://<bucket>/thumbs/<video_id>/` (y
+`dataset/<video_id>/`). Sin `--video` toma todos los de validación; una lista de ids vacía (posible solo desde el
+código) no borra nada, nunca «todos». Con `--simular` hace las mismas comprobaciones y la misma negativa, cuenta los
+objetos que borraría (`list-objects-v2`) y no borra nada: así un validador puede comprobar la negativa con un video
+real sin arriesgarlo. Se ejecuta como tarea suelta con la definición de
+`worker`, que es la que puede listar y borrar en S3 (infra §5.8; su `s3:ListBucket` exige `s3:prefix` `dataset/*` o
+`thumbs/*`, y `list-objects-v2 --prefix dataset/{id}/` lo cumple). Lo usan los validadores mientras no existe el
+borrado de BE-4.1 (§5.11); nunca toca otros videos. Sus logs llevan `proceso = migrate` (como toda la CLI) aunque
+corra con la definición de `worker` y su log vaya a `/campus-locator/dev/worker`.
 
 La clave del objeto sigue el formato de infra §5.5 (`dataset/{video_id}/{imagen_id}.jpg`): el `worker` recupera la
-fila de la imagen a partir de la clave sin otra consulta.
+fila de la imagen a partir de la clave sin otra consulta (`dominio.recoleccion.ids_de_clave`).
+
+**Para los lotes siguientes: qué ofrece BE-2.1 al código.**
+
+| Elemento | Qué hace |
+|---|---|
+| `app.dominio.recoleccion` | `clave_dataset(video_id, imagen_id)` y `clave_miniatura(…)` (`dataset/…` y `thumbs/{video_id}/{imagen_id}.jpg`); `prefijos_del_video(video_id)` → `("dataset/{id}/", "thumbs/{id}/")`; `ids_de_clave(clave)` → `(video_id, imagen_id)` o `None` (la clave ya decodificada con `unquote_plus`; exige UUID en minúsculas y `.jpg`): BE-2.2 la usa para los eventos de S3. `Conteo(pendiente_subida, subida, procesada, error)` (*dataclass* congelado; `Conteo.desde({estado: n})`, `.total`, `.como_dict()`); `estado_video(conteo, subida_completa)` → `EstadoVideo` (reglas de arriba); `es_dato_de_validacion(nombre, ref_cliente)`; `PREFIJO_VALIDACION`, `TIPO_JPEG`, `ENCABEZADOS_PUT`; `como_real(x)` (el float32 que guarda una columna `real`) y `real_legible(x)` |
+| `app.servicios.recoleccion.bloquear_video(conexion, video_id)` → `EstadoVideo \| None` | `SELECT estado … FOR UPDATE` de la fila del video en la transacción en curso: su estado, o `None` si no existe. No lanza por `eliminado` (quien llama decide: la recolección responde 409; el `worker` descarta el mensaje). **Primer bloqueo de toda transacción que cambie fotos** (orden video → imágenes) |
+| `app.servicios.recoleccion.recalcular_estado(conexion, video_id)` → `(EstadoVideo, Conteo)` | Cuenta las fotos por estado, deriva el estado del video y lo guarda si cambió (`eliminado` no cambia; `VideoNoEncontrado` si no existe). Va **dentro** de la transacción que cambió las fotos, que ya llamó a `bloquear_video`. BE-2.2, por cada foto: `async with sesion.transaccion(motor) as c:` → `bloquear_video(c, video_id)` (si `None` o `eliminado`, descarta) → `UPDATE imagenes …` → `recalcular_estado(c, video_id)` |
+| `app.servicios.recoleccion` (casos de uso) | `crear_video(motor, usuario_id=, datos=VideoCrear)` → `(VideoResumen, creado)`; `registrar_imagenes(motor, almacen, ajustes, video_id=, imagenes=[ImagenRegistro])` → `ImagenesRegistradas`; `completar_subida(motor, almacen, video_id=)` → `SubidaCompletada`; `validar_lote(imagenes, ajustes)`. `almacen` puede ser `None`: se exige después de comprobar el video. Excepciones: `VideoNoEncontrado`, `VideoEliminado` (de `servicios.videos`), `AlmacenNoConfigurado` (→ `500`), `DatosNoValidos(campos)` (→ `422`, `campos` = `detalle.campos`) y `FalloS3` al firmar |
+| `app.servicios.videos` | `listar(motor, q=, orden=, direccion=, pagina=, por_pagina=)` → `Pagina[VideoResumen]`; `detalle(motor, video_id)` → `VideoDetalle` (`VideoNoEncontrado` si no existe o está `eliminado`); `resumen(conexion, video_id)` → `VideoResumen \| None` (también de un eliminado) y `contar(conexion, video_id)` → `Conteo`, dentro de una transacción abierta. BE-4.1 añade aquí renombrar y borrar, y rellena `url`, `url_miniatura` y `url_expira_en` de `ImagenAdmin` en `detalle` |
+| `app.servicios.limpieza.limpiar_validacion(motor, almacen, video_ids=None, *, simular=False)` → `ResultadoLimpieza` | Lo que hace `limpiar-validacion` (arriba): `ResultadoLimpieza(videos, objetos, video_ids, simulada, restos_s3, motivo_restos)`. `video_ids=None` = todos los de validación; `[]` = nada. Lanza `LimpiezaRechazada(inexistentes, sin_prefijo)`, `FalloS3` (primera pasada, o el recuento al simular) y los errores de la base. La purga de BE-4.1 puede copiar su orden (S3 → filas → S3) |
+| `app.clientes.s3` | `AlmacenS3(bucket, region="us-east-1", cliente=None, reloj=…)` (síncrono): `firmar_put(clave, ttl_s)` → `UrlFirmada(url, expira_en)`; `consultar(clave)` (HEAD) → `ObjetoS3(bytes, etag)` o `None` si 404/403; `borrar_prefijo(prefijo)` → objetos borrados (lista y borra de 1000 en 1000); `contar_prefijo(prefijo)` → objetos bajo el prefijo (solo lista). Todo error → `FalloS3` (mensaje sin URL). Desde código asíncrono: `await firmar_puts(almacen, claves, ttl_s)` → `{clave: UrlFirmada}` (un hilo) y `await consultar_varios(almacen, claves, concurrencia=8)` → `{clave: ObjetoS3 \| FalloS3 \| None}` (nunca lanza por una clave). `crear_cliente(region)` da el cliente de boto3 configurado. **Falta** (se añade aquí, con su prueba con `Stubber`): para BE-2.2, `descargar(clave)` → `bytes` (`get_object`; el original de `dataset/`) y `subir(clave, datos, content_type="image/jpeg")` (`put_object` con `ContentType`; la miniatura en `thumbs/`), ambos con el rol `tarea-worker`, que tiene `s3:GetObject` y `s3:PutObject` sobre `dataset/*` y `thumbs/*` (infra §5.8); para BE-4.1 (URLs GET de 1 h) y BE-3.1 (foto de lugar), `firmar_get(clave, ttl_s)` |
+| `app.api.dependencias.obtener_almacen(request)` → `AlmacenS3`; `almacen_o_none(request)`; `sin_almacen(request)` → `ErrorApi` | El de `app.state.almacen`; sin él, `obtener_almacen` lanza el `500 ERROR_INTERNO` de `sin_almacen` (que registra `configuracion_incompleta`). La recolección usa `almacen_o_none` y traduce `AlmacenNoConfigurado` con `sin_almacen`, para responder antes el 404/409 del video |
+| `app.main.crear_app(ajustes=None, *, almacen=None)` | `almacen` sustituye al cliente de S3 (las pruebas pasan un doble); sin él, el ciclo de vida lo crea si hay `S3_BUCKET_DATASET` |
+| `app.esquemas.comun` | `FechaUtc` (fecha de **salida**: UTC con `Z` y sin fracciones), `FechaConZona` (de **entrada**: con zona, devuelta en UTC; sin zona, o fuera de los años 1–9999 al pasarla a UTC —p. ej. `0001-01-01T00:00:00+05:00`—, → `422`; sin esa conversión asyncpg lanzaba `OverflowError` al guardarla y la API respondía `500`), `Referencia` (`{id, nombre}`), `Pagina[T]` (`items`, `total`, `pagina`, `por_pagina`; PEP 695: `Pagina[VideoResumen]`) y `texto_admitido(valor)` (la regla de §4.4 en un `field_validator`). BE-3.1 los usa para `LugarAdmin`, `AlertaAdmin` (`creado_por`) y sus listados |
+| `app.esquemas.videos` | Los modelos de §5.4 y §5.5: `VideoCrear`, `InicioRecorrido`, `ImagenRegistro`, `ImagenesRegistrar`, `SubidaPut`, `ImagenRegistrada`, `ImagenesRegistradas`, `ConteoFotos`, `SubidaCompletada`, `VideoResumen`, `ImagenAdmin`, `VideoDetalle`; constantes `NOMBRE_VIDEO_MAX` (40), `REF_CLIENTE_MAX` (40), `DISPOSITIVO_MAX` (200), `APP_VERSION_MAX` (40), `ENTERO_MAX`, `Q_MAX` (100) y `LOTE_TOPE` (50: `ImagenesRegistrar.imagenes` tiene `max_length` fijo, así Pydantic no valida cuerpos enormes; `REC_MAX_LOTE` solo puede bajarlo). Las peticiones ignoran campos de más; las respuestas los prohíben |
+| Fixtures de prueba | `almacen_falso` (`tests/conftest.py`): doble de `AlmacenS3` con los objetos en memoria; `subir(clave, n_bytes)` simula el `PUT` de la app, `fallar_head` y `fallar_firma` provocan `FalloS3`, `contar_prefijo` cuenta, `consultadas` y `firmadas` registran las llamadas y sus URL llevan `FIRMA_FALSA` para comprobar que no llegan a los logs. Para la CLI: `monkeypatch.setattr(cli, "crear_almacen", lambda ajustes: almacen_falso)`. Ejemplos en `tests/base/test_recoleccion_base.py` y `test_limpieza_base.py`; botocore simulado con `Stubber` en `tests/unit/test_s3.py` |
+
+Trampas: un `rumbo` de 359,9999999 pasa `< 360` como `float` pero se guarda como 360,0 en `real` y violaría el
+`CHECK`: los esquemas comprueban el rango sobre `como_real(x)`. Un `ImagenRegistro.orden` mayor que 200 lo rechaza el
+`CHECK` de §5.7 aunque se suba `REC_MAX_FOTOS_VIDEO`: el servicio usa `min(REC_MAX_FOTOS_VIDEO, 200)`.
 
 ### 4.6 BE-2.2 — Worker de ingesta
 Bucle con espera larga sobre `ingesta` (hasta 10 mensajes). Antes de recibir comprueba que `embedding` esté listo
 (`GET /health/ready`); si no lo está, espera y no toma mensajes (evita que se agoten los 5 reintentos y caigan en la
 DLQ mientras el modelo carga). Por cada objeto:
-1. Decodifica la clave (las claves de los eventos S3 vienen codificadas como URL) y busca la imagen. Si no existe o
-   su video está `eliminado`, borra el mensaje (la purga se ocupará del objeto).
-2. Si la imagen ya está `procesada` con el mismo ETag, borra el mensaje (idempotencia ante eventos repetidos).
+1. Decodifica la clave (las claves de los eventos S3 vienen codificadas como URL) y busca la imagen
+   (`dominio.recoleccion.ids_de_clave`, §4.5). Si no existe o su video está `eliminado`, borra el mensaje (la purga se
+   ocupará del objeto). La imagen puede estar en `pendiente_subida` o ya en `subida` (la pasó `complete` o una
+   repetición de `images` con su `HEAD`, §4.5, con `bytes` y `etag` ya rellenos): las dos se procesan.
+2. Si la imagen ya está `procesada` con el mismo ETag, borra el mensaje (idempotencia ante eventos repetidos). El ETag
+   de `imagenes.etag` se guarda sin comillas, como el `eTag` del evento.
 3. Descarga, valida (JPEG decodificable, ≤ 4 MB, lado menor ≥ 320 px), corrige la orientación EXIF, genera la
    miniatura en `thumbs/…` y una copia reducida en memoria (lado mayor `WORKER_LADO_EMBEDDING_PX`, JPEG calidad 90)
    para el modelo: así cada lote queda muy por debajo del límite de 16 MB de embeddings.
@@ -440,7 +528,9 @@ DLQ mientras el modelo carga). Por cada objeto:
    espera una localización que llega mientras se procesa un lote (embeddings no interrumpe un lote en curso). Si no
    coincide con la esperada (§5.10), no guarda y lo registra como
    error de configuración.
-5. Marca la imagen `procesada` y recalcula el estado del video.
+5. Marca la imagen `procesada` y recalcula el estado del video, en una transacción que respeta el orden de bloqueo
+   de §4.5 (video → imágenes): `recoleccion.bloquear_video` (si devuelve `None` o `eliminado`, descarta), `UPDATE` de la
+   foto y `recoleccion.recalcular_estado`. Lo mismo al pasar una foto a `subida` (paso 1) o a `error`.
 
 Errores **permanentes** (imagen corrupta, demasiado grande): imagen en `error` con el motivo, mensaje borrado.
 Errores **transitorios** (embedding caído, base no disponible): el mensaje no se borra y vuelve a la cola tras la
@@ -750,10 +840,21 @@ alarma (infra §5.10: más de 5 en 5 min; sin comprobar en `dev`): `validate13.p
   "dispositivo": "Xiaomi 23028RA60L / Android 14", "app_version": "0.9.0"
 }
 ```
-- `ref_cliente` (1–40 caracteres) es obligatorio. `nombre` opcional (1–40 tras recortar; vacío → `video_<numero>`).
-  `total_fotos` ∈ [0, 200].
+- `ref_cliente` es obligatorio: 1–40 caracteres tras recortar los espacios de alrededor (se guarda recortado).
+  `nombre` opcional: 1–40 tras recortar; vacío, solo espacios, `null` o ausente → `video_<numero>`.
+- El resto es opcional (ausente = `null`): `iniciado_en` y `finalizado_en` (ISO-8601 **con zona**, `Z` o `±hh:mm`; sin
+  zona, o fuera de los años 1–9999 al pasarla a UTC, → `422`; si están las dos, `finalizado_en` ≥ `iniciado_en`), `duracion_s` y `pasos` (enteros en
+  [0, 2 147 483 647]), `distancia_m` (número en [0, 1 000 000]), `inicio` (`lat` y `lng` obligatorios dentro del
+  objeto, WGS84; `rumbo` en [0, 360) o `null`, §5.1), `total_fotos` (entero en [0, 200], por defecto 0; solo informa:
+  no limita las fotos), `dispositivo` (≤ 200 tras recortar) y `app_version` (≤ 40 tras recortar).
+- Ningún texto puede llevar el carácter NUL ni un sustituto suelto (§4.4). Los campos de más se ignoran (también dentro
+  de `inicio`). Los números no admiten `NaN` ni infinitos.
 - `201` → `VideoResumen` (§5.5) con `estado = "pendiente"`. Si ya existe un video del mismo admin con ese
-  `ref_cliente`: `200` con el mismo video (idempotente).
+  `ref_cliente`: `200` con ese video **tal como está** (idempotente: el cuerpo nuevo no lo cambia). Otro admin con el
+  mismo `ref_cliente` crea su propio video.
+- Errores: `422 VALIDACION` (`detalle.campos`, p. ej. `inicio.rumbo`), `400 SOLICITUD_INVALIDA` (JSON roto),
+  `409 VIDEO_ELIMINADO` si el video de ese admin con ese `ref_cliente` está eliminado (BE-4.1; la app usa otro
+  `ref_cliente`), `503 BASE_NO_DISPONIBLE` y los de §5.2.
 
 #### `POST /v1/collect/videos/{video_id}/images`
 ```json
@@ -763,8 +864,12 @@ alarma (infra §5.10: más de 5 en 5 min; sin comprobar en `dev`): `validate13.p
   ]
 }
 ```
-- 1 a 50 elementos; `orden` ∈ [1, 200] y único dentro del video; `bytes` ≤ 4 MB (4 194 304); `rumbo` puede ser `null`.
-- `200`:
+- 1 a `REC_MAX_LOTE` (50) elementos (más de 50 se rechaza siempre, aunque se suba el parámetro: el esquema tiene ese
+  tope fijo); `orden` ∈ [1, `REC_MAX_FOTOS_VIDEO`] (200; nunca más de 200, el `CHECK` de §5.7)
+  y sin repetir dentro de la petición; `lat` y `lng` WGS84; `rumbo` en [0, 360) o `null`; `capturada_en` ISO-8601 con
+  zona; `bytes` (tamaño del JPEG que se va a subir) en [1, `REC_MAX_BYTES_FOTO`] (4 194 304). Los máximos son
+  parámetros de §5.10. Campos de más, ignorados.
+- `200` (los elementos en el **mismo orden** que la petición):
 ```json
 {
   "imagenes": [
@@ -780,19 +885,36 @@ alarma (infra §5.10: más de 5 en 5 min; sin comprobar en `dev`): `validate13.p
   ]
 }
 ```
-- Idempotente por (`video_id`, `orden`): repetir actualiza los metadatos mientras la foto siga `pendiente_subida` y
-  devuelve URLs nuevas. Si la foto ya está `subida`, `procesada` o `error`, `subida` es `null`.
-- La app sube con `PUT` a `url`, enviando **exactamente** los `encabezados` indicados y el JPEG como cuerpo. S3
-  responde `200`; una URL vencida da `403` de S3 → pedir URLs de nuevo.
-- Errores: `404 NO_ENCONTRADO`, `409 VIDEO_ELIMINADO`, `422 VALIDACION`.
+- `id` lo genera el backend la primera vez; la clave del objeto es `dataset/{video_id}/{id}.jpg` (infra §5.5).
+  `estado` es el de la foto **después** de la llamada.
+- Idempotente por (`video_id`, `orden`): una foto repetida que sigue `pendiente_subida` se comprueba antes con `HEAD`
+  en S3 (§4.5): si el objeto ya está, pasa a `subida` (sin tocar sus metadatos) y `subida` es `null`; si no, se
+  actualizan sus metadatos y recibe una URL nueva. Si la foto ya estaba `subida`, `procesada` o `error`, no cambia y
+  `subida` es `null`. Una foto nueva siempre recibe URL. Registrar una foto devuelve el video a `pendiente` (§5.5).
+- `subida.expira_en` = hora de la firma + `PRESIGN_PUT_TTL_S` (900 s), sin fracciones (como mucho 1 s antes del
+  vencimiento real).
+- La app sube con `PUT` a `url`, enviando **exactamente** los `encabezados` indicados (`Content-Type` forma parte de
+  la firma) y el JPEG como cuerpo. S3 responde `200`; repetir el mismo `PUT` sobrescribe el mismo objeto. Una URL
+  vencida da `403` de S3 (`<Code>AccessDenied</Code>`, `Request has expired`) → pedir URLs de nuevo. Una URL `PUT` no
+  limita el tamaño: lo valida el `worker` (R4).
+- Errores, en este orden: `422 VALIDACION` (cuerpo; también `video_id` que no es un UUID), `404 NO_ENCONTRADO` (video
+  inexistente), `409 VIDEO_ELIMINADO`, `500 ERROR_INTERNO` (falta `S3_BUCKET_DATASET` en `api`, sin registrar nada; o
+  no se pudo firmar, evento `s3_fallido`: las fotos ya quedaron registradas y repetir es seguro), `503
+  BASE_NO_DISPONIBLE` y los de §5.2.
 
 #### `POST /v1/collect/videos/{video_id}/complete`
-Sin cuerpo. Antes de responder hace `HEAD` en S3 de las fotos que siguen `pendiente_subida` y pasa a `subida` las que
-ya existen (§4.5). `200` →
+Sin cuerpo (si llega, se ignora). Antes de responder hace `HEAD` en S3 de las fotos que siguen `pendiente_subida` y
+pasa a `subida` las que ya existen (§4.5). `200` →
 ```json
 { "id": "…", "estado": "procesando", "conteo": { "pendiente_subida": 0, "subida": 37, "procesada": 83, "error": 0 } }
 ```
-Repetirlo es seguro.
+- Marca la subida como terminada (`videos.subida_completa_en`, la primera vez) y devuelve el `estado` del video
+  (§5.5: `pendiente` si queda alguna foto sin subir) y el `conteo` (siempre las cuatro claves).
+- Repetirlo es seguro: solo vuelve a consultar en S3 las que sigan pendientes. Un `HEAD` que falla por otra causa que
+  «no está» deja esa foto pendiente (evento `s3_fallido`) y la respuesta sigue siendo `200`.
+- Errores: `404 NO_ENCONTRADO`, `409 VIDEO_ELIMINADO`, `422 VALIDACION` (`video_id` no es un UUID), `500 ERROR_INTERNO`
+  (falta `S3_BUCKET_DATASET`; después de comprobar el video, así un video inexistente da `404` igual), `503
+  BASE_NO_DISPONIBLE` y los de §5.2.
 
 ### 5.5 Endpoints de administración (requieren `admin`)
 
@@ -801,7 +923,7 @@ Repetirlo es seguro.
 `VideoResumen`:
 ```json
 {
-  "id": "…", "numero": 12, "nombre": "Entrada norte", "estado": "procesado",
+  "id": "…", "numero": 12, "nombre": "Entrada norte", "ref_cliente": "rec_0003", "estado": "procesado",
   "creado_en": "…", "iniciado_en": "…", "finalizado_en": "…",
   "duracion_s": 512, "distancia_m": 340.5, "pasos": 470,
   "inicio": { "lat": 6.2001, "lng": -75.5786, "rumbo": 90.0 },
@@ -812,7 +934,15 @@ Repetirlo es seguro.
 ```
 `estado` del video ∈ {`pendiente` (faltan fotos por subir), `procesando`, `procesado` (todas procesadas),
 `con_errores` (ninguna pendiente y al menos una en error), `eliminado`}. Los videos `eliminado` no aparecen en los
-listados.
+listados. El estado se deriva del `conteo` y de si la app ya llamó a `complete` (ADR-BE-14): `pendiente` mientras no
+lo haya llamado o quede alguna foto `pendiente_subida`; si no, `procesando` si queda alguna `subida`; si no,
+`con_errores` si hay alguna en `error`; si no, `procesado` (también un video sin fotos).
+- `inicio` es `null` si la app no lo envió; `iniciado_en`, `finalizado_en`, `duracion_s`, `distancia_m` y `pasos`, `null`
+  si no se enviaron. `total_fotos` es el que declaró la app al crear el video (no el número de fotos registradas: ese
+  es la suma del `conteo`). `creado_por` es el admin que lo creó. `ref_cliente` es la referencia local con que la app
+  lo creó (recortada, §5.4): la app la usa para casar sus grabaciones con los videos del servidor y los validadores para
+  reconocer sus datos (`validacion-` en `nombre` **y** `ref_cliente`).
+- `conteo` lleva siempre las cuatro claves. Las fechas, en UTC con `Z` y sin fracciones (§5.1).
 
 `ImagenAdmin`:
 ```json
@@ -826,7 +956,10 @@ listados.
 }
 ```
 `estado` de la imagen ∈ {`pendiente_subida`, `subida`, `procesada`, `error`}; `calidad` ∈ {`alta`, `normal`, `baja`};
-`url` y `url_miniatura` son prefirmadas GET de 1 h (`null` mientras no existan).
+`url` y `url_miniatura` son prefirmadas GET de 1 h (`null` mientras no existan). **Hasta BE-4.1, `url`,
+`url_miniatura` y `url_expira_en` son siempre `null`** (BE-2.1 entrega el detalle para la barra de progreso; las URLs
+GET llegan con BE-4.1, PLAN §2.2). `error` es el motivo cuando `estado = "error"` (si no, `null`); `lugar` es `null`
+si la foto no tiene lugar asignado.
 
 `LugarAdmin` = `LugarPublico` sin `distancia_m`, más `creado_en`, `actualizado_en` y `total_fotos`.
 
@@ -838,8 +971,8 @@ BE-2.3; diagnóstico, BE-2.4; lugares y alertas, BE-3.1; el resto de videos y to
 | Método y ruta | Petición | Respuesta |
 |---|---|---|
 | `GET /v1/admin/stats` | — | `200` `{"total_fotos": 2842, "total_lugares": 48, "alertas_activas": 3, "ultimo_video": {"numero": 12, "creado_en": "…"} \| null}`. `total_fotos` = imágenes `procesada` de videos no eliminados |
-| `GET /v1/admin/videos` | `?q=&orden=fecha\|nombre\|fotos&dir=desc\|asc&pagina&por_pagina` | Página de `VideoResumen` |
-| `GET /v1/admin/videos/{id}` | — | `VideoResumen` + `"fotos": [ImagenAdmin…]` en orden |
+| `GET /v1/admin/videos` | `?q=&orden=fecha\|nombre\|fotos&dir=desc\|asc&pagina&por_pagina` | Página de `VideoResumen` (detalle abajo) |
+| `GET /v1/admin/videos/{id}` | — | `VideoResumen` + `"fotos": [ImagenAdmin…]` en orden (detalle abajo) |
 | `PATCH /v1/admin/videos/{id}` | `{"nombre": "Entrada norte"}` (1–40 tras recortar) | `200` `VideoResumen` |
 | `DELETE /v1/admin/videos/{id}` | — | `202` `{"id": "…", "estado": "eliminado", "fotos_retiradas": 120, "purga": "programada"}`. Repetir da la misma respuesta |
 | `GET /v1/admin/images` | `?video_id&lugar_id&estado&calidad&q&pagina&por_pagina` | Página de `ImagenAdmin`, por video (más reciente primero) y `orden` |
@@ -866,6 +999,25 @@ BE-2.3; diagnóstico, BE-2.4; lugares y alertas, BE-3.1; el resto de videos y to
 `normal`), `radio_m`
 (5–100, por defecto 15), `activa` (por defecto `true`), `vigencia_desde`, `vigencia_hasta` (si ambas,
 `hasta > desde`). En `sincronizar`, cada cambio es independiente: un error no revierte los demás.
+
+#### `GET /v1/admin/videos` (BE-2.1)
+Parámetros, todos opcionales:
+- `q`: texto (≤ 100 caracteres, sin NUL) contenido en `nombre`, sin distinguir mayúsculas; `%`, `_` y `\` se buscan
+  literalmente. Vacío o solo espacios = sin filtro.
+- `orden`: `fecha` (por defecto; `creado_en`), `nombre` (en minúsculas) o `fotos` (fotos registradas, la suma del
+  `conteo`); `dir`: `desc` (por defecto) o `asc`. A igualdad, desempata `numero` en la misma dirección.
+- `pagina` ≥ 1 (por defecto 1, como mucho 100 000); `por_pagina` en [1, `PAGINA_MAX`] (100; por defecto
+  `PAGINA_POR_DEFECTO`, 24).
+
+`200` → `{"items": [VideoResumen…], "total": n, "pagina": 1, "por_pagina": 24}` (§5.1), sin los videos `eliminado`;
+`total` cuenta todos los que cumplen `q`. Una página más allá del final da `items` vacío. Errores: `422 VALIDACION`
+(parámetro fuera de rango o valor no admitido, `detalle.campos` con `q`, `orden`, `dir`, `pagina` o `por_pagina`),
+`503 BASE_NO_DISPONIBLE` y los de §5.2.
+
+#### `GET /v1/admin/videos/{id}` (BE-2.1)
+`200` → `VideoResumen` + `"fotos": [ImagenAdmin…]` ordenadas por `orden` (todas, sin paginar: como mucho 200). Su
+`conteo` es el mismo que devolvería `complete` en ese momento. Errores: `404 NO_ENCONTRADO` (no existe o está
+`eliminado`), `422 VALIDACION` (`id` no es un UUID), `503 BASE_NO_DISPONIBLE` y los de §5.2.
 
 #### `POST /v1/admin/diagnostico/vecinos`
 `multipart/form-data` con una sola parte `foto` (`image/jpeg`, ≤ `LOC_MAX_BYTES_FOTO`, las mismas reglas que una foto
@@ -902,9 +1054,9 @@ Errores: `400 FOTOS_INVALIDAS` (falta la foto, tipo o tamaño; `detalle.indice =
 | 403 | `SIN_PERMISOS` | Token válido de un usuario activo sin rol `admin` (§5.2) |
 | 404 | `NO_ENCONTRADO` | Recurso inexistente (o video eliminado en rutas de lectura); también una ruta que no existe |
 | 405 | `SOLICITUD_INVALIDA` | Método no permitido en una ruta que existe; `detalle.metodos_permitidos` (p. ej. `["GET"]`) y encabezado `Allow` |
-| 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido · subir fotos a un video borrado · `If-Match` no coincide |
+| 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido · registrar fotos, completar la subida o volver a crear (mismo `ref_cliente`) un video borrado (§5.4) · `If-Match` no coincide |
 | 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]` |
-| 500 | `ERROR_INTERNO` | Fallo no previsto (el `X-Request-Id` permite encontrarlo en los logs) |
+| 500 | `ERROR_INTERNO` | Fallo no previsto (el `X-Request-Id` permite encontrarlo en los logs); también configuración que falta en `api` (`JWT_SECRET`, §5.2; `S3_BUCKET_DATASET` en las rutas de §5.4 que usan S3) |
 | 501 | `NO_IMPLEMENTADO` | Endpoints reservados |
 | 503 | `EMBEDDING_NO_DISPONIBLE` · `BASE_NO_DISPONIBLE` | Dependencia caída, apagada o lenta. `BASE_NO_DISPONIBLE`, en cualquier endpoint que use la base (desde BE-1.3, §4.4) |
 | 503 | `SERVICIO_OCUPADO` | `POST /v1/auth/login` con la cola de verificaciones llena o sin turno a tiempo (§5.3); lleva `Retry-After` |
@@ -1005,7 +1157,7 @@ valor por defecto), restricciones e índices con sus nombres, secuencias y la re
 | `inicio_rumbo` | `real` | sí | | rumbo |
 | `total_fotos_declaradas` | `smallint` | | `0` | 0–200 |
 | `dispositivo`, `app_version` | `text` | sí | | |
-| `subida_completa_en` | `timestamptz` | sí | | |
+| `subida_completa_en` | `timestamptz` | sí | | la primera llamada a `complete` (§5.4); entra en el estado del video (ADR-BE-14) |
 | `creado_por` | `uuid` | | | FK `usuarios` |
 | `creado_en`, `actualizado_en` | `timestamptz` | | `now()` | |
 | `eliminado_en`, `purgado_en` | `timestamptz` | sí | | borrado lógico y purga (ADR-BE-07): `estado = 'eliminado'` si y solo si `eliminado_en` no es nulo, y `eliminado_en` y `eliminado_por` van juntos (`videos_eliminado_check`); `purgado_en` solo con `eliminado_en` (`videos_purgado_en_check`) |
@@ -1023,8 +1175,8 @@ valor por defecto), restricciones e índices con sus nombres, secuencias y la re
 | `rumbo` | `real` | sí | | rumbo |
 | `capturada_en` | `timestamptz` | | | informada por la app |
 | `bytes_declarados` | `integer` | | | > 0 (el máximo, `REC_MAX_BYTES_FOTO`, lo valida la API) |
-| `bytes` | `integer` | sí | | ≥ 0; tamaño real en S3 |
-| `etag` | `text` | sí | | |
+| `bytes` | `integer` | sí | | ≥ 0; tamaño real en S3 (del `HEAD` de la recolección o del `worker`, §4.5) |
+| `etag` | `text` | sí | | sin comillas, como el `eTag` de los eventos de S3 (§5.8) |
 | `ancho`, `alto` | `smallint` | sí | | > 0; tras corregir EXIF |
 | `estado` | `estado_imagen` | | `pendiente_subida` | índice `imagenes_estado_idx` |
 | `error` | `text` | sí | | motivo legible; no nulo si y solo si `estado = 'error'` (`imagenes_error_check`) |
@@ -1154,7 +1306,7 @@ y `tests/` quedan fuera. El contenedor se llama `app` (infra §5.1).
 | Verificación de esquema (tarea suelta con la definición de `migrate`) | `python -m app.cli verificar-esquema` (compara la base con §5.7 en una transacción de solo lectura) | — | código de salida 0 = coincide; 1 = difiere (un evento `esquema_diferencia` por diferencia); 2 = no se pudo verificar (base no disponible o error al leer el catálogo); 3, abajo |
 | Usuarios (tarea suelta con la definición de `migrate`; BE-1.3) | `python -m app.cli crear-usuario --correo X --nombre Y [--rol admin\|user]`. Si el correo existe, actualiza nombre, contraseña y, si se pasa `--rol`, rol (sin `--rol` conserva el suyo), y lo reactiva; un usuario nuevo sin `--rol` es `user`. Resultado: evento `usuario_guardado` (`resultado` = `creado` \| `actualizado`) | — | 0 = hecho; 1 = dejaría sin ningún admin activo (`usuario_rechazado`) u otro error de la base (`comando_fallido`); 2 y 3, abajo |
 | | `python -m app.cli desactivar-usuario --correo X`. Resultado: evento `usuario_desactivado` | — | 0 = desactivado (también si ya lo estaba); 1 = no existe (`usuario_no_encontrado`), dejaría sin ningún admin activo (`usuario_rechazado`) u otro error (`comando_fallido`); 2 y 3, abajo |
-| Limpieza de pruebas (tarea suelta con la definición de `worker`) | `python -m app.cli limpiar-validacion [--video ID …]` (§4.5): sin `--video`, todos los videos `validacion-`; con `--video`, solo esos, y se niega (código 1) si alguno no lleva el prefijo. Imprime `LIMPIEZA {"videos": n, "objetos": m}` | — | código 0 = hecho |
+| Limpieza de pruebas (tarea suelta con la definición de `worker`; BE-2.1) | `python -m app.cli limpiar-validacion [--video ID …] [--simular]` (§4.5): sin `--video`, todos los videos cuyo `nombre` **y** `ref_cliente` empiezan por `validacion-`; con `--video` (uno o varios UUID, `--video A B` o `--video A --video B`), solo esos, y se niega entera (nada se borra) si alguno no existe o no lleva el prefijo. Borra filas (`videos` y en cascada `imagenes` y `embeddings`) y objetos de `dataset/{id}/` y `thumbs/{id}/`. Resultado: evento `limpieza_validacion` (`videos`, `objetos`, `video_ids`) y, después, la línea de texto `LIMPIEZA {"videos": n, "objetos": m}` por la salida estándar (`n` = videos borrados, `m` = objetos borrados). Si S3 falla en la segunda pasada (tras borrar las filas), antes registra `limpieza_s3_incompleta` (`WARNING`, `prefijos`, `motivo`) y sale igual con 0: pueden quedar objetos huérfanos que se borran a mano (§4.5). Con `--simular`: las mismas comprobaciones y la misma negativa, sin borrar nada; cuenta los objetos (`list-objects-v2`) y su resultado es el evento `limpieza_simulada` (`videos`, `objetos`, `video_ids`) y la línea `SIMULACION {"videos": n, "objetos": m}` (lo que borraría) | — | 0 = hecho (también con 0 videos; con `--simular`, «lo borraría»); 1 = negativa (`limpieza_rechazada`: `inexistentes`, `sin_prefijo`; también con `--simular`), error de S3 (`s3_fallido`, operación `borrar` —las filas quedan— o `listar` con `--simular`) u otro error (`comando_fallido`); 2 y 3, abajo (3 también si falta `S3_BUCKET_DATASET`, o un `--video` que no es un UUID) |
 
 **`crear-usuario` y `desactivar-usuario` en detalle** (BE-1.3, §4.4):
 - `--correo` se normaliza (sin espacios alrededor y en minúsculas) y tiene que tener la forma `algo@algo` (sin
@@ -1177,21 +1329,32 @@ y `tests/` quedan fuera. El contenedor se llama `app` (infra §5.1).
   `docker compose run --rm -T -e CREAR_USUARIO_PASSWORD api python -m app.cli crear-usuario …` con la variable
   exportada (así lo hace `validate13.py`), o sin `-T` ni `-e` para que la pida por la terminal (sin comprobar).
 
+**`limpiar-validacion` en `dev`** (BE-2.1): `aws ecs run-task` con la última revisión de `campus-locator-dev-worker`
+(tiene `DB_*`, `S3_BUCKET_DATASET` y el rol `tarea-worker`), la misma red que `migrate` (`subredes_tareas` +
+`sg_migrate`, IP pública) y `containerOverrides` con `command`. Su log va a `/campus-locator/dev/worker`, stream
+`worker/app/<id de la tarea>`. Así lo lanza `EntornoBackend.cli(…, familia=FAMILIA_WORKER)` (§5.11). En `local` no hay
+S3: sin `S3_BUCKET_DATASET` termina con 3.
+
 **Códigos de salida de `python -m app.cli`**, comunes a todos los comandos. Sus logs son líneas JSON de §5.10 con
-`proceso = migrate`; todos informan su resultado solo como eventos de log (desde BE-1.3, también `crear-usuario`).
-La excepción es un error en los argumentos: argparse escribe el uso y el error en texto por stderr, sin evento.
+`proceso = migrate` (también `limpiar-validacion`, aunque corra con la definición de `worker`); todos informan su
+resultado solo como eventos de log (desde BE-1.3, también `crear-usuario`), salvo `limpiar-validacion`, que además
+imprime la línea `LIMPIEZA {…}` (texto, no JSON de §5.10). La otra excepción es un error en los argumentos: argparse
+escribe el uso y el error en texto por stderr, sin evento.
 
 | Código | Significado |
 |---|---|
 | 0 | Hecho (en `verificar-esquema`, la base coincide) |
 | 1 | Resultado negativo: el que diga cada comando arriba (difiere, falló, no existe) |
 | 2 | No se pudo trabajar con la base: no se pudo abrir la conexión (red, DNS, TLS, credenciales, permiso `CONNECT`, base inexistente, tiempo agotado) o se perdió después (evento `base_no_disponible`). En `verificar-esquema`, también un error que impide comparar sin ser de conexión: al leer el catálogo, al cargar las migraciones o al esperar más de 5 min a un `migrar` en curso (evento `verificacion_fallida`) |
-| 3 | Uso o configuración: argumentos (argparse daría 2; aquí es 3; escribe el uso y el error en texto por stderr, sin evento), una variable con un valor no válido (p. ej. `DB_PORT=abc`), `DB_*` que faltan, `ADMIN_INICIAL_*` cuando hay que crear el admin o la contraseña de `crear-usuario` (evento `configuracion_incompleta`) |
+| 3 | Uso o configuración: argumentos (argparse daría 2; aquí es 3; escribe el uso y el error en texto por stderr, sin evento), una variable con un valor no válido (p. ej. `DB_PORT=abc`), `DB_*` que faltan, `ADMIN_INICIAL_*` cuando hay que crear el admin, la contraseña de `crear-usuario` o `S3_BUCKET_DATASET` en `limpiar-validacion` (evento `configuracion_incompleta`) |
 
 Variables que lee: las de infra §5.4 para `api`, `worker` y `migrate`, `APP_COMMIT`, que fija la imagen, y
 `CREAR_USUARIO_PASSWORD` (solo `crear-usuario`). `api` necesita `JWT_SECRET` (infra §5.4) para el login y las rutas
 protegidas: sin ella arranca, pero esas rutas responden `500` (§5.2); con menos de 32 bytes, PyJWT avisa
-(`InsecureKeyLengthWarning`, en texto por stderr). Ningún otro valor es obligatorio; los parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescribirse con
+(`InsecureKeyLengthWarning`, en texto por stderr). Desde BE-2.1, `api` usa `S3_BUCKET_DATASET` y `AWS_REGION` para el
+cliente de S3 (sin el bucket arranca, pero `images` y `complete` responden `500`, §5.4) y `limpiar-validacion` los
+mismos (sin el bucket, código 3). Las credenciales de AWS son las del rol de tarea (infra §5.8): no hay variables de
+llaves. boto3 está en la imagen desde BE-2.1 (dependencias de `pyproject.toml`; antes solo en el grupo `ops`). Ningún otro valor es obligatorio; los parámetros de §5.10 tienen valor por defecto en `config.py` y pueden sobrescribirse con
 una variable del mismo nombre (si se vuelve necesario, se añade antes a infra §5.4). Ninguna variable es obligatoria
 para arrancar: cada lote exige las suyas al usarlas (por ejemplo, `DB_*` desde BE-1.2). De las `DB_*` de conexión
 (infra §5.4), tienen valor por defecto `DB_PORT` (5432) y `DB_SSLMODE` (`require`). `DB_SSLMODE` admite `disable`, `allow`, `prefer`, `require`,
@@ -1216,16 +1379,16 @@ que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que 
 | `LOC_NIVEL_ALTA_MIN` / `LOC_NIVEL_MEDIA_MIN` (cortes de nivel) | 0,70 / 0,45 | `alta` ≥ 0,70 · `media` ≥ 0,45 · `baja` < 0,45. Iniciales |
 | `LOC_DISPERSION_RUMBO_MAX` | 30° | Para devolver `correccion_rumbo_grados` |
 | `LOC_LUGAR_CERCANO_M` / `LOC_REFERENCIAS_M` / `LOC_REFERENCIAS_MAX` | 60 / 150 / 3 | |
-| `REC_MAX_FOTOS_VIDEO` / `REC_MAX_LOTE` | 200 / 50 | 200 coincide con `MAX_FOTOS_VIDEO` de la app |
-| `REC_MAX_BYTES_FOTO` / `REC_LADO_MIN_PX` | 4 194 304 (4 MB) / 320 | Se valida en el `worker` (una URL PUT no limita tamaño) |
-| `PRESIGN_PUT_TTL_S` / `PRESIGN_GET_TTL_S` | 900 / 3600 | |
+| `REC_MAX_FOTOS_VIDEO` / `REC_MAX_LOTE` | 200 / 50 | 200 coincide con `MAX_FOTOS_VIDEO` de la app. `images` (BE-2.1) rechaza con `422` un `orden` > `min(REC_MAX_FOTOS_VIDEO, 200)` (200 es el `CHECK` de §5.7) y un lote de más de `REC_MAX_LOTE` |
+| `REC_MAX_BYTES_FOTO` / `REC_LADO_MIN_PX` | 4 194 304 (4 MB) / 320 | `images` rechaza un `bytes` declarado mayor (`422`); el tamaño real lo valida el `worker` (una URL PUT no limita tamaño) |
+| `PRESIGN_PUT_TTL_S` / `PRESIGN_GET_TTL_S` | 900 / 3600 | Vida de las URL `PUT` de `images` (BE-2.1) y de las GET (BE-4.1). C3a de la validación espera 900 s + 10 s |
 | `MINIATURA_LADO_PX` / `MINIATURA_CALIDAD` | 320 / 80 | |
 | `WORKER_MAX_MENSAJES` / `WORKER_LOTE_EMBEDDING` | 10 / 4 | Embeddings admite hasta 8; se usan 4 para no retrasar la localización |
 | `WORKER_LADO_EMBEDDING_PX` | 1024 | Copia reducida que se envía al modelo (el original y la miniatura no cambian) |
 | `WORKER_ESPERA_EMBEDDING_S` | 15 | Pausa entre comprobaciones de `/health/ready` |
 | `RECONCILIADOR_CADA_MIN` | 10 | Purgas pendientes |
 | `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api` |
-| `PAGINA_POR_DEFECTO` / `PAGINA_MAX` | 24 / 100 | 24 coincide con `FOTOS_POR_PAGINA` de la Galería |
+| `PAGINA_POR_DEFECTO` / `PAGINA_MAX` | 24 / 100 | 24 coincide con `FOTOS_POR_PAGINA` de la Galería. Los usa `GET /v1/admin/videos` desde BE-2.1 |
 | `DB_POOL_API` / `DB_POOL_API_DESBORDE` / `DB_POOL_WORKER` | 5 / 5 / 2 | `db.t4g.micro` admite ~100 conexiones |
 | `DB_CONNECT_TIMEOUT_S` | 5 | Tiempo máximo para abrir una conexión (asyncpg espera 60 s por defecto) y para el `SELECT 1` de `/v1/health/ready` |
 | Formato de log | JSON por línea: `ts`, `nivel`, `proceso`, `request_id`, `evento`, campos propios | Sin secretos ni URLs firmadas. Detalle abajo |
@@ -1246,15 +1409,23 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `error_api` | `api` | `estado`, `codigo` | Un error de §5.6 con estado ≥ 500 (`ERROR`) |
 | `api_iniciada` / `api_detenida` | `api` | `version`, `commit`, `entorno` (solo al iniciar) | Arranque y parada de la aplicación |
 | `worker_iniciado` / `latido` / `worker_detenido` | `worker` | Al iniciar: `version`, `commit`, `entorno`, `modo`; en cada latido: `modo` | Arranque, cada 60 s y parada. `modo = sin_consumo` hasta BE-2.2 |
-| `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` y, desde BE-1.3, en cualquier endpoint que la use (`WARNING`; responde `503`); en `migrate`, la CLI termina con 2 (`ERROR`) |
-| `configuracion_incompleta` | `migrate`, `api` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, o falta o no vale la contraseña de `crear-usuario` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida (`ERROR`; responde `500`) |
+| `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` y, desde BE-1.3, en cualquier endpoint que la use (`WARNING`; responde `503`); en `migrate` (toda la CLI, también `limpiar-validacion`), la CLI termina con 2 (`ERROR`) |
+| `configuracion_incompleta` | `migrate`, `api` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, falta o no vale la contraseña de `crear-usuario`, o falta `S3_BUCKET_DATASET` en `limpiar-validacion` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida; desde BE-2.1, falta `S3_BUCKET_DATASET` (o no se pudo crear el cliente de S3) en `images` o `complete` (`ERROR`; responde `500`) |
+| `video_creado` | `api` | `video_id`, `numero`, `nuevo` (`false` si ya existía con ese `ref_cliente`) | `POST /v1/collect/videos` con `201` o `200` (BE-2.1) |
+| `imagenes_registradas` | `api` | `video_id`, `recibidas`, `nuevas`, `actualizadas` (pendientes con metadatos nuevos y URL), `marcadas_subida` (pendientes que el `HEAD` encontró en S3), `sin_cambios` (ya `subida`, `procesada` o `error`), `urls` | `POST …/images` con `200` (BE-2.1). Nunca las URL |
+| `subida_completada` | `api` | `video_id`, `comprobadas` (pendientes con `HEAD`), `encontradas`, `fallidas`, `estado`, `conteo` | `POST …/complete` con `200` (BE-2.1) |
+| `s3_fallido` | `api`, `migrate` | `operacion` (`firmar` \| `head` \| `borrar` \| `listar` \| `crear_cliente`), `motivo` (clase y código de AWS, nunca la URL); en `head`, `video_id` y `claves` (cuántas fallaron); en `firmar`, `video_id` | `firmar`: `images` responde `500` (`ERROR`). `head`: alguna foto queda pendiente y la respuesta sigue (`WARNING`). `borrar` (primera pasada) o `listar` (`--simular`): `limpiar-validacion` termina con 1 (`ERROR`). `crear_cliente`: al arrancar `api` (`ERROR`) |
+| `limpieza_validacion` | `migrate` | `videos`, `objetos`, `video_ids` | `limpiar-validacion` terminó con 0 (BE-2.1). Después imprime `LIMPIEZA {"videos": n, "objetos": m}` |
+| `limpieza_rechazada` | `migrate` | `inexistentes`, `sin_prefijo` (ids), `motivo` | `limpiar-validacion --video …` (con o sin `--simular`) con algún id inexistente o sin el prefijo `validacion-` en `nombre` y `ref_cliente` (`ERROR`); no borra nada y termina con 1 |
+| `limpieza_simulada` | `migrate` | `videos`, `objetos`, `video_ids` (lo que borraría) | `limpiar-validacion --simular` terminó con 0 (no borró nada). Después imprime `SIMULACION {"videos": n, "objetos": m}` |
+| `limpieza_s3_incompleta` | `migrate` | `prefijos` (los de la segunda pasada que fallaron), `motivo` | `limpiar-validacion` ya borró las filas y la segunda pasada por S3 falló (`WARNING`): pueden quedar objetos huérfanos; el comando sale con 0 (§4.5) |
 | `login` | `api` | `resultado` (`exito` \| `fallo` \| `rechazado`), `motivo` (`null` \| `correo_desconocido` \| `password_incorrecta` \| `usuario_inactivo` \| `cola_llena` \| `espera_agotada`), `usuario_id` (`null` si el correo no existe o no se buscó) | Cada `POST /v1/auth/login` con el cuerpo válido que llega a la cola del hash (`INFO` si entró; `WARNING` si no). `rechazado` = `503 SERVICIO_OCUPADO`, sin fila de auditoría. Nunca el correo escrito ni la contraseña |
 | `autorizacion_rechazada` | `api` | `codigo` (`NO_AUTENTICADO`, `TOKEN_INVALIDO`, `TOKEN_EXPIRADO`, `SIN_PERMISOS`), `usuario_id` (el `sub` si el token era válido; si no, `null`) | `requiere_admin` rechaza una petición (`INFO`) |
 | `usuario_guardado` | `migrate` | `resultado` (`creado` \| `actualizado`), `usuario_id`, `rol`, `reactivado`, `rol_anterior` (solo al actualizar) | `crear-usuario` terminó con 0 |
 | `usuario_desactivado` | `migrate` | `usuario_id`, `ya_estaba_inactivo` | `desactivar-usuario` terminó con 0 |
 | `usuario_no_encontrado` | `migrate` | — | `desactivar-usuario` con un correo que no existe (`WARNING`); termina con 1 |
 | `usuario_rechazado` | `migrate` | `motivo` | `crear-usuario` o `desactivar-usuario` dejaría sin ningún admin activo (`ERROR`); termina con 1 |
-| `comando_fallido` | `migrate` | `comando`, `motivo` (y la traza en `excepcion`) | Error de `crear-usuario` o `desactivar-usuario` que no es de conexión (p. ej. la base sin migrar) (`ERROR`); termina con 1 |
+| `comando_fallido` | `migrate` | `comando`, `motivo` (y la traza en `excepcion`) | Error de `crear-usuario`, `desactivar-usuario` o `limpiar-validacion` que no es de conexión (p. ej. la base sin migrar) (`ERROR`); termina con 1 |
 | `migracion_iniciada` | `migrate` | `version`, `commit`, `entorno`, `revision_objetivo` | Al empezar `migrar` |
 | `migracion_terminada` | `migrate` | `revision_anterior`, `revision`, `aplicada`, `admin_inicial` (`creado` \| `ya_habia_admin`), `usuario_id` (si lo creó), `duracion_ms` | `migrar` terminó con 0. Los mensajes de Alembic (`Running upgrade  -> 0001, …`) salen antes como `evento = log` |
 | `migracion_fallida` | `migrate` | `motivo` (y la traza en `excepcion`) | Falló una migración o el admin inicial, o esperó más de 5 min a otro `migrar` (`LockNotAvailableError`) (`ERROR`); la CLI termina con 1 |
@@ -1303,9 +1474,12 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
 - `Validador(lote="BE-x.y", validacion="validation-x-y", entornos=("dev", …), descripcion=__doc__)`. `iniciar()` lee
   `--entorno local|dev`, `--informe <ruta>`, `--solo C1,C3` y `--sin-limpieza`; un error de uso o un entorno que el
   validador no admite terminan con 3. `ejecutar(precondiciones=[("P1", f), …], comprobaciones=[("C1", f), …],
-  manuales=[("M1", "instrucción"), …], limpieza=f)` sigue el orden del contrato común, imprime una línea por
-  precondición y comprobación (`[PASA] C1 …`), escribe el informe JSON (por defecto en
-  `project/.validacion/<lote>-<AAAAMMDD-HHMMSS>.json`, que git ignora) y devuelve el código de salida.
+  manuales=[("M1", "instrucción"), …], limpieza=f, preparacion=None)` sigue el orden del contrato común, imprime una
+  línea por precondición y comprobación (`[PASA] C1 …`), escribe el informe JSON (por defecto en
+  `project/.validacion/<lote>-<AAAAMMDD-HHMMSS>.json`, que git ignora) y devuelve el código de salida. `preparacion`
+  (BE-2.1) corre una vez si las precondiciones pasan, antes de las comprobaciones (p. ej. borrar restos `validacion-`),
+  e imprime `[PREPARACION] <detalle>`; si lanza, imprime `[PREPARACION] falló: …` y sigue sin cambiar el código. Va
+  también con `--solo` y con `--sin-limpieza` (que solo omite la limpieza del final).
 - Cada `f` devuelve el detalle (un texto corto) o lanza una excepción. En una precondición, `PrecondicionNoCumplida`
   (otro lote no está listo) termina con 2 y cualquier otra (`ErrorConfiguracion`, `Falla` o una inesperada), con 3;
   en ambos casos no se ejecutan las comprobaciones. En una comprobación, cualquier excepción la deja en `falla`
@@ -1320,12 +1494,16 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
   comando=None, iniciada_por="validacion", entorno=None)` lanza la definición (familia o ARN de una revisión) en
   Fargate, en `campus-locator-dev` y sin etiquetas; `comando` sustituye el del contenedor `app`, `entorno` (BE-1.3) le
   añade variables (`environment` del *override*: no se imprimen, pero quedan en `describe-tasks`, así que solo valores
-  de prueba), y `familia` (`FAMILIA_MIGRATE` o
-  `FAMILIA_VALIDACION`) elige el log group y el prefijo del stream. Espera hasta 900 s a que la tarea pare y devuelve
+  de prueba), y `familia` (`FAMILIA_MIGRATE`, `FAMILIA_VALIDACION` o, desde BE-2.1, `FAMILIA_WORKER`; `LOGS_TAREA`
+  da `/campus-locator/dev/<migrate|validacion|worker>` y el prefijo del mismo nombre) elige el log group y el prefijo
+  del stream. Espera hasta 900 s a que la tarea pare y devuelve
   un `ResultadoTarea`: `id`, `arn`, `definicion` (ARN de la revisión), `codigo` (salida del contenedor `app`; `None` si
   no llegó a correr), `motivo`, `lineas` (el log) y `eventos(nombre)` (las líneas JSON de §5.10, todas o las de un
-  evento). `leer_log(logs, grupo, stream)` lee un stream desde el principio y, mientras no exista o esté vacío, lo
-  intenta hasta 12 veces, con 5 s entre intentos (`[]` si nunca llega). Al lanzar la tarea o leer el log, un error de
+  evento). `leer_log(logs, grupo, stream, completo=None)` lee un stream desde el principio y, mientras no exista,
+  esté vacío o (BE-2.1) `completo(mensajes)` sea falso, lo intenta hasta 12 veces, con 5 s entre intentos; agotados,
+  devuelve lo último leído (`[]` si nunca llegó). CloudWatch puede entregar las líneas en varias tandas: sin
+  `completo`, la primera tanda no vacía se da por buena. `lanzar_tarea(…, log_completo=f)` y
+  `EntornoBackend.cli(…, log_completo=f)` pasan `f(codigo, mensajes)` (p. ej. `fin_limpieza`). Al lanzar la tarea o leer el log, un error de
   AWS por falta de permiso es `ErrorConfiguracion` y cualquier otro, `Falla`; un error mientras espera a que pare
   también es `Falla` («no se detuvo en 900 s»), y uno de `describe-tasks` llega sin convertir.
 
@@ -1337,8 +1515,8 @@ Ayudas de BE-1.3 (para los validadores que inician sesión o usan la CLI; las de
 | `credenciales_admin(entorno, sesion=None)` → `(correo, password)` | `VALIDACION_ADMIN_CORREO` y `VALIDACION_ADMIN_PASSWORD` si están las dos; si no y es `dev`, las claves `correo` y `password` de `SECRETO_ADMIN`; si no, `ErrorConfiguracion` |
 | `ClienteApi(url_base, http=None, dormir=time.sleep, reloj=time.monotonic)` | `pedir(metodo, ruta, token=None, **kwargs)` (ruta relativa a la URL con `/v1`; `token` añade `Authorization: Bearer`; un `429` **de API Gateway** se reintenta tras 1, 2, 4 y 8 s, y un `500 {"message": "Internal Server Error"}` **de API Gateway** —`api` sin instancias en Cloud Map, infra §5.13: la petición no llegó al backend— tras 2, 4 y 8 s; si no ceden, se devuelve el último; los 429 y 500 del backend (formato §5.1) no se reintentan; `reintentos_429`, `reintentos_500`); `login(correo, password)` (`POST /auth/login` con al menos `PAUSA_LOGIN_S` = 0,6 s desde el anterior, por el *throttling* de 2 req/s de infra §5.10; cuenta `logins_ok` y `logins_fallidos`); `token(correo, password, quien=…)` (el token de un 200, o `Falla` con el código, y con «¿está desplegado BE-1.3?» ante un 404); `ultima_duracion_ms`, `reintentos_429`, `cerrar()`. `http` es un `httpx.Client` (15 s) o, en las pruebas, un objeto con `request()` y `close()` |
 | `es_respuesta_api_gateway(r)`, `codigo_error(r)`, `describir_respuesta(r)` | ¿Cuerpo `{"message": …}` de API Gateway (infra §5.13)?; `error.codigo` o `None`; texto corto para un detalle (`401 CREDENCIALES_INVALIDAS`, `429 (API Gateway)`), nunca el cuerpo |
-| `EntornoBackend(entorno, sesion=None, outputs=None, iniciada_por="validacion", dormir=time.sleep)` | `cli(argumentos, entorno=None)` → `ResultadoTarea`: en `local`, `docker compose run --rm -T [-e VAR…] api python -m app.cli …` desde `project/`, con los valores solo en el entorno del proceso; en `dev`, tarea suelta con la última revisión de `campus-locator-dev-migrate`, que debe usar la imagen del servicio `api` (si no, `Falla`: `backend.yml` no terminó). `sql(consulta)` → líneas de `psql -tAc` (en `local`, `docker compose exec -T db psql -U campus_app -d campus_locator`; en `dev`, la tarea `campus-locator-dev-validacion`) o `Falla` si `psql` no termina con 0. También `imagen(definicion)` → `(arn, imagen)` y `revision_migrate()`. `outputs` es una función que devuelve los outputs (por defecto, `outputs_terraform`) |
-| `motivo_cli(resultado)` | Por qué un `app.cli` no dio 0, a partir de sus eventos (`base_no_disponible`, `configuracion_incompleta`, `comando_fallido`, `usuario_rechazado`, `usuario_no_encontrado`, `migracion_fallida`, `verificacion_fallida`) |
+| `EntornoBackend(entorno, sesion=None, outputs=None, iniciada_por="validacion", dormir=time.sleep)` | `cli(argumentos, entorno=None, familia=FAMILIA_MIGRATE)` → `ResultadoTarea`: en `local`, `docker compose run --rm -T [-e VAR…] <servicio> python -m app.cli …` desde `project/` (`api` con `FAMILIA_MIGRATE`, `worker` con `FAMILIA_WORKER`: `SERVICIO_COMPOSE`), con los valores solo en el entorno del proceso; en `dev`, tarea suelta con la última revisión de la familia (`campus-locator-dev-migrate` o, para `limpiar-validacion`, `campus-locator-dev-worker`), que debe usar la imagen del servicio `api` (si no, `Falla`: `backend.yml` no terminó). `sql(consulta)` → líneas de `psql -tAc` (en `local`, `docker compose exec -T db psql -U campus_app -d campus_locator`; en `dev`, la tarea `campus-locator-dev-validacion`) o `Falla` si `psql` no termina con 0. También `imagen(definicion)` → `(arn, imagen)`, `revision(familia=FAMILIA_MIGRATE)` → ARN (con la comprobación de imagen; una vez por familia) y `revision_migrate()`. `outputs` es una función que devuelve los outputs (por defecto, `outputs_terraform`) |
+| `motivo_cli(resultado)` | Por qué un `app.cli` no dio 0, a partir de sus eventos (`base_no_disponible`, `configuracion_incompleta`, `comando_fallido`, `usuario_rechazado`, `usuario_no_encontrado`, `migracion_fallida`, `verificacion_fallida` y, desde BE-2.1, `limpieza_rechazada` y `s3_fallido`) |
 | `USUARIO_VALIDACION`, `crear_usuario_validacion(backend)` → contraseña, `desactivar_usuario_validacion(backend, tolerar_inexistente=False)` → detalle | El usuario de prueba de rol `user` (abajo): `crear-usuario --rol user` con una contraseña aleatoria `validacion-pw-<uuid>` en `CREAR_USUARIO_PASSWORD` (se devuelve, nunca se imprime) y `desactivar-usuario`; `Falla` con `motivo_cli` si no terminan con 0. Con `tolerar_inexistente` (para la limpieza), «no existe» (1 con `usuario_no_encontrado`) no es un fallo |
 
 `validate13.py` es el ejemplo de uso: el `Contexto` crea `ClienteApi` y `EntornoBackend` en P2, pide los tokens la
@@ -1347,6 +1525,39 @@ si pudo quedar activo. Marca «pudo quedar activo» **antes** de lanzar `crear-u
 y después falla la espera o la lectura del log, la limpieza lo desactiva igual (y si no llegó a crearlo, lo tolera). Sus funciones `partes_jwt`, `firma_valida`, `firmar` y `alterar_firma` hacen el HMAC a mano,
 sin la biblioteca del backend; `alterar_firma` cambia un carácter **del medio** de la firma, porque el último puede
 codificar solo bits de relleno de base64url y no cambiarla.
+
+Ayudas de BE-2.1 (para los validadores que suben fotos o borran videos de prueba; BE-2.2 y BE-4.1 las reutilizan):
+
+| Elemento | Qué hace |
+|---|---|
+| `FAMILIA_WORKER` (`campus-locator-dev-worker`), `SERVICIO_COMPOSE` | Familia con la que corre `limpiar-validacion` (`backend.cli([...], familia=FAMILIA_WORKER)`); su log: `/campus-locator/dev/worker`, stream `worker/app/<id>`. `backend.revision(FAMILIA_WORKER)` exige que use la imagen de `api` (`Falla` si no: en una precondición, conviértela en `PrecondicionNoCumplida`) |
+| `PREFIJO_VALIDACION` (`validacion-`), `ENCABEZADOS_PUT`, `TIMEOUT_PUT_S` (60), `LINEA_LIMPIEZA` (`"LIMPIEZA "`), `LINEA_SIMULACION` (`"SIMULACION "`) | Constantes |
+| `put_prefirmado(http, subida, cuerpo, *, que)` → respuesta | `PUT` a `subida["url"]` con **exactamente** `subida["encabezados"]`; devuelve la respuesta de httpx (`status_code`, `text`: el XML de error de S3). Cualquier excepción → `Falla("PUT de <que>: <clase> (sin respuesta de S3)")`, **sin el mensaje** (podría llevar la URL prefirmada) |
+| `head_objeto(s3, bucket, clave)` → `dict \| None` | `head-object` con el cliente de boto3 de quien valida: la respuesta (`ContentType`, `ContentLength`…) o `None` si 404. 403/`AccessDenied` → `ErrorConfiguracion`; otro → `Falla` |
+| `claves_s3(s3, bucket, prefijo)` → `list[str]` | Todas las claves bajo `prefijo` (`list-objects-v2` paginado). Sin permiso → `ErrorConfiguracion`; otro → `Falla` |
+| `comprobar_bucket(s3, bucket)` → detalle | Para la precondición de S3: `head-bucket`, `list-objects-v2 --max-keys 1` en `dataset/` y `head-object` de una clave que no existe (`dataset/validacion-sonda-<uuid>.jpg`, 404 esperado; sin `s3:ListBucket` S3 respondería 403). Bucket inexistente → `PrecondicionNoCumplida` (INF-1.2); permisos → `ErrorConfiguracion` (código 3 en la precondición, no 1 a mitad de una comprobación) |
+| `hora_s3(s3, bucket)` → `datetime`; `desfase_s3_s(s3, bucket, ahora)` → segundos | Hora de S3 (encabezado `Date` de un `head-bucket`, resolución 1 s) y lo que hay que sumar al reloj local para tenerla (positivo si el local va atrasado). `Falla` si no viene `Date` |
+| `fin_limpieza(codigo, lineas)` → `bool` | ¿Está entero el log de `limpiar-validacion`? Con 0, cuando aparece `LIMPIEZA …` o `SIMULACION …` (se imprimen después del evento JSON); con otro código, cuando aparece un evento de `EVENTOS_DE_FALLO`; sin código, ya |
+| `limpiar_videos(backend, video_ids=None, *, simular=False)` → `ResultadoTarea` | `limpiar-validacion [--video ID …] [--simular]` con `FAMILIA_WORKER`, leyendo el log hasta `fin_limpieza`. `None` = sin `--video` (todos los `validacion-`); `[]` no lanza nada (código 0, sin líneas): nunca equivale a «todos» |
+| `linea_limpieza(tarea, prefijo=LINEA_LIMPIEZA)` → `dict \| None` | El JSON de la línea `LIMPIEZA {…}` (o `SIMULACION {…}`), o `None` si no está o no es JSON. Con código 0 y `None`, el log llegó incompleto: la limpieza final no lo trata como fallo |
+| `videos_validacion(api, token)` → `list[dict]` | Los `VideoResumen` con `nombre` **y** `ref_cliente` que empiezan por `validacion-` (lo que borraría `limpiar-validacion` sin `--video`), recorriendo todas las páginas de `GET /v1/admin/videos?q=validacion-` (100 por página). No 200 → `Falla` |
+| `borrar_restos(api, token, backend)` → detalle | La `preparacion` de los validadores que crean videos: si `videos_validacion` encuentra algo, `limpiar_videos(backend, None)`; `Falla` si la tarea no sale con 0. Devuelve `sin restos validacion- …` o `restos borrados: {…}` |
+| `RecorridoPrueba(api, token, nombre, *, total_fotos=4, http_s3=None, lat=1.0, lng=-100.0, semilla=0)` | Un video de prueba (`nombre` = `ref_cliente`; exige el prefijo, si no `Falla`) por la API de §5.4. `token` es una función. `crear()` → respuesta (con 201/200 guarda `video`; `video_id`); `registrar(ordenes)` → respuesta (con 200 guarda cada `ImagenRegistrada` en `registro[orden]`); `subir(orden, subida=None)` → respuesta del `PUT` (por defecto con la `subida` de `registro[orden]` y `foto(orden)`; con 200 añade el orden a `subidas`; sin `subida` → `Falla`); `asegurar_subidas(ordenes)` (registra las que falten en `subidas` —URL nueva— y las sube; `Falla` si algo no da 200; para validadores que solo necesitan fotos subidas, como BE-2.2); `completar()` → respuesta de `complete`; `foto(orden)` → `jpeg_sintetico(1024, 768, semilla * 1000 + orden)`; `elemento(orden)` → el elemento de `images` (coordenada fuera del campus, rumbos 0/90/180/270, `bytes` reales); `cerrar()` (cierra el `httpx.Client` de los `PUT`, que crea con 60 s si no se le pasa uno) |
+| `jpeg_sintetico(ancho=1024, alto=768, semilla=0)` → `bytes` | JPEG *baseline* en escala de grises hecho a mano, sin Pillow (bloques de 8×8 de tono uniforme: solo coeficientes DC, AC con un EOB de un bit). La misma semilla da los mismos bytes; semillas distintas, ETag distintos. 1024×768 ocupa ~12 KB. Decodificado con Pillow (libjpeg) en `local` el 2026-10-25: `JPEG (1024, 768) L` (`tests/ops/test_comun_recoleccion.py`, que se omite sin Pillow). Sirve como foto válida para el `worker` (lado menor 768 ≥ `REC_LADO_MIN_PX`) |
+| `Validador.ejecutar(…, preparacion=f)` | Arriba: limpieza de restos al empezar |
+
+`validate21.py` es el ejemplo de un validador que sube a S3, montado sobre esas ayudas: un `RecorridoPrueba` por video
+y, en su `Contexto`, `asegurar_video`, `asegurar_registro` (guarda la respuesta de C1b: C3a usa su URL de la foto 4) y
+`asegurar_todas_subidas` (`RecorridoPrueba.asegurar_subidas`), así `--solo C4` sube la foto 4 con una URL nueva sin
+esperar 15 min. De cada `PUT` solo informa el código. Inspecciona S3 con el perfil de quien valida. `ctx.ahora` y
+`ctx.dormir` se sustituyen en las pruebas (reloj falso: la espera de C3a no tarda).
+
+**Trampa del reloj (C3a).** S3 da una URL por vencida con **su** hora; el reloj de la máquina que valida puede ir
+atrasado (WSL suele atrasarse tras suspender el equipo). Si el validador esperara con el reloj local, haría el `PUT`
+antes de tiempo, S3 lo aceptaría (200) y la foto quedaría subida. Por eso P4 mide el desfase con el `Date` de S3
+(`desfase_s3_s`), C3a espera con `ahora + desfase` hasta `expira_en + 10 s` y vuelve a medir el desfase justo antes del
+`PUT`. No se reintenta el `PUT` «hasta que dé 403»: antes de vencer, un intento sube la foto. Un 200 es `falla` con ese
+motivo. `expira_en` lo calcula `api` (Fargate, con hora de AWS), así que solo cuenta el reloj local.
 
 **Datos de prueba**: videos con `ref_cliente` y `nombre` que empiezan por `validacion-` (con coordenadas fuera del
 campus, para no mezclarse con el dataset real), lugares cuyo nombre empieza por `validacion-`, alertas cuyo mensaje
@@ -1362,8 +1573,20 @@ empieza por `validacion-`, y un usuario `validacion+user@campus.edu.co` de rol `
 | Usuario `validacion+user@campus.edu.co` | Lo crea o reactiva `crear-usuario --rol user` (contraseña aleatoria en `CREAR_USUARIO_PASSWORD`, nunca impresa) y lo desactiva `desactivar-usuario` al terminar, ambos en una tarea suelta de `migrate` (en `local`, con `docker compose run`): `crear_usuario_validacion` y `desactivar_usuario_validacion` de `comun.py`. La fila queda inactiva entre ejecuciones; reactivarla devuelve la validez a sus tokens sin vencer (§5.2), que solo tuvo el validador |
 
 Al empezar, cada validador que crea videos borra los `validacion-` que haya dejado una ejecución interrumpida
-(`limpiar-validacion` sin `--video`, o los `DELETE` si BE-4.1 está hecho). Las filas de `auditoria` que generan las
-pruebas se conservan (son registro) y las de `eventos_localizacion` caducan a los `EVENTOS_RETENCION_DIAS` (§5.10).
+(`limpiar-validacion` sin `--video`, o los `DELETE` si BE-4.1 está hecho), con `preparacion` de `Validador`
+(`borrar_restos`). Para no lanzar una tarea en vano, antes busca restos con `videos_validacion` (todas las páginas y el
+prefijo en `nombre` **y** `ref_cliente`, el mismo criterio que la CLI). Al terminar borra solo los suyos con `--video`
+(y solo los que aún existen: un id que ya no existe haría que la orden se negara entera); si la tarea sale con 0 pero
+el log no trae la línea `LIMPIEZA`, no es un fallo. Para comprobar que la orden se niega con un video real, se usa
+`--simular`: la orden real nunca se apunta a un video ajeno. Las filas de
+`auditoria` que generan las pruebas se conservan (son registro) y las de `eventos_localizacion` caducan a los
+`EVENTOS_RETENCION_DIAS` (§5.10).
+
+Los `PUT` de un validador generan eventos de S3 en la cola `ingesta` (infra §5.5). El validador no los borra: recibir
+mensajes ajenos para buscar los suyos subiría su `ApproximateReceiveCount` y podría mandarlos a la DLQ. Con BE-2.2 el
+`worker` los descarta (la imagen ya no existe, §4.6 paso 1); antes de BE-2.2 esperan hasta la retención de la cola
+(4 días, infra §5.6). Mientras haya mensajes visibles en `ingesta`, la alarma `embedding-inactivo` no apaga
+`embedding` por inactividad (sí a las 22:00) y, con `embedding` encendido, el autoescalado puede subir `worker` (R13).
 
 ---
 
@@ -1433,6 +1656,24 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 - *Consecuencias:* reactivar a un usuario devuelve la validez a sus tokens sin vencer; cambiar la contraseña no los
   invalida. Sin límite de intentos por cuenta (R7).
 
+**ADR-BE-14 — Recolección: S3 confirma la subida y el estado del video se deriva de los conteos (aceptada, BE-2.1).**
+- Una foto pasa a `subida` por el evento de S3 (BE-2.2) **o** por un `HEAD` que hace `api` en `complete` y en las
+  repeticiones de `images` (§4.5). Sin el `HEAD`, con el `worker` apagado (lo está siempre que `embedding` lo está,
+  infra §5.10) el conteo diría que faltan fotos ya subidas y repetir `images` les daría URL otra vez. El `HEAD` usa el
+  `s3:GetObject` que el rol de `api` ya tiene para firmar; sin `s3:ListBucket`, «no existe» llega como 403 y se trata
+  igual que 404.
+- El estado del video no se guarda «a mano» en cada endpoint: `estado_video(conteo, subida_completa)` lo calcula
+  siempre igual y `recalcular_estado` lo guarda en la misma transacción que cambia las fotos (también el `worker`).
+  `pendiente` dura hasta que la app llama a `complete`, aunque todas las fotos estén subidas: solo la app sabe si
+  faltan lotes por registrar.
+- Idempotencia: `POST /collect/videos` devuelve el existente sin cambiarlo (gana el primero; la app reintenta con el
+  mismo cuerpo); `images` por (`video_id`, `orden`).
+- *Alternativas descartadas:* contar como subida toda foto con URL emitida (falso: la app pudo no subirla); listar el
+  prefijo del video en S3 (exige `s3:ListBucket` en `api`, un cambio de infra; con él, el `HEAD` daría 404 y seguiría
+  igual); esperar al `worker` (no hay `worker` sin `embedding`).
+- *Consecuencias:* `complete` cuesta un `HEAD` por foto pendiente (8 a la vez; 200 fotos ≈ 25 rondas, muy por debajo
+  de los 30 s de API Gateway; sin medir en `dev`). La imagen del backend lleva boto3.
+
 ---
 
 ## 7. Riesgos
@@ -1442,7 +1683,7 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 | R1 | La precisión de ubicación no alcanza (dataset escaso, cambios de luz, lugares parecidos) | Alta | Alto | Conjunto de evaluación (EMB-3.2), calibrar umbrales, confianza honesta (`baja` → repetir), cobertura visible en el panel |
 | R2 | `/v1/localize` supera 1 s en el servidor | Media | Medio | Modelo pequeño (ViT-S/14) en 2 vCPU (infra ADR-INF-14); medir en EMB-3.1 y BE-3.2; fotos de 1024 px; palancas de embeddings §4.4 |
 | R3 | La ingesta retrasa la localización (un solo servicio de embeddings, que no interrumpe un lote en curso) | Media | Medio | Prioridad `alta` para localización (embeddings §5.2); lotes de 4 imágenes reducidas en el `worker` |
-| R4 | Una URL PUT permite subir archivos enormes | Baja | Bajo | URL de 15 min ligada a una clave; el `worker` rechaza > 4 MB y la purga los borra |
+| R4 | Una URL PUT permite subir archivos enormes | Baja | Bajo | URL de 15 min ligada a una clave; el `worker` rechaza > 4 MB y la purga los borra. Un objeto de más de 2 GiB deja `imagenes.bytes` nulo en el `HEAD` (no cabe en `integer`, §4.5) |
 | R5 | Rumbos de fuentes distintas (magnético vs. verdadero) | Alta | Medio | ADR-BE-12; lote del frontend para convertir en el escaneo |
 | R6 | Eventos de S3 duplicados o fuera de orden | Media | Bajo | Idempotencia por imagen y ETag |
 | R7 | Fuerza bruta contra el login | Baja | Alto | *Throttling* de API Gateway (aproximado y común a todos los clientes: frena volumen, no intentos sueltos, infra §3.3), argon2id, auditoría de cada intento con su motivo (`usuario.login`, §5.7), alarma de 5xx. **Sin límite de intentos por cuenta:** infra lo propone (su CHANGELOG 0.12.0 y R10: 5 fallos en 15 min por correo → `429` con `Retry-After` durante 15 min, fallos en PostgreSQL); no entra en BE-1.3 y está pendiente de decisión. Si se adopta, cambia §5.3 (un error nuevo del login) y la app lo consume |
@@ -1451,3 +1692,5 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 | R10 | Formatos de error distintos cuando responde API Gateway | Alta | Bajo | §5.1 lo documenta; la app decide por código HTTP |
 | R11 | El texto del catálogo (restricciones, índices) cambia con una versión mayor de PostgreSQL y `verificar-esquema` da diferencias que no lo son | Baja | Bajo | RDS actualiza por su cuenta solo la versión menor (infra §3.5); CI usa la misma mayor (`pg17`) y prueba que la migración deja exactamente `esquema.py`; un cambio de mayor actualiza `esquema.py` en el mismo cambio |
 | R12 | argon2id en 0,25 vCPU: login lento, falta de memoria o el *health check* sin CPU con varios a la vez | Media | Medio | Como mucho `LOGIN_HASH_CONCURRENTES` (2) a la vez, fuera de la base, 64 MiB cada uno; como mucho 8 más esperando y 10 s de espera (luego `503 SERVICIO_OCUPADO`, §4.4). En `local` tarda ~92 ms; en `dev`, 1,1–1,2 s por login, uno a la vez (C2 de `validate13.py`, 2026-10-25), así que con 2 verificando a la vez los 8 que esperan pueden pasar de los 10 s y recibir el 503 (sin medir). **Riesgo que queda:** con un flujo sostenido de logins, las dos verificaciones argon2 (t = 3, 64 MiB, p = 4) pueden ocupar los 0,25 vCPU y retrasar `GET /v1/health`; si el *health check* del contenedor (cada 30 s, 5 s de plazo, 3 fallos, infra §5.7) falla, ECS reinicia la tarea. Sin comprobar. Palancas: `LOGIN_HASH_CONCURRENTES = 1`, bajar los parámetros de argon2 (los hashes viejos siguen verificándose, §4.3) o el límite por cuenta de R7 |
+| R13 | Eventos de S3 de los validadores (y de subidas reales con `embedding` apagado) esperan en `ingesta` sin consumidor | Alta hasta BE-2.2 | Bajo | Antes de BE-2.2 el `worker` no consume (§4.2) y `validate21.py` deja 6 mensajes por ejecución que caducan a los 4 días (infra §5.6). Mientras estén visibles, `embedding` no se apaga por inactividad (sí a las 22:00) y, encendido, sube `worker`, que no hace nada (costo acotado por el apagado nocturno). Con BE-2.2 los consume y descarta (§4.6 paso 1). No se purgan desde el validador (§5.11) |
+| R14 | boto3 en `api` (0,25 vCPU, 0,5 GB): memoria y tiempo de arranque | Media | Bajo | El cliente se crea una vez, en un hilo, al arrancar (§4.5); argon2id ya usa hasta 128 MiB (R12). Sin medir en `dev`: anotar la memoria de la tarea tras desplegar BE-2.1 |
