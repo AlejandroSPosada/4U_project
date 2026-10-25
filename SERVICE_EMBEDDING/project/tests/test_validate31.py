@@ -20,9 +20,9 @@ ClientError = pytest.importorskip("botocore.exceptions").ClientError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "ops"))
 
-import validate31
+import validate31  # noqa: E402
 
-import comun
+import comun  # noqa: E402
 
 SHA = "b" * 40
 IMAGEN_CI = f"648617469176.dkr.ecr.us-east-1.amazonaws.com/campus-locator/embedding:{SHA}"
