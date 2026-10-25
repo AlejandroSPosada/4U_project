@@ -318,7 +318,7 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
 | FE-0.10 | 0 | Hecho | — | — | 0.1.0 | Local (`assets/`) | Compila y se abre en dispositivo; prueba completa en FE-2.3 |
 | FE-0.11 | 0 | Hecho | — | — | 0.1.0 | Local (`files/recoleccion/`) | Sin pruebas automáticas (FE-2.3) |
 | FE-0.12 | 0 | Hecho | — | — | 0.1.0 | Local (`SharedPreferences`) | ⚠ Pasada completa sin probar (FE-2.3) |
-| FE-1.1 | 1 | En curso | [1-1](./validation/validation-1-1.md) | — | — | `dev` (`GET /v1/health`) | Código y CI listos (ARCHITECTURE 0.4.0); `validate11.py --entorno local` con código 0 sobre el árbol sin commit. Falta: `dev` con teléfono (C1a, C4b, C1b) y PR en verde (C3) |
+| FE-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `c5917bd` 2026-10-25 | 0.4.0 | `dev` (`GET /v1/health`) | `validate11.py --entorno dev` con código 0 en un Xiaomi 23028RA60L (Android 14): C1a (`GET /v1/health` → 200 desde el teléfono), C2, C4a y C4b (338 ms). C1b manual: [capturas](./validation/evidencia/fe-1-1/) «Conectado» → modo avión «Sin conexión» → «Conectado». C3: `frontend.yml` en verde en el PR #8 (`104673b`). En MIUI/HyperOS hay que activar «Instalar vía USB» en Opciones de desarrollador; sin eso `installDebug` da `INSTALL_FAILED_USER_RESTRICTED` |
 | FE-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | | |
 | FE-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | | |
 | FE-2.2 | 2 | Pendiente | [2-2](./validation/validation-2-2.md) | — | — | | |
