@@ -23,6 +23,26 @@ re-indexar el dataset.
 
 ---
 
+## [0.8.0] — 2026-10-25
+
+- **Lote que la motivó:** EMB-3.1 (rendimiento en CPU), cierre con la medida en `dev` (C2 y C3).
+- **Qué cambió:** §5.7 «Latencias medidas en `dev`» con los números de la tarea suelta (lotes de 1, 4, 5 y 8 en
+  p50 / p95: 91 / 92, 326 / 331, 406 / 413 y 659 / 668 ms; inferencia p95 90, 327, 409 y 663 ms), CPU, memoria, pp-v1
+  por imagen y el peor caso con ingesta en curso (≈ 744 ms); §5.5 memoria en `dev` (475 MiB en reposo, 538 de pico);
+  §4.4 resume la medida; §5.9 da por comprobado que `limites_de` sale `ecs` con 2 / 4096 en `dev`. PLAN: EMB-3.1
+  «Hecho».
+- **Contratos tocados (§5):** §5.5 y §5.7 (parámetros medidos; la latencia objetivo no cambia). Sube la menor, como
+  anunciaba 0.7.0.
+- **Cómo se verificó:** `validate31.py --entorno dev` con código 0 sobre `a7d2907` (2026-10-25 19:16 UTC, informe
+  `.validacion/EMB-3.1-20261025-191654.json` y `EMB-3.1-benchmark-55cdd0de6c41465ba5bd5c043082a031.json`): pasan P3,
+  P2, P1, C1a (tarea `campus-locator-dev-embedding:5`, 2048 CPU / 4096 MB, salida 0, descarga 15 s, ejecución 96 s) y
+  C1b. C3: el lote de 5 queda en p95 413 ms ≤ 800 ms, no aplica ninguna palanca. `embedding.yml` publicó la imagen y
+  registró `:5` sin encender el servicio (sigue en 0).
+- **Pendiente:** una sola medida en una generación de CPU (Xeon 6975P-C): la variación entre tareas de Fargate sigue
+  sin medir. La latencia real de `/v1/localize` (red, backend y RDS) la mide BE-3.2.
+
+---
+
 ## [0.7.0] — 2026-10-25
 
 - **Lote que la motivó:** EMB-3.1 (rendimiento en CPU), antes de su validación en `dev`.

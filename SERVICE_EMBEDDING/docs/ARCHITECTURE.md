@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.7.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.8.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: código de EMB-1.1 (servicio base e imagen), EMB-2.1 (vectorización por lotes) y EMB-3.1 (benchmark y su validador; las latencias de `dev` de §5.7, pendientes de medir); el resto de lotes, pendiente |
+| Estado | En construcción: código de EMB-1.1 (servicio base e imagen), EMB-2.1 (vectorización por lotes) y EMB-3.1 (benchmark y su validador; latencias de `dev` medidas en §5.7); el resto de lotes, pendiente |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Servicio HTTP interno que convierte fotos en **vectores de 384 dimensiones** con **DINOv2 ViT-S/14** sobre CPU
@@ -185,7 +185,8 @@ vectores dorados (§5.4) y dónde se calculan: ADR-EMB-12.
 ### 4.4 EMB-3.1 — Rendimiento en CPU
 Objetivo: lote de 5 en p95 ≤ 800 ms en `dev` (2 vCPU), para que `POST /v1/localize` quede en p95 ≤ 1 s (infra §5.10;
 el resto se va en el backend y en la búsqueda en RDS, backend §4.10). Estimación previa, sin medir: 0,5–1,5 s
-(ADR-EMB-11). Los números de `dev` van a §5.7 (**pendientes de medir**).
+(ADR-EMB-11). Medido en `dev` el 2026-10-25: lote de 5 en p95 413 ms, holgado bajo el objetivo (C3 no aplica);
+tablas completas en §5.7.
 
 **Qué mide `tools/benchmark.py`** (ADR-EMB-13; argumentos, salida y códigos en §5.9):
 1. Genera las imágenes en memoria: JPEG sintéticos de 1024 × 768 px y calidad 85 (como las fotos de `/v1/localize`,
@@ -410,7 +411,7 @@ de la tolerancia de §5.4) exige una versión nueva (ADR-EMB-08).
 | Variables fijadas en el `Dockerfile` | `MODELO_DIR=/opt/modelo`, `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `HF_HOME=/tmp/huggingface` (el usuario de la imagen no tiene carpeta personal) y `GIT_COMMIT` (argumento de build con el SHA del commit, por defecto `desconocido`; `/v1/info` publica sus 7 primeros caracteres como `commit`) (la aplicación además aplica `TORCH_NUM_THREADS` a PyTorch y a OpenMP al arrancar) |
 | Variables que inyecta la infraestructura | `TORCH_NUM_THREADS`, `LOG_LEVEL`, `APP_ENV` (infra §5.4) |
 | Tamaño esperado | ~1,8 GB (PyTorch CPU + transformers + pesos de ~90 MB) |
-| Memoria en ejecución | Medida en local (ensayo de EMB-3.1, §4.4): 477 MiB de RSS en reposo y 541 MiB de pico tras lotes de hasta 8. En `dev`, **pendiente de medir** (campo `memoria_proceso_mb` del benchmark, §5.7). La tarea tiene 4 GB |
+| Memoria en ejecución | Medida en local (ensayo de EMB-3.1, §4.4): 477 MiB de RSS en reposo y 541 MiB de pico tras lotes de hasta 8. En `dev` (EMB-3.1, §5.7): 475 MiB en reposo y 538 MiB de pico (campo `memoria_proceso_mb` del benchmark). La tarea tiene 4 GB |
 
 ### 5.6 Códigos de error
 
@@ -452,19 +453,22 @@ copia quien cierra el lote del detalle de C1b de `validate31.py` y del JSON que 
 
 | Lote | p50 | p95 | `inferencia` p95 | Repeticiones |
 |---|---|---|---|---|
-| 1 | pendiente de medir en `dev` | pendiente | pendiente | 40 |
-| 4 (el del `worker`) | pendiente | pendiente | pendiente | 30 |
-| 5 | pendiente | pendiente | pendiente | 60 |
-| 8 | pendiente | pendiente | pendiente | 30 |
+| 1 | 91 ms | 92 ms | 90 ms | 40 |
+| 4 (el del `worker`) | 326 ms | 331 ms | 327 ms | 30 |
+| 5 | 406 ms | 413 ms | 409 ms | 60 |
+| 8 | 659 ms | 668 ms | 663 ms | 30 |
 
 | Dato de la medida | Valor |
 |---|---|
-| Fecha, commit de la imagen y tarea | pendiente |
-| CPU (`cpu`, `capacidad_cpu_torch`) | pendiente |
-| Memoria del proceso (reposo / pico) | pendiente |
-| pp-v1 por imagen (p50) | pendiente |
-| Peor caso de embeddings en `/v1/localize` con ingesta en curso (≈ p95 del lote de 4 + p95 del lote de 5, §4.4) | pendiente |
-| ¿Lote de 5 en p95 ≤ 800 ms? Si no, palanca elegida (C3, ADR) | pendiente |
+| Fecha, commit de la imagen y tarea | 2026-10-25 19:16 UTC; imagen `a7d2907` (`campus-locator-dev-embedding:5`); tarea `55cdd0de6c41465ba5bd5c043082a031` (descarga de la imagen 15 s, ejecución 96 s; arranque del servicio dentro de la tarea 4,0 s) |
+| CPU (`cpu`, `capacidad_cpu_torch`) | `Intel(R) Xeon(R) 6975P-C`, `AVX512`; 2 hilos; límites 2 vCPU / 4096 MiB leídos de ECS (`limites_de = ecs`) |
+| Memoria del proceso (reposo / pico) | 475 / 538 MiB |
+| pp-v1 por imagen (p50) | 8,4 ms (`preproceso_ms_por_imagen`) |
+| Peor caso de embeddings en `/v1/localize` con ingesta en curso (≈ p95 del lote de 4 + p95 del lote de 5, §4.4) | ≈ 744 ms (331 + 413) |
+| ¿Lote de 5 en p95 ≤ 800 ms? Si no, palanca elegida (C3, ADR) | Sí (413 ms): C3 no aplica, ninguna palanca |
+
+Máximos observados: 95, 399, 588 y 867 ms (lotes de 1, 4, 5 y 8); `cola_max_ms` = 0 en todos (servicio ocioso).
+Una sola tarea: la variación entre generaciones de CPU de Fargate sigue sin medir (§4.4).
 
 Son tiempos de `POST /v1/embed` con el servicio ocioso, medidos en *loopback* dentro de la tarea: lo que el backend
 añada (red de la VPC, subida de las fotos, su propio trabajo) va aparte (§4.4).
@@ -612,7 +616,7 @@ benchmark es el PID 1 y atiende `SIGTERM` (`stop-task`): detiene el servicio y s
 | `repeticiones`, `calentamiento` | Peticiones medidas por lote y las descartadas antes |
 | `commit`, `version_vector` | De `GET /v1/info` del servicio medido |
 | `hilos` | `TORCH_NUM_THREADS` con que se arrancó el servicio |
-| `vcpu`, `memoria_mb`, `limites_de` | Límites del contenedor: de los metadatos de la tarea de ECS (`ECS_CONTAINER_METADATA_URI_V4` → `Limits`, `ecs`; en `dev`, **a verificar** que salga 2 / 4096 por esta vía), del cgroup v2 o v1 (`cgroup`) o de la máquina (`sistema`, sin memoria) |
+| `vcpu`, `memoria_mb`, `limites_de` | Límites del contenedor: de los metadatos de la tarea de ECS (`ECS_CONTAINER_METADATA_URI_V4` → `Limits`, `ecs`; en `dev` sale 2 / 4096 por esta vía, comprobado en EMB-3.1), del cgroup v2 o v1 (`cgroup`) o de la máquina (`sistema`, sin memoria) |
 | `cpu`, `capacidad_cpu_torch` | Modelo de CPU (`/proc/cpuinfo`) y ruta SIMD de PyTorch (`AVX2`, `AVX512`…) |
 | `imagen` | Las imágenes enviadas: tamaño, calidad JPEG y bytes de media |
 | `arranque_s` | Segundos desde lanzar el servicio hasta `/health/ready` = 200 (carga y calentamiento; sin la descarga de la imagen) |
