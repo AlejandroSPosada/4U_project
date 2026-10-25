@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.8.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.9.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: código de EMB-1.1 (servicio base e imagen), EMB-2.1 (vectorización por lotes) y EMB-3.1 (benchmark y su validador; latencias de `dev` medidas en §5.7); el resto de lotes, pendiente |
+| Estado | En construcción: código de EMB-1.1 (servicio base e imagen), EMB-2.1 (vectorización por lotes), EMB-3.1 (benchmark y su validador; latencias de `dev` medidas en §5.7) y la parte de EMB-3.2 que no necesita dataset (protocolo de captura, `tools/evaluacion/` y `validate32.py`, probados con datos sintéticos; sin ejecutar en `dev`); el resto de lotes, pendiente |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Servicio HTTP interno que convierte fotos en **vectores de 384 dimensiones** con **DINOv2 ViT-S/14** sobre CPU
@@ -38,6 +38,8 @@ Este documento define lo que el servicio **expone**. Lo que consume se enlaza:
 | Tamaño de la tarea (2 vCPU / 4 GB), encendido manual y apagado automático | Infra §3.4 y ADR-INF-14 |
 | Nombre DNS `embedding.campus-locator.local:8080`, grupo de seguridad, *health check* del contenedor | Infra §5.7 |
 | Contrato de despliegue (imagen `linux/amd64`, etiqueta = SHA) | Infra §5.9 |
+| Herramienta de evaluación y `validate32.py` (EMB-3.2): `POST /v1/auth/login`, `GET /v1/admin/videos` y `/videos/{id}` (BE-2.1), `POST /v1/admin/diagnostico/vecinos` (BE-2.4), parámetros `LOC_*` y algoritmo v1 | Backend §5.3, §5.5, §5.10 y §4.10 |
+| Prefijo `evaluacion/` del bucket del dataset y secreto `campus-locator/dev/admin-inicial` | Infra §5.5; backend §5.11 |
 
 ---
 
@@ -99,9 +101,17 @@ SERVICE_EMBEDDING/
     │   ├── benchmark.py          EMB-3.1: latencia de POST /v1/embed por tamaño de lote (va dentro de la
     │   │                         imagen; §4.4, uso y salida en §5.9)
     │   ├── dorados.py            EMB-2.1: imágenes de referencia y vectores esperados de tests/golden/ (§5.4)
-    │   └── evaluacion/           EMB-3.2: recuperación sobre un conjunto etiquetado
+    │   └── evaluacion/           EMB-3.2: recuperación sobre el conjunto de consulta (§4.5; órdenes y API, §5.9)
+    │       ├── __main__.py       `uv run python tools/evaluacion <orden>`: pone tools/ y src/ en sys.path
+    │       ├── cli.py            órdenes revisar, cobertura, evaluar y variantes; informe JSON y Markdown
+    │       ├── conjunto.py       puntos.json: carga, revisión, haversine, cobertura y criterio C1 (solo stdlib)
+    │       ├── fuentes.py        interfaces BuscadorVecinos y FuenteDataset; cliente del backend (httpx),
+    │       │                     fuerza bruta, carpeta local; preparar_foto (como /v1/localize)
+    │       ├── metricas.py       recall a 15 m, similitudes, simulación del algoritmo v1, recomendaciones
+    │       └── variantes.py      variantes de preprocesamiento/extracción y ExtractorDinov2 (pesos locales)
     ├── tests/                    contrato HTTP, configuración, modelo, preproceso, planificador, validadores
-    │                             (test_ops_comun, test_validate31 con dobles de AWS), benchmark y vectores
+    │                             (test_ops_comun, test_validate31 y test_validate32 con dobles de AWS),
+    │                             benchmark, evaluación (test_evaluacion, datos sintéticos) y vectores
     │                             dorados (golden/: cinco imágenes y esperados.json, §5.4)
     ├── .dockerignore             solo entra a la imagen lo de §5.5
     ├── .gitignore                incluye .validacion/ (informes de los validadores) y .modelo/ (pesos para dorados)
@@ -264,12 +274,115 @@ Exportar o cuantizar cambia los vectores, así que conviene decidirlo antes de i
 - En local, `docker run --cpus 2` reparte por cuota, no da dos núcleos: sirve para ensayar, no para comparar con `dev`.
 
 ### 4.5 EMB-3.2 — Conjunto de evaluación y calibración
-- Conjunto: fotos de consulta tomadas en puntos conocidos del campus (no usadas en el dataset), con su coordenada.
-- Métricas: *recall@1* y *recall@5* «a 15 m» (algún vecino recuperado está a ≤ 15 m del punto real), y la distribución
-  de similitudes entre «mismo lugar» y «otro lugar».
-- Salida: valores recomendados de `LOC_SIM_MIN`, `LOC_SIM_ALTA` y cortes de nivel para el backend (BE-3.2), y la
-  comparación de pp-v1 con variantes (sin recorte central, resolución mayor, media de *tokens* de parches en lugar del
-  CLS). Las variantes no se despliegan: si alguna gana, se abre EMB-5.1.
+
+**Estado (0.9.0).** Hecho lo que no necesita dataset: el protocolo de captura (abajo), `tools/evaluacion/` y
+`src/ops/validate32.py`, probados con datos sintéticos (`tests/test_evaluacion.py`, `tests/test_validate32.py`).
+**Falta**, porque depende de otros lotes y del trabajo de campo: el dataset real indexado (FE-2.1 + BE-2.2), el
+endpoint de vecinos desplegado (BE-2.4), tomar y subir las fotos, generar el informe, ejecutar `validate32.py` en
+`dev` y entregar los valores a BE-3.2 (C3). La comparación de variantes necesita además BE-4.1 (las URL de las
+imágenes del dataset). Ningún número de calidad de recuperación de este documento está medido todavía.
+
+**Qué se mide** (PLAN EMB-3.2; método y por qué en ADR-EMB-14):
+- Cada foto de consulta de un **punto con dataset** (alguna imagen del dataset a ≤ 30 m) se envía a
+  `POST /v1/admin/diagnostico/vecinos` con `k = 10` (`LOC_TOP_K`, backend §5.10). Acierto a `k` = alguno de los `k`
+  primeros vecinos está a ≤ 15 m del punto. *recall@1* y *recall@5* = fracción de fotos con acierto a 1 y a 5.
+- Similitudes de los 5 primeros vecinos de esas fotos: **mismo lugar** (vecino a ≤ 15 m del punto) y **otro lugar**
+  (a > 50 m); entre 15 y 50 m no cuentan. De las fotos de **puntos lejanos** (toda imagen a > 150 m) se guarda la
+  similitud de su mejor vecino (`lejos_del_dataset`): son las que deben dar `sin_coincidencias` (BE-3.2 C5).
+  Percentiles por rango más cercano, como §5.9. Los puntos «intermedios» (entre 30 y 150 m) no se consultan.
+- *Recall* por franja horaria (`por_hora`), para ver si la luz importa.
+
+**Qué se recomienda** (`recomendado` del informe; todo en rejilla de 0,01):
+1. `LOC_SIM_MIN` = el umbral que maximiza TPR − FPR entre «mismo lugar» y «otro lugar» (Youden; a igualdad, el
+   menor), subido si hace falta hasta 0,01 por encima de la mejor similitud de un punto lejano (si no, BE-3.2 C5
+   fallaría), y limitado a [0,01; 0,98]. `detalle_recomendacion` dice qué parte decidió y qué fracción de vecinos
+   «mismo lugar» sobrevive.
+2. `LOC_SIM_ALTA` = el menor umbral por encima de `LOC_SIM_MIN` con el que ≥ 95 % de los vecinos (mínimo 5) por
+   encima son «mismo lugar»; si ninguno, el p90 de «mismo lugar» (al menos `LOC_SIM_MIN` + 0,05; máximo 1).
+3. Cortes de nivel: se **simula** `/v1/localize` (pasos 3–7 de backend §4.10, con `LOC_RADIO_GRUPO_M` = 20,
+   `LOC_PESO_EXPONENTE` = 4 y los dos umbrales recomendados) sobre «consultas» de hasta 5 fotos: las de una misma
+   `vuelta` del punto o, sin `vuelta`, las del mismo punto, día y franja. `corte_alta` = el menor valor en
+   [0,50; 0,99] con el que ninguna consulta de nivel alta yerra > 30 m (BE-3.2 C2) y ≥ 90 % quedan a ≤ 15 m;
+   `corte_media` = el menor por debajo con ≥ 60 % a ≤ 15 m. Donde §4.10 no fija la fórmula, la simulación asume (a
+   confirmar con BE-3.2): centroide de grupo = media sin ponderar de sus miembros; `m = (p₁ − p₂) / p₁`, 1 con un solo
+   grupo. Los parámetros del backend están copiados en `metricas.py`: si cambian en backend §5.10, se cambian ahí.
+4. Los valores son una propuesta para C3: con ~50 fotos y ~10–20 consultas son ruidosos; la persona los revisa con
+   `detalle_recomendacion` y `simulacion` antes de entregarlos.
+
+**Variantes** (las compara la orden `variantes`, §5.9; no se despliegan: si una gana, EMB-5.1): `pp-v1-local` (pp-v1
+calculada aquí: referencia de la fuerza bruta), `sin-recorte` (lado menor 224, el mayor proporcional truncado a
+múltiplo de 14, tope 896: no pierde el tercio de altura de las fotos verticales, ADR-EMB-04), `res-448` (lado menor
+512 y recorte central 448) y `media-parches` (pp-v1 con la media de los *tokens* de parches tras la *layernorm* final
+en lugar del CLS, ADR-EMB-03). Se calculan en el proceso de la herramienta con los pesos de `project/.modelo/`
+(`ExtractorDinov2` comprueba `revision.json` como el servicio; con pp-v1 reproduce los vectores dorados a ≤ 1e-5,
+prueba `test_extractor_reproduce_los_vectores_dorados_de_pp_v1`, comprobado en local con los pesos de la revisión
+fijada), y el dataset, reducido a 1024 px como lo envía el `worker`, se vectoriza con la misma variante y se busca por
+fuerza bruta. Hoy no se puede ejecutar contra el dataset real: `GET /v1/admin/videos/{id}` devuelve `url = null` hasta
+BE-4.1 (backend §5.5) y la orden termina con 2 (`[PENDIENTE]`).
+
+#### Protocolo para tomar las fotos de consulta
+
+Para una persona en el campus. Cumple C1 (≥ 50 fotos en ≥ 10 puntos con dataset, ≥ 1 punto con ≥ 3 fotos a > 150 m
+del dataset) con margen. El resultado es una carpeta con la forma de §5.9 que se revisa y sube con
+`validation-3-2.md` §5 (pasos 3 a 6).
+
+**Antes de salir: elegir los puntos.**
+1. Esperar a que el dataset esté grabado (FE-2.1) o, como mínimo, conocer sus recorridos. Elegir **12 puntos** sobre
+   esos recorridos (2 de margen: si alguno queda a más de 30 m de toda imagen tras la ingesta, no cuenta), separados
+   entre sí ≥ 50 m y variados: entradas, plazoletas, pasillos exteriores y lugares que se parezcan entre sí (los
+   difíciles).
+2. Elegir **1 o 2 puntos lejanos**, en zona transitable y segura, a más de 150 m de cualquier recorrido del dataset.
+3. Cada punto en un sitio que se reconozca a simple vista **y** en el mapa satelital (una esquina de edificio, un poste,
+   una puerta, el centro de una plazoleta): hay que volver a él en otra franja sin desviarse más de 2–3 m.
+4. Identificadores `P01`, `P02`… y una descripción corta (`Entrada de la biblioteca`).
+5. Las fotos de consulta **nunca** entran al dataset: no se toman con la app en modo recolección ni se suben a
+   `dataset/`.
+
+**La coordenada de cada punto.**
+- Se lee del mapa satelital tocando el sitio exacto, en grados decimales WGS84 con 6 decimales (≈ 0,1 m), en lo
+  posible el mismo mapa con el que se fija el inicio de los recorridos del dataset (la app lo fija con un toque en el
+  mapa: frontend ARCHITECTURE, recolección), para compartir el mismo error de referencia.
+- Comprobación cruzada: el GPS del teléfono quieto 30 s en el punto. Si difiere más de 10 m, se repite la lectura en
+  el mapa; la que vale es la del mapa (el GPS entre edificios suele errar varios metros: sin medir aquí).
+- Una coordenada por punto; todas sus fotos se toman desde ahí (±3 m). El *recall* se mide a 15 m: el error de la
+  coordenada debe ser muy inferior.
+
+**Las fotos: una vuelta por punto y sesión.**
+- De pie en el punto, 5 fotos girando ~72° entre una y otra (una vuelta como la de `/v1/localize`), con el teléfono
+  como lo sostiene la app al escanear (orientación a confirmar con frontend; mientras tanto, vertical, a la altura del
+  pecho y sin inclinar). Sin zoom ni flash; JPEG (en iPhone, formato «Más compatible», no HEIC). El tamaño da igual:
+  la herramienta las reduce a 1024 px como la app.
+- Rumbo de cada foto con una brújula en **norte verdadero** (backend ADR-BE-12), redondeado al grado; si la brújula
+  no da norte verdadero o no se pudo leer, `null` (no se inventa).
+- Evitar caras en primer plano y matrículas; no fotografiar interiores de aulas ni oficinas.
+- Anotar en la hoja de registro: punto, número de foto, vuelta, hora local (Bogotá) y rumbo.
+
+**Las horas del día.** Franjas por la hora de Bogotá: `manana` 05:00–11:59, `tarde` 12:00–17:59, `noche` el resto
+(la herramienta avisa si `hora` no cuadra con `capturada_en`).
+- Mínimo para C1: los puntos con dataset con 1 vuelta de 5 (≥ 50 fotos) y el lejano con 1 vuelta (≥ 3 fotos).
+- **Recomendado**: cada punto con dataset en **2 franjas** (mañana y tarde; cada sesión es una `vuelta` nueva: 1, 2…),
+  ≈ 120 fotos, y si se puede en un día distinto del de la grabación del dataset (cambian la gente y la luz). La noche
+  es opcional (3 puntos bastan para ver la caída en `por_hora`).
+
+**De la hoja a `puntos.json`** (formato §5.9). Carpeta local `project/.validacion/evaluacion/<version_conjunto>/`
+(ignorada por Git), con la versión `AAAA-MM<letra>` (`2026-11a`; si se rehace, `2026-11b`: nunca se reutiliza una
+versión ya subida con otro contenido, porque BE-3.2 toma la última en orden lexicográfico).
+- Fotos en `fotos/<punto>/<n>.jpg`, con `n` consecutivo por punto a través de las vueltas (1–5 la vuelta 1, 6–10 la 2).
+- `capturada_en` en UTC con `Z`: hora local de Bogotá + 5 h (Colombia no tiene horario de verano). También se puede
+  copiar de la fecha EXIF de la foto (`DateTimeOriginal`, hora local del teléfono) sumando 5 h.
+- Revisar con `tools/evaluacion revisar`, comprobar la cobertura con `cobertura` y subir solo bajo `evaluacion/`
+  (`validation-3-2.md` §5, pasos 3 a 6).
+
+**Trampas conocidas.**
+- Un `.jpg` subido por error bajo `dataset/` dispara la ingesta (infra §5.5) y contamina el dataset.
+- El EXIF de las fotos trae la posición GPS: la herramienta lo descarta al preparar cada foto (`preparar_foto`), pero
+  los originales del bucket lo conservan (el bucket es privado, infra §5.5).
+- `POST /v1/admin/diagnostico/vecinos` vectoriza con `embedding`: la orden `evaluar` necesita el servicio encendido
+  (recurso compartido; ~0,10 USD/h) y, si no, termina con `503 EMBEDDING_NO_DISPONIBLE`.
+- `GET /v1/admin/images` y `GET /v1/admin/images/{id}` son de BE-4.1: la herramienta y el validador leen el dataset con
+  `GET /v1/admin/videos` + `GET /v1/admin/videos/{id}` (BE-2.1) y excluyen los videos `validacion-…`.
+- Los vecinos del endpoint salen del índice HNSW (aproximado); los de las variantes, de fuerza bruta (exacta): por eso
+  las variantes se comparan con `pp-v1-local`, no con la fila `pp-v1` del backend.
 
 ### 4.6 EMB-5.1 — Nueva versión del vector (diferido)
 Procedimiento previsto para cambiar de modelo o preprocesamiento sin dejar de ubicar:
@@ -499,8 +612,8 @@ Los validadores no usan la cadena de credenciales por defecto de AWS: sin `AWS_P
 **Lo que la imagen incluye para los validadores**: `tools/benchmark.py` va dentro de la imagen (en `/srv/tools/`) para
 poder ejecutarlo como tarea suelta en `dev` con el comando `python tools/benchmark.py --salida json`; el resultado
 (formato en §5.9) se lee del log `/campus-locator/dev/embedding`. `tools/evaluacion/` no va en la imagen: se ejecuta en
-la máquina de quien valida, lee el conjunto de `evaluacion/` del bucket (infra §5.5) y obtiene los vecinos del dataset
-con el endpoint de diagnóstico del backend (§5.9).
+la máquina de quien valida sobre una copia local del conjunto de `evaluacion/` del bucket (infra §5.5) y obtiene los
+vecinos del dataset con el endpoint de diagnóstico del backend (§5.9).
 
 **Tareas sueltas en `dev`** (`validate11.py` C1b y `validate31.py` C1a). `ecs run-task` con: `cluster` =
 `campus-locator-dev`; `taskDefinition` = la revisión que usa el servicio `embedding` (`describe-services` →
@@ -521,6 +634,17 @@ llega tarde), toma la última línea `BENCHMARK_JSON` y exige `version_vector` =
 del SHA desplegado y, en los lotes 1, 5 y 8, `0 < p50_ms ≤ p95_ms` con ≥ 20 repeticiones; guarda el JSON en
 `project/.validacion/EMB-3.1-benchmark-<id>.json` y dice en el detalle si C3 aplica (p95 del lote de 5 > 800 ms). C2
 y C3 son manuales. Detalle completo en `validation-3-1.md`.
+
+**`validate32.py`** (EMB-3.2, solo `dev`, solo lectura): P4 credenciales → P1 EMB-2.1 «Hecho» → P2 login de admin
+(`VALIDACION_API_URL` obligatoria; correo y contraseña de `VALIDACION_ADMIN_*` o del secreto
+`campus-locator/dev/admin-inicial`; `401` → 3, otro fallo → 2) y algún video real con imágenes procesadas
+(`GET /v1/admin/videos`) → P2b `POST /v1/admin/diagnostico/vecinos` responde `200` con la `version_vector` de §5.3 o
+`503 EMBEDDING_NO_DISPONIBLE` (no enciende `embedding`) → P3 hay algún `evaluacion/<version_conjunto>/puntos.json`. C1
+revisa `puntos.json`, los archivos del bucket y la cobertura frente al dataset con `evaluacion.conjunto`; C2, el
+informe más reciente con `evaluacion.metricas.revisar_informe` (el mismo código que la herramienta: no se pueden
+desalinear). C3 es manual. Importa `tools/evaluacion` añadiendo `project/tools` a `sys.path`. Sus pruebas
+(`tests/test_validate32.py`) usan dobles de S3, Secrets Manager y del cliente del backend, sin `botocore`. Detalle en
+`validation-3-2.md`.
 
 **Datos de prueba**: imágenes sintéticas generadas por el propio validador y las cinco imágenes de
 `project/tests/golden/`; el servicio no guarda nada, así que no hay limpieza más allá de detener las tareas sueltas.
@@ -563,7 +687,8 @@ API (basta para escribir un validador nuevo sin leer el código; si cambia, esta
 Forma de un validador: `from comun import …` (el script se ejecuta como `python src/ops/validate<fase><n>.py`), un
 `LOTE = Lote(…)` a nivel de módulo (las pruebas comprueban que sus IDs son los de su `validation-<fase>-<n>.md`) y
 `raise SystemExit(ejecutar(LOTE))`. `validate11.py` es el ejemplo de tarea suelta que espera `HEALTHY`;
-`validate31.py`, el de tarea suelta con comando sobrescrito que lee su log; `validate21.py`, el de contenedor local.
+`validate31.py`, el de tarea suelta con comando sobrescrito que lee su log; `validate21.py`, el de contenedor local;
+`validate32.py`, el de solo lectura de S3 y de la API del backend.
 Sus pruebas sin AWS usan dobles de los clientes de boto3 (`tests/test_validate31.py`).
 
 ### 5.9 Formatos de las herramientas, de los vectores dorados y del conjunto de evaluación
@@ -660,7 +785,8 @@ sha256sum .modelo/model.safetensors   # el SHA-256 de §5.3
 casos: con una `version_vector` nueva (§4.6), o si una actualización de dependencias cambia `sha256_preprocesado` (la
 prueba lo detecta) y `comparar` confirma que los vectores siguen dentro de 1e-5.
 
-**Conjunto de evaluación** (EMB-3.2), en el bucket del dataset bajo `evaluacion/<version_conjunto>/` (infra §5.5):
+**Conjunto de evaluación** (EMB-3.2, §4.5), en el bucket del dataset bajo `evaluacion/<version_conjunto>/` (infra
+§5.5), y con la misma forma en la carpeta local de la herramienta (`project/.validacion/evaluacion/<version_conjunto>/`):
 ```
 evaluacion/2026-11a/
 ├── puntos.json
@@ -672,13 +798,30 @@ En el nombre del informe, la `/` de la `version_vector` se escribe `_` (`dinov2-
 ```json
 { "version_conjunto": "2026-11a", "creado_en": "2026-11-05T14:00:00Z",
   "puntos": [ { "id": "P01", "lat": 6.200104, "lng": -75.578612, "descripcion": "Entrada de la biblioteca" } ],
-  "fotos": [ { "archivo": "fotos/P01/1.jpg", "punto": "P01", "rumbo": 90.0, "capturada_en": "2026-11-05T14:02:10Z", "hora": "manana" } ] }
+  "fotos": [ { "archivo": "fotos/P01/1.jpg", "punto": "P01", "rumbo": 90.0, "capturada_en": "2026-11-05T14:02:10Z",
+               "hora": "manana", "vuelta": 1 } ] }
 ```
-`rumbo` en norte verdadero [0, 360) o `null`; `hora` ∈ {`manana`, `tarde`, `noche`}. Las fotos no se usan nunca en
-el dataset. El conjunto incluye además al menos un punto lejos del dataset (> 150 m de toda imagen): sus fotos no
-entran en el *recall* y sirven para comprobar `sin_coincidencias` (BE-3.2 C5).
+Reglas (las aplica `evaluacion.conjunto.revisar`, que usan la herramienta y `validate32.py` C1):
 
-**Informe de evaluación** (`informes/<version_vector>-<AAAAMMDD>.json`):
+| Campo | Regla |
+|---|---|
+| `version_conjunto` | `AAAA-MM<letra minúscula>` (`2026-11a`); igual al nombre de la carpeta |
+| `creado_en`, `fotos[].capturada_en` | ISO-8601 en UTC con `Z` (backend §5.1) |
+| `puntos[].id` | `P` + 2 o 3 cifras, único |
+| `puntos[].lat`, `.lng` | WGS84 (backend §5.1); `(0, 0)` se rechaza como «sin rellenar» |
+| `puntos[].descripcion` | Texto libre, opcional |
+| `fotos[].archivo` | `fotos/<punto>/<n>.jpg`, único, en la carpeta de su `punto`, que debe existir en `puntos` |
+| `fotos[].rumbo` | Norte verdadero en [0, 360) o `null` |
+| `fotos[].hora` | `manana` (05:00–11:59 en Bogotá), `tarde` (12:00–17:59) o `noche` (el resto). Si no cuadra con `capturada_en` es un aviso, no un error |
+| `fotos[].vuelta` | **Opcional** (desde 0.9.0): entero ≥ 1, la sesión de 5 fotos del punto. Agrupa las consultas de la simulación (§4.5); sin él, se agrupan por punto, día y franja. BE-3.2 no lo usa (su validación lee `archivo`, `punto` y `rumbo`, backend validation-3-2) |
+
+Las fotos no se usan nunca en el dataset. Un punto con dataset tiene alguna imagen `procesada` a ≤ 30 m; uno lejano,
+todas a > 150 m (sus fotos no entran en el *recall* y sirven para `sin_coincidencias`, BE-3.2 C5); los demás
+(«intermedios») no cuentan. C1 exige ≥ 50 fotos en ≥ 10 puntos con dataset y ≥ 1 punto lejano con ≥ 3 fotos.
+
+**Informe de evaluación** (`informes/<version_vector>-<AAAAMMDD>.json`; lo escribe `tools/evaluacion evaluar`, junto
+con un `.md` del mismo nombre). Las claves de este ejemplo son el contrato (las comprueba `validate32.py` C2); el resto
+son extras para quien revisa (C3):
 ```json
 { "version_conjunto": "2026-11a", "version_vector": "dinov2-vits14/pp-v1", "fotos": 50, "puntos": 10,
   "recall_1_15m": 0.0, "recall_5_15m": 0.0,
@@ -686,11 +829,125 @@ entran en el *recall* y sirven para comprobar `sin_coincidencias` (BE-3.2 C5).
   "variantes": [ { "nombre": "pp-v1", "recall_1_15m": 0.0, "recall_5_15m": 0.0 } ],
   "recomendado": { "LOC_SIM_MIN": 0.0, "LOC_SIM_ALTA": 0.0, "corte_alta": 0.0, "corte_media": 0.0 } }
 ```
-«Mismo lugar» = vecino a ≤ 15 m del punto real; «otro lugar» = vecino a > 50 m. Los vecinos del dataset se obtienen con
-`POST /v1/admin/diagnostico/vecinos` del backend (backend §5.5), con `k = 5`. `variantes` incluye siempre `pp-v1`
-(los mismos números de arriba); una variante de preprocesamiento distinta se evalúa sin tocar `dev`: la herramienta
-descarga las imágenes del dataset con las URL de `GET /v1/admin/images`, las vectoriza con la variante en un
-contenedor local y busca los vecinos por fuerza bruta.
+| Clave | Significado |
+|---|---|
+| `fotos`, `puntos` | Fotos y puntos **con dataset** evaluados (las de los lejanos no cuentan) |
+| `recall_1_15m`, `recall_5_15m` | §4.5; `null` si no hay fotos con dataset |
+| `similitud.mismo_lugar`, `.otro_lugar` | p10 / p50 / p90 (rango más cercano, 4 decimales) y `n` de los 5 primeros vecinos a ≤ 15 m y a > 50 m del punto real |
+| `similitud.lejos_del_dataset` | Igual, más `max`, de la similitud del mejor vecino de cada foto de un punto lejano |
+| `variantes` | Siempre `pp-v1` primero, con los números de arriba (vecinos del backend). La orden `variantes` añade detrás `pp-v1-local`, `sin-recorte`, `res-448` y `media-parches` (con `descripcion` y `"vecinos": "fuerza_bruta_local"`) |
+| `recomendado` | Los cuatro valores de §4.5 (2 decimales; `null` si no hay datos para calcularlos) |
+| `creado_en`, `herramienta`, `fuente_vecinos` (`backend` o `fuerza_bruta_local`), `k` | Cómo se generó |
+| `puntos_lejanos`, `fotos_lejanas`, `cobertura` (`{punto: metros al dataset}`) | Cobertura del conjunto |
+| `por_hora` | `{franja: {fotos, recall_1_15m, recall_5_15m}}` de las franjas con fotos |
+| `actual_backend` | Los valores vigentes de backend §5.10 copiados en `metricas.py`, para comparar |
+| `detalle_recomendacion` | `LOC_SIM_MIN`: `youden`, `lejos_max`, `mismo_lugar_retenido`; `LOC_SIM_ALTA`: `metodo` (`precision` o `p90_mismo_lugar`) y `precision`; `cortes`: `consultas` |
+| `simulacion` | `consultas`, `error_mediano_m`, `por_nivel` (`sin_coincidencias` y, por nivel, `consultas`, `a_15m`, `error_max_m`) y `lejanas_sin_coincidencias` (`"n/m"`) |
+
+**`tools/evaluacion`** (EMB-3.2). Desde `project/`: `uv run [--group ops] python tools/evaluacion <orden> DIR
+[opciones]` (`DIR` = la carpeta local del conjunto). No va en la imagen (§5.5). Lee el dataset y los vecinos del
+backend con `VALIDACION_API_URL` (con `/v1`), `VALIDACION_ADMIN_CORREO` y `VALIDACION_ADMIN_PASSWORD` (backend §5.11;
+la herramienta no lee el secreto), o de una carpeta local con `--dataset-local D` (`D/dataset.json` =
+`{"imagenes": [{"imagen_id", "archivo", "lat", "lng", "rumbo"}]}` y los JPEG al lado; los vecinos, por fuerza bruta con
+pp-v1 y los pesos locales). No escribe en AWS: el informe queda en `DIR/informes/` y se sube a mano.
+
+| Orden | Qué hace | Opciones |
+|---|---|---|
+| `revisar DIR` | Estructura de `puntos.json` y que cada foto exista | — |
+| `cobertura DIR` | Distancia de cada punto a la imagen más cercana, clase (`con dataset`, `lejano`, `intermedio`) y criterio C1 | `--dataset-local` |
+| `evaluar DIR` | Vecinos de cada foto (puntos con dataset y lejanos), informe JSON + `.md` | `--dataset-local`, `--salida` (por defecto `DIR/informes`), `--fecha AAAAMMDD` (por defecto hoy, UTC), `--k` (5–50, por defecto 10), `--modelo` |
+| `variantes DIR --informe RUTA` | Recalcula el *recall* con cada variante (fuerza bruta) y reescribe `variantes` del informe | `--nombres` (por defecto `pp-v1,sin-recorte,res-448,media-parches`), `--dataset-local`, `--modelo` (por defecto `MODELO_DIR` o `project/.modelo/`) |
+
+Códigos de salida: **0** hecho; **1** conjunto con errores (`[ERROR] …`) o `cobertura` sin cumplir C1
+(`[NO CUMPLE C1] …`); **2** uso, variables que faltan, error del backend (`[ERROR] … → <estado> <codigo>`; con `503
+EMBEDDING_NO_DISPONIBLE` añade cómo encender) o algo pendiente de otro lote (`[PENDIENTE] …`, hoy BE-4.1 en
+`variantes` con el backend). Progreso y avisos en la salida de error. Cada foto se prepara como una de `/v1/localize`
+(`preparar_foto`: orientación EXIF aplicada, lado mayor ≤ 1024 px con Lanczos, JPEG calidad 85, sin EXIF; si pasa de
+1,5 MB, error). El cliente reintenta `429` y `503 SERVICIO_OCUPADO` hasta 3 veces (espera `Retry-After` o 2, 4 y 8 s), hace un
+solo login y nunca imprime el token ni las URL prefirmadas.
+
+API de los módulos (para enchufar otra fuente de vecinos o del dataset, o una variante, sin leer el código):
+
+| Elemento | Qué hace |
+|---|---|
+| `conjunto.revisar(dict)` → `Revision(errores, avisos)`; `cargar(DIR)` → `(Conjunto, Revision)` o `ConjuntoInvalido`; `desde_dict(dict)` | Reglas de la tabla de arriba; `cargar` además exige que existan los archivos |
+| `conjunto.haversine_m(lat1, lng1, lat2, lng2)`; `franja(datetime)`; `cobertura(Conjunto, [(lat, lng)])` → `[CoberturaPunto(punto, distancia_m, fotos)]` (`.con_dataset`, `.lejano`); `revisar_c1(cobertura)` → `(errores, resumen)` | R = 6 371 008,8 m; umbrales `DATASET_CERCA_M` 30, `LEJOS_M` 150, `FOTOS_MIN` 50, `PUNTOS_CON_DATASET_MIN` 10, `FOTOS_PUNTO_LEJANO_MIN` 3 |
+| `fuentes.BuscadorVecinos` (protocolo): `.version_vector`, `.vecinos(foto_jpeg, k)` → `[Vecino(imagen_id, lat, lng, rumbo, similitud)]` de mayor a menor | Lo implementan `ClienteBackend` (BE-2.4) y `BuscadorFuerzaBruta(imagenes, vectores, vectorizar)` |
+| `fuentes.FuenteDataset` (protocolo): `.imagenes()` → `[ImagenDataset(imagen_id, lat, lng, rumbo, video_id, url)]`, `.descargar(imagen)` → bytes | `ClienteBackend` (BE-2.1; `descargar` lanza `PendienteBE41` mientras `url` sea `null`) y `FuenteCarpeta(D)` |
+| `fuentes.ClienteBackend(url_base, correo, password)`: `.token()`, `.videos()`, `.imagenes()`, `.vecinos_crudo(foto, k)` (la respuesta HTTP), `.vecinos(foto, k)` | `ErrorFuente(mensaje, estado)` ante una respuesta que no es 200 |
+| `fuentes.indexar(fuente, vectorizar)` → `BuscadorFuerzaBruta`; `preparar_foto(bytes)` → JPEG | Vectoriza todo el dataset con una función `bytes → vector` |
+| `metricas.consultar(conjunto, cobertura, buscador, leer)` → `[ResultadoFoto]`; `recall`, `distribuciones`, `recomendar_sim_min`, `recomendar_sim_alta`, `localizar`, `simular`, `recomendar_cortes`, `construir_informe`, `revisar_informe(informe, version_vector, fotos)` → errores | §4.5; `revisar_informe` es exactamente lo que comprueba C2 |
+| `variantes.VARIANTES` (`nombre` → `Variante(nombre, descripcion, preprocesar, extraccion)`); `ExtractorDinov2(dir, hilos=1).vector(tensor, "cls" \| "media_parches")`; `vectorizador(variante, extractor)`; `comparar(…)` | Una variante nueva = una función `bytes → array (3, H, W)` float32 normalizado (H y W múltiplos de 14) y una entrada en `VARIANTES` |
+| `cli.main(argv)`; `cli.evaluar(conjunto, coordenadas, buscador, fuente, salida, fecha=, k=)` → `(ruta, informe)`; `cli.nombre_informe(version_vector, AAAAMMDD)` | Lo que usan las pruebas y `validate32.py` |
+
+**Parámetros exactos de `metricas.py`** (constantes del módulo; cambiarlos cambia las recomendaciones):
+
+| Constante | Valor | Uso |
+|---|---|---|
+| `MISMO_LUGAR_M` / `OTRO_LUGAR_M` | 15 / 50 m | Vecino «mismo lugar» (≤) y «otro lugar» (>); acierto del *recall* a ≤ 15 m |
+| `K_RECALL` | (1, 5) | *recall*; las distribuciones usan los 5 primeros vecinos de cada foto con dataset |
+| `LOC_TOP_K`, `LOC_RADIO_GRUPO_M`, `LOC_PESO_EXPONENTE` | 10, 20 m, 4 | Copia de backend §5.10 para la simulación |
+| `LOC_SIM_MIN_ACTUAL` / `LOC_SIM_ALTA_ACTUAL` / `CORTE_ALTA_ACTUAL` / `CORTE_MEDIA_ACTUAL` | 0,55 / 0,80 / 0,70 / 0,45 | Copia de backend §5.10 para `actual_backend` |
+| `FOTOS_POR_CONSULTA` | 5 | Tamaño máximo de una consulta simulada (`LOC_MAX_FOTOS`) |
+| `MARGEN_LEJOS` | 0,01 | `LOC_SIM_MIN` ≥ techo a 2 decimales de (mejor similitud lejana + 0,01) |
+| `PRECISION_SIM_ALTA` / `SOPORTE_SIM_ALTA` | 0,95 / 5 vecinos | `LOC_SIM_ALTA` |
+| `PRECISION_15M_ALTA` / `ERROR_MAX_ALTA_M` | 0,90 / 30 m | `corte_alta` |
+| `PRECISION_15M_MEDIA` | 0,60 | `corte_media` |
+
+**Detalle del cálculo** (lo que §4.5 resume; basta para reproducirlo o revisar un informe):
+- Percentil por rango más cercano: posición ⌈p/100 · n⌉ de los n ordenados (mín. 1); lista vacía → `null`. Las
+  similitudes del informe se redondean a 4 decimales; los umbrales, a 2.
+- Youden: se recorre la rejilla 0,00…1,00; TPR = fracción de «mismo lugar» ≥ t, FPR = fracción de «otro lugar» ≥ t
+  (0 si no hay «otro lugar»); gana el primer t con el máximo. Sin «mismo lugar», todo `recomendado` sale `null` y no se
+  simula. `LOC_SIM_MIN` = max(Youden, techo(lejos_max + 0,01)), recortado a [0,01; 0,98].
+- `LOC_SIM_ALTA`: primer t de la rejilla desde `LOC_SIM_MIN` + 0,01 hasta 1,00 con ≥ 5 vecinos («mismo» + «otro») ≥ t y
+  precisión ≥ 0,95; si no hay, max(techo(p90 de «mismo lugar»), `LOC_SIM_MIN` + 0,05), con tope 1,0.
+- `localizar` (pasos 3–7 de backend §4.10): descarta vecinos con similitud < `LOC_SIM_MIN`; los recorre de mayor a menor
+  similitud y cada uno entra en el **primer** grupo cuyo centroide (media sin ponderar de sus miembros, recalculada en
+  cada alta) esté a < 20 m, o abre uno; puntuación de un grupo = suma, por foto, de la mejor similitud que aporta; el
+  mejor grupo es el de mayor puntuación (a igualdad, el creado antes); posición = media de lat/lng ponderada por
+  similitud⁴; `s` = (similitud máxima del grupo − `LOC_SIM_MIN`) / (`LOC_SIM_ALTA` − `LOC_SIM_MIN`) recortada a [0, 1]
+  (1 si `LOC_SIM_ALTA` ≤ `LOC_SIM_MIN`); `c` = fotos con vecino en el grupo / fotos de la consulta (también las que no
+  tienen ningún vecino); `m` = (p₁ − p₂)/p₁, 1 con un grupo; confianza = 0,5·s + 0,3·c + 0,2·m. Sin vecinos tras el
+  filtro → `sin_coincidencias` (confianza 0, error infinito). No simula la corrección de rumbo ni el contexto (pasos 8–10).
+- Cortes: para cada t, el subconjunto de consultas con confianza ≥ t; un subconjunto **vacío cuenta como que cumple**
+  (por eso, si ninguna consulta llega a 0,50, `corte_alta` sale 0,50). `corte_alta` = primer t en [0,50; 0,99] que
+  cumple (si ninguno, 0,99); `corte_media` = primer t en [0,05; `corte_alta` − 0,01] con ≥ 60 % a ≤ 15 m (si ninguno,
+  max(0,01; `corte_alta` − 0,05)). Solo se simulan las consultas de puntos con dataset; las de puntos lejanos solo dan
+  `lejanas_sin_coincidencias`.
+- Consultas: clave `(punto, "v", vuelta)` si la foto trae `vuelta`; si no, `(punto, fecha local de Bogotá, hora)`. Dentro
+  de cada clave, las fotos se ordenan por `archivo` **como texto** (`fotos/P01/10.jpg` va antes que `…/2.jpg`) y se
+  parten en trozos de 5. Con `vuelta` de 5 fotos no importa; sin ella, una sesión de más de 5 fotos se parte así.
+
+**Detalle de `fuentes.py` y `cli.py`:**
+- `ClienteBackend`: `httpx.Client(timeout=60 s)`; `url_base` sin barra final + la ruta (`/auth/login`,
+  `/admin/videos?pagina=N&por_pagina=100`, `/admin/videos/{id}`, `/admin/diagnostico/vecinos?k=K` con la parte
+  multipart `foto`, `consulta.jpg`, `image/jpeg`). `videos()` pide páginas hasta tener `total` o una página vacía.
+  `imagenes()` salta los videos con `nombre` `validacion-…` o `conteo.procesada` = 0 (sin pedir su detalle) y, de cada
+  detalle, las fotos que no están `procesada` o sin `lat`. El token se pide una vez (se renueva solo si se crea otro
+  cliente; dura 12 h, backend §5.10). `vecinos()` guarda la primera `version_vector` y falla si cambia. `descargar()`
+  baja la `url` prefirmada sin token (`httpx.get`, 60 s).
+- `BuscadorFuerzaBruta.vecinos`: producto escalar con la matriz de vectores (L2 = 1 → coseno) y `argsort` estable;
+  `indexar` vectoriza el dataset en el orden de `fuente.imagenes()`.
+- `ExtractorDinov2`: carpeta = argumento, si no `MODELO_DIR`, si no `project/.modelo/`; `hilos` = 1 por defecto (con
+  `app.modelo.fijar_hilos`); `cls` = `pooler_output`, `media_parches` = media de `last_hidden_state[0, 1:]`; el vector se
+  normaliza en float64 y se devuelve en float32. Importa `app.preproceso` y `app.modelo` del servicio (no los copia).
+- `sin_recorte`: lado largo = min(896, max(224, ⌊⌊224·largo/corto⌋ / 14⌋ · 14)), bicúbica sin `reducing_gap`;
+  `resolucion_448`: lado menor 512, el otro `int(512·lado/corto)`, recorte central de 448 empezando en `(lado − 448)//2`.
+  Ambas usan `decodificar` de pp-v1 (EXIF, RGB, `LADO_MIN_PX` 64, `PROPORCION_MAX` 32) y su normalización.
+- `evaluar` escribe el informe aunque el conjunto aún no cumpla C1 (lo avisa con `[AVISO]`, código 0) e imprime una línea
+  JSON con `recall_1_15m`, `recall_5_15m` y `recomendado`. Con `--dataset-local` los vecinos son de fuerza bruta con pp-v1
+  y los pesos locales (`fuente_vecinos = fuerza_bruta_local`). `--k` fuera de 5–50 → error de uso de argparse (código 2).
+- `variantes` conserva solo la **primera** fila `pp-v1` del informe y sustituye el resto por las que calcula; un nombre
+  desconocido → código 2. Necesita los pesos aunque los vecinos de referencia vengan del backend.
+- `revisar` sin `puntos.json` o con fotos que faltan → código 1.
+
+**Nombres internos de `validate32.py`:** `BUCKET` = `campus-locator-dev-dataset-648617469176`, `PREFIJO` =
+`evaluacion/`, `SECRETO_ADMIN` = `campus-locator/dev/admin-inicial`, `IMAGEN_P2B` = `tests/golden/validacion-01-campus.jpg`
+(se pasa por `preparar_foto`), `PATRON_INFORME` = `^evaluacion/<version>/informes/dinov2-vits14_pp-v1-<AAAAMMDD>.json$`
+(gana el mayor `(fecha, version, clave)`). Comparte en `ctx.datos`: `cliente`, `imagenes` (el dataset, pedido una sola
+vez), `versiones` (de P3), `informe` (`(clave, dict)` o `None`) y `cobertura` (por versión: `errores`,
+`fotos_con_dataset`, `resumen`, `dataset`). Una carpeta de `evaluacion/` que no tenga la forma `AAAA-MM<letra>` se ignora.
 
 ---
 
@@ -798,6 +1055,25 @@ servicio espera (sube el cuerpo y lee la respuesta: el total queda a 10 ms o men
 ensayo local); los números no incluyen la red ni el backend (§4.4); y la imagen tiene que traer el benchmark, así que
 para medir hay que desplegar antes (las imágenes anteriores a EMB-3.1 traen uno provisional).
 
+**ADR-EMB-14 — Evaluación con el endpoint de vecinos del backend y recomendación por reglas fijas (aceptada, 0.9.0,
+EMB-3.2).**
+EMB-3.2 debe medir la recuperación sobre el dataset **indexado** y proponer `LOC_SIM_MIN`, `LOC_SIM_ALTA` y los cortes
+de nivel a BE-3.2, sin que el servicio conozca la base ni S3 (ADR-EMB-06). *Decisión:* `tools/evaluacion` corre en la
+máquina de quien valida; los vecinos de pp-v1 los da `POST /v1/admin/diagnostico/vecinos` (BE-2.4: el mismo índice
+HNSW y `ef_search` que `/v1/localize`) con `k = LOC_TOP_K` = 10, y el dataset (coordenadas) `GET /v1/admin/videos`
+y `/videos/{id}` (BE-2.1), detrás de dos interfaces (`BuscadorVecinos`, `FuenteDataset`) para poder cambiar de
+fuente. Las recomendaciones salen de reglas deterministas y explicadas (§4.5): Youden más el margen sobre los puntos
+lejanos para `LOC_SIM_MIN` (BE-3.2 C5 exige `sin_coincidencias` en ellos), precisión ≥ 95 % para `LOC_SIM_ALTA` y una
+simulación del algoritmo v1 para los cortes (BE-3.2 C2 exige que ningún nivel alta yerre > 30 m). Las variantes se
+calculan en proceso con los pesos locales y fuerza bruta. *Alternativas descartadas:* leer los vectores de pgvector
+(la base es privada y su esquema es del backend); usar `POST /v1/localize` (agrupa y aplica `LOC_SIM_MIN`: no deja
+ver la distribución cruda, y deja eventos); `k = 5` como decía 0.8.0 (la simulación necesita los 10 vecinos de la
+localización; el *recall* usa los 5 primeros igual); un contenedor local para las variantes (mismas dependencias que
+`uv`, sin ventaja); optimizar umbrales con búsqueda sobre una métrica global (con ~50 fotos sobreajusta).
+*Consecuencias:* `evaluar` necesita `embedding` encendido; la simulación copia parámetros de backend §5.10 y supone dos
+detalles que §4.10 no fija (centroide de grupo y margen `m`): BE-3.2 debe confirmarlos; la comparación de variantes
+espera a BE-4.1 (URL de las imágenes).
+
 ---
 
 ## 7. Riesgos
@@ -805,7 +1081,7 @@ para medir hay que desplegar antes (las imágenes anteriores a EMB-3.1 traen uno
 | ID | Riesgo | Prob. | Impacto | Mitigación |
 |---|---|---|---|---|
 | R1 | Latencia por encima del objetivo (lote de 5 > 800 ms en 2 vCPU) | Media | Medio | EMB-3.1 (`benchmark.py` en `dev`, §5.7; en el ensayo local, p95 de 695–846 ms); palancas de §4.4, decisión en C3 |
-| R2 | Calidad de recuperación insuficiente (luz, oclusiones, recorte central, lugares parecidos; ViT-S/14 discrimina algo menos que ViT-B/14) | Media | Alto | EMB-3.2; EMB-5.1 si una variante gana (incluido volver a ViT-B/14 con más vCPU o con GPU) |
+| R2 | Calidad de recuperación insuficiente (luz, oclusiones, recorte central, lugares parecidos; ViT-S/14 discrimina algo menos que ViT-B/14) | Media | Alto | EMB-3.2 (`tools/evaluacion` listo, sin medir: falta el dataset real; protocolo con dos franjas horarias y `por_hora`, §4.5); EMB-5.1 si una variante gana (incluido volver a ViT-B/14 con más vCPU o con GPU) |
 | R3 | Imagen grande (~1,8 GB): 2–3 min desde el encendido | Alta | Bajo | *Start period* de 180 s; el `worker` espera a `/health/ready`; encender antes de probar (infra R6) |
 | R4 | Una actualización de librerías cambia los vectores sin avisar | Media | Alto | Versiones fijadas en `uv.lock`; vectores dorados en CI (con los pesos y `DORADOS_OBLIGATORIOS=1`) y en `validate21` (ADR-EMB-12) |
 | R5 | Ingesta masiva satura el servicio | Media | Bajo | Prioridad; `503 SATURADO`; el `worker` reintenta |

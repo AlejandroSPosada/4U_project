@@ -23,6 +23,53 @@ re-indexar el dataset.
 
 ---
 
+## [0.9.0] — 2026-10-25
+
+- **Lote que la motivó:** EMB-3.2 (conjunto de evaluación y calibración), solo la parte que no necesita dataset. El
+  lote sigue «En curso»: falta el dataset real (FE-2.1 + BE-2.2), BE-2.4 desplegado y las fotos de consulta.
+- **Qué cambió:**
+  - Código: nuevo `tools/evaluacion/` (`__main__.py`, `cli.py`, `conjunto.py`, `fuentes.py`, `metricas.py`,
+    `variantes.py`) con las órdenes `revisar`, `cobertura`, `evaluar` y `variantes`; nuevo `src/ops/validate32.py`;
+    pruebas nuevas `tests/test_evaluacion.py` (campus sintético, cliente del backend con `httpx.MockTransport`, el
+    extractor de variantes contra los vectores dorados si hay pesos) y `tests/test_validate32.py` (dobles de S3,
+    Secrets Manager y del backend). No cambian el servicio, el `Dockerfile`, el `.dockerignore` (ya dejaba fuera
+    `tools/evaluacion/`), `pyproject.toml`, `uv.lock` ni `comun.py`.
+  - §4.5 reescrito: estado, qué se mide, cómo se recomiendan `LOC_SIM_MIN`, `LOC_SIM_ALTA` y los cortes (con la
+    simulación del algoritmo v1 y sus dos supuestos), variantes, el **protocolo de toma de fotos** y las trampas.
+  - Nuevo ADR-EMB-14 (evaluación con el endpoint de vecinos y reglas fijas de recomendación).
+  - §1.3: contratos que consume la evaluación (backend e infra). §4.1: estructura de `tools/evaluacion/` y pruebas. R2.
+  - `validation-3-2.md`: orden de las precondiciones (P4 → P1 → P2 → P2b → P3) y sus códigos; P2 deja de usar
+    `GET /v1/admin/images` y `/images/{id}` (BE-4.1, que no es dependencia del lote) y usa `GET /v1/admin/videos`;
+    P2b acepta `503 EMBEDDING_NO_DISPONIBLE` (el validador no enciende `embedding`); C1 lee el dataset con
+    `/admin/videos/{id}` y concreta qué es «punto con dataset»; C2 dice cómo elige el informe; §5 completo
+    (variables, nueve pasos de preparación con su salida esperada, ejecución con su salida esperada y la de hoy).
+  - PLAN: alineado con 0.9.0; EMB-3.2 «En curso»; §2.1 anota BE-4.1 solo para la comparación de variantes.
+- **Contratos tocados (§5):**
+  - §5.8: `validate32.py` (orden, códigos, que no enciende `embedding` ni escribe) y la herramienta sobre una copia
+    local del conjunto.
+  - §5.9, conjunto: campo **nuevo opcional** `fotos[].vuelta` (compatible: la validación de BE-3.2 solo lee `archivo`, `punto` y `rumbo`) y tabla de reglas
+    (formas de `version_conjunto`, `id`, `archivo`; franjas de `hora` en hora de Bogotá).
+  - §5.9, informe: las claves de 0.8.0 siguen siendo el contrato; se documentan los extras (`similitud.*.n`,
+    `similitud.lejos_del_dataset`, `por_hora`, `actual_backend`, `detalle_recomendacion`, `simulacion`, `cobertura`…)
+    y que `variantes` añade `pp-v1-local`, `sin-recorte`, `res-448` y `media-parches`.
+  - §5.9: los vecinos se piden con `k = 10` (`LOC_TOP_K`), no `k = 5`; el dataset sale de `GET /v1/admin/videos` (no
+    de `GET /v1/admin/images`, que es de BE-4.1); las variantes se calculan en el proceso de la herramienta, no en un
+    contenedor. Órdenes, opciones, códigos de salida y la API de los módulos de `tools/evaluacion`.
+  - §5.9: parámetros exactos de `metricas.py`, detalle del cálculo (percentiles, Youden, `LOC_SIM_ALTA`, simulación,
+    cortes y sus valores de respaldo, agrupación de consultas), de `fuentes.py`, `cli.py` y `variantes.py`, y los
+    nombres internos de `validate32.py`, para cerrar el lote y BE-3.2 sin leer el código.
+  - `version_vector` **no cambia** (`dinov2-vits14/pp-v1`).
+- **Cómo se verificó:** en WSL (Ubuntu 26.04), desde `project/`: `uv run ruff check .`, `uv run ruff format --check .`
+  y `uv run --group ops pytest`, en verde; `test_extractor_reproduce_los_vectores_dorados_de_pp_v1` corrió con los
+  pesos de `project/.modelo/` (ExtractorDinov2 con pp-v1 da los dorados a ≤ 1e-5). Nada se ejecutó en AWS ni con el
+  backend real.
+- **Pendiente:** tomar las fotos (protocolo de §4.5), generar el informe y `validate32.py` en `dev` (necesita FE-2.1,
+  BE-2.2 y BE-2.4); C3 (entrega a BE-3.2); comparar variantes (BE-4.1). A confirmar con BE-3.2 los dos supuestos de la
+  simulación (centroide de grupo y margen `m`, backend §4.10). La orientación del teléfono en el protocolo, a confirmar
+  con frontend.
+
+---
+
 ## [0.8.0] — 2026-10-25
 
 - **Lote que la motivó:** EMB-3.1 (rendimiento en CPU), cierre con la medida en `dev` (C2 y C3).
