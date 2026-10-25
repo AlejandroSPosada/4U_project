@@ -69,7 +69,9 @@ re-indexar el dataset.
   - `validation-3-1` no decía en qué orden se evalúan las precondiciones (infra §5.11 pide las de credenciales
     primero); duración de 10–20 min estimada de nuevo en 6–10 min.
 - **Cómo se verificó:** en WSL (AMD Ryzen 7 6800HS, Docker 29, uv 0.13): `ruff check` y `ruff format --check`
-  limpios y 135 pruebas en verde con `DORADOS_OBLIGATORIOS=1` (entre ellas, el bucle completo de `benchmark.py`
+  limpios y 135 pruebas en verde con `DORADOS_OBLIGATORIOS=1` y el grupo `ops` instalado (`embedding.yml` instala
+  solo `dev`: allí `test_validate31.py` se omite con `importorskip`, porque necesita `botocore`; el primer push,
+  `aff448b`, falló en CI por esa importación) (entre ellas, el bucle completo de `benchmark.py`
   contra el servicio HTTP con un modelo falso, cuya salida acepta `validate31.revisar_resultado`, y `validate31` de
   punta a punta con dobles de ECS y Logs: pasa, bloquea con `bootstrap` o con el provisional sin lanzar tareas, falla
   con la tarea en salida 1 o de otro tamaño). `benchmark.py` dentro de la imagen `f2ddc42` con el benchmark nuevo

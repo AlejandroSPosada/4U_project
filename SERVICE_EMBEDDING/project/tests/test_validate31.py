@@ -14,7 +14,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from botocore.exceptions import ClientError
+
+# botocore viene del grupo `ops`; CI (`embedding.yml`) instala solo `dev`, así que allí se omite.
+ClientError = pytest.importorskip("botocore.exceptions").ClientError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "ops"))
 
