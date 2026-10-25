@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.12.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.13.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-24 |
-| Estado | Diseño propuesto. **INF-0.1 a INF-1.4 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS); el resto, sin código todavía |
+| Estado | Diseño propuesto. **INF-0.1 a INF-1.4 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS). **INF-2.1 escrito**, pendiente de aplicar y validar (encendido de `embedding` y escalado del `worker`); el resto, sin código todavía |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -102,7 +102,9 @@ Detalle funcional de cada flujo: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §4.
   `AWSServiceRoleForAPIGateway` (lo necesita el VPC Link de INF-1.4). Lo creó `root` el 2026-10-24 a las 23:16 UTC,
   antes del `apply` de INF-1.4 (CloudTrail, `CreateServiceLinkedRole`); el `apply` lo intentó crear a las 23:22 y
   recibió `InvalidInputException` porque ya existía. Si falta en otra cuenta: `aws iam create-service-linked-role
-  --aws-service-name ops.apigateway.amazonaws.com`.
+  --aws-service-name ops.apigateway.amazonaws.com`. `AWSServiceRoleForApplicationAutoScaling_ECSService` (lo usan los
+  objetivos escalables de INF-2.1) no existía: se crea igual, con `--aws-service-name
+  ecs.application-autoscaling.amazonaws.com`, antes del `apply` de INF-2.1 (`validation-2-1` §5, paso 1).
 
 ### 3.2 Red
 
@@ -165,16 +167,25 @@ Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas, todo e
 
 - Los comandos exactos de cada proceso los define `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.9 y
   `SERVICE_EMBEDDING/docs/ARCHITECTURE.md` §5.5; esta carpeta solo los referencia en la definición de tarea.
-- **Encendido y apagado de `embedding`** (ADR-INF-11, ADR-INF-14): apagado por defecto. Se enciende a mano antes de
-  probar (`src/ops/embedding.py encender`, INF-2.1; tarda 2–3 min en estar sano) y se apaga con `embedding.py apagar` o solo: tras
-  45 min sin peticiones a `POST /v1/localize` ni mensajes en `ingesta` o `purga`, y a las 22:00 (hora de Bogotá) si
-  sigue encendido. Con `embedding` apagado, `api` sigue respondiendo (`/v1/health`, login, lugares, alertas) pero
+- **Encendido y apagado de `embedding`** (ADR-INF-11, ADR-INF-14, ADR-INF-15): apagado por defecto. Se enciende a mano
+  antes de probar con `src/ops/embedding.py encender` (3–6 min hasta sano: 1–3 esperando a que la alarma de
+  inactividad vea el encendido y 2–3 de arranque) y se apaga con `embedding.py apagar` o solo: tras 45 min sin
+  peticiones a `POST /v1/localize` ni mensajes visibles o en vuelo en `ingesta` o `purga` (alarma
+  `campus-locator-dev-embedding-inactivo`, que lee el filtro de métricas de los *access logs* y las métricas de SQS), y
+  a las 22:00 (hora de Bogotá). Poner `desiredCount = 1` con `ecs update-service` no basta: si esa alarma está en
+  `ALARM` (puede estarlo mientras nadie usa el sistema), su política lo devuelve a 0 en un minuto; el contrato de
+  encendido está en §5.10. Con `embedding` apagado, `api` sigue respondiendo (`/v1/health`, login, lugares, alertas) pero
   `/v1/localize` devuelve `503 EMBEDDING_NO_DISPONIBLE`.
 - **`worker` escala por cola**: sube a 1 con `ApproximateNumberOfMessagesVisible ≥ 1` en `ingesta` o `purga` **y**
   `embedding` encendido; 15 minutos sin mensajes visibles ni en vuelo → 0. `embedding.py apagar` y la acción de las 22:00
   también lo dejan en 0 (capacidad máxima 0 hasta el siguiente `embedding.py encender`), aunque queden mensajes. Con
   `embedding` apagado los mensajes esperan en la cola (retención de 4 días): la ingesta avanza cuando se enciende
-  `embedding`.
+  `embedding`. La condición «`embedding` encendido» va en la propia alarma de subida: mensajes visibles y una muestra
+  de `CPUUtilization` del servicio `embedding` (ECS solo la publica con tareas en marcha) en el mismo minuto. Así,
+  tras el apagado por inactividad, que no cambia el rango de `worker`, los mensajes nuevos tampoco lo suben.
+- SQS y ECS publican sus métricas por minuto con unos minutos de retraso, y SQS hasta 15 min cuando una cola vuelve a
+  tener actividad tras más de 6 h sin ella: la subida de `worker` puede tardar eso. Las alarmas rellenan con 0 los
+  minutos sin dato (`FILL`), así que el apagado por inactividad puede llegar un minuto antes de los 45.
 - *Health checks* de contenedor (§5.7) y *deployment circuit breaker* con *rollback* activado en los tres servicios.
 - **ECS Exec** (`enable_execute_command`) solo en `api`, para depurar en `dev` (y para la comprobación de disco de
   BE-3.2). Quien lo use necesita el *Session Manager plugin* de la CLI de AWS. `worker` y `embedding` no lo tienen.
@@ -241,7 +252,8 @@ Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas, todo e
 - Alarmas de CloudWatch publicadas en el topic SNS `campus-locator-dev-alertas` (suscripción por correo, variable
   `correo_alertas`; SNS envía un correo de confirmación y no entrega nada hasta que se confirma): errores 5xx de la API,
   mensajes en cualquier DLQ, `embedding` encendido demasiadas horas seguidas (el apagado automático falló),
-  almacenamiento libre y créditos de CPU de RDS (umbrales en §5.10).
+  almacenamiento libre y créditos de CPU de RDS (umbrales en §5.10). Las cuatro alarmas de escalado de INF-2.1 (§5.1)
+  no avisan: su única acción es una política de Application Auto Scaling.
 - Una regla de **EventBridge** sobre los eventos `ECS Task State Change` avisa al mismo topic cuando una tarea de los
   **servicios** `api`, `worker` o `embedding` se detiene por error: `lastStatus = STOPPED`, `stopCode` =
   `EssentialContainerExited` o `TaskFailedToStart`, y `group` = `service:api`, `service:worker` o
@@ -302,10 +314,10 @@ y 160 h de `embedding` encendido al mes (uso de prueba de 1–3 personas y uso i
 | IPv4 públicas | `api` siempre; `embedding`, `worker` y `migrate` mientras corren | 3,9 | 4,6 |
 | RDS `db.t4g.micro` + 20 GB `gp3` | una zona | 14,0 | 14,0 |
 | Secrets Manager | 3 secretos | 1,2 | 1,2 |
-| CloudWatch (logs ~2 GB, ~8 alarmas, 1 filtro de métricas) | | 2,3 | 2,3 |
+| CloudWatch (logs ~2 GB; 10 alarmas, las 4 de escalado con 16 métricas en sus expresiones; 2 métricas propias) | 0,10 USD por métrica de cada alarma y 0,30 por métrica propia al mes | 3,8 | 3,8 |
 | ECR (~10 GB entre versiones) | conservar 5 por repo | 1,0 | 1,0 |
 | Cloud Map, API Gateway, S3, SQS, transferencia | tráfico de desarrollo | ~3,0 | ~3,0 |
-| **Total aproximado** | | **≈ 39** | **≈ 52** |
+| **Total aproximado** | | **≈ 40** | **≈ 53** |
 
 Cargos que pueden aparecer y no están en la tabla: créditos de CPU de RDS (los `t4g` corren en modo *unlimited* y
 cobran si la media de 24 h supera la línea base), almacenamiento de copias por encima del tamaño de la base, y
@@ -334,14 +346,14 @@ INFRASTRUCTURA_TERRAFORM/
     │   ├── red/                 VPC, subredes, IGW, rutas, endpoint de S3, grupos de seguridad
     │   ├── datos/               RDS (+ grupo de parámetros), bucket del dataset, colas SQS, notificación S3→SQS
     │   ├── secretos/            random_password y los tres secretos
-    │   ├── computo/             ECR, clúster, Cloud Map, log groups de los procesos, roles, definiciones de tarea (incluida la de validación), servicios
-    │   │                        (el autoescalado y el apagado de `embedding` los añade INF-2.1)
-    │   ├── borde/               HTTP API, VPC Link, integración con Cloud Map, rutas, throttling, access logs (y su log group)
+    │   ├── computo/             ECR, clúster, Cloud Map, log groups de los procesos, roles, definiciones de tarea (incluida la de validación), servicios;
+    │   │                        escalado.tf: objetivos, políticas, alarmas y acciones programadas de Application Auto Scaling (INF-2.1)
+    │   ├── borde/               HTTP API, VPC Link, integración con Cloud Map, rutas, throttling, access logs (y su log group), filtro de métricas de /v1/localize
     │   └── observabilidad/      topic SNS, alarmas, regla de EventBridge
     ├── pruebas/
     │   └── imagen-prueba/       Dockerfile, servidor.py y README.md (cómo publicarla) de la imagen `bootstrap` (§5.11)
     ├── src/
-    │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes INF-x.y (§5.11); embedding.py (INF-2.1)
+    │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes INF-x.y (§5.11); embedding.py (INF-2.1, §5.10)
     ├── .tflint.hcl              configuración de TFLint para infra.yml
     └── pyproject.toml           dependencias de los validadores (grupo `ops`: boto3, httpx)
 ```
@@ -357,7 +369,7 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
 | **INF-1.2 Datos y secretos** | Módulo `datos`: RDS en `us-east-1a` (grupo de subredes con las dos privadas y grupo de parámetros con `rds.force_ssl`); bucket con cifrado, *Block Public Access*, propiedad, ciclo de vida, política «solo TLS» y notificación a `ingesta` (la política de la cola autoriza solo a ese bucket); colas y DLQ. Módulo `secretos`: `random_password`, `random_bytes` y los tres secretos. Los dos módulos se usan entre sí a través de `envs/dev` (la contraseña va de `secretos` a RDS y el endpoint de RDS vuelve al secreto `db`) sin ciclo, porque Terraform resuelve las dependencias recurso por recurso. La **notificación** del bucket (`aws_s3_bucket_notification`) se crea después de la política de la cola, porque S3 valida el destino al guardarla. Entradas, salidas y recursos en §5.12 |
 | **INF-1.3 Cómputo** | Módulo `computo` (30 recursos; entradas, salidas y nombres internos en §5.12): repositorios ECR (etiquetas inmutables, escaneo al subir, conservar 5), clúster sin *Container Insights*, espacio de nombres privado `campus-locator.local` con los servicios de Cloud Map `api` (A + SRV) y `embedding` (A), TTL 10 s, los cinco *log groups* de los procesos, el rol de ejecución y los cuatro roles de tarea de §5.8 (todos con el *boundary*, que `envs/dev` lee de los outputs de `bootstrap` con `terraform_remote_state`), las cinco definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza; la de validación usa `postgres:17-alpine`) y los servicios `api`, `worker` y `embedding` con `desired_count = 0` hasta el primer despliegue. La imagen de prueba se publica a mano tras el `apply` (`pruebas/imagen-prueba/README.md`): los servicios en 0 no la necesitan para crearse. `validate13.py` sube `api` y `embedding` a 1 solo mientras valida |
 | **INF-1.4 Borde** | Módulo `borde` (7 recursos; entradas, salidas y nombres internos en §5.12): HTTP API `campus-locator-dev-api` con `prevent_destroy` (R8), VPC Link en `publica-a` y `publica-b` con el grupo `-vpclink`, una integración `HTTP_PROXY` privada hacia el servicio de Cloud Map `api` (su ARN sale del nuevo output `cloud_map_api_arn` de `computo`), las rutas `ANY /{proxy+}` y `POST /v1/auth/login` hacia esa integración, etapa `$default` con despliegue automático y el *throttling* de §5.10 (general en `DefaultRouteSettings`, login en `RouteSettings`) y *access logs* en JSON en `/campus-locator/dev/apigw`, que crea el propio módulo. Expone `api_base_url` (el `ApiEndpoint`, sin barra final). `validate14.py` sube `api` a 1 solo mientras valida |
-| **INF-2.1 Encendido de `embedding` y escalado** | `src/ops/embedding.py` (`encender`, `apagar`, `estado`); apagado automático de `embedding` por inactividad (filtro de métricas sobre los *access logs* de `/v1/localize` y profundidad de las colas) y acción programada de las 22:00 (zona `America/Bogota`); política de escalado por pasos de `worker` sobre las colas, condicionada a que `embedding` esté encendido; `embedding.py apagar` y la acción de las 22:00 también dejan `worker` en 0 |
+| **INF-2.1 Encendido de `embedding` y escalado** | `src/ops/embedding.py` (`encender`, `apagar`, `estado`, con el contrato de §5.10; su clase `Operador` la reutilizan los validadores). En `borde`, el filtro de métricas `campus-locator-dev-localize` sobre los *access logs* (métrica `LocalizePeticiones`). En `computo`, `escalado.tf` (11 recursos): los objetivos de Application Auto Scaling de `embedding` y `worker` (rango 0-0 al crearse; después Terraform ignora el rango, que cambian `embedding.py` y las acciones programadas), tres políticas por pasos de capacidad exacta (`embedding-apagar` → 0, `worker-cola` → 1, `worker-colas-vacias` → 0), las cuatro alarmas de expresión que las disparan (inactividad de 45 de 45 min; subida de `worker` con mensajes y CPU de `embedding` en el mismo minuto; bajada tras 15 de 15 min sin mensajes) y las dos acciones de las 22:00 (`America/Bogota`, rango 0-0). `envs/dev` define la métrica (`local.metrica_localize`) y se la pasa a los dos módulos, que así no se referencian entre sí, y la variable `apagado_embedding`. Decisiones en ADR-INF-15; nombres internos en §5.12 |
 | **INF-3.1 Observabilidad** | Topic SNS, suscripción por correo (hay que confirmarla desde el correo que envía SNS), alarmas de §5.10 y regla de EventBridge de §3.8. Expone `sns_alertas_arn` |
 | **INF-6.1 Producción** (diferido) | Ver PLAN, Fase 6 |
 
@@ -409,9 +421,10 @@ Inventario de nombres:
 | Presupuesto | `campus-locator-mensual` |
 | Alarmas de CloudWatch (INF-3.1) | `campus-locator-dev-api-5xx`, `campus-locator-dev-ingesta-dlq`, `campus-locator-dev-purga-dlq`, `campus-locator-dev-embedding-encendida`, `campus-locator-dev-rds-almacenamiento`, `campus-locator-dev-rds-creditos-cpu` |
 | Alarmas de escalado (INF-2.1) | `campus-locator-dev-worker-cola-ingesta`, `campus-locator-dev-worker-cola-purga` (subir `worker`), `campus-locator-dev-worker-colas-vacias` (bajarlo), `campus-locator-dev-embedding-inactivo` (apagar `embedding`) |
-| Políticas de escalado | `campus-locator-dev-worker-cola` (por pasos), `campus-locator-dev-embedding-apagar` (capacidad exacta 0) |
+| Políticas de escalado (INF-2.1) | `campus-locator-dev-worker-cola` (sube `worker` a 1), `campus-locator-dev-worker-colas-vacias` (lo baja a 0), `campus-locator-dev-embedding-apagar` (`embedding` a 0); las tres por pasos con capacidad exacta |
 | Acciones programadas | `campus-locator-dev-embedding-apagar-noche`, `campus-locator-dev-worker-apagar-noche` (INF-2.1) |
 | Filtro de métricas (INF-2.1) | `campus-locator-dev-localize` sobre `/campus-locator/dev/apigw` → métrica `LocalizePeticiones` del espacio `campus-locator/dev` |
+| Métricas propias (INF-2.1) | espacio `campus-locator/dev`, sin dimensiones: `LocalizePeticiones` (la publica el filtro) y `EmbeddingEncendidos` (la publica `embedding.py encender`, §5.10) |
 | Regla de EventBridge | `campus-locator-dev-tarea-detenida` |
 | Entorno de GitHub | `dev` (§3.9) |
 | Workflows | `infra.yml`, `backend.yml`, `embedding.yml`, `frontend.yml` (§5.9) |
@@ -448,7 +461,7 @@ con INF-1.2 y el resto con INF-1.3. Desde INF-0.2, `envs/dev` tiene además el o
 `bootstrap/terraform.tfvars` y `envs/dev/terraform.tfvars` (columna «Dónde»). Los dos archivos se versionan: no
 contienen secretos. Cada variable de `envs/dev` se declara con el lote que la usa (INF-0.2: `aws_account_id`, `region`,
 `proyecto` y `entorno`; INF-1.1: `cidr_vpc`, `az_computo` y `az_secundaria`; INF-1.2: `rds_clase`, `rds_gb`,
-`rds_gb_max` y `pg_version`; INF-1.3: `imagen_inicial_tag`).
+`rds_gb_max` y `pg_version`; INF-1.3: `imagen_inicial_tag`; INF-2.1: `apagado_embedding`).
 
 | Variable | Dónde | Valor en `dev` | Notas |
 |---|---|---|---|
@@ -462,7 +475,7 @@ contienen secretos. Cada variable de `envs/dev` se declara con el lote que la us
 | `github_ids` | `bootstrap` | `{ propietario = 142058005, repositorio = 1362957467 }` | IDs inmutables del `sub` de OIDC (§5.8): el repositorio se creó después del 2026-07-15. `null` = formato clásico |
 | `correo_alertas` | ambos | *(el de `bootstrap/terraform.tfvars`)* | Presupuesto (`bootstrap`) y topic de alarmas (`envs/dev`) |
 | `presupuesto_usd` | `bootstrap` | `100` | |
-| `apagado_embedding` | `envs/dev` | `{ zona = "America/Bogota", noche = "cron(0 22 * * ? *)", inactividad_min = 45 }` | Apagado automático de `embedding` (INF-2.1); `noche = null` quita el apagado nocturno |
+| `apagado_embedding` | `envs/dev` | `{ zona = "America/Bogota", noche = "cron(0 22 * * ? *)", inactividad_min = 45 }` | Apagado automático de `embedding` (INF-2.1): `zona` IANA y `noche` en el formato `cron(...)` de Application Auto Scaling para las dos acciones nocturnas (`noche = null` u omitida las quita; `validate21.py` exige que existan); `inactividad_min`, entero entre 5 y 1440 (periodos de 60 s de la alarma; lo valida el módulo `computo`) |
 | `imagen_inicial_tag` | `envs/dev` | `"bootstrap"` | Imagen de las definiciones de tarea que crea Terraform. CI registra revisiones con su imagen (ADR-INF-09); cambiarla solo crea revisiones nuevas, que ningún servicio usa hasta el siguiente despliegue |
 | `rds_clase` / `rds_gb` / `rds_gb_max` | `envs/dev` | `"db.t4g.micro"` / `20` / `50` | `rds_gb_max` debe ser mayor que `rds_gb` (lo valida el módulo `datos`) |
 | `pg_version` | `envs/dev` | `"17"` | Solo la versión mayor (lo valida el módulo `datos`): RDS elige la menor por defecto (≥ 17.1, pgvector 0.8.x) y la actualiza. Forma también la familia (`postgres17`) y el nombre del grupo de parámetros |
@@ -663,9 +676,10 @@ llaves de AWS en GitHub. Formato: `SUBREDES_TAREAS` = IDs de subred separados po
 | Parámetro | Valor en `dev` |
 |---|---|
 | Tamaños de tarea | §3.4 |
-| Encendido de `embedding` | Apagado por defecto; a mano con `embedding.py encender`; se apaga tras 45 min sin peticiones a `POST /v1/localize` ni mensajes en `ingesta` o `purga`, y a las 22:00 `America/Bogota` |
+| Encendido de `embedding` | Apagado por defecto; a mano con `embedding.py encender` (contrato abajo); se apaga tras `inactividad_min` (45) min seguidos sin peticiones a `POST /v1/localize`, sin muestras de `EmbeddingEncendidos` y sin mensajes visibles ni en vuelo en `ingesta` y `purga` (alarma `embedding-inactivo`: 45 de 45 periodos de 60 s con la suma < 0,5), y a las 22:00 `America/Bogota` (rango 0-0) |
+| Contrato de encendido (`embedding.py encender`; lo siguen también los validadores que necesitan `embedding`, §5.11) | 1) `RegisterScalableTarget` de `embedding` y `worker` con mínimo 0 y máximo 1 (si el objetivo no existe, INF-2.1 no está aplicado: no se crea); 2) `PutMetricData` de `EmbeddingEncendidos` = 1 (`Count`) en `campus-locator/dev`; 3) esperar a que `GetMetricStatistics` devuelva esa muestra, un minuto más y que la alarma `campus-locator-dev-embedding-inactivo` no esté en `ALARM` (hasta 5 min); 4) `UpdateService` de `embedding` a 1; 5) esperar tarea `HEALTHY`, despliegue `COMPLETED` e instancia sana en Cloud Map (hasta 10 min desde el paso 1). **Apagado** (`embedding.py apagar`): `RegisterScalableTarget` 0-0 y `UpdateService` a 0 de `embedding` y `worker` |
 | Latencia objetivo de `POST /v1/localize` | p95 de `integrationLatency` (*access logs*) ≤ 1000 ms con `embedding` encendido |
-| Escalado de `worker` | sube a 1 con ≥ 1 mensaje visible en `ingesta` o `purga` y `embedding` encendido; baja a 0 tras 15 min en 0, y también con `embedding.py apagar` o a las 22:00 |
+| Escalado de `worker` | sube a 1 con ≥ 1 mensaje visible en `ingesta` o `purga` y una muestra de `CPUUtilization` de `embedding` en el mismo minuto (1 de 10 periodos de 60 s; una alarma por cola); baja a 0 tras 15 periodos seguidos sin mensajes visibles ni en vuelo en las dos, y también con `embedding.py apagar` o a las 22:00 (rango 0-0) |
 | Throttling API Gateway | general: 20 req/s, ráfaga 40 · `POST /v1/auth/login`: 2 req/s, ráfaga 5 (valores configurados; AWS los aplica de forma aproximada, §3.3) |
 | Formato de los *access logs* | JSON por línea: `requestId`, `ip`, `requestTime`, `httpMethod`, `routeKey`, `path`, `status`, `responseLength`, `integrationLatency`, `integrationStatus` (`requestId` es el encabezado `apigw-requestid` de la respuesta). Todos los valores son **cadenas** (`"status":"200"`; API Gateway escribe `"-"` si un dato no existe, p. ej. `integrationLatency` en un 429), así toda línea es JSON válido; quien calcule con `integrationLatency` la convierte a número |
 | Retención de logs | 14 días (todos los log groups) |
@@ -755,7 +769,8 @@ falla porque faltan credenciales, herramientas o variables da **3**, no 2: el 2 
 - Es idempotente: se puede repetir sin preparar nada a mano.
 - Si un lote cambia sus criterios en el PLAN, su documento y su script se actualizan en el mismo cambio.
 - **`embedding` en `dev`** (ADR-INF-14): un validador que necesita el servicio `embedding` en marcha (ingesta,
-  localización) lo enciende si está apagado —lo mismo que `embedding.py encender`— y espera hasta 10 min a que esté sano; al
+  localización) lo enciende si está apagado con el contrato de encendido de §5.10 (los de esta carpeta usan
+  `embedding.Operador`) y espera hasta 10 min a que esté sano; poner `desiredCount = 1` sin más no basta (§3.4). Al
   terminar, también si algo falló, lo deja como lo encontró: lo apaga (como `embedding.py apagar`) solo si lo encendió él.
   Como a las 22:00 (`America/Bogota`) se apaga solo, cada validación declara la hora límite para empezar. El apagado
   por inactividad llega tras 45 min sin peticiones a `/v1/localize` ni mensajes en las colas: un validador que pase
@@ -763,6 +778,9 @@ falla porque faltan credenciales, herramientas o variables da **3**, no 2: el 2 
   definición de `embedding` (validadores de embeddings) no necesitan el servicio: corren en Fargate por su cuenta.
 - Por ahora se ejecutan desde la máquina de quien cierra el lote, con sus propias credenciales de AWS; ejecutarlos en CI
   es parte de INF-6.1.
+- `validate13.py` (INF-1.3, anterior a esta regla) sube `embedding` con `update-service`: para repetirlo tras INF-2.1, se
+  enciende antes con `embedding.py encender` (así lo encuentra en 1 y no lo toca) y se apaga después
+  (`validation-1-3` §5).
 
 **Recursos de apoyo que crea esta carpeta**
 - **Imagen de prueba** (`project/pruebas/imagen-prueba/`): imagen mínima que responde 200 en `GET /v1/health` (puerto
@@ -824,6 +842,14 @@ evalúa primero las precondiciones de credenciales (código 3), luego las de otr
 falla; limpia restos `validacion-…` de ejecuciones anteriores; registra con `al_limpiar` lo que cree, en cuanto lo crea,
 y ejecuta las comprobaciones en el orden del documento de validación.
 
+**Encendido de `embedding` desde un validador (`project/src/ops/embedding.py`, INF-2.1).** `import embedding` y
+`Operador(sesion)` (sesión ya comprobada con `comun.comprobar_cuenta`): `encender(esperar=True, limite_s=600)` y
+`apagar(esperar=True)` siguen el contrato de §5.10 y devuelven los segundos que tardaron; `sano()` → `(bool, lo que
+falta)`; `servicio(nombre)`, `objetivo(nombre)`, `alarma(nombre)`, `cola("ingesta"|"purga")` (visibles, en vuelo,
+retrasados) y `acciones_noche()` leen; `registrar(nombre, maximo)` y `poner(nombre, replicas)` cambian el rango o
+`desiredCount`; `t_latido` es el momento de la última muestra de `EmbeddingEncendidos`. Lanza `comun.Bloqueo` si falta
+INF-1.3 o INF-2.1 y traduce los errores de AWS como `comun.errores_aws`. `validate21.py` es el ejemplo.
+
 ### 5.12 Código de Terraform de `envs/dev` y de los módulos (convenciones)
 
 Lo que un lote necesita saber para añadir infraestructura sin leer el código existente (INF-0.2 dejó el esqueleto).
@@ -844,17 +870,19 @@ Lo que un lote necesita saber para añadir infraestructura sin leer el código e
 
 | Nombre | Qué es |
 |---|---|
-| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno`; `var.cidr_vpc`, `var.az_computo`, `var.az_secundaria` (INF-1.1); `var.rds_clase`, `var.rds_gb`, `var.rds_gb_max`, `var.pg_version` (INF-1.2); `var.imagen_inicial_tag` (INF-1.3) | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos) |
+| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno`; `var.cidr_vpc`, `var.az_computo`, `var.az_secundaria` (INF-1.1); `var.rds_clase`, `var.rds_gb`, `var.rds_gb_max`, `var.pg_version` (INF-1.2); `var.imagen_inicial_tag` (INF-1.3); `var.apagado_embedding` (INF-2.1) | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos) |
 | `local.prefijo` | `"${var.proyecto}-${var.entorno}"` = `campus-locator-dev`, sin guion final: el prefijo de §5.1. Está en `main.tf` (INF-1.1); los módulos lo reciben como variable `prefijo` |
+| `local.metrica_localize` | `{ espacio = "${var.proyecto}/${var.entorno}", nombre = "LocalizePeticiones" }` (INF-2.1): la métrica del filtro de `borde`, que lee la alarma de inactividad de `computo`. Se define aquí y se pasa a los dos módulos, así ninguno referencia al otro por ella |
 | `data.aws_caller_identity.actual` | Cuenta de las credenciales (`.account_id`); alimenta el output `cuenta_id` |
 | `data.terraform_remote_state.bootstrap` | Outputs de `bootstrap` (backend S3, clave `bootstrap/terraform.tfstate` del bucket de estado; los dos roles de CI pueden leer todo el bucket). Hoy solo se usa `.outputs.limite_roles_arn` (INF-1.3) |
 | `data.aws_default_tags.actuales` | Etiquetas efectivas del proveedor; nada lo referencia (lleva `# tflint-ignore: terraform_unused_declarations`) porque solo sirve para que los validadores lean las etiquetas del estado |
-| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); `module.datos`, `module.secretos` y `module.computo`, lo que dicen sus tablas más abajo (INF-1.2, INF-1.3); `module.borde`, lo que dice su tabla más abajo (INF-1.4); `module.observabilidad`, todavía sin argumentos: su lote (§4) le añade entradas y salidas |
+| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); `module.datos`, `module.secretos` y `module.computo`, lo que dicen sus tablas más abajo (INF-1.2, INF-1.3); `module.borde`, lo que dice su tabla más abajo (INF-1.4); desde INF-2.1, `module.computo` recibe además `metrica_localize` y `apagado_embedding`, y `module.borde`, `metrica_localize`; `module.observabilidad`, todavía sin argumentos: su lote (§4) le añade entradas y salidas |
 | Outputs de `envs/dev` | `cuenta_id` (INF-0.2); `subredes_tareas` = `[module.red.subred_tareas]` y `sg_migrate` = `module.red.grupos_seguridad["api"]` (INF-1.1); `bucket_dataset`, `sqs_ingesta_url`, `sqs_purga_url`, `sqs_ingesta_dlq_url` y `sqs_purga_dlq_url` (de `module.datos.colas[…].url`), `rds_endpoint` = `module.datos.rds_direccion` y `secretos` = `module.secretos.arns` (INF-1.2); `ecr_backend_url` y `ecr_embedding_url` (de `module.computo.ecr_urls[…]`), `ecs_cluster`, `ecs_servicios`, `familias_tarea` y `embedding_dns` (INF-1.3); `api_base_url` = `module.borde.api_base_url` (INF-1.4) |
 | Última línea de `main.tf`: `# validacion-0-2 <AAAAMMDD-HHMMSS>` | La escribe y sustituye `validate02.py` (C2 la fusiona en `main`). No se borra ni hace falta moverla: el validador quita la anterior y añade la nueva al final |
 
 **Módulos (`modules/<nombre>/`)**
-- Cada uno tiene `main.tf` y `versions.tf` (`terraform { required_version = ">= 1.10" }`). Cuando un módulo usa un
+- Cada uno tiene `main.tf` y `versions.tf` (`terraform { required_version = ">= 1.10" }`); un módulo grande puede
+  repartir sus recursos en más archivos por tema (`computo/escalado.tf`, INF-2.1). Cuando un módulo usa un
   proveedor, lo declara en `required_providers` de su `versions.tf` con la misma restricción que `envs/dev`.
 - Entradas en `variables.tf` (siempre con `type` y `description`) y salidas en `outputs.tf`. Un módulo nunca llama a
   otro: `main.tf` de `envs/dev` pasa los outputs de uno como entradas de otro.
@@ -956,12 +984,14 @@ Por dentro: `random_password.db`, `random_bytes.jwt`, `random_password.admin_ini
 | `bucket_dataset`, `bucket_dataset_arn` | `string` | `module.datos.bucket_dataset`, `.bucket_dataset_arn` |
 | `colas` | mapa de `{ nombre, url, arn }` con `ingesta` y `purga` | `module.datos.colas` |
 | `imagen_inicial_tag` | `string` | `var.imagen_inicial_tag` |
+| `metrica_localize` | `object({ espacio = string, nombre = string })` | `local.metrica_localize` (INF-2.1; su `espacio` es también el de `EmbeddingEncendidos`) |
+| `apagado_embedding` | `object({ zona = string, noche = optional(string), inactividad_min = number })`; `noche` debe ser `null` o `cron(...)` e `inactividad_min` un entero entre 5 y 1440 (si no, falla la validación) | `var.apagado_embedding` (INF-2.1) |
 
 | Salida | Valor | La usa |
 |---|---|---|
 | `ecr_urls` | `{ backend, embedding }` → `repositoryUri` | outputs `ecr_backend_url` y `ecr_embedding_url` |
-| `cluster` | `campus-locator-dev` | output `ecs_cluster`; INF-2.1 (autoescalado) |
-| `servicios` | `{ api, worker, embedding }` → nombre | output `ecs_servicios`; INF-2.1 |
+| `cluster` | `campus-locator-dev` | output `ecs_cluster` |
+| `servicios` | `{ api, worker, embedding }` → nombre | output `ecs_servicios` |
 | `familias_tarea` | `{ api, worker, embedding, migrate, validacion }` → familia | output `familias_tarea` |
 | `embedding_dns` | `embedding.campus-locator.local` | output `embedding_dns` |
 | `cloud_map_api_arn` | ARN del servicio de Cloud Map `api` (SRV) | `borde` (`integration_uri`, INF-1.4) |
@@ -984,6 +1014,26 @@ Por dentro: `aws_ecr_repository.repos["backend"|"embedding"]` y `aws_ecr_lifecyc
 - Servicios con `availability_zone_rebalancing = "DISABLED"` (una zona), *circuit breaker* con *rollback*,
   `assign_public_ip = true` y `ignore_changes = [task_definition, desired_count]` (ADR-INF-09).
 
+`escalado.tf` (INF-2.1, ADR-INF-15) añade 11 recursos (41 en total): `aws_appautoscaling_target.servicios["embedding"|"worker"]`,
+`aws_appautoscaling_policy.worker_cola`, `.worker_colas_vacias` y `.embedding_apagar`,
+`aws_cloudwatch_metric_alarm.worker_cola["ingesta"|"purga"]`, `.worker_colas_vacias` y `.embedding_inactivo`, y
+`aws_appautoscaling_scheduled_action.noche["embedding"|"worker"]` (ninguna si `apagado_embedding.noche` es `null`).
+Detalles que explican un `plan` o un comportamiento:
+- Los objetivos se crean con rango 0-0 e ignoran `min_capacity` y `max_capacity` (como `desired_count`, ADR-INF-09):
+  los cambian `embedding.py` y las acciones de las 22:00, y un `plan` no los devuelve a 0-0.
+- Políticas `StepScaling` con `ExactCapacity` y enfriamiento de 60 s, una por sentido (`worker-cola` → 1;
+  `worker-colas-vacias` y `embedding-apagar` → 0). Cada una tiene dos pasos, `(−∞, 0]` y `[0, ∞)`, con la misma
+  capacidad: da igual qué muestras agregue Application Auto Scaling (con `FILL`, la más reciente suele valer 0 aunque
+  la alarma esté en `ALARM`). Los límites van como cadena (`"0"`, como los guarda el proveedor).
+- Las políticas de un mismo objetivo y las acciones programadas se crean una tras otra (`depends_on`): Application
+  Auto Scaling puede rechazar cambios simultáneos sobre un objetivo y el proveedor no los reintenta.
+- Las alarmas son de expresión, con umbral 0,5 sobre valores que son 0 o enteros positivos: la distancia al umbral
+  (lo que comparan los pasos) nunca es 0. `FILL(m, 0)` da 0 donde una métrica no tiene dato (SQS no publica de una
+  cola inactiva; `LocalizePeticiones` solo existe con peticiones) y `+ 0 * <cpu del servicio>` no cambia el valor pero
+  asegura un dato por minuto mientras el servicio corre. Las métricas de las expresiones no llevan `return_data` (el
+  proveedor lo guarda como `false`, igual que AWS).
+- Las alarmas no avisan a nadie (INF-3.1 añade las que van al topic); su única acción es la política.
+
 **Módulo `borde` (INF-1.4)**
 
 | Entrada | Tipo | Valor que le pasa `envs/dev` |
@@ -992,6 +1042,7 @@ Por dentro: `aws_ecr_repository.repos["backend"|"embedding"]` y `aws_ecr_lifecyc
 | `subredes_publicas` | `list(string)`, exactamente dos | `module.red.subredes_publicas` |
 | `sg_vpclink` | `string` | `module.red.grupos_seguridad["vpclink"]` |
 | `cloud_map_api_arn` | `string` | `module.computo.cloud_map_api_arn` |
+| `metrica_localize` | `object({ espacio = string, nombre = string })` | `local.metrica_localize` (INF-2.1) |
 
 | Salida | Valor | La usa |
 |---|---|---|
@@ -999,7 +1050,8 @@ Por dentro: `aws_ecr_repository.repos["backend"|"embedding"]` y `aws_ecr_lifecyc
 
 Por dentro: `aws_cloudwatch_log_group.apigw`, `aws_apigatewayv2_vpc_link.principal`, `aws_apigatewayv2_api.principal`
 (con `prevent_destroy`), `aws_apigatewayv2_integration.api`, `aws_apigatewayv2_route.rutas["ANY /{proxy+}"|"POST /v1/auth/login"]`
-y `aws_apigatewayv2_stage.default`: 7 recursos. Detalles que explican un `plan`:
+y `aws_apigatewayv2_stage.default`: 7 recursos; desde INF-2.1, 8 con `aws_cloudwatch_log_metric_filter.localize`.
+Detalles que explican un `plan`:
 - El formato de los *access logs* se genera con `jsonencode`, que ordena las claves: AWS guarda la misma cadena y el
   `plan` queda vacío. Cambiar un campo es editar §5.10, `modules/borde/main.tf` y `CAMPOS_LOG` de `validate14.py`.
 - La integración fija `payload_format_version = "1.0"` (la única que admite `HTTP_PROXY`) y `timeout_milliseconds =
@@ -1007,6 +1059,13 @@ y `aws_apigatewayv2_stage.default`: 7 recursos. Detalles que explican un `plan`:
 - La etapa depende de las rutas (`route_settings` exige que la ruta exista). Con `auto_deploy`, AWS crea los
   despliegues: no hay `aws_apigatewayv2_deployment`.
 - Destruir la API exige quitar antes `prevent_destroy` (R8).
+- El filtro `localize` vive aquí porque el *log group* y su formato son de `borde`; la alarma que lo lee, en `computo`.
+  Patrón `{ ($.httpMethod = "POST") && ($.path = "/v1/localize") }` (valor 1, unidad `Count`): mira `httpMethod` y
+  `path` porque `/v1/localize` entra por `ANY /{proxy+}` (`routeKey` no la distingue), con comillas porque todos los
+  valores del formato son cadenas (§5.10). Si el backend cambia la ruta de localización, se cambian aquí el patrón y
+  `LINEAS_PRUEBA` de `validate21.py`. Una tercera ruta `POST /v1/localize` (con *throttling* propio, R10) se descartó
+  en ADR-INF-15. CloudWatch admite alarmas sobre métricas que todavía no existen: no hace falta orden entre el filtro y
+  la alarma.
 
 **Proveedores y lock**
 - `envs/dev/.terraform.lock.hcl` fija hoy `hashicorp/aws` 6.70.0 y, desde INF-1.2, `hashicorp/random` (3.x) con
@@ -1173,6 +1232,29 @@ servidor no está garantizado: se mide en EMB-3.1 y BE-3.2 y, si no se cumple, l
 antes de indexar el dataset real, porque cambia los vectores) o 4 vCPU (embeddings §4.4); Graviton sigue como
 optimización (INF-6.1).
 
+**ADR-INF-15 — Apagado de `embedding` y escalado de `worker` con alarmas de CloudWatch y Application Auto Scaling
+(aceptada; INF-2.1).**
+ADR-INF-14 pide apagar `embedding` tras 45 min sin uso y subir `worker` solo con `embedding` encendido, sin pagar
+*Container Insights* (§3.8) ni operar código propio. *Decisión:* todo con alarmas de expresión (*metric math*) que
+disparan políticas por pasos de capacidad exacta sobre los objetivos de Application Auto Scaling de los dos servicios:
+- El uso de `/v1/localize` sale de un filtro de métricas sobre los *access logs* (`borde`), que mira `httpMethod` y
+  `path`. Se descartó añadir una ruta `POST /v1/localize`: daría un `routeKey` propio y *throttling* propio (R10), pero
+  cambia el borde y el contrato de §5.10 con la app y el backend; queda como opción para INF-6.1.
+- «`embedding` encendido» se mide con la métrica gratuita `CPUUtilization` del servicio, que ECS solo publica con
+  tareas en marcha, y se exige en el mismo minuto que los mensajes, dentro de la alarma de subida de `worker`. El rango
+  máximo de `worker` (0 con `embedding.py apagar` y a las 22:00) no basta: el apagado por inactividad no puede
+  cambiarlo.
+- La alarma de inactividad puede quedar en `ALARM` mientras `embedding` está apagado y, en ese estado, Application
+  Auto Scaling repite su acción cada minuto. Por eso encender es «publicar `EmbeddingEncendidos`, esperar a que la
+  alarma lo vea, poner 1» (contrato de §5.10), no solo `desiredCount = 1`; a cambio, un `embedding` encendido a mano
+  sin ese paso se apaga solo enseguida, lo que también protege del gasto (R13).
+- Una política de capacidad exacta por sentido, con dos pasos que cubren todos los valores con la misma capacidad:
+  el resultado no depende de qué muestras agregue Application Auto Scaling, y la alarma ya decidió cuándo actuar.
+Se descartaron una Lambda programada (más código, permisos y otro rol con el *boundary*) y *Container Insights*
+(`RunningTaskCount`, con costo). *Consecuencias:* sin código en ejecución propio; ~1,6 USD/mes por las 16 métricas
+de las alarmas y 0,6 por las dos métricas propias (§3.10); los tiempos dependen del retraso con que SQS y ECS publican
+(§3.4): la subida de `worker` puede tardar de 2 a 15 min y el apagado llega a los 45 min ± 2.
+
 ---
 
 ## 7. Riesgos
@@ -1184,7 +1266,7 @@ optimización (INF-6.1).
 | R3 | Caída de `us-east-1a` | Baja | Alto | Aceptado en `dev`; Multi-AZ en `prod` (Fase 6) |
 | R4 | `db.t4g.micro` (1 GiB) se queda corto: índice HNSW en memoria, conexiones, créditos de CPU | Media | Medio | Alarma de créditos; el índice cabe holgado hasta ~50 000 vectores de 768 dimensiones; subir a `db.t4g.small` (~23 USD/mes) si hace falta |
 | R5 | Contraseña de la base y demás secretos en el estado de Terraform | Media | Medio | Bucket de estado privado, cifrado, versionado y solo TLS. Lo leen el administrador, `gha-terraform` y `gha-terraform-plan`; este último desde cualquier PR del repositorio, que solo abre quien tiene escritura. Aceptado en `dev`; se revisa en INF-6.1 |
-| R6 | Imagen de embeddings de ~1,8 GB: 2–3 min desde `embedding.py encender` hasta `embedding` sano | Alta | Bajo | Encender antes de probar (`embedding.py estado` dice cuándo está listo); *start period* de 180 s; `worker` solo sube con `embedding` encendido |
+| R6 | Imagen de embeddings de ~1,8 GB: 3–6 min desde `embedding.py encender` hasta `embedding` sano (1–3 de espera a la alarma de inactividad, §5.10) | Alta | Bajo | Encender antes de probar (`embedding.py estado` dice cuándo está listo); *start period* de 180 s; `worker` solo sube con `embedding` encendido |
 | R7 | Límite de 30 s y 10 MB de API Gateway | Media | Medio | Fotos del dataset directo a S3; `/v1/localize` limitado a 5 fotos de ≤ 1,5 MB (contrato del backend) |
 | R8 | La URL de la API cambia si se recrea la HTTP API, y `ApiConfig.kt` queda desactualizado | Baja | Medio | `prevent_destroy` en la API; dominio propio en Fase 6 |
 | R9 | Cuotas por defecto de una cuenta nueva (vCPU de Fargate, etc.) | Baja | Medio | El sistema usa ~2,5 vCPU con todo encendido; solicitar aumento si un `apply` falla por cuota. Sin GPU desde 0.9.0: el cupo de instancias G de la cuenta es 0 (ADR-INF-14) |

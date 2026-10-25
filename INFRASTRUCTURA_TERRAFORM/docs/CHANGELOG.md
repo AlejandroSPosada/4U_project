@@ -20,6 +20,74 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.13.0] — 2026-10-24
+
+- **Lote que la motivó:** INF-2.1 (encendido de `embedding` y escalado del `worker`).
+- **Qué cambió:**
+  - Código: en `borde`, el filtro de métricas `campus-locator-dev-localize` (8 recursos); en `computo`, `escalado.tf`
+    con 11 recursos (41 en total): objetivos de Application Auto Scaling de `embedding` y `worker` (0-0 al crearse,
+    rango ignorado después), tres políticas por pasos de capacidad exacta, cuatro alarmas de expresión y las dos
+    acciones de las 22:00; en `envs/dev`, `local.metrica_localize` (la reciben `borde` y `computo`, que así no se
+    referencian entre sí) y la variable `apagado_embedding`; `src/ops/embedding.py` y `src/ops/validate21.py`.
+  - Nueva ADR-INF-15 con las decisiones: el filtro vive en `borde` y mira `httpMethod` y `path` (se descartó una ruta
+    `POST /v1/localize`); «`embedding` encendido» es una muestra de `CPUUtilization` de ECS en el mismo minuto que los
+    mensajes, dentro de la alarma de subida de `worker`, porque el apagado por inactividad no puede cambiar el rango de
+    `worker`; encender publica `EmbeddingEncendidos` y espera a que la alarma de inactividad lo vea; una política de
+    capacidad exacta por sentido, con pasos que cubren todos los valores.
+  - §3.1: el rol vinculado `AWSServiceRoleForApplicationAutoScaling_ECSService` no existe; se crea a mano antes del
+    `apply` (`validation-2-1` §5, paso 1). §3.4: cómo se enciende y se apaga, la condición de `worker` y el retraso de
+    las métricas. §3.8: las alarmas de escalado no avisan. §3.10: CloudWatch pasa de 2,3 a 3,8 USD/mes (16 métricas en
+    alarmas y 2 métricas propias); total ≈ 40 y ≈ 53. §4: árbol y fila de INF-2.1 con lo construido. R6: 3–6 min.
+  - §5.1: nueva política `campus-locator-dev-worker-colas-vacias` y las métricas propias `LocalizePeticiones` y
+    `EmbeddingEncendidos`. §5.3: semántica y validación de `apagado_embedding`. §5.10: contrato de encendido y
+    apagado, y parámetros exactos de las alarmas. §5.11: la regla de `embedding` remite al contrato y se documenta
+    `embedding.Operador`. §5.12: entradas nuevas de `borde` y `computo`, recursos de `escalado.tf` y por qué el `plan`
+    queda vacío.
+  - `validation-2-1.md` reescrito con el script: C3 se parte en C3a (configuración) y C3b (comportamiento); §5 con
+    Variables, Preparación (incluido el rol vinculado) y Ejecución, y la hora límite para empezar (19:30).
+  - PLAN: entregables completos de INF-2.1 y su fila de §3 en «En curso».
+  - Corrige contradicciones: (1) `validation-2-1` C3 suponía que el `worker` borra los mensajes de prueba, pero la
+    imagen `bootstrap` no consume las colas: ahora los borra el validador y mide la bajada desde que las colas quedan
+    vacías. (2) §5.1 tenía una sola política para subir y bajar `worker`; ahora hay una por sentido, cada una con dos pasos
+    que fijan su capacidad para cualquier valor (una sola, con pasos distintos por encima y por debajo del umbral,
+    dependería de qué muestras agrega Application Auto Scaling). (3) §3.4 y §5.11 daban encender por
+    `desiredCount = 1` («lo mismo que `embedding.py encender`»); con la alarma de inactividad eso no basta (§5.10).
+    `validate13.py` (INF-1.3) sube `embedding` así: `validation-1-3` §5 dice ahora que se encienda antes con
+    `embedding.py`. (4) `validation-2-1` C2b exigía el apagado entre 45 y 60 min desde que se vacían las colas; puede
+    llegar un minuto antes (el minuto del vaciado cuenta y `FILL` rellena el último): ahora 43–60, desde el último uso
+    (vaciado o encendido). (5) `validation-2-1` P5 pedía el horario siempre; ahora solo con las comprobaciones largas, y
+    también exige `worker` en 0. (6) `validation-2-1` §4 decía que las paradas del `worker` podían avisar por la regla
+    de EventBridge: con `stopCode = ServiceSchedulerInitiated` no avisan (§3.8). (7) §5.12 decía que INF-2.1 usaría
+    los outputs `cluster` y `servicios` de `computo`; el escalado vive dentro del módulo y no los necesita.
+- **Contratos tocados (§5):** §5.1 (política y métricas nuevas), §5.3 (`apagado_embedding`), §5.10 (contrato de
+  encendido), §5.11 (regla de `embedding`) y §5.12 (módulos). Compatible: sube la menor.
+- **Cómo se verificó:** en local, con OpenTofu 1.13.2 y los proveedores `aws` 6.70.0 y `random` 3.9.1 desde un espejo
+  en el sistema de archivos (copia sin lock): `fmt -check`, `validate` de `envs/dev` y TFLint 0.65.0 con el *ruleset*
+  de AWS 0.50.0 en `envs/dev`, `modules/borde` y `modules/computo`, sin avisos; `tofu test` de `computo` con proveedor
+  simulado (6 casos: los 11 recursos con sus nombres, rangos 0-0, expresiones, 45 de 45 y acciones con zona y cron;
+  `noche = null` u omitida sin acciones; `inactividad_min` 2 o 45,5 y un cron inválido, rechazados). Con moto 5.2.4 no
+  se pudo hacer un `apply`: no implementa las etiquetas de Application Auto Scaling ni el protocolo CBOR de CloudWatch
+  del proveedor 6.70. `embedding.py` y `validate21.py` con ruff y contra una simulación acelerada de AWS (ECS con
+  tiempos de arranque, métricas por minuto con retraso, alarmas M de N con `FILL` que repiten su acción en `ALARM`,
+  capacidad exacta dentro del rango): pasa con 2, 5 y 8 min de retraso de SQS y ECS (C2b a los 44,8 min, bajada de
+  C3b a los 14,8); falla como debe con un mensaje ajeno (C3b, C2b y C4, con una sola recepción del ajeno), con la
+  alarma de subida sin la condición de `embedding` (C4), sin apagado por inactividad (C2b), fuera de horario o con
+  `embedding` en marcha (P5, código 3), sin INF-2.1 y con credenciales inválidas (código 3); `--solo C2a,C3a` no
+  cambia nada, C2b y C4 funcionan solas. La simulación destapó que encender justo cuando la alarma iba a pasar a
+  `ALARM` lo apagaba al instante: de ahí la espera a que la alarma vea `EmbeddingEncendidos`. Revisión independiente
+  del código (contra la documentación de AWS y el código del proveedor 6.70.0), con estos arreglos: las actividades de
+  Application Auto Scaling se aceptan también `Pending` o `InProgress` y se buscan 3 min antes de fallar (C3b y C2b
+  habrían dado FALLA falsos); C2b y C4 esperan a que SQS cuente 0 tras borrar mensajes que dejó una comprobación
+  anterior, y la referencia de C2b es el borrado del último mensaje propio; `EmbeddingEncendidos` se publica con marca
+  de tiempo explícita (con el reloj local desfasado, el encendido no la encontraba); cada política tiene dos pasos
+  que cubren todos los valores con la misma capacidad (antes, un solo paso dependía de qué muestras agregara
+  Application Auto Scaling); y las políticas y acciones de un objetivo se crean en cadena (`depends_on`), porque
+  Application Auto Scaling puede rechazar cambios simultáneos y el proveedor no los reintenta. En `dev`: pendiente.
+- **Pendiente:** el `apply` y `validate21.py` en `dev` (cierran INF-2.1). Lo de 0.12.0: §5.13 con la imagen de BE-1.1
+  y la propuesta de R10 a `BACKEND_FASTAPI`.
+
+---
+
 ## [0.12.0] — 2026-10-24
 
 - **Lote que la motivó:** ninguno; cambio aparte antes de INF-2.1. INF-1.4 estaba «Hecho», pero §5 no decía lo que

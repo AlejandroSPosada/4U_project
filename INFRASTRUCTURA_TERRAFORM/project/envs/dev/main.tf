@@ -25,6 +25,13 @@ data "terraform_remote_state" "bootstrap" {
 locals {
   # Prefijo de nombres de §5.1 (campus-locator-dev).
   prefijo = "${var.proyecto}-${var.entorno}"
+
+  # Métrica de uso de POST /v1/localize (§5.1, INF-2.1). borde crea el filtro que la publica y computo la lee en la
+  # alarma de inactividad de embedding: se define aquí y llega a los dos, así ninguno referencia al otro por ella.
+  metrica_localize = {
+    espacio = "${var.proyecto}/${var.entorno}"
+    nombre  = "LocalizePeticiones"
+  }
 }
 
 module "red" {
@@ -84,6 +91,8 @@ module "computo" {
   bucket_dataset_arn = module.datos.bucket_dataset_arn
   colas              = module.datos.colas
   imagen_inicial_tag = var.imagen_inicial_tag
+  metrica_localize   = local.metrica_localize
+  apagado_embedding  = var.apagado_embedding
 }
 
 module "borde" {
@@ -95,6 +104,7 @@ module "borde" {
   subredes_publicas = module.red.subredes_publicas
   sg_vpclink        = module.red.grupos_seguridad["vpclink"]
   cloud_map_api_arn = module.computo.cloud_map_api_arn
+  metrica_localize  = local.metrica_localize
 }
 
 module "observabilidad" { # INF-3.1

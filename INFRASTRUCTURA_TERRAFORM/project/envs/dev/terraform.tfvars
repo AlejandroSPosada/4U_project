@@ -17,3 +17,10 @@ pg_version = "17"
 
 # INF-1.3
 imagen_inicial_tag = "bootstrap"
+
+# INF-2.1 (noche = null quita el apagado nocturno)
+apagado_embedding = {
+  zona            = "America/Bogota"
+  noche           = "cron(0 22 * * ? *)"
+  inactividad_min = 45
+}

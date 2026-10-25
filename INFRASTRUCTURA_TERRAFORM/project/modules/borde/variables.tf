@@ -32,3 +32,8 @@ variable "cloud_map_api_arn" {
   type        = string
   description = "ARN del servicio de Cloud Map api (SRV, salida cloud_map_api_arn del modulo computo)."
 }
+
+variable "metrica_localize" {
+  type        = object({ espacio = string, nombre = string })
+  description = "Metrica de uso de POST /v1/localize que publica el filtro de metricas (campus-locator/dev, LocalizePeticiones; 5.1). La misma la recibe computo para la alarma de inactividad (INF-2.1)."
+}

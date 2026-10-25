@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.12.0**.
+Alineado con `ARCHITECTURE.md` **v0.13.0**.
 
 ---
 
@@ -166,11 +166,15 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 
 #### INF-2.1 — Encendido de `embedding` y escalado del `worker`
 - **Objetivo:** pagar `embedding` solo mientras se usa, y `worker` solo cuando hay trabajo (ADR-INF-14).
-- **Entregables:** `src/ops/embedding.py` (`encender`, `apagar`, `estado`); filtro de métricas `campus-locator-dev-localize`,
-  alarma `campus-locator-dev-embedding-inactivo` y política `campus-locator-dev-embedding-apagar`; acción programada
-  `campus-locator-dev-embedding-apagar-noche` y `campus-locator-dev-worker-apagar-noche`; política por pasos de
-  `worker` condicionada a `embedding` encendido;
-  variable `apagado_embedding` (§3.4, §5.1, §5.3, §5.10).
+- **Entregables:** `src/ops/embedding.py` (`encender`, `apagar`, `estado`; contrato de encendido en §5.10); en
+  `borde`, el filtro de métricas `campus-locator-dev-localize`; en `computo` (`escalado.tf`), los objetivos escalables
+  de `embedding` y `worker`, la alarma `campus-locator-dev-embedding-inactivo` y la política
+  `campus-locator-dev-embedding-apagar`, las alarmas `campus-locator-dev-worker-cola-ingesta`, `-worker-cola-purga` y
+  `-worker-colas-vacias` con las políticas por pasos `campus-locator-dev-worker-cola` y `-worker-colas-vacias` (la
+  subida exige `embedding` corriendo), y las acciones programadas `campus-locator-dev-embedding-apagar-noche` y
+  `campus-locator-dev-worker-apagar-noche`; en `envs/dev`, la variable `apagado_embedding` y `local.metrica_localize`;
+  rol vinculado `AWSServiceRoleForApplicationAutoScaling_ECSService` (a mano, §3.1); `src/ops/validate21.py`
+  (§3.4, §5.1, §5.3, §5.10, §5.12, ADR-INF-15).
 - **Criterios de cierre:**
   - C1. `embedding.py encender` deja `embedding` sano en ≤ 10 min; `embedding.py apagar` lo deja en 0 y deja `worker`
     en 0.
@@ -214,7 +218,7 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 | INF-1.2 | 1 | Hecho | [1-2](./validation/validation-1-2.md) | `e5ee713` 2026-10-24 | 0.6.0 | `apply` por `infra.yml` (24 recursos, PostgreSQL 17.9); el «plan vacío» destapó una diferencia perpetua en `rds.force_ssl` (es el valor por defecto en PostgreSQL 17), corregida con `apply_method = "pending-reboot"` |
 | INF-1.3 | 1 | Hecho | [1-3](./validation/validation-1-3.md) | `a0f2dc5` 2026-10-24 | 0.10.0 | `apply` por `infra.yml` (30 recursos) y `plan` vacío después; imagen `bootstrap` publicada a mano en los dos repositorios. La primera ejecución destapó un error del validador (C5 esperaba `t`; `boolean \|\| text` da `true`), corregido en `a0f2dc5`. `embedding` en Fargate con 2 vCPU (ADR-INF-14) |
 | INF-1.4 | 1 | Hecho | [1-4](./validation/validation-1-4.md) | `13d80fe` 2026-10-24 | 0.11.1 | `apply` por `infra.yml` (7 recursos) y `plan` vacío después. La primera ejecución falló en C2b (1 de 100 con 429 a 5 req/s, con la etapa bien configurada): el *throttling* de API Gateway es aproximado; C2b pasó a 20 req/s con ≥ 10 % de 429 (0.11.1) |
-| INF-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | Rediseñado en 0.7.0: encendido manual de `embedding` y apagado automático en lugar de horario fijo |
+| INF-2.1 | 2 | En curso | [2-1](./validation/validation-2-1.md) | — | — | Código en 0.13.0 (`escalado.tf`, filtro en `borde`, `embedding.py`, `validate21.py`), probado en local; falta el `apply` y la validación en `dev` (1,5–2 h, empezar entre 06:00 y 19:30) |
 | INF-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | |
 | INF-6.1 | 6 | Diferido | — | — | — | |
 

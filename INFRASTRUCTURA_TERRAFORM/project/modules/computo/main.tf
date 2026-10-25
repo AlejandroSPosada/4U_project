@@ -2,7 +2,7 @@
 # procesos, roles de ECS (con el permissions boundary de bootstrap), definiciones de tarea (incluida la de validacion,
 # §5.11) y los servicios api, worker y embedding en Fargate. Terraform crea los servicios y CI cambia la imagen
 # (ADR-INF-09): los servicios ignoran task_definition y desired_count. El autoescalado y el apagado de embedding
-# son de INF-2.1.
+# (INF-2.1) están en escalado.tf.
 
 locals {
   repos = {
@@ -430,7 +430,7 @@ resource "aws_ecs_service" "servicios" {
     }
   }
 
-  # CI registra revisiones nuevas y fija las replicas (ADR-INF-09); INF-2.1 escala worker y embedding.
+  # CI registra revisiones nuevas y fija las replicas (ADR-INF-09); worker y embedding los escala escalado.tf.
   lifecycle {
     ignore_changes = [task_definition, desired_count]
   }

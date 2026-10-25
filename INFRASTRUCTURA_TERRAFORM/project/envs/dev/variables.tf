@@ -67,3 +67,13 @@ variable "imagen_inicial_tag" {
   type        = string
   description = "Etiqueta de imagen de las definiciones de tarea que crea Terraform (imagen de prueba bootstrap, §5.11); CI la reemplaza."
 }
+
+# INF-2.1
+variable "apagado_embedding" {
+  type = object({
+    zona            = string
+    noche           = optional(string)
+    inactividad_min = number
+  })
+  description = "Apagado automatico de embedding (§5.3): zona IANA y cron de la accion nocturna (null = sin ella) y minutos sin uso antes de apagarlo."
+}

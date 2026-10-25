@@ -1,6 +1,6 @@
 # Módulo borde (ARCHITECTURE §3.3, §5.1, §5.7, §5.10; INF-1.4): HTTP API con integración privada por VPC Link hacia el
 # servicio de Cloud Map api (SRV), dos rutas con su propio throttling, etapa $default con despliegue automático y
-# access logs en JSON.
+# access logs en JSON. Desde INF-2.1, también el filtro de métricas que cuenta las peticiones a POST /v1/localize.
 
 locals {
   # Formato de §5.10: un objeto JSON por línea. Todos los valores son cadenas (API Gateway escribe "-" cuando un dato
@@ -94,4 +94,22 @@ resource "aws_apigatewayv2_stage" "default" {
 
   # route_settings exige que la ruta exista.
   depends_on = [aws_apigatewayv2_route.rutas]
+}
+
+# Filtro de métricas de INF-2.1 (§5.1, §5.10): una muestra de valor 1 por cada petición POST /v1/localize que pasa por
+# la API (también las que terminan en 4xx, 429 o 5xx: todas son uso). La lee la alarma de inactividad de embedding, que
+# vive en computo: el espacio y el nombre de la métrica llegan a los dos módulos desde envs/dev, así ninguno de los dos
+# referencia al otro por esto (§5.12). Mira httpMethod y path, no routeKey: /v1/localize entra por ANY /{proxy+}. Los
+# valores del formato son cadenas (§5.10), de ahí las comillas.
+resource "aws_cloudwatch_log_metric_filter" "localize" {
+  name           = "${var.prefijo}-localize"
+  log_group_name = aws_cloudwatch_log_group.apigw.name
+  pattern        = "{ ($.httpMethod = \"POST\") && ($.path = \"/v1/localize\") }"
+
+  metric_transformation {
+    name      = var.metrica_localize.nombre
+    namespace = var.metrica_localize.espacio
+    value     = "1"
+    unit      = "Count"
+  }
 }

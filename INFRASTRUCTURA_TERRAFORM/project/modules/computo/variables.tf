@@ -107,3 +107,31 @@ variable "imagen_inicial_tag" {
   type        = string
   description = "Etiqueta de imagen de las definiciones de tarea que crea Terraform (bootstrap, 5.3); CI la reemplaza."
 }
+
+# INF-2.1
+variable "metrica_localize" {
+  type        = object({ espacio = string, nombre = string })
+  description = "Metrica de uso de POST /v1/localize (la publica el filtro de metricas de borde; 5.1). Su espacio es tambien el de EmbeddingEncendidos."
+}
+
+variable "apagado_embedding" {
+  type = object({
+    zona            = string
+    noche           = optional(string)
+    inactividad_min = number
+  })
+  description = "Apagado automatico de embedding (5.3): zona horaria IANA y cron de la accion nocturna (null = sin apagado nocturno), y minutos sin uso antes de apagarlo."
+
+  validation {
+    condition     = var.apagado_embedding.noche == null || can(regex("^cron\\(.+\\)$", var.apagado_embedding.noche))
+    error_message = "apagado_embedding.noche debe ser null o una expresion cron(...) de Application Auto Scaling."
+  }
+
+  validation {
+    condition = (
+      var.apagado_embedding.inactividad_min >= 5 && var.apagado_embedding.inactividad_min <= 1440 &&
+      floor(var.apagado_embedding.inactividad_min) == var.apagado_embedding.inactividad_min
+    )
+    error_message = "apagado_embedding.inactividad_min debe ser un entero entre 5 y 1440 (la alarma evalua un periodo de 60 s por minuto, como mucho un dia)."
+  }
+}

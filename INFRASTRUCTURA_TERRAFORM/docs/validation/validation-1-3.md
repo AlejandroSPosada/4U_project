@@ -153,7 +153,10 @@ imagen de prueba, C1a, C2 y C6 fallan con `falta la imagen de prueba en …`.
    Esperado: las tres variables con `…/campus-locator/backend`, `…/campus-locator/embedding` y `campus-locator-dev`.
 
 **Ejecución** (antes de las 21:40 `America/Bogota` una vez aplicado INF-2.1, para que el apagado de las 22:00 no
-ponga `embedding` en 0 a mitad):
+ponga `embedding` en 0 a mitad). Desde INF-2.1, encender `embedding` antes con `uv run --group ops python
+src/ops/embedding.py encender` y apagarlo al terminar con `embedding.py apagar`: C2 y C6 lo suben con
+`update-service`, y la alarma de inactividad, si está en `ALARM`, lo devolvería a 0 en un minuto (ARCHITECTURE §3.4);
+encendido, `validate13.py` lo encuentra en 1 y no lo toca:
 
 ```bash
 cd INFRASTRUCTURA_TERRAFORM/project
