@@ -23,6 +23,19 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.9.1] — 2026-10-26
+- Lote que la motivó: FE-3.2 (cierre de la documentación, a la pregunta del maestro «¿se podrían hacer FE-3.5, FE-3.6 y
+  la validación de FE-3.2 en `dev` leyendo solo docs?»), y su primera ejecución en `dev`.
+- Qué cambió (solo documentos; el código es el de `e3f3d12`): §5.5, el formato exacto de la línea `ResultadoVM`
+  (`Resultado: <nivel|sin_coincidencias|sin ubicación>, destino <sí|no>`) y la trampa de que empieza por `Resultado:`
+  como la de `EscaneoVM` (hay que filtrar por tag); §5.6, los valores de `RESULTADO_DE_PRUEBA` (los usa la vista previa
+  de la 6.3); §5.11, que el doble de `esperar_enter` de `test_validate32.py` reconoce los pasos guiados por «puntos
+  conocidos» y «embedding apagado»; §4.6 y PLAN §3, el resultado en `dev`.
+- Contratos tocados (§5): ninguno (aclaraciones).
+- Cómo se verificó: `validate32.py --entorno dev` sobre `e3f3d12` (el maestro): P1–P5 pasan, P6 falla (BE-3.2 no está
+  «Hecho»), P7 no evaluada, código 2 (`Bloqueado`), informe `.validacion/FE-3.2-20261026-153456.json`; lo esperado.
+- Pendiente: lo de 0.9.0 (C1, C4 y C3b en `dev` cuando BE-3.2 esté «Hecho»).
+
 ## [0.9.0] — 2026-10-26
 
 - **Lote que la motivó:** FE-3.2 (ubicación real y Resultado 6.3; sin alertas, que son de FE-3.6).
