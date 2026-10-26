@@ -68,6 +68,15 @@ prueba de validate31" la regla no avisaría») y C3b también (sin eventos coinc
 No llega correo cuando la alarma de la DLQ vuelve a `OK` tras la limpieza (ADR-INF-16). Si un correo no llega en unos
 minutos aunque SNS lo dé por entregado, mirar la carpeta de spam (R14).
 
+**Evidencia del cierre** (ejecución del 2026-10-26, 22:47:50–22:54:40 UTC, sobre `91bac0a`, código 0; informe
+`.validacion/INF-3.1-20261026-224750.json`):
+- C2b: [captura del correo](./evidencia/inf-3-1/c2b-correo-alarma-ingesta-dlq.png) «ALARM: "campus-locator-dev-ingesta-dlq"
+  in US East (N. Virginia)» de AWS Notifications, 17:53 de Bogotá, «State Change: OK -> ALARM», «Threshold Crossed: 1
+  out of the last 1 datapoints [1.0 (26/10/26 22:51:00)]», 22:53:49 UTC (se ve también el de la primera ejecución,
+  17:19). No muestra la dirección de correo.
+- C3c: el usuario confirmó por escrito que llegó el correo de la tarea detenida (tarea
+  `feb7821458354cffa300ab68366ae1b3`, `startedBy = validacion-3-1`, `EssentialContainerExited`); sin captura.
+
 ## 4. Datos de prueba y limpieza
 
 - **C2:** un mensaje en una DLQ con cuerpo `{"validacion": "validacion-3-1-<AAAAMMDD-HHMMSS>"}`. Lo borra el propio C2a

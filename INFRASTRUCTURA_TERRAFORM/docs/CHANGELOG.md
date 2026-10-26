@@ -20,6 +20,32 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.15.1] — 2026-10-26
+
+- **Lote que la motivó:** INF-3.1, cierre en `dev`.
+- **Qué cambió:** solo documentos. INF-3.1 pasa a «Hecho» en PLAN §3 (`91bac0a`, 2026-10-26). Encabezado, §3.8, §5.11,
+  §5.12 y R13 dicen lo comprobado y quitan los «sin comprobar» que ya no lo son: la parada de la tarea de prueba, que
+  EventBridge publica con la condición `aws:SourceArn` de la política, el `apply` de 0.15.0 y la forma del correo de
+  CloudWatch. `validation-3-1` §3 enlaza la evidencia de C2b (`evidencia/inf-3-1/c2b-correo-alarma-ingesta-dlq.png`)
+  y anota la confirmación escrita de C3c.
+- **Contratos tocados (§5):** ninguno. Sube el parche.
+- **Cómo se verificó:** `91bac0a` aplicado por `infra.yml` (ejecución 40414967226: `Plan: 0 to add, 1 to change, 0 to
+  destroy.` y `Apply complete! Resources: 0 added, 1 changed, 0 destroyed.`), aprobado por el maestro con la
+  autorización del usuario. `validate31.py --entorno dev` sobre `91bac0a` con código 0 (2026-10-26 22:47:50–22:54:40
+  UTC; informe `.validacion/INF-3.1-20261026-224750.json`): pasan P1–P4; C1a (6 alarmas en `OK`); C1b (patrón con
+  `startedBy validacion-3-1`, `TestEventPattern` con los 9 casos como se espera, política); C1c; C3a (tarea
+  `feb7821458354cffa300ab68366ae1b3`, `family:campus-locator-dev-validacion`, `EssentialContainerExited`, código 3, a
+  los 1,3 min); C3b (1 evento coincidente, 1 invocación, 0 fallidas; SNS 1 entregada, 0 fallidas); C2a (`ingesta-dlq`
+  → `ALARM` a los 2,7 min; SNS 1 entregada); limpieza hecha. Manuales: C2b con captura del correo (sin la dirección);
+  C3c, confirmación escrita del usuario. La primera ejecución (22:16 UTC, sobre `8c98f90`) dio código 1 en C3 por el
+  `group` (0.15.0).
+- **Pendiente:** ninguno del lote (INF-3.1 «Hecho»). Sin comprobar todavía (§3.8): el `stopCode` de una tarea
+  reemplazada por *health checks*, eventos repetidos, la métrica de una DLQ inactiva con mensajes, el texto de una acción
+  fallida de una alarma y que la alarma de `embedding` encendido dispare tras 10 h. Lo de 0.12.0: §5.13 con la imagen de
+  BE-1.1 y la propuesta de R10.
+
+---
+
 ## [0.15.0] — 2026-10-26
 
 - **Lote que la motivó:** INF-3.1, tras su primera validación en `dev` (C3 no podía pasar).

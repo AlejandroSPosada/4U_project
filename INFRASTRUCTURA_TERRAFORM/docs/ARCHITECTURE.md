@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.15.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.15.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
-| Estado | Diseño propuesto. **INF-0.1 a INF-2.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS; encendido de `embedding` y escalado del `worker`). **INF-3.1** (observabilidad) **aplicado** el 2026-10-26, con la suscripción confirmada; su primera validación en `dev` pasó C1 y C2 y falló en C3 (§3.8: ECS no admite el `group` de la tarea de prueba). 0.15.0 añade a la regla una rama para la tarea de prueba (§5.10): **sin aplicar**. INF-6.1, diferido |
+| Estado | Diseño propuesto. **INF-0.1 a INF-3.1 aplicados y validados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS; encendido de `embedding` y escalado del `worker`; observabilidad y alarmas, con la regla de 0.15.0 y la suscripción confirmada). INF-6.1, diferido |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -282,10 +282,15 @@ Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas, todo e
   dev` sobre `8c98f90` (código 1): **comprobado** que las 6 alarmas, la regla, su destino, la política del topic y la
   suscripción quedaron como en §5.6 y §5.10 (C1a–C1c) y que una DLQ con un mensaje pasa su alarma a `ALARM` y SNS
   entrega el aviso (C2a: `ingesta-dlq` a los 2,7 min, 1 entregada, 0 fallidas; la historia de la alarma trae la
-  entrada `Action` del aviso al topic, así que CloudWatch puede publicar con la política). **Falló C3**: ECS rechazó
-  la tarea de prueba con `group = service:worker` (abajo). 0.15.0 cambia la regla (rama `startedBy`, §5.10) y la
-  tarea de prueba (sin `group`); comprobado con `plan` (1 cambio en sitio, solo el `event_pattern`) y pruebas locales;
-  la regla y su entrega al topic siguen **sin comprobar** en `dev` hasta su `apply` y `validate31.py`.
+  entrada `Action` del aviso al topic, así que CloudWatch puede publicar con la política). Falló C3: ECS rechazó
+  la tarea de prueba con `group = service:worker` (abajo). 0.15.0 (commit `91bac0a`) cambió la regla (rama
+  `startedBy`, §5.10) y la tarea de prueba (sin `group`): aplicado por `infra.yml` (ejecución 40414967226,
+  `Apply complete! Resources: 0 added, 1 changed, 0 destroyed.`). `validate31.py --entorno dev` sobre `91bac0a`
+  (2026-10-26 22:47–22:54 UTC, código 0): **comprobado todo el camino** — `TestEventPattern` da lo esperado en los 9
+  casos de C1b; la tarea de prueba se detuvo con `EssentialContainerExited` (código 3) a los 1,3 min; la regla
+  registró 1 evento coincidente y 1 invocación sin fallos, y SNS entregó el aviso (C3b: EventBridge publica con la
+  condición `aws:SourceArn` de la política); C2a repitió `ingesta-dlq` → `ALARM` a los 2,7 min con 1 entrega. Llegaron
+  los dos correos (C2b con captura, C3c confirmado por el usuario; `validation-3-1` §3).
 - Trampas conocidas:
   - La alarma de 5xx cuenta también los 500 que da API Gateway con `api` en 0 réplicas (§5.13; p. ej., durante un
     validador de INF-1.x) y los `503 EMBEDDING_NO_DISPONIBLE` de `/v1/localize` con `embedding` apagado: más de 5 en
@@ -305,10 +310,14 @@ Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas, todo e
     dice que el grupo de una tarea de servicio es su nombre y no se puede cambiar). Así, una tarea suelta nunca casa
     con la rama `group` de la regla: por eso existe la rama `startedBy = validacion-3-1` (0.15.0), y la rama de los
     servicios se prueba con `events:TestEventPattern` contra eventos sintéticos (`validate31.py` C1b).
-  - Sin comprobar hasta que C3 pase en `dev`: que EventBridge publique con la condición `ArnEquals aws:SourceArn` de la
-    política del topic (si no, C3b da `FailedInvocations`). Comprobado en C2a: CloudWatch publica y la historia de la
-    alarma trae la entrada `Action` (`accion_publicada` busca «fail» o el nombre del topic; sin ninguna entrada, C2a
-    decide con las métricas de SNS y lo dice en el detalle). El texto exacto de una acción fallida sigue sin verse.
+  - Comprobado el 2026-10-26: EventBridge publica con la condición `ArnEquals aws:SourceArn` de la política del topic
+    (C3b, 0 `FailedInvocations`) y CloudWatch también, con entrada `Action` en la historia de la alarma
+    (`accion_publicada` busca «fail» o el nombre del topic; sin ninguna entrada, C2a decide con las métricas de SNS y lo
+    dice en el detalle). Sigue sin verse el texto exacto de una acción fallida.
+  - El correo de CloudWatch, tal como llegó (captura en `validation-3-1` §3): remitente «AWS Notifications»
+    `no-reply@sns.amazonaws.com`, asunto `ALARM: "campus-locator-dev-ingesta-dlq" in US East (N. Virginia)`, con
+    «State Change: OK -> ALARM», el motivo (`Threshold Crossed: 1 out of the last 1 datapoints [1.0 (…)]`) y la hora en
+    UTC.
 - **AWS Budgets** `campus-locator-mensual`: 100 USD/mes con avisos al 50 % y 80 % del gasto real y al 100 % del
   pronosticado, al mismo correo. Budgets escribe directamente a ese correo (suscriptor `EMAIL`), sin confirmación.
   *Cost Anomaly Detection* activado (sin costo).
@@ -919,7 +928,8 @@ falla porque faltan credenciales, herramientas o variables da **3**, no 2: el 2 
   regla, §5.10) y el comando de `app` sobrescrito a
   `["sh", "-c", "echo 'validacion-3-1: sale con error a proposito'; exit 3"]`, sin detener ningún servicio
   (ADR-INF-16). Escribe esa línea en `/campus-locator/dev/validacion` (stream `validacion/app/<id-de-la-tarea>`) y se
-  detiene sola con `stopCode = EssentialContainerExited` y código 3 (lo esperado; sin comprobar en `dev`). En 0.14.0
+  detiene sola con `stopCode = EssentialContainerExited` y código 3 (comprobado en `dev` el 2026-10-26: 1,3 min desde el
+  `run-task`). En 0.14.0
   la lanzaba con `--group service:worker`, que ECS rechaza («Invalid namespace for group.», §3.8). Ningún otro
   validador debe usar `startedBy = validacion-3-1`: su parada mandaría un correo.
 - Lee los outputs con `terraform -chdir=bootstrap output -json` (lotes INF-0.x) y
@@ -1277,9 +1287,10 @@ son el nombre sin el prefijo), `aws_cloudwatch_event_rule.tarea_detenida` y `aws
   las alarmas y la regla están libres (`validation-3-1` §5, paso 1): `CreateTopic`, `PutMetricAlarm` y `PutRule` no
   fallan con un nombre que ya existe, lo sobrescriben, y Terraform se quedaría con un recurso ajeno sin avisar.
 - El `plan` de INF-3.1 (0.14.0) fueron 11 altas, ninguna modificación ni baja, y el output nuevo (`+ sns_alertas_arn`).
-  Los outputs nuevos de `borde`, `computo` y `datos` no cambian ningún recurso. El de 0.15.0 es `Plan: 0 to add, 1 to
+  Los outputs nuevos de `borde`, `computo` y `datos` no cambian ningún recurso. El de 0.15.0 fue `Plan: 0 to add, 1 to
   change, 0 to destroy.`: solo el `event_pattern` de `aws_cloudwatch_event_rule.tarea_detenida` (en `detail`, `group`
-  pasa a ser la primera rama de `"$or"`, con la rama `startedBy` al lado).
+  pasa a ser la primera rama de `"$or"`, con la rama `startedBy` al lado); aplicado el 2026-10-26 (ejecución
+  40414967226 de `infra.yml`, `0 added, 1 changed, 0 destroyed`).
 - La política nombra la regla con su ARN escrito (`arn:aws:events:<region>:<cuenta>:rule/<prefijo>-tarea-detenida`, bus
   `default`), no con `aws_cloudwatch_event_rule.tarea_detenida.arn`: con la referencia, cualquier cambio en sitio de la
   regla aplaza la lectura del `data` al `apply` y el `plan` muestra también `aws_sns_topic_policy.alertas` como
@@ -1567,7 +1578,7 @@ decisión sigue igual.
 | R10 | `/v1/localize` es público: abuso que dispara costos; `/v1/auth/login` admite fuerza bruta | Baja | Medio | *Throttling* (aproximado: frena volumen, no intentos sueltos, §3.3); alarma de 5xx; en `prod`, WAF o clave de app. Límite de intentos de inicio de sesión: lo tiene que poner el backend (`BACKEND_FASTAPI`; propuesta en CHANGELOG 0.12.0). Si limita por IP, la cabecera con la IP del cliente está sin verificar (§5.13) |
 | R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y pueden chocar con nombres de §5.1 (sobre todo el *namespace* de Cloud Map `campus-locator.local`, con INF-1.3) | Alta | Medio | Revisado el 2026-10-24: no había otra VPC `campus-locator-dev-vpc` (C2a de INF-1.1) ni nada que choque con INF-1.2 (el bucket del dataset ya no existe; sin instancias, *snapshots*, grupos de parámetros ni de subredes de RDS; sin colas; `campus-locator-dev/jwt-secret` está en borrado programado y su nombre no choca). Antes de INF-1.3, inventariar y limpiar el resto: clúster y servicios de ECS, ECR `campus-locator-dev/*`, *namespace* de Cloud Map, *target group*, *log groups* `/ecs/…`, roles `campus-locator-dev-backend-*` y `-embedding-*` y los buckets `campus-locator-dev-scans-648617469176` y `4uproject-eafit-tfstate` (CHANGELOG 0.3.0). Revisado de nuevo antes de INF-1.3 (`.validacion/inventario-r11b.txt`): ya no quedan roles `campus-locator-dev-*` ni buckets del intento anterior; antes del `apply` de INF-1.3 se confirma que no hay *namespace* `campus-locator.local`, clúster `campus-locator-dev` ni repositorios `campus-locator/*` (`servicediscovery list-namespaces`, `ecs describe-clusters`, `ecr describe-repositories`) |
 | R12 | El repositorio es público: los logs de Actions y los comentarios del `plan` los puede leer cualquiera | Alta | Bajo | Terraform oculta los valores `sensitive` (contraseñas, secretos) en el `plan` y en los logs; ningún paso imprime el estado ni credenciales; todo output con un dato sensible se declara `sensitive`; los PR desde *forks* no ejecutan el `plan`. Lo que queda visible (IDs, ARN, URL) no da acceso por sí solo |
-| R13 | El apagado automático de `embedding` falla y queda encendido (~2,5 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas; INF-3.1, con código desde 0.14.0, sin aplicar todavía) y presupuesto con avisos. El apagado por inactividad y el escalado están configurados y revisados (`validate21.py` C2a y C3a), pero observarlos en `dev` es opcional desde 0.13.1: la alarma de INF-3.1 avisa si falla |
+| R13 | El apagado automático de `embedding` falla y queda encendido (~2,5 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas; INF-3.1, aplicada el 2026-10-26; su configuración la comprueba `validate31.py` C1a, pero que dispare tras 10 h no se ha observado) y presupuesto con avisos. El apagado por inactividad y el escalado están configurados y revisados (`validate21.py` C2a y C3a), pero observarlos en `dev` es opcional desde 0.13.1: la alarma de INF-3.1 avisa si falla |
 | R14 | Los avisos no llegan: suscripción sin confirmar, alguien se da de baja desde el enlace de un correo, o el correo cae en spam | Media | Medio | `validate31.py` C1c comprueba la suscripción confirmada y C2/C3 que SNS entrega; una suscripción borrada la vuelve a crear el siguiente `plan`/`apply` (hay que confirmarla otra vez); la primera vez, marcar el remitente `no-reply@sns.amazonaws.com` como «no es spam». Si el correo deja de servir, se cambia `correo_alertas` en los dos `terraform.tfvars` (§5.3) |
 
 ---
