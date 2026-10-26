@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from app.api.v1 import (
     admin_diagnostico,
     admin_estadisticas,
+    admin_imagenes,
     admin_videos,
     alertas,
     auth,
@@ -30,11 +31,13 @@ RESPUESTAS_PROTEGIDAS = {
     503: {"model": ErrorRespuesta, "description": "BASE_NO_DISPONIBLE"},
 }
 
-#: Routers de `/v1/admin/*` (BE-2.1: videos; BE-2.3: stats; BE-2.4: diagnóstico; BE-3.1: lugares; BE-3.3: alertas…).
+#: Routers de `/v1/admin/*` (BE-2.1: videos; BE-2.3: stats; BE-2.4: diagnóstico; BE-3.1: lugares; BE-3.3: alertas;
+#: BE-4.1: imágenes).
 RUTAS_ADMIN: list[APIRouter] = [
     reservados.router_admin,
     admin_estadisticas.router,  # BE-2.3: GET /v1/admin/stats
-    admin_videos.router,
+    admin_videos.router,  # BE-2.1 (lecturas) y BE-4.1 (PATCH, DELETE)
+    admin_imagenes.router,  # BE-4.1: /v1/admin/images
     admin_diagnostico.router,
     lugares.router_admin,
     alertas.router_admin,  # BE-3.3: /v1/admin/alerts

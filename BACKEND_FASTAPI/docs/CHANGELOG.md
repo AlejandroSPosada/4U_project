@@ -20,6 +20,63 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.15.0] — 2026-10-26
+
+- **Lote que la motivó:** BE-4.1 (Administración de videos e imágenes, y purga), construcción; la ejecución en `dev`
+  la coordina el maestro. Lo consumirán FE-4.1 (vistas 7.11–7.14) y la comparación de variantes de EMB-3.2 (las `url`
+  del detalle de un video).
+- **Qué cambió:**
+  - **Construido** (§4.12 reescrita): `PATCH` y `DELETE /v1/admin/videos/{id}`, `GET /v1/admin/images`,
+    `GET`/`PATCH`/`DELETE /v1/admin/images/{id}`, `POST /v1/admin/images/lote`, `POST
+    /v1/admin/images/{id}/reprocesar`, URLs prefirmadas GET en `ImagenAdmin` (también en `GET /v1/admin/videos/{id}`),
+    la purga de la cola `purga` en el `worker` (`purgar_video`, `purgar_imagen`) y el reconciliador en `api`. Código
+    nuevo: `servicios/imagenes.py`, `servicios/purga.py`, `api/v1/admin_imagenes.py`; cambios en `servicios/videos.py`,
+    `api/v1/admin_videos.py`, `api/v1/__init__.py`, `api/dependencias.py`, `clientes/s3.py` (`firmar_get`,
+    `firmar_gets`), `clientes/sqs.py` (`enviar`, `Colas`, `crear_colas`), `dominio/mensajes.py` (mensajes de `purga` y
+    cuerpos que envía `api`), `esquemas/videos.py`, `errores.py`, `main.py` (colas y tarea `reconciliador-purgas`) y
+    `worker.py` (el bucle consume también `purga`, en serie con la ingesta; `procesar_lote` de la ingesta no cambia).
+    Sin migración ni cambios de infraestructura.
+  - **ADR-BE-20** (purga: video tras el `COMMIT` con reconciliador, imagen y re-procesado dentro de la transacción,
+    purga en serie con la ingesta, mensajes acotados, `DELETE` de video repetido igual y de imagen `404`, `409` al
+    re-procesar una foto sin subir, URLs que no rompen el detalle) y riesgo **R18** (purga pendiente sin `worker`;
+    huérfanos de un `purgar_imagen` en la DLQ).
+  - §4.1, §4.2, §4.5, §4.9 y §4.11 al día (las guías para BE-4.1 de §4.9 y §4.11, aplicadas). §4.12 incluye «Para la
+    app (FE-4.1)».
+  - `validate41.py` nuevo (P1–P5; C5b, C4a, C1a, C1b, C4b, C5a, C2, C3) y su prueba con un mundo falso; §5.11 con su
+    descripción y la fila de limpieza «con BE-4.1 hecho». `validation-4-1.md` reescrito con su §5 completo.
+  - Contradicciones corregidas: `validation-4-1` P3 pedía `embedding` encendido junto con BE-2.2 y P4 una consulta
+    `vecinos` (que necesita `embedding`) antes de encenderlo; ahora P5 enciende `embedding` al final, como en
+    `validate24.py`. C3b contaba solo `ApproximateNumberOfMessages` (aproximado y con retraso): ahora exige el evento
+    `purgas_reencoladas` del log de `api` y el contador queda como evidencia. P5 (objetivo escalable) pasa a P4. La
+    preparación borraba con `limpiar-validacion` en el texto de otros validadores; aquí con `DELETE`. §5.5 decía de
+    `ImagenAdmin` «hasta BE-4.1 … `null`» y `total_fotos` de lugares «hasta BE-4.1 … es 0».
+- **Contratos tocados (§5):**
+  - §5.5: `ImagenAdmin` con las reglas de `url`, `url_miniatura` y `url_expira_en`; filas de la tabla precisadas (sin
+    cambiar las formas: `DELETE` de imagen repetido → `404`; `reprocesar` → `202` sin cuerpo o `409
+    IMAGEN_NO_SUBIDA`); subsecciones nuevas «Videos: `PATCH` y `DELETE` (BE-4.1)» e «Imágenes: `/v1/admin/images`
+    (BE-4.1)» con ejemplos, reglas y orden de errores; el detalle de video firma las URLs.
+  - §5.6: código nuevo `409 IMAGEN_NO_SUBIDA`; `500 ERROR_INTERNO` también por falta de `SQS_URL_PURGA`/`SQS_URL_INGESTA`
+    en `api` y por SQS que no acepta un mensaje en las rutas que encolan dentro de la transacción.
+  - §5.7: «`auditoria`: filas de BE-4.1» (`video.renombrar`, `video.eliminar`, `imagen.editar`, `imagen.eliminar`,
+    `imagen.reprocesar`), sin cambio de esquema. §5.8: quién envía cada mensaje y cuándo, qué exige el `worker` (en
+    `purgar_imagen`, solo las dos claves de la imagen), cuándo descarta y que el reconciliador puede duplicar
+    `purgar_video` (formato sin cambios). §5.9: el `worker` consume `purga`. §5.10: notas de `PRESIGN_GET_TTL_S` y
+    `RECONCILIADOR_CADA_MIN`; eventos nuevos (`video_renombrado`, `video_eliminado`, `purga_no_encolada`,
+    `imagen_editada`, `imagen_eliminada`, `imagen_reprocesada`, `imagenes_lote`, `purgas_reencoladas`,
+    `reconciliador_fallido`, `lote_purga`, `video_purgado`, `imagen_purgada`, `purga_descartada`,
+    `purga_transitoria`) y campos nuevos en `worker_iniciado` (`purga`), `mensaje_no_reconocido` y `cola_fallida`
+    (`cola`; también en `api`), `s3_fallido` (`firmar_get`) y `configuracion_incompleta`.
+- **Cómo se verificó:** en local (WSL), `ruff check` y `ruff format --check` en verde; `pytest` **sin**
+  `PRUEBAS_DB_URL`: 778 pasan y 274 se omiten (las `base`), entre ellas las nuevas `tests/unit/test_purga.py`,
+  `tests/contrato/test_contrato_admin.py` y `tests/ops/test_validate41.py` (camino feliz, 5 backends defectuosos, BE-4.1
+  sin desplegar → 2, el escalado suspendido que reanuda la preparación). Las 12 de `tests/base/test_admin_videos_base.py`
+  **sin ejecutar**: Docker Desktop no arranca en la máquina (sin PostgreSQL local); corren en el CI de `backend.yml` de
+  un PR. El SQL de §4.12 es el que compila SQLAlchemy con el dialecto asyncpg (impreso). Nada ejecutado en `dev`.
+- **Pendiente:** las pruebas con base en el CI; integrar en `main` **después** del día de campo del 2026-10-27 (cambia
+  el bucle del `worker`); `validate41.py --entorno dev` con código 0 y entonces la fila BE-4.1 de PLAN §3 a «Hecho».
+  Del frontend (a decidir con FE-4.1): 7.12 pide «dispositivo» y 7.13 «reprocesar embeddings» y «reintentar subida» de
+  un video entero, que §5.5 no tiene (hoy: foto a foto). ADR-BE-20, decisión del lote a confirmar por el maestro.
+
 ## [0.14.1] — 2026-10-26
 
 - **Lote que la motivó:** BE-3.3 (cierre: `validate33.py --entorno dev` con código 0 sobre `4885ad6`, PLAN §3).

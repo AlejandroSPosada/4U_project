@@ -156,6 +156,7 @@ class AlmacenFalso:
         self.fallar_descarga: set[str] = set()
         self.fallar_escritura = False
         self._etags = 0
+        self.firmadas_get: list[str] = []  # BE-4.1
 
     def subir(self, clave: str, n_bytes: int = 1234, datos: bytes | None = None) -> str:
         """Simula el `PUT` de la app; con `datos`, guarda esos bytes (los descarga el `worker`). Devuelve el ETag
@@ -203,6 +204,21 @@ class AlmacenFalso:
             expira_en=ahora + timedelta(seconds=ttl_s),
         )
 
+    def firmar_get(self, clave: str, ttl_s: int):
+        """BE-4.1: como `firmar_put`, para las URLs GET del panel (`firmadas_get`; `fallar_firma` también)."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.clientes.s3 import FalloS3, UrlFirmada
+
+        if self.fallar_firma:
+            raise FalloS3("firmar: NoCredentialsError")
+        self.firmadas_get.append(clave)
+        ahora = datetime.now(UTC).replace(microsecond=0)
+        return UrlFirmada(
+            url=f"https://{self.bucket}.s3.amazonaws.com/{clave}?{self.FIRMA_FALSA}",
+            expira_en=ahora + timedelta(seconds=ttl_s),
+        )
+
     def consultar(self, clave: str):
         from app.clientes.s3 import FalloS3
 
@@ -224,3 +240,33 @@ class AlmacenFalso:
 @pytest.fixture
 def almacen_falso() -> AlmacenFalso:
     return AlmacenFalso()
+
+
+class ColaFalsa:
+    """BE-4.1: doble de `ColaSqs` para lo que envía `api` (`enviar`): guarda los cuerpos en `enviados` (JSON ya
+    leído en `mensajes()`); con `fallar`, `FalloSqs`."""
+
+    def __init__(self) -> None:
+        self.enviados: list[str] = []
+        self.fallar = False
+
+    def enviar(self, cuerpo: str) -> str:
+        from app.clientes.sqs import FalloSqs
+
+        if self.fallar:
+            raise FalloSqs("enviar: ClientError: AccessDenied")
+        self.enviados.append(cuerpo)
+        return f"m{len(self.enviados)}"
+
+    def mensajes(self) -> list[dict]:
+        import json
+
+        return [json.loads(cuerpo) for cuerpo in self.enviados]
+
+
+@pytest.fixture
+def colas_falsas():
+    """BE-4.1: `Colas(ingesta=ColaFalsa(), purga=ColaFalsa())` para `crear_app(…, colas=…)`."""
+    from app.clientes.sqs import Colas
+
+    return Colas(ingesta=ColaFalsa(), purga=ColaFalsa())

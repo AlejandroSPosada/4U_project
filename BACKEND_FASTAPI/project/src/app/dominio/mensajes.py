@@ -7,6 +7,10 @@
 - `Reprocesar(imagen_id)`: `{"tipo": "reprocesar_imagen", "version": 1, "imagen_id": …}` (lo envía `api`).
 - `PruebaS3()`: el `s3:TestEvent` que S3 envía al configurar la notificación: se borra sin hacer nada.
 - `NoReconocido(motivo)`: cualquier otra cosa; el `worker` lo registra y lo borra.
+
+BE-4.1 añade la cola `purga`: `interpretar_purga(cuerpo)` → `PurgarVideo(video_id)`, `PurgarImagen(imagen_id,
+video_id, s3_keys)` o `NoReconocido(motivo)`; y los cuerpos que envía `api`: `cuerpo_reprocesar`,
+`cuerpo_purgar_video` y `cuerpo_purgar_imagen` (JSON compacto, §5.8).
 """
 
 from __future__ import annotations
@@ -14,8 +18,11 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import unquote_plus
+
+from app.dominio.recoleccion import clave_dataset, clave_miniatura
 
 #: Versiones aceptadas de `reprocesar_imagen` (§5.8: la actual y la anterior durante un despliegue).
 VERSIONES_REPROCESAR = frozenset({1})
@@ -95,3 +102,110 @@ def interpretar(cuerpo: str) -> Mensaje:
             return NoReconocido(f"{TIPO_REPROCESAR} sin imagen_id válido")
         return Reprocesar(imagen_id=imagen_id)
     return NoReconocido("ni Records ni tipo")
+
+
+# --- Cola `purga` y cuerpos que envía `api` (BE-4.1) --------------------------------------------------------------
+TIPO_PURGAR_VIDEO = "purgar_video"
+TIPO_PURGAR_IMAGEN = "purgar_imagen"
+#: Versiones aceptadas de los mensajes de `purga` (§5.8).
+VERSIONES_PURGA = frozenset({1})
+
+
+@dataclass(frozen=True)
+class PurgarVideo:
+    video_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class PurgarImagen:
+    imagen_id: uuid.UUID
+    video_id: uuid.UUID
+    s3_keys: tuple[str, ...]
+
+
+MensajePurga = PurgarVideo | PurgarImagen | NoReconocido
+
+
+def _uuid(valor: Any) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(str(valor)) if isinstance(valor, str) else None
+    except ValueError:
+        return None
+
+
+def interpretar_purga(cuerpo: str) -> MensajePurga:
+    """Un mensaje de `purga`. `purgar_imagen` solo admite en `s3_keys` las dos claves de esa imagen (el original y la
+    miniatura, infra §5.5): así un mensaje nunca puede borrar otra cosa del bucket."""
+    try:
+        datos = json.loads(cuerpo)
+    except (ValueError, TypeError):
+        return NoReconocido("cuerpo que no es JSON")
+    if not isinstance(datos, dict):
+        return NoReconocido("cuerpo que no es un objeto JSON")
+    tipo = datos.get("tipo")
+    if tipo not in (TIPO_PURGAR_VIDEO, TIPO_PURGAR_IMAGEN):
+        return NoReconocido(f"tipo desconocido: {str(tipo)[:60]}")
+    version = datos.get("version")
+    if type(version) is not int or version not in VERSIONES_PURGA:
+        return NoReconocido(f"versión no admitida de {tipo}: {str(version)[:20]}")
+    video_id = _uuid(datos.get("video_id"))
+    if video_id is None:
+        return NoReconocido(f"{tipo} sin video_id válido")
+    if tipo == TIPO_PURGAR_VIDEO:
+        return PurgarVideo(video_id=video_id)
+    imagen_id = _uuid(datos.get("imagen_id"))
+    if imagen_id is None:
+        return NoReconocido(f"{tipo} sin imagen_id válido")
+    claves = datos.get("s3_keys")
+    permitidas = {clave_dataset(video_id, imagen_id), clave_miniatura(video_id, imagen_id)}
+    if not isinstance(claves, list) or not claves or any(c not in permitidas for c in claves):
+        return NoReconocido(f"{tipo} con s3_keys que no son de la imagen")
+    return PurgarImagen(imagen_id=imagen_id, video_id=video_id, s3_keys=tuple(dict.fromkeys(claves)))
+
+
+def _sello(ahora: datetime | None) -> str:
+    return (ahora or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _json(datos: dict[str, Any]) -> str:
+    return json.dumps(datos, separators=(",", ":"), ensure_ascii=False)
+
+
+def cuerpo_reprocesar(imagen_id: uuid.UUID, solicitado_por: uuid.UUID | None, ahora: datetime | None = None) -> str:
+    return _json(
+        {
+            "tipo": TIPO_REPROCESAR,
+            "version": 1,
+            "imagen_id": str(imagen_id),
+            "solicitado_por": str(solicitado_por) if solicitado_por else None,
+            "solicitado_en": _sello(ahora),
+        }
+    )
+
+
+def cuerpo_purgar_video(video_id: uuid.UUID, solicitado_por: uuid.UUID | None, ahora: datetime | None = None) -> str:
+    return _json(
+        {
+            "tipo": TIPO_PURGAR_VIDEO,
+            "version": 1,
+            "video_id": str(video_id),
+            "solicitado_por": str(solicitado_por) if solicitado_por else None,
+            "solicitado_en": _sello(ahora),
+        }
+    )
+
+
+def cuerpo_purgar_imagen(
+    imagen_id: uuid.UUID, video_id: uuid.UUID, solicitado_por: uuid.UUID | None, ahora: datetime | None = None
+) -> str:
+    return _json(
+        {
+            "tipo": TIPO_PURGAR_IMAGEN,
+            "version": 1,
+            "imagen_id": str(imagen_id),
+            "video_id": str(video_id),
+            "s3_keys": [clave_dataset(video_id, imagen_id), clave_miniatura(video_id, imagen_id)],
+            "solicitado_por": str(solicitado_por) if solicitado_por else None,
+            "solicitado_en": _sello(ahora),
+        }
+    )

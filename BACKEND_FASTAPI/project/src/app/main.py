@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from app import __version__
 from app.api.v1 import router_v1
 from app.clientes.s3 import AlmacenS3
+from app.clientes.sqs import Colas, crear_colas
 from app.config import Settings, get_settings
 from app.db import sesion
 from app.errores import registrar_manejadores
@@ -27,7 +28,7 @@ from app.esquemas.errores import ErrorRespuesta
 from app.logs import configurar_logs, obtener_logger, registrar
 from app.middleware import MiddlewareSolicitud
 from app.seguridad import hash as hash_password
-from app.servicios import alertas
+from app.servicios import alertas, purga
 from app.servicios.autenticacion import ColaHash
 
 log = obtener_logger(__name__)
@@ -48,8 +49,23 @@ async def _crear_almacen(aplicacion: FastAPI, ajustes: Settings) -> AlmacenS3 | 
         return None
 
 
-def crear_app(ajustes: Settings | None = None, *, almacen: AlmacenS3 | None = None) -> FastAPI:
-    """`almacen` sustituye al cliente de S3 (las pruebas pasan un doble); sin él, se crea al arrancar."""
+async def _crear_colas(ajustes: Settings) -> Colas:
+    """BE-4.1: las colas a las que envía `api` (`SQS_URL_INGESTA`, `SQS_URL_PURGA`; un cliente de boto3, en un hilo).
+    Si no se puede crear el cliente, `Colas()` y el evento `cola_fallida` (`operacion = crear_cliente`)."""
+    try:
+        return await anyio.to_thread.run_sync(
+            lambda: crear_colas(ajustes.sqs_url_ingesta, ajustes.sqs_url_purga, ajustes.aws_region)
+        )
+    except Exception as exc:
+        registrar(log, "cola_fallida", logging.ERROR, operacion="crear_cliente", motivo=type(exc).__name__)
+        return Colas()
+
+
+def crear_app(
+    ajustes: Settings | None = None, *, almacen: AlmacenS3 | None = None, colas: Colas | None = None
+) -> FastAPI:
+    """`almacen` sustituye al cliente de S3 y `colas` (BE-4.1) a las de SQS (las pruebas pasan dobles); sin ellos, se
+    crean al arrancar."""
     ajustes = ajustes or get_settings()
     configurar_logs("api", ajustes.log_level)
 
@@ -68,6 +84,7 @@ def crear_app(ajustes: Settings | None = None, *, almacen: AlmacenS3 | None = No
         aplicacion.state.cola_hash = ColaHash.desde(ajustes)
         await anyio.to_thread.run_sync(hash_password.hash_ficticio)
         aplicacion.state.almacen = almacen if almacen is not None else await _crear_almacen(aplicacion, ajustes)
+        aplicacion.state.colas = colas if colas is not None else await _crear_colas(ajustes)
         registrar(log, "api_iniciada", version=__version__, commit=ajustes.commit_corto, entorno=ajustes.app_env)
         # BE-3.3: purga diaria de los tombstones de alertas (ALERTAS_TOMBSTONE_DIAS, §5.10); la primera, 60 s después
         # de arrancar. Sin motor no hay nada que purgar.
@@ -77,13 +94,23 @@ def crear_app(ajustes: Settings | None = None, *, almacen: AlmacenS3 | None = No
                 alertas.limpieza_diaria(aplicacion.state.motor, ajustes.alertas_tombstone_dias),
                 name="limpieza-diaria-alertas",
             )
+        # BE-4.1: reconciliador de purgas (RECONCILIADOR_CADA_MIN, §4.12); la primera pasada, 60 s después de arrancar.
+        reconciliador = None
+        if aplicacion.state.motor is not None and aplicacion.state.colas.purga is not None:
+            reconciliador = asyncio.create_task(
+                purga.reconciliador(
+                    aplicacion.state.motor, aplicacion.state.colas.purga, ajustes.reconciliador_cada_min
+                ),
+                name="reconciliador-purgas",
+            )
         try:
             yield
         finally:
-            if limpieza is not None:
-                limpieza.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await limpieza
+            for tarea in (limpieza, reconciliador):
+                if tarea is not None:
+                    tarea.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await tarea
             if aplicacion.state.motor is not None:
                 await aplicacion.state.motor.dispose()
             registrar(log, "api_detenida")
@@ -105,6 +132,7 @@ def crear_app(ajustes: Settings | None = None, *, almacen: AlmacenS3 | None = No
     app.state.cola_hash = ColaHash.desde(ajustes)  # el ciclo de vida la renueva al arrancar (BE-1.3)
     app.state.almacen = almacen  # sin doble, lo crea el ciclo de vida (BE-2.1)
     app.state.motivo_sin_almacen = "falta S3_BUCKET_DATASET"
+    app.state.colas = colas if colas is not None else Colas()  # sin doble, las crea el ciclo de vida (BE-4.1)
 
     registrar_manejadores(app)
     app.add_middleware(MiddlewareSolicitud)
