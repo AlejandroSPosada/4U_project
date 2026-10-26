@@ -1,6 +1,7 @@
 """Contrato de BE-3.1: los ejemplos y reglas de `GET /v1/places` (ARCHITECTURE §5.3) y de `/v1/admin/places` (§5.5),
 el código `NOMBRE_DUPLICADO` (§5.6) y las rutas del OpenAPI coinciden con los esquemas y la app. Las alertas (BE-3.3)
-siguen sin rutas. Se omite si el documento no está (p. ej. con `project/` copiado solo)."""
+tienen su propia prueba (`test_contrato_alertas.py`). Se omite si el documento no está (p. ej. con `project/` copiado
+solo)."""
 
 from __future__ import annotations
 
@@ -82,4 +83,3 @@ def test_rutas_del_openapi():
         for metodos in ("/v1/admin/places", "/v1/admin/places/{lugar_id}")
         for op in rutas[metodos].values()
     )
-    assert not [ruta for ruta in rutas if "alert" in ruta]  # BE-3.3: sin implementar

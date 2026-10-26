@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.13.1**.
+Alineado con `ARCHITECTURE.md` **v0.14.0**.
 
 ---
 
@@ -119,8 +119,8 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 - **Historias:** HU-14.
 
 #### BE-2.3 — Resumen del panel
-- **Entregables:** `GET /v1/admin/stats` (§5.5). `alertas_activas` cuenta la tabla `alertas` (0 mientras no exista
-  BE-3.3; ARCHITECTURE §4.7).
+- **Entregables:** `GET /v1/admin/stats` (§5.5). `alertas_activas` cuenta la tabla `alertas` (la escribe BE-3.3;
+  ARCHITECTURE §4.7).
 - **Criterios de cierre:**
   - C1. `total_fotos`, `total_lugares` y `ultimo_video` coinciden con los datos de prueba creados por el validador.
     `alertas_activas` se comprueba con datos en BE-3.3 (C5): las alertas salieron del núcleo (decisión del usuario,
@@ -159,12 +159,13 @@ necesitamos las alertas por el momento»).
 - **Historias:** HU-15; habilita HU-02 y HU-03.
 
 #### BE-3.3 — Alertas (fuera del núcleo)
-Sale de BE-3.1 (ARCHITECTURE 0.11.0). Su contrato está en §5.3 y §5.5, marcado «sin implementar (BE-3.3)»; el diseño,
-en §4.9 y ADR-BE-10. Antes de empezar, revisar con el frontend (FE-3.1 y FE-3.3, que también llevan alertas).
+Sale de BE-3.1 (ARCHITECTURE 0.11.0); construido en 0.14.0 (ARCHITECTURE §4.11, ADR-BE-10 y ADR-BE-19; contratos en
+§5.3 y §5.5). Se revisó con el frontend (FE-3.3 y FE-3.6, que consumen las alertas): el contrato coincide con lo que
+espera la app, y lo que la app debe hacer está en ARCHITECTURE §4.11, «Para la app».
 - **Entregables:** `GET /v1/alerts` (foto completa y por diferencias con `desde`), `GET /v1/admin/alerts`,
-  `PUT`/`DELETE /v1/admin/alerts/{id}` (con `If-Match`/versión y `409 CONFLICTO_VERSION`),
-  `POST /v1/admin/alerts/sincronizar` (§5.3, §5.5), auditoría `alerta.*` (§5.7) y la limpieza diaria de *tombstones*
-  (`ALERTAS_TOMBSTONE_DIAS`, §5.10).
+  `PUT /v1/admin/alerts/{id}` (con `If-Match`/versión y `409 CONFLICTO_VERSION`) y `DELETE /v1/admin/alerts/{id}`
+  (sin `If-Match`, §5.5), `POST /v1/admin/alerts/sincronizar` (§5.3, §5.5), auditoría `alerta.*` (§5.7) y la
+  limpieza diaria de *tombstones* (`ALERTAS_TOMBSTONE_DIAS`, §5.10).
 - **Criterios de cierre:**
   - C1. La secuencia «crear, editar, borrar» de una alerta, sincronizada por diferencias, deja la caché del cliente
     igual a la foto completa.
@@ -238,7 +239,7 @@ en §4.9 y ADR-BE-10. Antes de empezar, revisar con el frontend (FE-3.1 y FE-3.3
 | BE-2.4 | 2 | Hecho | [2-4](./validation/validation-2-4.md) | `50d931d` 2026-10-25 | 0.10.0 | `validate24.py --entorno dev` con código 0 (informe `.validacion/BE-2.4-20261026-020153.json`; el informe registra `17b0acb`, que sobre `50d931d` solo añade docs del frontend; `api`, `migrate` y `worker` con la imagen `backend:50d931d`): P1–P5 (`embedding` encendido en 311 s), C1 (fotos 1–3 en `procesada` en 4,1 min; cada una es su primer vecino con similitud 0,9991, 0,9992 y 0,9996), C2a, C2b, C3a, C3b, C3c, C4a (6 claves nuevas, `eventos_localizacion` sin cambios) y C4b; al final `embedding` apagado, video de prueba borrado y `validacion+user` desactivado. Lo necesita EMB-3.2 |
 | BE-3.1 | 3 | Hecho | [3-1](./validation/validation-3-1.md) | `86fc024` 2026-10-25 | 0.11.0 | Solo lugares desde 0.11.0 (las alertas pasaron a BE-3.3, decisión del usuario del 2026-10-25). `validate31.py --entorno dev` con código 0 (informe `.validacion/BE-3.1-20261026-030207.json`; `api` con la imagen `backend:86fc024`): P1–P3, C1a–C1c (crear, editar y borrar; `DELETE` repetido → 204), C2a–C2c (orden por distancia, filtro por categoría y orden por nombre), C3a–C3c (`409 NOMBRE_DUPLICADO` con mayúsculas, tildes y espacios de más), C4a (6 entradas → `422`) y C4b (`401` sin token); limpieza: 3 lugares de prueba borrados. En local, también código 0 contra el compose |
 | BE-3.2 | 3 | En curso | [3-2](./validation/validation-3-2.md) | — | — | Construido en 0.12.0 (`POST /v1/localize`, ARCHITECTURE §4.10 y ADR-BE-18; `validate32.py`), probado en local (834 pruebas con la base del compose), sin ejecutar nada en `dev`. Centroide sin ponderar y margen `(p₁ − p₂) / p₁` (ADR-BE-18): confirmados por el usuario el 2026-10-26 (0.12.1). Falta: el dataset real (FE-2.1), el conjunto y el informe de EMB-3.2, la calibración de `LOC_SIM_MIN`, `LOC_SIM_ALTA` y los cortes de nivel (§5.10 dice «Iniciales»: C6 falla hasta entonces) y `validate32.py --entorno dev` con código 0 |
-| BE-3.3 | 3 | Pendiente | [3-3](./validation/validation-3-3.md) | — | — | Fuera del núcleo (decisión del usuario, 2026-10-25). Sin código; su validador (`validate33.py`) tampoco existe |
+| BE-3.3 | 3 | En curso | [3-3](./validation/validation-3-3.md) | — | — | Fuera del núcleo (decisión del usuario, 2026-10-25). Construido en 0.14.0 (`GET /v1/alerts` con foto completa y diferencias con un margen de 60 s, `/v1/admin/alerts` con `PUT` + `If-Match`, `DELETE` con *tombstone* y `sincronizar` cambio por cambio, auditoría y purga diaria en `api`; ARCHITECTURE §4.11 y ADR-BE-19; `validate33.py` y las ayudas de alertas de `comun.py`). Sin migración. Probado en local sin base (ruff y pytest en verde); las 31 pruebas con base (`test_alertas_base.py` y 3 de `test_validate33.py`), sin ejecutar: Docker Desktop no arrancó, corren en el CI de un PR. Falta `validate33.py --entorno dev` con código 0 (menos de 1 min; sin `embedding`, S3 ni tareas; C5 necesita BE-2.3 «Hecho») |
 | BE-4.1 | 4 | Pendiente | [4-1](./validation/validation-4-1.md) | — | — | |
 | BE-5.1 | 5 | Diferido | — | — | — | |
 | BE-5.2 | 5 | Diferido | — | — | — | |

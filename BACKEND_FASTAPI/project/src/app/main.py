@@ -8,6 +8,8 @@ Un solo proceso de uvicorn (la tarea tiene 0,25 vCPU, §4.2).
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -25,6 +27,7 @@ from app.esquemas.errores import ErrorRespuesta
 from app.logs import configurar_logs, obtener_logger, registrar
 from app.middleware import MiddlewareSolicitud
 from app.seguridad import hash as hash_password
+from app.servicios import alertas
 from app.servicios.autenticacion import ColaHash
 
 log = obtener_logger(__name__)
@@ -66,9 +69,21 @@ def crear_app(ajustes: Settings | None = None, *, almacen: AlmacenS3 | None = No
         await anyio.to_thread.run_sync(hash_password.hash_ficticio)
         aplicacion.state.almacen = almacen if almacen is not None else await _crear_almacen(aplicacion, ajustes)
         registrar(log, "api_iniciada", version=__version__, commit=ajustes.commit_corto, entorno=ajustes.app_env)
+        # BE-3.3: purga diaria de los tombstones de alertas (ALERTAS_TOMBSTONE_DIAS, §5.10); la primera, 60 s después
+        # de arrancar. Sin motor no hay nada que purgar.
+        limpieza = None
+        if aplicacion.state.motor is not None:
+            limpieza = asyncio.create_task(
+                alertas.limpieza_diaria(aplicacion.state.motor, ajustes.alertas_tombstone_dias),
+                name="limpieza-diaria-alertas",
+            )
         try:
             yield
         finally:
+            if limpieza is not None:
+                limpieza.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await limpieza
             if aplicacion.state.motor is not None:
                 await aplicacion.state.motor.dispose()
             registrar(log, "api_detenida")

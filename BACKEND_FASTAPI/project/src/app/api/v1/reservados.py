@@ -1,4 +1,4 @@
-"""Endpoints reservados (ARCHITECTURE §5.3 «Endpoints reservados», §4.12): responden `501 NO_IMPLEMENTADO`.
+"""Endpoints reservados (ARCHITECTURE §5.3 «Endpoints reservados», §4.13): responden `501 NO_IMPLEMENTADO`.
 
 `router_publico` va en `/v1` sin autenticación; `router_admin`, dentro del router protegido de `/v1/admin`, así que
 exige primero el token de admin (`401`/`403`) y después responde `501`. Cada lote diferido sustituye su ruta aquí por

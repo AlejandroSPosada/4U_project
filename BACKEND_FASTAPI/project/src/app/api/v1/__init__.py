@@ -12,6 +12,7 @@ from app.api.v1 import (
     admin_diagnostico,
     admin_estadisticas,
     admin_videos,
+    alertas,
     auth,
     collect,
     localizar,
@@ -36,6 +37,7 @@ RUTAS_ADMIN: list[APIRouter] = [
     admin_videos.router,
     admin_diagnostico.router,
     lugares.router_admin,
+    alertas.router_admin,  # BE-3.3: /v1/admin/alerts
 ]
 #: Routers de `/v1/collect/*` (BE-2.1).
 RUTAS_COLLECT: list[APIRouter] = [collect.router]
@@ -53,6 +55,7 @@ router_v1.include_router(salud.router)
 router_v1.include_router(auth.router)
 router_v1.include_router(reservados.router_publico)
 router_v1.include_router(lugares.router_publico)
+router_v1.include_router(alertas.router_publico)  # BE-3.3: GET /v1/alerts (público)
 router_v1.include_router(localizar.router)  # BE-3.2: POST /v1/localize (público)
 router_v1.include_router(_protegido("/admin", RUTAS_ADMIN))
 router_v1.include_router(_protegido("/collect", RUTAS_COLLECT))

@@ -25,7 +25,7 @@ Reglas (§5.11): nunca imprimir secretos, tokens ni URLs prefirmadas; ser idempo
 Además (tabla completa en backend §5.11): tareas sueltas de ECS (BE-1.2) y, desde BE-1.3, secretos y credenciales del
 admin, `ClienteApi` (login con pausa y reintentos de 429 de API Gateway), `EntornoBackend` (`python -m app.cli` y SQL
 en `local` o `dev`) y el usuario de prueba `validacion+user@campus.edu.co`; recolección (BE-2.1), `embedding` y colas
-(BE-2.2), vecinos (BE-2.4), lugares de prueba (BE-3.1) y el resumen del panel (BE-2.3).
+(BE-2.2), vecinos (BE-2.4), lugares de prueba (BE-3.1), el resumen del panel (BE-2.3) y alertas de prueba (BE-3.3).
 """
 
 from __future__ import annotations
@@ -1904,3 +1904,64 @@ def resumen_panel(api: ClienteApi, token: str, que: str = "GET /v1/admin/stats")
             f"{que}: {campo} = {valor!r}, se esperaba un entero ≥ 0",
         )
     return cuerpo
+
+
+# --- Alertas de prueba (BE-3.3; ARCHITECTURE §5.3, §5.5 y §5.11) ----------------------------------------------------
+RUTA_ALERTAS = "/alerts"
+RUTA_ALERTAS_ADMIN = "/admin/alerts"
+RUTA_SINCRONIZAR = "/admin/alerts/sincronizar"
+#: Campos exactos de `Alerta` (§5.3), `AlertaAdmin` (§5.5) y de la respuesta de `GET /v1/alerts`.
+CAMPOS_ALERTA = frozenset(
+    {
+        "id",
+        "lat",
+        "lng",
+        "mensaje",
+        "tipo",
+        "prioridad",
+        "radio_m",
+        "activa",
+        "vigencia_desde",
+        "vigencia_hasta",
+        "actualizado_en",
+        "version",
+    }
+)
+CAMPOS_ALERTA_ADMIN = CAMPOS_ALERTA | {"creado_en", "creado_por", "actualizado_por"}
+CAMPOS_FOTO_ALERTAS = frozenset({"generado_en", "completo", "alertas", "eliminadas"})
+
+
+def alertas_validacion(api: ClienteApi, token: str, prefijo: str = PREFIJO_VALIDACION) -> list[dict[str, Any]]:
+    """Las `AlertaAdmin` (sin borrar) cuyo `mensaje` empieza por `prefijo` (por defecto `validacion-`), de
+    `GET /v1/admin/alerts?q=<prefijo>` (busca contenido sin tildes ni mayúsculas; aquí se exige el comienzo). No 200 →
+    `Falla`."""
+    respuesta = api.pedir("GET", RUTA_ALERTAS_ADMIN, token=token, params={"q": prefijo})
+    exigir(respuesta.status_code == 200, f"GET /v1/admin/alerts respondió {describir_respuesta(respuesta)}")
+    clave = normalizar_nombre(prefijo)
+    items = respuesta.json().get("items", [])
+    return [alerta for alerta in items if normalizar_nombre(str(alerta.get("mensaje", ""))).startswith(clave)]
+
+
+def borrar_alertas(api: ClienteApi, token: str, ids: Iterable[str]) -> int:
+    """`DELETE /v1/admin/alerts/{id}` de cada id (sin repetir). Devuelve cuántos; un código distinto de 204 → `Falla`
+    (204 también si no existe o ya estaba borrada, §5.5)."""
+    vistos: list[str] = []
+    for alerta_id in ids:
+        if alerta_id in vistos:
+            continue
+        respuesta = api.pedir("DELETE", f"{RUTA_ALERTAS_ADMIN}/{alerta_id}", token=token)
+        exigir(
+            respuesta.status_code == 204, f"DELETE de una alerta de prueba respondió {describir_respuesta(respuesta)}"
+        )
+        vistos.append(alerta_id)
+    return len(vistos)
+
+
+def borrar_alertas_restos(api: ClienteApi, token: str) -> str:
+    """La `preparacion` de quien crea alertas: borra las `validacion-` (de cualquier lote) que haya dejado una ejecución
+    interrumpida. Devuelve `sin alertas validacion- …` o `alertas validacion- borradas: n`. Dejan su *tombstone*
+    `ALERTAS_TOMBSTONE_DIAS` (§5.10)."""
+    restos = alertas_validacion(api, token)
+    if not restos:
+        return "sin alertas validacion- de ejecuciones anteriores"
+    return f"alertas validacion- borradas: {borrar_alertas(api, token, [str(alerta['id']) for alerta in restos])}"

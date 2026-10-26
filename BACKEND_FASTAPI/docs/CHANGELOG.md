@@ -20,6 +20,68 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.14.0] — 2026-10-26
+
+- **Lote que la motivó:** BE-3.3 (Alertas, fuera del núcleo), construcción; la ejecución en `dev` la hace el maestro
+  tras el push. Lo consumirán FE-3.3 (editor de alertas) y FE-3.6 (alertas públicas), con los que se revisó el contrato.
+- **Qué cambió:**
+  - **Alertas construidas** (§4.11 nueva): `GET /v1/alerts` (público: foto completa o diferencias desde `desde`),
+    `GET /v1/admin/alerts`, `PUT /v1/admin/alerts/{id}` (crea, reemplaza o restaura una borrada, con `If-Match`
+    opcional), `DELETE /v1/admin/alerts/{id}` (*tombstone*) y `POST /v1/admin/alerts/sincronizar` (cambio por cambio),
+    con auditoría `alerta.upsert`/`alerta.eliminar` y la purga diaria de *tombstones* en `api` (tarea del ciclo de vida
+    de `main.py`: 60 s después de arrancar y cada 24 h). Código: `dominio/alertas.py`, `esquemas/alertas.py`,
+    `servicios/alertas.py`, `api/v1/alertas.py`; `errores.py` (mensaje de `CONFLICTO_VERSION`), `api/v1/__init__.py`
+    y `main.py`. Sin migración (la tabla `alertas` de `0001` ya tenía todo) ni cambios en `servicios/estadisticas.py`.
+  - **ADR-BE-19** con lo que ADR-BE-10 y §5 no fijaban: margen de 60 s en las diferencias, `desde` futuro → foto
+    completa, `PUT` que restaura, `If-Match` estricto y solo en `PUT`, sobre estricto de `sincronizar` con cambios
+    independientes en transacciones propias, `PUT` sin cambios sin escribir, `null` = valor por defecto, vigencias sin
+    fracciones, purga en `api` y `q` sin tildes. Riesgo R17 (sincronización por marca de tiempo).
+  - §4.11 incluye «Para la app (FE-3.3 y FE-3.6)»: qué espera el backend (caché por diferencias que puede repetir
+    cambios; una sola operación pendiente por id, la última, para que crear y borrar antes de sincronizar no deje
+    rastro; `VALIDACION` no se arregla reintentando; `503` se reintenta entero; `sincronizar` sin `If-Match`).
+  - Las secciones de §4 se desplazan: BE-4.1 pasa a §4.12 y los diferidos a §4.13 (referencias de §4.2 y del docstring
+    de `api/v1/reservados.py` al día). §4.1 al día; §4.9 deja solo un enlace a §4.11; §4.7 marca su guía para BE-3.3
+    como aplicada.
+  - `validate33.py` nuevo (P1–P4, C1a–C1d, C2–C5; `dev` y `local`) y ayudas de alertas en `comun.py`
+    (`RUTA_ALERTAS`, `RUTA_ALERTAS_ADMIN`, `RUTA_SINCRONIZAR`, `CAMPOS_ALERTA`, `CAMPOS_ALERTA_ADMIN`,
+    `CAMPOS_FOTO_ALERTAS`, `alertas_validacion`, `borrar_alertas`, `borrar_alertas_restos`); §5.11 con su tabla, la
+    descripción del validador, su `ApiFalsa` y sus trampas. `validation-3-3.md` reescrito con su §5 completo.
+  - Contradicciones corregidas: `validation-3-3` P4 exigía BE-2.3 «Hecho» también en `local` (el PLAN describe `dev`:
+    ahora solo en `dev`, y P4 solo corre si C5 está incluida); pedía esperar 1 s entre cambio y diferencia (con el margen
+    no hace falta); C1b no comprobaba el `409` y C2 no comprobaba que no quedara *tombstone*. PLAN §2.2 BE-3.3 decía
+    «`PUT`/`DELETE` con `If-Match`», pero §5.5 solo lo pone en `PUT` (aclarado). §4.7, §5.5 y PLAN §2.2 BE-2.3 decían
+    «`alertas_activas` = 0 mientras no exista BE-3.3»; §5.11 marcaba la limpieza de alertas «sin implementar»; §5.11
+    decía que el validador de BE-3.3 extendería el mundo falso de `validate23.py` (usa su propia `ApiFalsa`).
+- **Contratos tocados (§5):**
+  - §5.3 `GET /v1/alerts`: deja de estar «sin implementar» (antes, `404`). Se precisa, de forma compatible con la caché
+    de la app: con `desde`, «modificadas desde `desde`» = desde `desde` − 60 s (`MARGEN_DESDE_S`, ADR-BE-19: una
+    diferencia puede repetir cambios ya aplicados); un `desde` posterior a la hora del servidor da también la foto
+    completa; `desde` con zona o `422` (`campo` = `desde`); `generado_en` = hora de la base en UTC sin fracciones;
+    orden por `actualizado_en` e `id`; errores `422` y `503`; público (ignora `Authorization`).
+  - §5.5: las cuatro rutas de alertas sin «sin implementar»; `PUT` → `201` también al restaurar una borrada y `200`
+    sin cambios; `DELETE` → `204` también si ya estaba borrada, sin `If-Match`. `AlertaEntrada` en detalle (`null` =
+    valor por defecto, vigencias con zona guardadas sin fracciones, `hasta > desde` sin fracciones, campos de más
+    ignorados). Subsección nueva «Alertas: `/v1/admin/alerts` (BE-3.3)»: orden y `q` del panel, `If-Match` (`3` o
+    `"3"`; `409` también si no existe, `detalle: null`; `422` con `campo` = `If-Match`), orden de errores, sobre de
+    `sincronizar` (1–100; mal formado → `422` sin aplicar nada), resultados en orden, `503` a mitad. Fila y detalle de
+    `GET /v1/admin/stats` sin «0 mientras BE-3.3 no exista» (misma forma).
+  - §5.6: `CONFLICTO_VERSION` (cuándo; `detalle: null`) y `If-Match` como campo de `VALIDACION`. §5.7: nota de
+    `eliminada_en` (purga de BE-3.3) y «`auditoria`: filas de BE-3.3» (sin cambio de esquema). §5.10: nota de
+    `ALERTAS_TOMBSTONE_DIAS` y los eventos `alerta_guardada`, `alerta_eliminada`, `alertas_sincronizadas`,
+    `alertas_purgadas` y `limpieza_fallida`. §5.11: ayudas y validador de BE-3.3.
+- **Cómo se verificó:** en local (WSL), `ruff check` y `ruff format --check` en verde; `pytest` **sin**
+  `PRUEBAS_DB_URL`, todas pasan salvo las `base`, que se omiten. Nuevas: `tests/unit/test_alertas.py`,
+  `tests/api/test_alertas.py`, `tests/contrato/test_contrato_alertas.py` y `tests/ops/test_validate33.py` (sin base, el
+  validador contra `ApiFalsa`: camino feliz en `local` y `dev`, `--solo`, restos, 6 backends defectuosos —cada uno
+  falla su comprobación— y BE-3.3 o BE-2.3 sin desplegar → código 2), en verde.
+  `tests/base/test_alertas_base.py` (28) y las 3 con base de `test_validate33.py` **sin ejecutar**: Docker Desktop no
+  arrancó en la máquina (sin PostgreSQL local); corren en el CI de `backend.yml` de un PR. El SQL de §4.11 es el que
+  compila SQLAlchemy con el dialecto asyncpg (impreso). `test_contrato_lugares.py` deja de exigir que no haya rutas de
+  alertas. Nada ejecutado en `dev`.
+- **Pendiente:** las pruebas con base en el CI; `validate33.py --entorno dev` con código 0 sobre un commit de `main`
+  desplegado (lo corre el maestro, `validation-3-3.md` §5), y entonces la fila BE-3.3 de PLAN §3 a «Hecho». Sin
+  comprobar en `dev` que API Gateway deja pasar `If-Match` (C1b lo comprueba).
+
 ## [0.13.1] — 2026-10-26
 
 - **Lote que la motivó:** BE-2.3 (cierre: `validate23.py --entorno dev` con código 0 sobre `012e0ae`, PLAN §3).
