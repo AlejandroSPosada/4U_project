@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.6.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.7.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); las pruebas en dispositivo (FE-2.3 C3) siguen pendientes. El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); las pruebas en dispositivo (FE-2.3 C3) siguen pendientes. Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4); la prueba en el campus (FE-2.1 C1 y C2) sigue pendiente. El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -149,9 +149,9 @@ El dataset es la base del sistema: **cada registro = foto + embedding DINOv2 + c
    corregirse, o bien se corrige contra el dataset ya existente cuando lo hay).
 5. Mientras camina puede **agregar alertas de obstáculo en su posición actual** con un
    botón (escribe o dicta el mensaje), sin tener que ir luego al editor de mapa.
-6. Al finalizar el video, se sube al backend: se almacenan las fotos, se generan los
+6. Al finalizar el video, se revisa en la vista 7.5 y se sube al backend: se almacenan las fotos, se generan los
    embeddings con DINOv2 y se indexan (subida con URLs prefirmadas y procesamiento
-   asíncrono: backend §4.5 y §4.6; uso desde la app en §5.10).
+   asíncrono: backend §4.5 y §4.6; uso desde la app en §5.10, «Subida de un recorrido»; desde FE-2.1).
 
 #### El concepto de "video" (recorrido de recolección)
 
@@ -360,7 +360,7 @@ com.example.myapplication/
 │   ├── auth/
 │   └── admin/
 │       ├── panel/
-│       ├── recoleccion/     # 7.3 ubicación manual y 7.4 recolección en curso (7.5 pendiente)
+│       ├── recoleccion/     # 7.3 ubicación manual, 7.4 recolección en curso y 7.5 resumen de video (FE-2.1)
 │       ├── calibracion/     # 7.3b calibración de la longitud de paso
 │       ├── lugares/
 │       ├── mapa/            # Editor de mapa y alertas
@@ -376,7 +376,7 @@ com.example.myapplication/
 ├── data/                        # Acceso a datos
 │   ├── remote/                  # Cliente HTTP (Retrofit + OkHttp, ADR-FE-12), DTOs, mapeo de errores y datos (§5.10)
 │   ├── repository/              # Implementaciones de repositorios
-│   └── local/                   # Caché local (Room/DataStore), cola de subida offline
+│   └── local/                   # Desde FE-2.1: cola de subida de recorridos sobre los manifests de files/recoleccion/ (§5.10); la caché de alertas en Room será de FE-3.6
 │
 ├── sensors/                     # Sensores y PDR
 │   ├── PdrEngine, StepDetector, PdrTracker, OrientationProvider
@@ -390,14 +390,16 @@ com.example.myapplication/
 Pruebas unitarias (JVM) en `app/src/test/java/com/example/myapplication/`: `data/remote/` (`MapeoErroresApiTest`,
 `MapeoDatosApiTest`, `ClienteApiTest`, `RemoteAuthRepositoryTest`), `session/SesionVencidaTest`, desde FE-2.3
 `domain/usecase/` (`CalibracionPasoTest`, `DisparadorCapturaTest`, `DerivaTest`, `RetomarRecoleccionTest`) y `sensors/`
-(`StepDetectorTest`, `InterruptorSensoresTest`) (lista y conteos en §4.1).
+(`StepDetectorTest`, `InterruptorSensoresTest`), y desde FE-2.1 `data/local/` (`AlmacenRecorridosTest`,
+`RecodificacionFotoTest`, `SubidaRecorridoTest`, `ColaSubidaTest`, con la ayuda `ManifestPrueba`) y
+`data/repository/VideoRepositoryCompuestoTest` (lista y conteos en §4.1).
 
 > Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
 > (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`) y de la calibración (`calibracion_mapa.html/js`), y la base común `mapa_base.js` (5.9).
 
 > Actualmente en el repo existen `ui/`, `camera/`, `sensors/`, `map/`, `logs/`, `session/`,
-> `data/remote/` (desde FE-1.1), `data/repository/`, `domain/model/`, `domain/usecase/`, `ApiConfig.kt`, `MyApp.kt` y
-> `MainActivity.kt`; el resto (`domain/fusion/`, `data/local/`, `voice/`,
+> `data/remote/` (desde FE-1.1), `data/local/` (desde FE-2.1), `data/repository/`, `domain/model/`, `domain/usecase/`,
+> `ApiConfig.kt`, `MyApp.kt` y `MainActivity.kt`; el resto (`domain/fusion/`, `voice/`,
 > `ui/navigation/`) se crea a medida que se implementa. ⚠ Dentro del paquete Kotlin hay archivos que
 > no son código de la app (`archivos_zip.py`, `crear_archivos.py`, `out.zip`): sacarlos (`PLAN.md`, FE-4.3).
 
@@ -453,8 +455,10 @@ almacenamiento externo.
 - Tags usados: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`, `RecoleccionVM` y `RecoleccionRepo` (7.4: video
   creado, grabando, pausado, retomado, fotos, re-anclajes; verificado en FE-2.3), desde FE-1.1 `Api` (una línea por
   petición HTTP con su `X-Request-Id`; formato en §5.10), desde FE-1.2 `Sesion` (`AppLog.w`: una ruta protegida sin
-  sesión o un `401` de sesión; sin token ni correo; §5.3) y desde FE-2.3 `Pdr` (`AppLog.i` en cada registro o retirada
-  de los sensores del PDR, p. ej. `sensores quitados (segundo plano)`; §5.2).
+  sesión o un `401` de sesión; sin token ni correo; §5.3), desde FE-2.3 `Pdr` (`AppLog.i` en cada registro o retirada
+  de los sensores del PDR, p. ej. `sensores quitados (segundo plano)`; §5.2) y desde FE-2.1 `Subida` (`AppLog.i` de la
+  cola y de la subida: `PUT S3 rec_0003/0007 -> 200 (412 ms, 512345 B)`, `rec_0003: video creado en el backend`,
+  `cola: reintento en 10 s (…)`; nunca URLs prefirmadas ni tokens; §5.10).
 - Registrar transiciones y decisiones, **no** cada lectura de sensor (50 por segundo).
 - No registrar datos sensibles (tokens, credenciales).
 
@@ -518,11 +522,16 @@ Componentes compartidos en `ui/components/`: `BotonGrande.kt`, `MapaCampus.kt`, 
   `data/remote/RemoteAuthRepositoryTest` (6) y `session/SesionVencidaTest` (9). Desde FE-2.3:
   `domain/usecase/CalibracionPasoTest` (13), `DisparadorCapturaTest` (10), `DerivaTest` (6), `RetomarRecoleccionTest`
   (6), `sensors/StepDetectorTest` (11) e `InterruptorSensoresTest` (6). Total al terminar el código de FE-2.3: 102
-  casos. No usan Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
+  casos. Desde FE-2.1: `data/local/AlmacenRecorridosTest` (13), `RecodificacionFotoTest` (12), `SubidaRecorridoTest`
+  (13), `ColaSubidaTest` (8) y `data/repository/VideoRepositoryCompuestoTest` (3); `MapeoDatosApiTest` sigue con 13
+  (su caso de `estadoFoto` ahora espera `PENDIENTE`). Total al terminar el código de FE-2.1: **151** casos. No usan
+  Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
   `EncryptedSharedPreferences` (la sesión se prueba con un `AlmacenSesion` en memoria, §5.3); lo de FE-2.3 es lógica
   pura (`PdrEngine`, `StepDetector`, `CalibracionPaso`, `DisparadorCaptura`, `Deriva`, `RetomarRecoleccion`,
-  `InterruptorSensores`). `RecoleccionRepositoryLocal` (usa `org.json`, que en la JVM son *stubs* de `android.jar`) y
-  `PdrTracker` (sensores) no tienen pruebas en la JVM.
+  `InterruptorSensores`); lo de FE-2.1 usa Gson (no `org.json`) y archivos en una `TemporaryFolder`, y el motor de
+  imágenes es un doble (`MotorImagen`). `RecoleccionRepositoryLocal` (usa `org.json`, que en la JVM son *stubs* de
+  `android.jar`), `MotorImagenAndroid` (`android.graphics`), los ViewModels y `PdrTracker` (sensores) no tienen
+  pruebas en la JVM.
 
 **`frontend.yml`** (raíz del monorepo, `.github/workflows/`):
 
@@ -554,6 +563,13 @@ la compilación en Linux con el SDK del runner no se ha ejecutado todavía.
 - En las pruebas, `assertThrows(X::class.java) { runBlocking { llamar { api.ruta() } } }` no compila («Argument type
   mismatch»): el `ThrowingRunnable` devuelve `void`, Kotlin infiere `T = Unit` para `llamar` y choca con el
   `Response<Dto>`. Hay que dar el tipo: `llamar<Dto> { … }` (así lo hace `SesionVencidaTest`).
+- (FE-2.1) Una prueba `@Test fun x() = runBlocking { …; assertThrows(…) }` devuelve lo que devuelve la última línea:
+  JUnit 4 la rechaza («Method x() should be void», `initializationError` de **toda** la clase). Terminar con un
+  `assert*` que devuelva `Unit` o escribir `fun x() { runBlocking { … } }`.
+- (FE-2.1) Con un `Dispatcher` propio de MockWebServer, `SocketPolicy.DISCONNECT_AT_START` **no** corta (MockWebServer
+  lo mira en `peek()`, antes de llamar a `dispatch`): responde 200. Para simular un corte de red desde un `Dispatcher`,
+  `SocketPolicy.DISCONNECT_AFTER_REQUEST` (el cliente recibe `IOException`). Con `enqueue` sí vale `DISCONNECT_AT_START`.
+- (FE-2.1) `TemporaryFolder.newFile(nombre)` falla si el archivo ya existe: en un bucle, `File.createTempFile(…, tmp.root)`.
 
 ### 4.2 Login contra el backend (FE-1.2)
 
@@ -597,6 +613,31 @@ Verificado el 2026-10-25: `testDebugUnitTest assembleDebug` en Windows → `BUIL
 en WSL `ruff check`, `ruff format --check` y `pytest` (93 casos) en verde y `validate23.py --entorno local` → código 0.
 **A verificar en dispositivo (FE-2.3 C3, C4 y C5):** el PDR caminando, 7.3, 7.3b, 7.4, retomar tras `am kill` y que
 `dumpsys sensorservice` no muestre conexiones en segundo plano (`validation-2-3` §3 y §5).
+
+### 4.4 Subida de recorridos y Resumen de video (FE-2.1)
+
+Qué se construyó (detalle y firmas en §5.5, §5.6, §5.8, §5.9, §5.10 y §5.11; validación en
+[`validation-2-1`](./validation/validation-2-1.md)):
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| Vista 7.5 | `ui/admin/recoleccion/ResumenVideoScreen.kt`, `ResumenVideoState.kt`, `ResumenVideoViewModel.kt` | Nombre editable, duración / distancia / fotos, mapa con la trayectoria (reutiliza `RecoleccionMapaContent` + `encuadrar()`), carrusel con descarte, «Subir y procesar» con progreso por foto, «Guardar y subir después», «Descartar video» (§5.5) |
+| Ruta | `MainActivity.kt` (`AppNav`) | `admin/recoleccion/resumen?video={video}` compone `ResumenVideoScreen` (ya no es un *placeholder*); «Finalizar» en 7.4 navega con `?video=rec_NNNN`; el Panel abre 7.5 desde su tarjeta de subidas (§5.8) |
+| Cola de subida | `data/local/` (`AlmacenRecorridos`, `ManifestRecorrido`, `SubidaRecorrido`, `ColaSubida`, `SubidorS3`, `Recodificacion.kt`, `MotorImagenAndroid`, `Subidas`, `RecorridoLocal.kt`) | La cola es el propio `manifest.json` (`subida_estado`, `remote_video_id`, `photos[].sync`, `photos[].upload`); re-codifica a ≤ 1600 px y ≤ 4 MB, crea el video, registra en lotes de 50, `PUT` a S3 sin interceptores, `complete`; reintentos con espera, «esperar sesión» sin bucles, retomar sin duplicar (§5.10; ADR-FE-19 y ADR-FE-20) |
+| `EstadoFoto.PENDIENTE` | `domain/model/Foto.kt`, `MapeoDatosApi.estadoFoto`, `GaleriaScreen`, `VideosScreen` | `pendiente_subida` del backend y `sync = pendiente` local; color gris en la Galería, «Pendiente de subir» en la Lista |
+| Ver lo recolectado | `data/repository/VideoRepository.kt` (`VideoRepositoryCompuesto`, `FuenteVideos`, `FuenteRecorridos`; `AssetsVideoRepository` con el parser compartido) | Galería, Lista, Detalle de video y 7.3 leen `assets/videos/` **y** los recorridos `finalizado` de `files/recoleccion/` (§5.6) |
+| Panel | `ui/admin/panel/PanelAdminViewModel.kt` (`AvisoSubidas`, `avisoSubidas()`), `PanelAdminScreen.kt` (`TarjetaSubidas`, `onAbrirSubida`) | Con sesión, retoma la cola (`reanudar()`) y muestra la tarjeta «Subiendo…», «Subida pendiente…» o «Recorridos sin subir» (§5.5) |
+| Cerrojo compartido | `data/local/AlmacenRecorridos.kt` (`CerrojoRecoleccion`), `RecoleccionRepositoryLocal` | Un solo `Mutex` por proceso para los manifests (antes, uno por instancia); `contarPendientes()` cuenta como dice §5.10 |
+| Pruebas | `AlmacenRecorridosTest` (13), `RecodificacionFotoTest` (12), `SubidaRecorridoTest` (13), `ColaSubidaTest` (8), `VideoRepositoryCompuestoTest` (3) | C2 y C3 en la JVM: MockWebServer para el backend y S3, la cola, la re-codificación y sus límites, el parser (§4.1) |
+| Validador | `src/ops/validate21.py` + ayudas nuevas de `comun.py` (`EmbeddingDev`, `leer_objeto_s3`, `dimensiones_jpeg`, `token` en `http_get`/`http_post_json`, argumentos propios del `Validador`) | Local: C2a, C3a, C4. Dev: C1 (procesado), C2b (sin duplicados), C3b (cada objeto de S3 ≤ 4 MB y ≤ 1600 px) (§5.11) |
+
+Verificado en local el 2026-10-25: `testDebugUnitTest assembleDebug` en Windows → `BUILD SUCCESSFUL` (151 casos, 0
+fallos); en WSL `ruff check`, `ruff format --check` y `pytest` (128 casos) en verde y `validate21.py --entorno local` →
+código 0 (P1; C2a 13/13, 8/8, 13/13; C3a 12/12; C4; C1, C2b y C3b omitidas; la manual C2c). **A verificar en
+dispositivo y en `dev` (FE-2.1 C1 y C2):** la vista 7.5 en el teléfono, la re-codificación real con `Bitmap` (EXIF de
+CameraX en el Xiaomi), la subida de un recorrido de ≥ 50 fotos hasta `procesado` y el corte de red a mitad
+(`validation-2-1` §3 y §5). Sin comprobar en dispositivo: el aspecto de 7.5 y de la tarjeta del Panel (no se han visto
+en pantalla; tienen `@Preview`).
 
 ---
 
@@ -890,7 +931,7 @@ Flujo completo (cómo se cumple «401 → cerrar sesión e ir a Login» y «sesi
    como «sin sesión»: el Panel emite su `SinSesion` y va a Login (5.5).
 
 - Quién lo usa (el Panel admin está verificado en `PanelAdminViewModel`, ver 5.5; Login verificado en `LoginViewModel`, ver 5.5): Login guarda la sesión de un `ADMIN` y, si ya existe una (vigente), entra directo al panel; el Panel admin lee nombre y rol, cierra sesión y usa `onSinSesion`; `ClienteApi.vigilante` lee el token y cierra la sesión ante un `401` de sesión. Un usuario que no es `ADMIN` **no se guarda**.
-- ⚠ Cada `SessionManager(context)` crea su propia instancia de `AlmacenSesionCifrado` (y de `EncryptedSharedPreferences`): crear **una por ViewModel**, no una por pantalla ni por recomposición. Todas leen el mismo archivo (Android comparte el `SharedPreferences` de un mismo nombre dentro del proceso), así que lo que guarda Login lo ve el vigilante. Desde FE-1.2 `MyApp` sí guarda una instancia durante toda la vida del proceso: la del `VigilanteSesion` de `ClienteApi`.
+- ⚠ Cada `SessionManager(context)` crea su propia instancia de `AlmacenSesionCifrado` (y de `EncryptedSharedPreferences`): crear **una por ViewModel**, no una por pantalla ni por recomposición. Todas leen el mismo archivo (Android comparte el `SharedPreferences` de un mismo nombre dentro del proceso), así que lo que guarda Login lo ve el vigilante. Desde FE-1.2 `MyApp` sí guarda una instancia durante toda la vida del proceso: la del `VigilanteSesion` de `ClienteApi`; desde FE-2.1 la misma instancia la usa la cola de subida para saber si hay sesión antes de llamar al backend (`Subidas.iniciar(app, sesion)`, `ColaSubida(haySesion = { sesion.obtener() != null })`, §5.10).
 - ⚠ **La sesión se borra en cada arranque en frío.** `MyApp.onCreate` llama a `cerrarSesion()` (decisión de producto: "el admin debe iniciar sesión cada vez que se abre la app desde cero"; si falla solo deja un `AppLog.e`). Consecuencias: la sesión **solo sobrevive mientras el proceso siga vivo**; si Android mata la app en segundo plano (p. ej. en una recolección larga), al volver no habrá sesión y el panel dispara `onSinSesion`. Cualquier flujo largo del admin debe tolerarlo. Además vence a las 12 h (`JWT_TTL_MIN` del backend; `expira_en` = `exp` del JWT).
 - Nunca registrar el token en `AppLog`.
 - Verificado en `LoginViewModel`: `session.esAdmin()` se llama en su `init`, en el hilo principal y **sin `try/catch`**: si el Keystore falla, crear el ViewModel lanza excepción y Login no abre (5.5).
@@ -976,6 +1017,7 @@ pinta sus colores a mano. Un tema propio sería el sitio natural para unificar l
 | `MapaPublicoScreen` | `map/MapaPublicoScreen.kt` (`public`) | `MapaPublicoScreen(modifier: Modifier = Modifier)` | Mapa público (`index.html` + `app.js`) en un `WebView` con seguimiento por pasos. Crea su propio `PdrTracker`, registra el puente `AndroidBridge` (`PuentePdr`) y empuja la posición, el rumbo y los avisos a la página (tabla en 2.6). Aplica `systemBarsPadding()` (el mapa no maneja *insets*). Libera sensores y `WebView` al salir. En segundo plano el `PdrTracker` quita los sensores solo y los vuelve a poner al volver (FE-2.3; la pantalla no maneja `ON_STOP`). Ruta `mapa` desde FE-2.3 (5.8): hoy solo se abre con `am start … --es ruta mapa` en el APK de depuración; la entrada desde Inicio es de FE-3.1. ⚠ A verificar en dispositivo (FE-2.3 C3). |
 | `CalibracionScreen` / `CalibracionContent` | `ui/admin/calibracion/CalibracionScreen.kt` (`public`) | `CalibracionScreen(onVolver, modifier, vm = viewModel())` · `CalibracionContent(ui, acciones, modifier)` | Vista 7.3b completa (detalle abajo, «CalibracionScreen y CalibracionBridge»). **No navega.** |
 | `UbicacionManualScreen` / `UbicacionManualContent` | `ui/admin/recoleccion/UbicacionManualScreen.kt` (`public`) | `UbicacionManualScreen(onVolver, onConfirmar: (InicioRecoleccion) -> Unit, onAjustes = {}, onCalibrar = {}, onRetomar = {}, viewModel = viewModel(factory = …))` · `UbicacionManualContent(estado, acciones, modifier, longitudCalibradaM: Double? = null, grabacionPendiente: GrabacionPendiente? = null)` | Vista 7.3 completa (detalle abajo, «UbicacionManual»). Sustituye a `MapaPublicoScreen` en la ruta `admin/ubicacion-manual`. `onRetomar` y `grabacionPendiente`: FE-2.3. |
+| `ResumenVideoScreen` / `ResumenVideoContent` | `ui/admin/recoleccion/ResumenVideoScreen.kt` (`public`) | `ResumenVideoScreen(videoId: String?, onIrAlPanel: () -> Unit, modifier = Modifier, vm = viewModel(key = "resumen-<videoId o actual>", factory = ResumenVideoViewModel.Factory(videoId)))` · `ResumenVideoContent(ui: ResumenVideoUiState, acciones: ResumenVideoAcciones, control: RecoleccionMapaControl?, modifier)` | Vista 7.5 completa (FE-2.1; detalle abajo, «`ResumenVideoScreen` y `ResumenVideoViewModel`»). **No navega**: `onIrAlPanel` lo decide la ruta (5.8). `control = null` dibuja un recuadro en lugar del mapa (previews). |
 | `EditorMapaScreen` / `EditorMapaContent` | `ui/admin/mapa/EditorMapaScreen.kt` (`public`) | `EditorMapaContent(alertasJson, lugaresJson, pendientes, borradorJson, eventos, modifier, miPosicion)` | Mapa web de alertas dentro de un `WebView` (vista 7.8). Detalle abajo. |
 | `FilaCategorias`, `CampoBusqueda`, `EncabezadoLista`, `FilaLugar`, `EstadoVacio`, `BotonVolver` | `ui/destino/componentes/ListaLugares.kt` | `FilaCategorias(seleccionada: CategoriaLugar?, onElegir: (CategoriaLugar?) -> Unit)` · `CampoBusqueda(texto: String, onCambio: (String) -> Unit)` · `EncabezadoLista(orden: OrdenLugares, onCambiarOrden: () -> Unit)` · `FilaLugar(lugar: LugarDestino, onClick: () -> Unit)` · `EstadoVacio(mensaje: String?, accion: String, onAccion: () -> Unit)` · `BotonVolver(onClick: () -> Unit)` | Verificado contra el código (bache 2). Propios de Destino salvo `EstadoVacio` y `BotonVolver`, que son genéricos. Todos públicos; `ChipCategoria` es privado. Detalle abajo. |
 | `EncabezadoPregunta`, `TarjetaOpciones` | `ui/destino/componentes/PanelesVoz.kt` | `EncabezadoPregunta()` · `TarjetaOpciones(opciones: List<LugarDestino>, onElegir: (LugarDestino) -> Unit)` | Verificadas contra el código (bache 2): las firmas coinciden con las llamadas de `SeleccionDestinoScreen`. `TarjetaOpciones` muestra las coincidencias cuando hay varias (5.5, Destino). Detalle abajo. |
@@ -1085,8 +1127,9 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| Constructor | `PanelAdminViewModel(repo: AdminRepository, session: SessionManager)`. `Factory(context)` crea `AdminRepositoryStub()` y `SessionManager(context.applicationContext)` (uno por ViewModel, como pide 5.3). |
-| `state: StateFlow<PanelUiState>` | `nombre` (primer nombre: lo que hay antes del primer espacio del nombre de la sesión), `rolTexto` (fijo: "Administrador del sistema"), `resumen: ResumenAdmin?`, `cargandoResumen` (empieza en `true`), `errorResumen`. |
+| Constructor | `PanelAdminViewModel(repo: AdminRepository, session: SessionManager, almacen: AlmacenRecorridos? = null, cola: ColaSubida? = null)`. `Factory(context)` crea `AdminRepositoryStub()`, `SessionManager(context.applicationContext)` (uno por ViewModel, como pide 5.3) y, desde FE-2.1, pasa `Subidas.almacen` y `Subidas.cola` (§5.10). |
+| `state: StateFlow<PanelUiState>` | `nombre` (primer nombre: lo que hay antes del primer espacio del nombre de la sesión), `rolTexto` (fijo: "Administrador del sistema"), `resumen: ResumenAdmin?`, `cargandoResumen` (empieza en `true`), `errorResumen` y, desde FE-2.1, `avisoSubidas: AvisoSubidas?`. |
+| Subidas (FE-2.1) | Con sesión ADMIN, en `init`: `cola.reanudar()` (retoma lo que quedó `subiendo`: tras volver a Login se cae aquí, 5.8) y recoge `combine(cola.estado, cola.cambiosVideos)`; en cada cambio relee los recorridos (`almacen.listar()`) y calcula `avisoSubidas` con `avisoSubidas(estado, recorridos)` (`internal`, lógica pura): si la cola trabaja sobre un video → «Preparando / Subiendo «nombre»» («N de M fotos»), «Subida de «nombre» en pausa» (sin conexión, «reintento en N s») o «La subida de «nombre» se detuvo» (error o fotos ilegibles, con el mensaje); si no, el `finalizado` `subiendo` más reciente → «Subida pendiente de «nombre»» («N fotos por subir»); si no, los `sin_subir` → «Recorridos sin subir» (el más reciente); nada pendiente → `null`. `AvisoSubidas(videoId, titulo, detalle, accion)`. Si la cola queda en `ESPERANDO_SESION` y `session.obtener()` ya es `null` (venció a las 12 h con el Panel vivo en la pila), emite `SinSesion` (a Login). |
 | `eventos` | `Channel(Channel.BUFFERED)` + `receiveAsFlow()`: cada evento lo recibe **un** recolector y queda guardado si llega antes de que alguien recoja. `PanelEvento.SesionCerrada` (volver al flujo público) y `PanelEvento.SinSesion` (ir a Login). |
 | `cargarResumen()` | Pone `cargandoResumen = true` y `errorResumen = false`, llama a `repo.obtenerResumen()` y, ante **cualquier** `Exception`, deja `errorResumen = true`. Sirve también de reintento. |
 | `cerrarSesion()` | `session.cerrarSesion()` y emite `SesionCerrada`. |
@@ -1103,7 +1146,7 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| Constructor | `GaleriaViewModel(repositorio: VideoRepository)`. `Factory(appContext)` crea `AssetsVideoRepository(appContext)`. Estado en `uiState: StateFlow<GaleriaUiState>`. Carga en `init`. |
+| Constructor | `GaleriaViewModel(repositorio: VideoRepository)`. `Factory(appContext)` crea, desde FE-2.1, `VideoRepositoryCompuesto.deLaApp(appContext)` (assets + recorridos locales `finalizado`, 5.6; antes `AssetsVideoRepository`). Estado en `uiState: StateFlow<GaleriaUiState>`. Carga en `init`. |
 | `GaleriaUiState` | `cargando` (empieza en `true`), `error: String?`, `videos`, `todas: List<Foto>` (las fotos de todos los videos), `filtros`, `modo`, `pagina` (desde 1) y `seleccion: Set<String>` con el **`uid`** de cada foto (5.6). Calculadas: `filtradas`, `totalPaginas` (mínimo 1), `paginaActual` y `lugares` (lugares distintos, ordenados). |
 | `GaleriaFiltros` | `busqueda`, `lugar`, `videoId`, `estado`, `calidad`; todos opcionales y combinados con **Y**. `hayActivos` dice si hay alguno. |
 | `ModoVista` · `FOTOS_POR_PAGINA` | `CUADRICULA` / `MAPA` (`cambiarModo`). `const val FOTOS_POR_PAGINA = 24`, público, en este archivo. |
@@ -1123,7 +1166,7 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| Constructor | `VideoDetalleViewModel(videoId: String, repositorio: VideoRepository)`. `Factory(appContext, videoId)` crea `AssetsVideoRepository(appContext)`. Estado en `ui: StateFlow<VideoDetalleUiState>`. |
+| Constructor | `VideoDetalleViewModel(videoId: String, repositorio: VideoRepository)`. `Factory(appContext, videoId)` crea, desde FE-2.1, `VideoRepositoryCompuesto.deLaApp(appContext)` (un recorrido local se abre con su id `rec_NNNN`). Estado en `ui: StateFlow<VideoDetalleUiState>`. |
 | `VideoDetalleUiState` | `cargando` (empieza en `true`), `noEncontrado`, `videoJson: String?` y `otrosJson` (`"[]"` por defecto). Ya vienen **serializados**: el mapa web recibe JSON. |
 | `videoJson` | `{id, nombre, fecha, fotos: [{id, url, thumb, lat, lng, rumbo}]}`. `fecha` = los 10 primeros caracteres de `creadoEn` (espera `"2026-10-09…"`); `rumbo` es número o `null`. **No** incluye `lugar`, `estado`, `calidad` ni `capturadaEn`. |
 | `otrosJson` | `[{id, nombre, fotos: [{lat, lng}]}]` con **los demás videos**, para comparar cobertura en el mapa. |
@@ -1140,10 +1183,10 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| `PanelAdminScreen` | `(onRecolector, onLugares, onMapaAlertas, onImagenes, onVideos, onEstadisticas, onAjustes, onVolverModoPublico, onSesionCerrada, onSinSesion, viewModel = viewModel(factory = PanelAdminViewModel.Factory(LocalContext.current.applicationContext)))`. Recoge `viewModel.eventos` en un `LaunchedEffect(Unit)`: `SesionCerrada` → `onSesionCerrada()`, `SinSesion` → `onSinSesion()`. El `Channel` con búfer es lo que permite que un `SinSesion` emitido en `init` llegue aunque aún no haya colector. |
-| `PanelAdminContent` | `internal` · `(state: PanelUiState, acciones: PanelAcciones)`. Sin lógica; 3 `@Preview` privados (normal, cargando, error). |
-| `PanelAcciones` | `data class` con 10 lambdas (`{}` por defecto): `onRecolector`, `onLugares`, `onMapaAlertas`, `onImagenes`, `onVideos`, `onEstadisticas`, `onAjustes`, `onCerrarSesion`, `onVolverModoPublico`, `onReintentarResumen`. |
-| Piezas privadas | `Encabezado`, `FilaTarjetas` / `TarjetaAcceso` (con `Acceso`), `ResumenRapido`, `TileDato`, `ChipTiempoReal`, `Pie`. No se reutilizan sin extraerlas. |
+| `PanelAdminScreen` | `(onRecolector, onLugares, onMapaAlertas, onImagenes, onVideos, onEstadisticas, onAjustes, onVolverModoPublico, onSesionCerrada, onSinSesion, onAbrirSubida: (videoId: String) -> Unit = {}, viewModel = viewModel(factory = PanelAdminViewModel.Factory(LocalContext.current.applicationContext)))`. Recoge `viewModel.eventos` en un `LaunchedEffect(Unit)`: `SesionCerrada` → `onSesionCerrada()`, `SinSesion` → `onSinSesion()`. El `Channel` con búfer es lo que permite que un `SinSesion` emitido en `init` llegue aunque aún no haya colector. `onAbrirSubida` (FE-2.1): la tarjeta de subidas → 7.5 de ese recorrido. |
+| `PanelAdminContent` | `internal` · `(state: PanelUiState, acciones: PanelAcciones)`. Sin lógica; 4 `@Preview` privados (normal, subiendo —FE-2.1—, cargando, error). |
+| `PanelAcciones` | `data class` con 11 lambdas (`{}` por defecto): `onRecolector`, `onLugares`, `onMapaAlertas`, `onImagenes`, `onVideos`, `onEstadisticas`, `onAjustes`, `onCerrarSesion`, `onVolverModoPublico`, `onReintentarResumen` y (FE-2.1) `onAbrirSubida(videoId)`. |
+| Piezas privadas | `Encabezado`, `TarjetaSubidas` (FE-2.1: va justo debajo del encabezado si `avisoSubidas != null`; borde `Acento`, ícono de nube, título, detalle y la acción —«Ver», «Revisar», «Revisar y subir»—; toda la fila es un botón de ≥ 64 dp con `liveRegion` Polite), `FilaTarjetas` / `TarjetaAcceso` (con `Acceso`), `ResumenRapido`, `TileDato`, `ChipTiempoReal`, `Pie`. No se reutilizan sin extraerlas. |
 
 Cuidados:
 - **No lee `cargandoResumen`:** mientras carga no hay indicador; los 5 datos muestran "—", igual que con error.
@@ -1184,7 +1227,8 @@ Cuidados:
 - **El diálogo de eliminar dice** "del dataset y del sistema de ubicación. Esto no se puede deshacer", pero hoy solo quita las fotos **de la memoria de esta pantalla** (ver `GaleriaViewModel`): el texto promete más de lo que hace.
 - **Reasignar:** campo de texto libre con el botón deshabilitado si está en blanco (TODO: selector de lugares reales, 7.6). Cualquier texto crea un "lugar" nuevo.
 - El modo `MAPA` solo muestra un mensaje provisional.
-- Miniaturas con Coil (`AsyncImage(model = foto.urlMiniatura)`, `contentDescription = null`: la tarjeta ya se anuncia completa con nombre, video, lugar, estado, "alta calidad" y "seleccionada"). Si la URL falla solo queda el fondo `Placeholder`.
+- Miniaturas con Coil (`AsyncImage(model = foto.urlMiniatura)`, `contentDescription = null`: la tarjeta ya se anuncia completa con nombre, video, lugar, estado, "alta calidad" y "seleccionada"). Si la URL falla solo queda el fondo `Placeholder`. Las fotos de un recorrido local (FE-2.1) llegan como `file://<ruta absoluta>` del JPG original, sin miniatura (Coil 2 entiende `file://` y la reduce).
+- Colores del estado (`EstadoFoto.color()`, `when` exhaustivo): `PENDIENTE` → `TextoSuave` (gris; FE-2.1), `SUBIDA` → `Azul`, `PROCESADA` → `Verde`, `ERROR` → `Rojo`. El filtro «Estado» lista los cuatro valores de `EstadoFoto` (con `PENDIENTE` desde FE-2.1).
 - `NumberFormat.getIntegerInstance()` para "N imágenes" (según la región).
 
 **`VideosScreen` y `VideosViewModel` (verificado, `ui/admin/videos/VideosScreen.kt` y `VideosViewModel.kt`)**
@@ -1193,10 +1237,10 @@ Cuidados:
 |---|---|
 | `VideosScreen` | `(onVolver, onAbrirVideo: (videoId) -> Unit, viewModel = viewModel(factory = VideosViewModel.Factory(LocalContext.current.applicationContext)))`. Recoge `viewModel.uiState` con `collectAsState()`. El estado es `VideosUiState(cargando = true, error: String? = null, videos = emptyList())` y el ViewModel tiene `reintentar()` (detalle abajo). |
 | `VideosContent` | `(state: VideosUiState, onVolver, onAbrirVideo, onReintentar, modifier)`. Público, **sin `@Preview`**. Muestra cargando, error con "Reintentar", vacío ("Todavía no hay videos.") o la lista con "N videos". |
-| Tarjeta de video | Nombre, y una línea con la fecha `dd/MM/yyyy` (los 10 primeros caracteres de `creadoEn`, invertidos), "N fotos" y la distancia (`Video.distanciaMetros`: "N m" o "X,XX km" según la región). Más un estado calculado: **Sin fotos**, **Con errores** (alguna `ERROR`), **Procesado** (todas `PROCESADA`) o **Pendiente de proceso**. El estado va en texto además del color. |
+| Tarjeta de video | Nombre, y una línea con la fecha `dd/MM/yyyy` (los 10 primeros caracteres de `creadoEn`, invertidos), "N fotos" y la distancia (`Video.distanciaMetros`: "N m" o "X,XX km" según la región). Más un estado calculado, en este orden: **Sin fotos**, **Pendiente de subir** (alguna `PENDIENTE`, FE-2.1: un recorrido local sin subir o a medias; gris `TextoSuave`), **Con errores** (alguna `ERROR`), **Procesado** (todas `PROCESADA`) o **Pendiente de proceso**. El estado va en texto además del color. |
 
 Cuidados:
-- El orden es el del repositorio (por carpeta, 5.6); aún no hay orden ni búsqueda (`PLAN.md`).
+- El orden es el del repositorio (5.6: primero los de `assets/`, después los `rec_NNNN` locales, cada grupo por carpeta); aún no hay orden ni búsqueda (`PLAN.md`).
 - Usa `GaleriaColores` del paquete `ui.admin.imagenes`: dependencia cruzada hasta que se muevan a `CampusColors`.
 - La fecha supone formato ISO (`2026-10-09…`); con otro formato sale mal.
 - **`VideosViewModel` sí recoge `repositorio.cambios()`** (verificado): el ViewModel de la lista sigue vivo en la pila mientras se ve el detalle, y al volver tras renombrar o eliminar un video la lista se recarga sola.
@@ -1204,7 +1248,7 @@ Cuidados:
 
 **`VideosViewModel` en detalle (verificado)**
 
-- `VideosViewModel(repositorio: VideoRepository)`; su `Factory(appContext)` crea `AssetsVideoRepository(appContext)` (**espera el contexto de la aplicación**). Expone `uiState` y no tiene flujo de eventos. No usa `AppLog`.
+- `VideosViewModel(repositorio: VideoRepository)`; su `Factory(appContext)` crea, desde FE-2.1, `VideoRepositoryCompuesto.deLaApp(appContext)` (**espera el contexto de la aplicación**). Expone `uiState` y no tiene flujo de eventos. No usa `AppLog`.
 - En el `init` recoge `repositorio.cambios()` y llama a `cargar()` por cada emisión: la primera emisión **es** la carga inicial (no hay otra) y las siguientes llegan cuando el detalle renombra o elimina. Cada una relee **todos** los manifests (5.6).
 - `cargar()`: con éxito pone `cargando = false`, `error = null` y `videos`. Con cualquier `Exception` (salvo `CancellationException`, que relanza) pone `cargando = false` y `error = "No se pudieron cargar los videos"` (texto fijo, sin registrar) y **conserva** la lista anterior en `videos`.
 - `reintentar()` vuelve a llamar a `cargar()` **sin** poner `cargando = true`: durante el reintento no hay indicador de carga y el error sigue en el estado hasta que termine. Como `cargar()` corre dentro del `collect`, las recargas por `cambios()` son secuenciales, pero un `reintentar()` simultáneo puede solaparse con una (gana la última en terminar).
@@ -1239,7 +1283,7 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| `UbicacionManualViewModel` | `ViewModel(videos: VideoRepository, lugares: LugaresRepository)`; `Factory(appContext)` crea `AssetsVideoRepository` y `LugaresRepositoryStub` (**espera el contexto de la aplicación**). Estado en `ui: StateFlow<UbicacionManualUiState>`. Eventos por `Channel(BUFFERED)` + `receiveAsFlow()` (un solo colector; no se pierden). |
+| `UbicacionManualViewModel` | `ViewModel(videos: VideoRepository, lugares: LugaresRepository)`; `Factory(appContext)` crea `VideoRepositoryCompuesto.deLaApp(appContext)` (desde FE-2.1: «Usar mi última posición» y el nombre autonumerado también cuentan los recorridos grabados; *decisión provisional del maestro, a confirmar por el usuario*) y `LugaresRepositoryStub` (**espera el contexto de la aplicación**). Estado en `ui: StateFlow<UbicacionManualUiState>`. Eventos por `Channel(BUFFERED)` + `receiveAsFlow()` (un solo colector; no se pierden). |
 | `UbicacionManualUiState` | `lugares`, `punto: PuntoMapa?` (`null` hasta tocar el mapa), `rumbo` (0…360), `brujulaDisponible`, `usandoBrujula`, `cargandoUltima`, `ultimaPosicion: UltimaPosicion?`, `ultimaAplicada`, `nombreVideo`, `nombreSugerido`, `edicion: EdicionCoordenada?`, `centrarSolicitud: Int`, `confirmando`. Calculadas: `puedeConfirmar` (hay punto y no está confirmando), `latitudTexto`, `longitudTexto` (6 decimales, siempre con punto). |
 | `UbicacionManualEvento` | Solo `Confirmado(inicio: InicioRecoleccion)`. **No navega.** |
 | `UbicacionManualAcciones` | `data class` con 15 lambdas (`{}` por defecto): `onVolver`, `onAjustes`, `onPuntoCambiado(lat, lng)`, `onRumbo`, `onAlternarBrujula`, `onEditarCoordenada`, `onTextoEdicion`, `onAceptarEdicion`, `onCancelarEdicion`, `onUsarUltima`, `onNombre`, `onCancelar`, `onConfirmar`, `onCalibrar`, `onRetomar` (FE-2.3). |
@@ -1292,7 +1336,7 @@ Cuidados:
 | `componentes/PanelesRecoleccion.kt` | Todo `internal`: `ChipEstadoVideo`, `TarjetaContador`, `TarjetaCalidad`, `TarjetaCaptura`, `BotonAccion`, `FilaAccion`, `BotonFinalizar`, `PanelReanclaje`, `FilaAlertasCercanas`, `PanelAvisos`, `formatearDistancia`, `formatearDuracion` y los colores `ColorFinalizar` (`#FF4D7D`) y `ColorAviso` (`#F59E0B`) |
 
 **Puente `RecoleccionBridge`, web → app** (clase `RecoleccionPuente : PuenteWeb`, `internal`; todo pasa al hilo principal): `listo()` (heredado) · `puntoCambiado(lat, lng)` (solo con el re-anclaje abierto; arrastre ~10 veces por segundo o toque en el mapa) · `seguimientoCambiado(activo)`.
-**App → web** (solo tras `listo()`): `setPosicion(lat, lng, rumbo)` · `cargarFotos(texto)` · `cargarTrayectoria(texto)` · `cargarAlertas(texto)` (los tres, **texto** JSON con `literalJs`; el JS hace `JSON.parse`) · `setReanclaje(lat, lng)` · `quitarReanclaje()` · `centrar()` · `zoomMas()` · `zoomMenos()`.
+**App → web** (solo tras `listo()`): `setPosicion(lat, lng, rumbo)` · `cargarFotos(texto)` · `cargarTrayectoria(texto)` · `cargarAlertas(texto)` (los tres, **texto** JSON con `literalJs`; el JS hace `JSON.parse`) · `setReanclaje(lat, lng)` · `quitarReanclaje()` · `centrar()` · `zoomMas()` · `zoomMenos()` · desde FE-2.1 `encuadrar()` (`fitBounds` de trayectoria y fotos, padding 24 px, zoom ≤ 19; deja de seguir la posición; lo usa 7.5).
 Formatos JSON: `fotosJson` = `[{id, lat, lng, rumbo|null}]`; `trayectoriaJson` = `[[lat, lng], …]`; `alertasJson` = los campos del editor (`id, lat, lng, mensaje, tipo, prioridad, radio, activa`).
 
 Comportamiento y cuidados:
@@ -1306,6 +1350,35 @@ Comportamiento y cuidados:
 - «Marcar punto de interés» está **deshabilitado**. El aviso temporal (`ui.aviso`) es una tarjeta propia que se descarta al tocarla; no usa `BannerEstado`. `ColorFinalizar` y `ColorAviso` son propios porque `CampusColors.Peligro` es morado (5.4).
 - Reutiliza `BotonIcono` y `Modifier.tarjeta` de `ui/destino/componentes/Comun.kt` (`internal`): regla 4 de 11, conviene moverlos a `ui/components/`.
 - Con fuente grande, los cuatro contadores en fila pueden apretarse. Sin brújula «N» ni giro del mapa.
+- **`RecoleccionMapaControl` (FE-2.1):** además de `centrar()`, `zoomMas()` y `zoomMenos()`, `encuadrar()` (llama al
+  JS `encuadrar()`: `fitBounds` de la trayectoria y las fotos con 24 px de margen y zoom ≤ 19, y deja de seguir la
+  posición) y `listo: Boolean` (la página ya llamó a `listo()`). Los usa 7.5 (abajo).
+
+**`ResumenVideoScreen` y `ResumenVideoViewModel` (vista 7.5; FE-2.1; `ui/admin/recoleccion/ResumenVideo*.kt`)**
+
+| Pieza | Detalle |
+|---|---|
+| `ResumenVideoViewModel` | `(videoIdPedido: String?, almacen: AlmacenRecorridos, cola: ColaSubida, estadosRemotos: suspend (videoId) -> SubidaRecorrido.EstadoRemoto?)`. `Factory(videoId)` usa `Subidas.almacen`, `Subidas.cola` y `Subidas.subida::actualizarEstados` (no necesita contexto). Estado en `ui: StateFlow<ResumenVideoUiState>`; eventos `Channel(BUFFERED)` + `receiveAsFlow()` (un solo colector): solo `ResumenVideoEvento.IrAlPanel`. Constante `SONDEO_MS = 15_000` |
+| Qué recorrido abre | `videoIdPedido` (argumento `video` de la ruta) → si no, `SesionDeRecoleccion.resumen.value?.videoId` → si no (proceso muerto y sin argumento), el `finalizado` sin `completada` de mayor `rec_NNNN`. Ninguno o manifest ilegible → `noEncontrado` («No hay un recorrido para revisar.» y «Volver al panel») |
+| Al abrir | Lee el manifest (`almacen.leer`), llama a `cola.reanudar()` (con sesión, lo que quedó `subiendo` sigue solo) y recoge `cola.cambios` (relee el manifest en cada cambio) y `cola.estado` (lo pasa a `SubidaUi` solo si `videoId` es este; `ESPERANDO_SESION`, que no lleva video, se muestra si este estaba `subiendo`) |
+| `ResumenVideoUiState` | `cargando`, `noEncontrado`, `videoId`, `nombre` (lo del campo) y `nombreGuardado` (`name`), `estadoSubida` (`EstadoSubida`), `enviadoAlBackend` (hay `remote_video_id`), `duracionSegundos`, `distanciaMetros`, `pasos`, `fotos: List<FotoResumen(id, ruta, estado, error)>`, `fotosJson` (`[{id, lat, lng, rumbo\|null}]`), `trayectoriaJson` (`progress.track` o, sin él, las fotos en orden), `subida: SubidaUi(fase, hechas, total, mensaje, reintentoEnS)`, `estadoRemoto` (`estado` del backend tras consultar), `fotoAbierta`, `confirmandoDescartar`, `aviso`. Calculadas: `editable` (= sin `remote_video_id`, sin `completada` y la cola no lo está subiendo), `puedeSubir` (hay fotos, no `completada`, cola parada y nombre no vacío), `subidas` (fotos no `PENDIENTE`), `conteo` (por `EstadoFoto`), `terminado` (`completada` y todas `PROCESADA` o `ERROR`) |
+| Acciones | `alCambiarNombre(t)` (recorta a 40) · `alSubir()` (guarda el nombre si cambió y es editable; `cola.subir(id)`) · `alGuardarParaDespues()` (guarda el nombre e `IrAlPanel`; el recorrido queda `sin_subir` y el Panel lo ofrece) · `alVolver()` (Atrás: lo mismo si es editable; si no, solo `IrAlPanel` —la subida sigue en segundo plano—) · `alAbrirFoto(id)`, `alCerrarFoto()` · `alDescartarFoto(id)` (`almacen.descartarFoto`; aviso «Foto N descartada.» o el error) · `alPedirDescartar()`, `alCancelarDescartar()`, `alConfirmarDescartar()` (solo si `editable`: `almacen.descartar(id)` e `IrAlPanel`) · `alDescartarAviso()` · `alIniciarSesion()` (con la cola en `ESPERANDO_SESION`: `EventosSesion.emitir(SinSesionLocal)` → `AppNav` va a Login, 5.3) · `alReanudar()` / `alPausar()` (ON_RESUME / ON_PAUSE: `cola.reanudar()` y, con `completada` y no `terminado`, cada `SONDEO_MS` `estadosRemotos(id)` + releer, hasta que el conteo remoto sea definitivo) |
+| `ResumenVideoAcciones` | `data class` con 12 lambdas (`{}` por defecto): `onVolver`, `onNombre`, `onAbrirFoto`, `onCerrarFoto`, `onDescartarFoto`, `onSubir`, `onGuardarDespues`, `onPedirDescartar`, `onConfirmarDescartar`, `onCancelarDescartar`, `onDescartarAviso`, `onIniciarSesion` |
+| Qué dibuja `ResumenVideoContent` | Columna con `systemBarsPadding` + `imePadding` y scroll: encabezado (Volver 56 dp, «Resumen del video» como encabezado, `rec_NNNN` y un chip: Procesado / Subido / Subiendo / Subida a medias / Sin subir) → aviso (tarjeta que se descarta al tocarla, *live region*) → `OutlinedTextField` «Nombre del video» (deshabilitado si no es editable, con la explicación) → tres `TarjetaContador` (Duración, Distancia, Fotos) → mapa de 260 dp (`RecoleccionMapaContent` sin posición propia, `encuadrar()` cuando cambian fotos o trayectoria) → carrusel `LazyRow` de miniaturas de 104 dp (Coil con el `File` original, punto de color y «0001 · Pendiente») → tarjeta de subida (título según la fase, `LinearProgressIndicator`, «Pendientes · Subidas · Procesadas · Con error», mensaje de la cola, botón «Iniciar sesión» en `ESPERANDO_SESION`; *live region*) → «Subir y procesar» (o «Reintentar subida» si está `subiendo`; oculto con `completada`), «Guardar y subir después» (o «Volver al panel» si no es editable) y «Descartar video» (rosa `ColorFinalizar`, solo si es editable). Diálogos: la foto en grande con su estado (y motivo de error) y «Descartar foto» si es editable; confirmación «¿Descartar «nombre»? Se borrarán del teléfono sus N fotos. No se puede deshacer.». 2 `@Preview` (sin subir; subiendo sin conexión) |
+| Colores | `CampusColors`, más `ColorFinalizar` (rosa) y `ColorAviso` (ámbar) de `PanelesRecoleccion.kt`. Punto de estado: `PENDIENTE` `TextoSuave`, `SUBIDA` `Acento`, `PROCESADA` `Exito`, `ERROR` `ColorFinalizar` |
+
+Cuidados:
+- **No navega**: `IrAlPanel` → la ruta vuelve al Panel (5.8). Salir de 7.5 no para la subida (es de la cola del proceso).
+- Nombre y fotos solo se cambian mientras el backend no conoce el video (`remote_video_id` nulo): `POST
+  /v1/collect/videos` es idempotente y **no** actualiza el nombre de un video ya creado (renombrar después es FE-4.1,
+  `PATCH /v1/admin/videos/{id}`). Descartar fotos después dejaría `total_fotos` mal declarado.
+- El progreso por foto sale del manifest (`sync`) mientras sube; con la subida completa, de
+  `GET /v1/admin/videos/{id}` (`estado` procesada/error escrito en el manifest por `actualizarEstados`) solo mientras la
+  vista está en primer plano. Con `embedding` apagado en `dev` las fotos se quedan en «Subida» hasta que se encienda.
+- «Corregir la trayectoria (re-anclar puntos) antes de subir» (elemento de 7.5) **no** está: no entraba en los
+  entregables de FE-2.1 (`PLAN.md` §2.2); queda pendiente (*decisión provisional del maestro, a confirmar por el usuario*).
+- ⚠ Cómo se ve en el teléfono, sin comprobar (FE-2.1 C1/C2 en el campus). Usa `androidx.lifecycle.compose.LocalLifecycleOwner`
+  (no el de `compose.ui.platform`, que da el aviso de deprecación de 7.3 y 7.4).
 
 **`CalibracionScreen` y `CalibracionBridge` (vista 7.3b; `ui/admin/calibracion/` y `assets/calibracion_mapa.*`; entregado el 2026-10-12, compila y se abre en dispositivo, ⚠ pasada completa a verificar en dispositivo (FE-2.3 C3))**
 
@@ -1492,14 +1565,14 @@ Cuidados:
 ### 5.6 Datos: repositorios y modelos
 
 Convención: `interface XRepository` + `XRepositoryStub` (o `AssetsX` si lee de `assets/`) + TODO `RemoteX`
-en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean el stub directamente (verificado: `SeleccionDestinoViewModel` con `LugaresRepositoryStub()` y la `Factory` de Lista de videos con `AssetsVideoRepository`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1) y la `Factory` de Login, `RemoteAuthRepository` (FE-1.2).
+en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean el stub directamente (verificado: `SeleccionDestinoViewModel` con `LugaresRepositoryStub()` y, desde FE-2.1, las `Factory` de Galería, Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp(appContext)`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1) y la `Factory` de Login, `RemoteAuthRepository` (FE-1.2).
 
 | Repositorio | Métodos | Implementación actual | Usado por |
 |---|---|---|---|
 | `AuthRepository` | `suspend login(identificador: String, password: String): Sesion` (lanza `CredencialesInvalidasException` o `java.io.IOException`; con el backend real también `ApiException` y `RespuestaInesperadaException`) | **Real** (`RemoteAuthRepository`, `POST /v1/auth/login`, FE-1.2); queda `AuthRepositoryStub` sin uso | `LoginViewModel` (por `Factory`) |
 | `AdminRepository` | `suspend obtenerResumen(): ResumenAdmin` (lanza `IOException`, solo documentado en el KDoc) | Stub (`AdminRepositoryStub`, 600 ms) | `PanelAdminViewModel` (por `Factory`). Detalle abajo |
-| `VideoRepository` | `suspend obtenerVideos(): List<Video>` (cada `Video` ya trae sus `fotos`) · `suspend renombrarVideo(videoId, nombre)` · `suspend eliminarVideo(videoId)` · `suspend eliminarFoto(videoId, fotoId)` · `cambios(): Flow<Int>` | Local (`AssetsVideoRepository(context)`) | Galería, Lista y Detalle de video |
-| `RecoleccionRepository` | `crearVideo(inicio): String` · `carpetaFotos(videoId): File` · `registrarFoto(videoId, archivo, DatosFoto): FotoRecolectada` · `desplazarFotos(videoId, desdeIndice, dLat, dLng)` · `fotos(videoId)` · `finalizar(videoId, duracionS, distanciaM, pasos): ResumenRecoleccion` · `descartar(videoId)` · `buscarEnCurso(): String?` · `leerEnCurso(videoId): VideoEnCurso` (FE-2.3) · `guardarProgreso(videoId, ProgresoRecoleccion)` (FE-2.3) · `contarPendientes(): Int` · `marcarSubida(videoId, fotoIds)` · `espacioLibreBytes(): Long` | Local (`RecoleccionRepositoryLocal(context)`, `data/repository/RecoleccionRepository.kt`) | `RecoleccionViewModel` (lo crea directamente) y, desde FE-2.3, `UbicacionManualScreen` (solo `buscarEnCurso` y `leerEnCurso`, para «Retomar …»). Detalle abajo |
+| `VideoRepository` | `suspend obtenerVideos(): List<Video>` (cada `Video` ya trae sus `fotos`) · `suspend renombrarVideo(videoId, nombre)` · `suspend eliminarVideo(videoId)` · `suspend eliminarFoto(videoId, fotoId)` · `cambios(): Flow<Int>` | Local: desde FE-2.1 `VideoRepositoryCompuesto.deLaApp(appContext)` = `AssetsVideoRepository` (`assets/videos/`) + `FuenteRecorridos` (`files/recoleccion/`, solo `finalizado`) | Galería, Lista, Detalle de video y (FE-2.1) 7.3. Detalle abajo |
+| `RecoleccionRepository` | `crearVideo(inicio): String` · `carpetaFotos(videoId): File` · `registrarFoto(videoId, archivo, DatosFoto): FotoRecolectada` · `desplazarFotos(videoId, desdeIndice, dLat, dLng)` · `fotos(videoId)` · `finalizar(videoId, duracionS, distanciaM, pasos): ResumenRecoleccion` · `descartar(videoId)` · `buscarEnCurso(): String?` · `leerEnCurso(videoId): VideoEnCurso` (FE-2.3) · `guardarProgreso(videoId, ProgresoRecoleccion)` (FE-2.3) · `contarPendientes(): Int` · `marcarSubida(videoId, fotoIds)` · `espacioLibreBytes(): Long` | Local (`RecoleccionRepositoryLocal(context)`, `data/repository/RecoleccionRepository.kt`) | `RecoleccionViewModel` (lo crea directamente) y, desde FE-2.3, `UbicacionManualScreen` (solo `buscarEnCurso` y `leerEnCurso`, para «Retomar …»). La subida (FE-2.1) no pasa por aquí: usa `AlmacenRecorridos` (§5.10). Detalle abajo |
 | `CalibracionPasoRepository` | `guardada(): Double?` · `longitudPasoM(): Double` (la calibrada, o `PdrEngine.LONGITUD_PASO_DEFECTO_M`) · `guardar(Valido, ahoraMs = ahora)` · `restablecer()` (borra todo el archivo) | Local (`CalibracionPasoRepository(context)`, `data/repository/CalibracionPasoRepository.kt`; **sin interfaz**) | `PdrTracker` (valor por defecto del parámetro), `CalibracionViewModel` y `UbicacionManualScreen`. Detalle abajo |
 | `LugaresRepository` | `suspend obtenerLugares(): List<LugarDestino>` (lanza `IOException`, solo documentado en el KDoc) | Stub (`LugaresRepositoryStub`, 300 ms; devuelve `LUGARES_DE_PRUEBA`, 6 lugares) | `SeleccionDestinoViewModel` (lo crea directamente); futuras 6.3 y 7.6/7.7 |
 | `EscaneoBackend` | `suspend analizar(fotos: List<File>)` → `Unit` (lanza `IOException`). Vive en `ui/ubicacion/EscaneoBackend.kt`, **no** en `data/repository/` | Stub (`EscaneoBackendStub`, 2,5 s) | `EscaneoViewModel` (lo instancia directamente). Detalle en 5.2 |
@@ -1511,7 +1584,8 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 | `ResumenAdmin` | `domain/model/ResumenAdmin.kt` | Verificado (bache 3): 6 campos, 5 datos del panel (el último video usa número y fecha). Detalle abajo |
 | `Alerta`, `Lugar(nombre, lat, lng)` | `domain/model/Alerta.kt` | Detalle abajo. `Lugar` lo usa el editor de mapa |
 | `LugarDestino`, `CategoriaLugar` | `domain/model/LugarDestino.kt` | Verificado contra el código. `id`, `nombre`, `categoria`, `lat`, `lng`, `alias`, `distanciaMetros?`, `imagenUrl?`. Detalle más abajo |
-| `Foto`, `Video`, `EstadoFoto`, `CalidadFoto` | `domain/model/Foto.kt` | Detalle abajo. Ver también 7.11 y 7.14 |
+| `Foto`, `Video`, `EstadoFoto`, `CalidadFoto` | `domain/model/Foto.kt` | Detalle abajo. Ver también 7.11 y 7.14. `EstadoFoto.PENDIENTE` desde FE-2.1 |
+| `RecorridoLocal`, `FotoLocal`, `FotoPreparada`, `EstadoSubida` | `data/local/RecorridoLocal.kt` | FE-2.1: un recorrido de `files/recoleccion/` tal como lo leen 7.5, la cola y el repositorio compuesto (de `ManifestRecorrido.recorrido`). Detalle en §5.10, «Subida de un recorrido» |
 | `InicioRecoleccion` | `domain/model/InicioRecoleccion.kt` | `lat`, `lng`, `rumbo` (0…360, 0 = norte; norte magnético si vino de la brújula), `nombreVideo` y `continuaVideoAnterior`. Lo emite la vista 7.3 y lo consume la 7.4 a través de `SesionDeRecoleccion`. Detalle en 5.5 («UbicacionManual») |
 | `FotoRecolectada`, `DatosFoto`, `ResumenRecoleccion` | `domain/model/FotoRecolectada.kt` | Lo que guarda y devuelve `RecoleccionRepository`. `FotoRecolectada` tiene un `uid`. Detalle abajo |
 | `SesionDeRecoleccion` | `domain/model/SesionRecoleccion.kt` (`object`) | Holder en memoria entre 7.3, 7.4 y 7.5. Detalle abajo |
@@ -1543,10 +1617,31 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 
 - **No hay `obtenerVideo(id)` ni `obtenerFotos`:** todo sale de `obtenerVideos()`, que relee **todos** los manifests en `Dispatchers.IO`. Para un solo video (Detalle) se filtra por `id` en la lista; no llamarlo en cada recomposición.
 - **Videos** ordenados por nombre de carpeta; **fotos** de cada video ordenadas por `id` como **texto**: los ids deben ir con ceros a la izquierda (`"0001"`, `"0002"`…); `"10"` quedaría antes que `"9"`. Un video cuyo manifest falla se **omite** (queda un `Log.w`, no una excepción).
-- **`cambios(): Flow<Int>`** devuelve el contador de `EdicionesLocales` (un `StateFlow` por dentro): emite el valor actual **apenas se empieza a recoger**. Si el ViewModel carga datos y además recoge `cambios()`, la carga inicial ocurre dos veces salvo que se ignore la primera emisión. El número no significa nada; solo avisa de que "algo cambió, vuelve a pedir".
+- **`cambios(): Flow<Int>`** devuelve el contador de `EdicionesLocales` (un `StateFlow` por dentro; en el compuesto, `combine` con `ColaSubida.cambiosVideos`, que sube cada vez que la cola termina un intento sobre un recorrido): emite el valor actual **apenas se empieza a recoger**. Si el ViewModel carga datos y además recoge `cambios()`, la carga inicial ocurre dos veces salvo que se ignore la primera emisión. El número no significa nada; solo avisa de que "algo cambió, vuelve a pedir".
 - **`EdicionesLocales`** (`internal object`): renombrar y eliminar viven **en memoria** y se aplican encima de lo leído de `assets/`; se pierden al cerrar la app. Al renombrar un video, también cambia `videoNombre` en todas sus fotos. Desaparece con el backend (**TODO** `RemoteVideoRepository`).
 - **Cómo lo consumen hoy las vistas:** Detalle de video recoge `cambios()` y es la referencia (ver `VideoDetalleViewModel`, 5.5). Galería carga una sola vez, no recoge `cambios()` y sus eliminar/reasignar **no** pasan por el repositorio (ver `GaleriaViewModel`, 5.5). Lista de videos también recoge `cambios()` desde su `init` (ver `VideosViewModel`, 5.5).
-- **Lo que falta para ver lo recolectado (FE-2.1):** la recolección (7.4) **no** usa `VideoRepository`: guarda con `RecoleccionRepository` (abajo), así que lo que se recolecta no aparece en Galería, Lista ni Detalle de video. Hace falta un `VideoRepository` **compuesto** (assets + `files/recoleccion/`) y un parser de manifest compartido. Esto cambia lo que pedía este documento (ampliar `VideoRepository` con `crearVideo` y `agregarFoto`): la interfaz sigue siendo de **solo lectura + borrar/renombrar**.
+- **Ver lo recolectado (FE-2.1, hecho):** la recolección (7.4) guarda con `RecoleccionRepository` (abajo); Galería,
+  Lista, Detalle de video y 7.3 leen con **`VideoRepositoryCompuesto`** (`data/repository/VideoRepository.kt`). La
+  interfaz `VideoRepository` no cambió (solo lectura + borrar/renombrar):
+  - `fun interface FuenteVideos { suspend fun videos(): List<Video> }` (sin `EdicionesLocales`; un video ilegible se
+    omite). `AssetsVideoRepository(context)` es a la vez `VideoRepository` (con `EdicionesLocales`) y `FuenteVideos`;
+    `FuenteRecorridos(almacen: AlmacenRecorridos)` da los recorridos `finalizado` (los `en_curso` no: se retoman en 7.4;
+    *decisión provisional del maestro, a confirmar por el usuario*) con `ManifestRecorrido.video(recorrido, carpeta)`.
+  - `VideoRepositoryCompuesto(fuentes: List<FuenteVideos>, cambiosExtra: Flow<Int> = flowOf(0))`: `obtenerVideos()` =
+    `EdicionesLocales.aplicar(fuentes.flatMap { it.videos() })` (en ese orden: primero `assets/`, después los
+    `rec_NNNN`); renombrar y eliminar van a `EdicionesLocales` **también para los recorridos locales** (en memoria; no
+    tocan el disco: persistirlos es FE-4.1 y borrar un recorrido local de verdad es «Descartar video» de 7.5;
+    *decisión provisional del maestro, a confirmar por el usuario*). `deLaApp(appContext)` = assets +
+    `FuenteRecorridos(Subidas.almacen)` con `cambiosExtra = Subidas.cola.cambiosVideos`.
+  - Un recorrido local como `Video`: `id` = `rec_NNNN`, `nombre` = `name`, `creadoEn` = `created_at` (ISO con zona, p.
+    ej. `2026-10-25T15:04:10-05:00`: los 10 primeros caracteres son la fecha, como espera la Lista); cada `Foto` con
+    `urlFoto` = `urlMiniatura` = `file://` + ruta absoluta del JPG original (no hay miniaturas), `rumbo` = `heading`,
+    `capturadaEn` = `captured_at`, sin `lugar`, `calidad = NORMAL` y `estado` según la regla del parser (abajo).
+  - El parser **compartido** es `ManifestRecorrido` (`data/local/`, Gson; §5.10): `AssetsVideoRepository` dejó de usar
+    `org.json` y llama a `ManifestRecorrido.video(videoId, json, url, miniaturaExiste)`, con las mismas reglas que antes
+    (`name` en blanco o ausente → id; miniatura solo si existe en `thumbs/`; fotos por `id` como texto; si falta `id`,
+    `file`, `lat` o `lng`, el video se omite). `RecoleccionRepositoryLocal` sigue con su propio `org.json` para escribir
+    durante la grabación (las claves son las mismas).
 - **Estructura y formato de los videos locales** (fuente única; la usan 7.11, 7.13 y 7.14):
 
   **Fuente de datos (provisional, local):** `AssetsVideoRepository` lee los videos empaquetados en
@@ -1569,27 +1664,29 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
   | `photos[].thumb` | No | Ruta relativa de la miniatura |
   | `photos[].heading` | No | Rumbo en grados, 0 = norte, sentido horario |
   | `photos[].captured_at` | No | Fecha/hora de captura |
-  | `photos[].lugar`, `estado`, `calidad` | No | Valores por defecto: sin lugar, `procesada`, `normal` |
+  | `photos[].lugar`, `estado`, `calidad` | No | Valores por defecto: sin lugar, `procesada`, `normal` (FE-2.1: sin `estado`, una foto con `sync` toma `pendiente`/`subida` de `sync`) |
+  | `photos[].sync`, `error`, `upload` | No | De los recorridos locales (abajo y §5.10) |
 
   > El `manifest.json` es solo la semilla local. Cuando exista el backend, la fuente de verdad serán
   > su base de datos (metadatos) y S3 (archivos, bucket privado con URLs prefirmadas de vida corta).
   > Cambiar `AssetsVideoRepository` por un `RemoteVideoRepository` no afecta a las pantallas: `Foto`
   > ya recibe las URLs resueltas.
 
-- **Formato del `manifest.json` que lee hoy el código:** `name` (si falta, usa el nombre de la carpeta), `created_at`, `photos[]` con `id`, `file`, `lat`, `lng` (obligatorios) y `thumb`, `heading`, `captured_at`, `lugar`, `estado`, `calidad` (opcionales). ⚠ **El código no lee `video_id`**: el id del video es el **nombre de la carpeta**, aunque la tabla de 7.11 lo menciona. `estado` y `calidad` se comparan con el **nombre** del enum sin importar mayúsculas (`"alta"`, `"ERROR"`), no con la etiqueta visible, y si falta o no se reconoce usan `PROCESADA` / `NORMAL`.
+- **Formato del `manifest.json` que lee hoy el código** (`ManifestRecorrido`, desde FE-2.1): `name` (si falta o está en blanco, usa el nombre de la carpeta), `created_at`, `photos[]` con `id`, `file`, `lat`, `lng` (obligatorios) y `thumb`, `heading`, `captured_at`, `lugar`, `estado`, `calidad`, `sync`, `error`, `upload` (opcionales). ⚠ **El código no lee `video_id`**: el id del video es el **nombre de la carpeta**, aunque la tabla de 7.11 lo menciona. **Regla del estado** (`ManifestRecorrido.estadoFoto`): `estado` si se reconoce, sin importar mayúsculas (`pendiente` o `pendiente_subida` → `PENDIENTE`, `subida`, `procesada`, `error`); si no, `sync` (`pendiente` → `PENDIENTE`, `subida` → `SUBIDA`); si no hay ninguno, `PROCESADA`. `calidad` se compara con el **nombre** del enum sin importar mayúsculas (`"alta"`) y si falta o no se reconoce, `NORMAL`.
 - Las URLs que arma son `file:///android_asset/videos/<id>/<ruta>`; si la miniatura no existe en `thumbs/`, `urlMiniatura` es la foto original.
 
 **`RecoleccionRepository` y `SesionDeRecoleccion` en detalle** (entregado el 2026-10-11; compila; el repositorio no tiene pruebas automáticas —usa `org.json`—, pero la decisión de cómo retomar sí: `RetomarRecoleccionTest`, §5.7)
 
 - **Por qué es aparte de `VideoRepository`:** éste es la fuente de verdad (futuro `RemoteVideoRepository`); el almacenamiento local de la captura es otra responsabilidad y así no se toca lo que ya funciona.
 - **Carpeta:** `files/recoleccion/<rec_NNNN>/photos/NNNN.jpg` + `manifest.json`. El id del video es `rec_` + 4 dígitos (prefijo distinto de `vid_` para no chocar con los datos de prueba); el id de cada foto lleva 4 dígitos con ceros a la izquierda, para ordenar como texto (ver `VideoRepository`).
-- **Manifest:** usa las claves del formato de `assets/videos/` (`video_id`, `name`, `created_at`, `photos[].id`, `file`, `lat`, `lng`, `heading`, `captured_at`) más claves **propias que el lector actual ignora**: `estado` (`en_curso` / `finalizado`), `start_lat`, `start_lng`, `start_heading`, `ended_at`, `duration_s`, `distance_m`, `steps`, `photos[].sync` (`pendiente` / `subida`) y, desde FE-2.3, `progress` (abajo). Es compatible **solo en las claves**: `AssetsVideoRepository` lee de `assets/`.
+- **Manifest:** usa las claves del formato de `assets/videos/` (`video_id`, `name`, `created_at`, `photos[].id`, `file`, `lat`, `lng`, `heading`, `captured_at`) más claves propias: `estado` (`en_curso` / `finalizado`), `start_lat`, `start_lng`, `start_heading`, `ended_at`, `duration_s`, `distance_m`, `steps`, `photos[].sync` (`pendiente` / `subida`), desde FE-2.3 `progress` (abajo) y, desde FE-2.1, las de la subida: `remote_video_id`, `subida_estado`, `photos[].upload`, `photos[].estado` y `photos[].error` (formato en §5.10, «Subida de un recorrido»). Desde FE-2.1 el mismo parser (`ManifestRecorrido`) lee `assets/videos/` y `files/recoleccion/`.
 - **`progress` (FE-2.3, solo mientras `estado = en_curso`; queda tal cual al finalizar):** objeto con `lat`, `lng`, `heading` (0…360), `steps`, `distance_m`, `duration_s` (sin pausas), `anchor_distance_m` (distancia en el último re-anclaje), `anchor_photo_index` y `anchor_track_index` (primera foto y primer punto de `track` posteriores al último re-anclaje), `track` (`[[lat, lng], …]`, la trayectoria completa: un punto cada 3 pasos más los de re-anclaje), `mode` (`{"type": "distance", "value": 5.0}` o `{"type": "time", "value": 3}`) y `saved_at` (ISO-8601, con segundos). Ejemplo: `"progress": {"lat": 6.20012, "lng": -75.57795, "heading": 92.5, "steps": 30, "distance_m": 21.6, "duration_s": 95, "anchor_distance_m": 0.0, "anchor_photo_index": 0, "anchor_track_index": 0, "track": [[6.2, -75.578], [6.20002, -75.57799]], "mode": {"type": "time", "value": 3}, "saved_at": "2026-10-25T15:04:10-05:00"}`. Lo escribe `guardarProgreso` y lo lee `leerEnCurso`; si falta `lat`/`lng` o algo no se puede leer, `progreso = null` (se retoma sin él, `AppLog.w` «progress ilegible»); un `mode` desconocido da el intervalo por defecto.
 - **Fechas** en ISO-8601 (`yyyy-MM-dd'T'HH:mm:ssXXX`): ordena como texto (decisión pendiente de la nota de `Video.creadoEn` en 7.14).
-- **`registrarFoto`** recibe el JPG que dejó `tomarFoto` (`tmp_<n>.jpg`), lo renombra a `NNNN.jpg` y actualiza el manifest en cada foto (se guarda de forma continua). `desplazarFotos` mueve de forma uniforme las fotos desde un índice (re-anclaje). `finalizar` marca el video como `finalizado` y devuelve el `ResumenRecoleccion`; `descartar` borra la carpeta. `contarPendientes` y `marcarSubida` son para la subida futura (**aún sin usar**). `espacioLibreBytes` alimenta el aviso de almacenamiento.
+- **`registrarFoto`** recibe el JPG que dejó `tomarFoto` (`tmp_<n>.jpg`), lo renombra a `NNNN.jpg` y actualiza el manifest en cada foto (se guarda de forma continua). `desplazarFotos` mueve de forma uniforme las fotos desde un índice (re-anclaje). `finalizar` marca el video como `finalizado` y devuelve el `ResumenRecoleccion`; `descartar` borra la carpeta. `contarPendientes` (desde FE-2.1 cuenta como dice §5.10: `sync = pendiente` en los `finalizado`; antes contaba todo lo que no fuera `subida`, también los `en_curso`) y `marcarSubida` siguen **sin uso** (la cola usa `AlmacenRecorridos`; FE-2.2 puede usar `contarPendientes()` o `AlmacenRecorridos.contarFotosPendientes()`, que dan lo mismo). `espacioLibreBytes` alimenta el aviso de almacenamiento.
+- **Cerrojo (FE-2.1):** todas las operaciones usan `CerrojoRecoleccion.mutex` (`data/local/AlmacenRecorridos.kt`), **uno por proceso** y compartido con `AlmacenRecorridos` (7.5 y la cola). Antes había un `Mutex` por instancia, así que la instancia de 7.3 y la de 7.4 no se excluían entre sí. `Mutex` no es reentrante: ninguna operación llama a otra con el cerrojo tomado.
 - **Retomar (FE-2.3):** `buscarEnCurso()` recorre las carpetas de `files/recoleccion/` de mayor a menor nombre y devuelve la primera con `estado = en_curso` (las de manifest ilegible se saltan); la usan 7.4 (`alAbrir` sin inicio) y 7.3 (`FilaRetomar`). `leerEnCurso(id)` → `VideoEnCurso(videoId, nombre = name (o el id si está vacío), inicioLat/inicioLng = start_lat/start_lng (obligatorios: si faltan, `IOException` «Manifest incompleto»), inicioRumbo = start_heading (0 si falta), fotos (como `fotos()`), progreso)`. `guardarProgreso(id, p)` relee el manifest y escribe `progress` **solo si sigue `en_curso`** (un guardado que llega tras `finalizar` no lo reabre; tras `descartar` lanza `IOException` porque ya no hay manifest). Todo con el mismo `Mutex` y la misma escritura atómica que el resto, así `registrarFoto` y `guardarProgreso` no se pisan.
 - Usa `org.json` (disponible en Android; en pruebas unitarias JVM hace falta la dependencia).
-- **`SesionDeRecoleccion`** (`object`): `inicio: StateFlow<InicioRecoleccion?>` · `resumen: StateFlow<ResumenRecoleccion?>` · `iniciar(inicio)` (la llama 7.3 vía `AppNav`) · `consumirInicio()` (la llama 7.4; **devuelve y borra**) · `finalizar(resumen)` (la llama `AppNav` al terminar; la leerá 7.5) · `limpiar()` (también la llama la ruta antes de «Retomar», FE-2.3). Vive en memoria: se pierde si Android mata el proceso; desde FE-2.3, 7.4 retoma entonces el video `en_curso` desde el disco (antes mostraba `SIN_INICIO`).
+- **`SesionDeRecoleccion`** (`object`): `inicio: StateFlow<InicioRecoleccion?>` · `resumen: StateFlow<ResumenRecoleccion?>` · `iniciar(inicio)` (la llama 7.3 vía `AppNav`) · `consumirInicio()` (la llama 7.4; **devuelve y borra**) · `finalizar(resumen)` (la llama `AppNav` al terminar; 7.5 la lee si la ruta no trae `video`, FE-2.1) · `limpiar()` (también la llama la ruta antes de «Retomar», FE-2.3). Vive en memoria: se pierde si Android mata el proceso; desde FE-2.3, 7.4 retoma entonces el video `en_curso` desde el disco (antes mostraba `SIN_INICIO`).
 - **`ProgresoRecoleccion`** (FE-2.3): `lat`, `lng`, `rumbo` (0…360), `pasos`, `distanciaMetros`, `duracionSegundos`, `distanciaAnclaM`, `indiceAnclaFoto`, `indiceAnclaTrayectoria`, `trayectoria: List<PuntoRecorrido>`, `modo: ModoCaptura`, `guardadoEnMs`. **`VideoEnCurso`**: `videoId`, `nombre`, `inicioLat`, `inicioLng`, `inicioRumbo`, `fotos: List<FotoRecolectada>` (coordenadas ya corregidas por los re-anclajes), `progreso: ProgresoRecoleccion?`. **`PuntoRecorrido(lat, lng)`**: también es el tipo interno de la trayectoria de `RecoleccionViewModel`.
 
 **`CalibracionPasoRepository` en detalle** (entregado el 2026-10-12; la lógica pura de `CalibracionPaso` tiene `CalibracionPasoTest` desde FE-2.3; el repositorio depende de Android y no se probó por separado)
@@ -1603,7 +1700,7 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 
 | Modelo | Campos y reglas |
 |---|---|
-| `EstadoFoto(etiqueta)` | `SUBIDA` "Subida" · `PROCESADA` "Procesada" · `ERROR` "Error" |
+| `EstadoFoto(etiqueta)` | `PENDIENTE` "Pendiente" (FE-2.1: `pendiente_subida` del backend o `sync = pendiente` local; es el **primero**: un `when` exhaustivo sobre `EstadoFoto` en otro archivo deja de compilar hasta cubrirlo) · `SUBIDA` "Subida" · `PROCESADA` "Procesada" · `ERROR` "Error" |
 | `CalidadFoto(etiqueta)` | `ALTA` "Alta calidad" · `NORMAL` "Normal" · `BAJA` "Baja calidad" |
 | `Foto` | `id` (único **solo dentro del video**), `videoId`, `videoNombre`, `urlFoto`, `urlMiniatura`, `lat`, `lng`, `rumbo: Float?` (grados, 0 = norte, sentido horario; `null` si se desconoce), `capturadaEn: String?`, `lugar: String?`, `estado` (por defecto `PROCESADA`), `calidad` (por defecto `NORMAL`). Calculadas: `uid` = `"videoId/id"` (**usarla como clave** en selecciones, listas y `key` de Compose, porque `id` se repite entre videos) y `nombreArchivo` (último tramo de `urlFoto`). |
 | `Video` | `id`, `nombre`, `creadoEn: String?`, `fotos: List<Foto>`. `distanciaMetros` (calculada): suma haversine entre fotos consecutivas **en el orden de la lista**; con menos de 2 fotos vale `0.0`. |
@@ -1713,29 +1810,31 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 | `ubicarme` | `EscaneoScreen` | — | `onCompletado` (**sin datos**; hoy hace `popBackStack()`, TODO resultado 6.3), `onCancelar` → `popBackStack()`. `onAjustes` **no está conectado** (valor por defecto `{}`) |
 | `destino` | `SeleccionDestinoScreen` | — | `onDestinoConfirmado(LugarDestino)` (hoy **descarta** el destino y abre `ubicarme`), `onAjustes` → `ajustes`, `onVolver` |
 | `login` | `LoginScreen` | — | `onLoginExitoso` → `admin/panel` (quita `login` de la pila), `onVolver` |
-| `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila) |
+| `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila); `onAbrirSubida(videoId)` (FE-2.1, tarjeta de subidas) → `navigate("admin/recoleccion/resumen?video=<id>")` |
 | `admin/ubicacion-manual` | `UbicacionManualScreen` (7.3) | — | `onVolver` (flecha y «Cancelar») → `popBackStack()`, `onAjustes` → `ajustes`, `onCalibrar` → `navigate("admin/calibracion")`, `onConfirmar(InicioRecoleccion)` → `SesionDeRecoleccion.iniciar(inicio)` y `navigate("admin/recoleccion")` (7.3 queda en la pila: su ViewModel reactiva «Confirmar» con `alReanudar()`), `onRetomar` (FE-2.3) → `SesionDeRecoleccion.limpiar()` y `navigate("admin/recoleccion")` (sin inicio: 7.4 retoma). Pide `Permisos.INICIALES` antes de mostrar la pantalla y descarta el resultado |
 | `admin/calibracion` | `CalibracionScreen` (7.3b) | — | Pide `Permisos.ACTIVIDAD` antes de mostrar la pantalla y **descarta el resultado** (negarlo no cambia nada: los pasos salen siempre del acelerómetro; quitar este permiso es parte de FE-4.3). `onVolver` → `popBackStack()`. Se llega desde la fila «Calibrar mi paso» de 7.3. No devuelve datos: el resultado se guarda en `CalibracionPasoRepository` (5.6) y lo recoge cada `PdrTracker` al crearse |
-| `admin/recoleccion` | `RecoleccionScreen` (7.4) | `InicioRecoleccion` por `SesionDeRecoleccion` (no por la ruta) | Pide **solo la cámara** antes de mostrar la pantalla (como `ubicarme`; si se niega, `popBackStack()`). `onFinalizado(resumen)` → `SesionDeRecoleccion.finalizar(resumen)` y `navigate("admin/recoleccion/resumen") { popUpTo("admin/ubicacion-manual") { inclusive = true } }` (saca 7.3 y 7.4 de la pila); `onDescartado` (video sin fotos) → `popBackStack("admin/panel", inclusive = false)`; `onVolver` (solo con error: `SIN_INICIO` —sin inicio ni video `en_curso` que retomar— o `NO_SE_PUDO_CREAR`) → `popBackStack()`; `onAjustes` → `ajustes`. Sin `InicioRecoleccion` (pila restaurada tras matar el proceso, o `onRetomar` de 7.3) retoma el video `en_curso` más reciente (FE-2.3, 5.2) |
-| `admin/recoleccion/resumen` | Placeholder (7.5, falta `ResumenVideoScreen`) | `SesionDeRecoleccion.resumen` | Pantalla en blanco: solo se sale con Atrás |
+| `admin/recoleccion` | `RecoleccionScreen` (7.4) | `InicioRecoleccion` por `SesionDeRecoleccion` (no por la ruta) | Pide **solo la cámara** antes de mostrar la pantalla (como `ubicarme`; si se niega, `popBackStack()`). `onFinalizado(resumen)` → `SesionDeRecoleccion.finalizar(resumen)` y `navigate("admin/recoleccion/resumen?video=${resumen.videoId}") { popUpTo("admin/ubicacion-manual") { inclusive = true } }` (saca 7.3 y 7.4 de la pila; FE-2.1 pasa el id); `onDescartado` (video sin fotos) → `popBackStack("admin/panel", inclusive = false)`; `onVolver` (solo con error: `SIN_INICIO` —sin inicio ni video `en_curso` que retomar— o `NO_SE_PUDO_CREAR`) → `popBackStack()`; `onAjustes` → `ajustes`. Sin `InicioRecoleccion` (pila restaurada tras matar el proceso, o `onRetomar` de 7.3) retoma el video `en_curso` más reciente (FE-2.3, 5.2) |
+| `admin/recoleccion/resumen?video={video}` | `ResumenVideoScreen` (7.5, FE-2.1) | `video` = `rec_NNNN` (argumento opcional: `navArgument("video") { type = NavType.StringType; nullable = true; defaultValue = null }`); sin él, `SesionDeRecoleccion.resumen` o el recorrido sin subir más reciente (5.5). `navigate("admin/recoleccion/resumen")` sin argumento también vale | `onIrAlPanel` → `popBackStack("admin/panel", inclusive = false)`; si el Panel no está en la pila, `navigate("admin/panel") { popUpTo("inicio") }`. Atrás lo maneja la pantalla (`BackHandler` → «Guardar y subir después» o salir) |
 | `admin/mapa` | `EditorMapaScreen` | `posicionAdmin: () -> Pair<Double, Double>?` (hoy `{ null }`) | `onVolver`, `onVerLista` (hoy vacío; el comentario dice «vista 17», que corresponde a la lista de alertas 7.10) |
 | `admin/imagenes` | `GaleriaScreen` | — | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
 | `admin/videos` | `VideosScreen` | — | `onVolver`, `onAbrirVideo(id)` → `admin/videos/<id>` |
 | `admin/videos/{videoId}` | `VideoDetalleScreen` | `videoId` (argumento de ruta, texto) | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
 | `mapa` | `MapaPublicoScreen` (2.6) | — | Ruta pública registrada en FE-2.3 para las pruebas en dispositivo; ninguna pantalla navega a ella todavía (la entrada desde Inicio, el comando de voz «mapa» y la acción de TalkBack son de FE-3.1). Se abre al arrancar con el extra `ruta` (abajo); Atrás vuelve a `inicio` |
 
-Rutas con placeholder vacío (pantalla en blanco, no cierran la app): `admin/recoleccion/resumen`, `admin/lugares`,
-`admin/estadisticas`, `ajustes`. Registrar una ruta **dos veces** hace que la última
+Rutas con placeholder vacío (pantalla en blanco, no cierran la app): `admin/lugares`, `admin/estadisticas`, `ajustes`
+(desde FE-2.1 `admin/recoleccion/resumen` ya no lo es). Registrar una ruta **dos veces** hace que la última
 reemplace a la primera (un placeholder puede tapar la pantalla real); navegar a una ruta **no
 registrada** cierra la app con un error.
 
 **Verificado en `MainActivity.kt` (`AppNav`):**
 - **El `NavHost` vive en `MainActivity.kt`**, no en `ui/navigation/AppNavHost.kt` (§3.2). Ruta
   inicial: `inicio`. Cada pantalla crea su propio ViewModel; `AppNav` **no** crea ni comparte ninguno.
-- **Único dato que viaja por ruta:** `videoId`, como argumento de texto sin `navArgument` declarado y sin
-  codificar. El id del video es el nombre de su carpeta (5.6): no usar `/` ni caracteres especiales.
-  Si el argumento falta, la ruta no dibuja nada.
-- **La recolección no usa argumentos de ruta:** los datos viajan por `SesionDeRecoleccion` (5.6; decisión 15).
+- **Datos que viajan por ruta:** `videoId` de `admin/videos/{videoId}`, como argumento de texto sin `navArgument` declarado y sin
+  codificar (el id del video es el nombre de su carpeta, 5.6: no usar `/` ni caracteres especiales; si falta, la ruta
+  no dibuja nada), y desde FE-2.1 `video` de `admin/recoleccion/resumen?video={video}` (opcional, con `navArgument`
+  anulable; `rec_NNNN`). Android guarda los argumentos con la pila: tras matar el proceso, 7.5 vuelve al mismo recorrido.
+- **La recolección (7.3 → 7.4) no usa argumentos de ruta:** los datos viajan por `SesionDeRecoleccion` (5.6; decisión 15).
+  7.5 recibe el id por la ruta (FE-2.1) y solo usa el holder si no viene.
 - **Sin protección al entrar en las rutas `admin/*`:** `AppNav` no comprueba la sesión al entrar en `admin/mapa`,
   `admin/imagenes` ni `admin/videos[/{id}]`; el panel dispara `onSinSesion` en su `init`. ⚠ Confirmar si cada
   pantalla admin lo comprueba por su cuenta. Ojo con la restauración tras matar el proceso: `MyApp`
@@ -1748,8 +1847,9 @@ registrada** cierra la app con un error.
   cierra. En cualquier otra ruta (flujo público, `login`) ignora el evento. Así cualquier pantalla admin que llame a
   `/v1/admin/…` o `/v1/collect/…` con la sesión vencida o rechazada vuelve a Login sin código propio. Tras esa vuelta,
   Login lleva a `admin/panel` (`onLoginExitoso`), **no** a la pantalla donde se perdió la sesión: la 7.5
-  (`admin/recoleccion/resumen`) se pierde de la pila. Lo que deba seguir (cola de subida, `SesionDeRecoleccion.resumen`)
-  tiene que sobrevivir en el holder o en disco y poder retomarse desde el Panel.
+  (`admin/recoleccion/resumen`) se pierde de la pila. Desde FE-2.1 lo que sigue vive en disco (la cola es el manifest,
+  `subida_estado = subiendo`) y el Panel lo retoma: su ViewModel llama a `ColaSubida.reanudar()` al abrirse con sesión y
+  su tarjeta de subidas lleva de vuelta a 7.5 (`onAbrirSubida`).
 - **Ruta de prueba al arrancar (FE-2.3, ADR-FE-18):** `MainActivity` lee el extra `MainActivity.EXTRA_RUTA` (`"ruta"`)
   solo si la app es depurable (`ApplicationInfo.FLAG_DEBUGGABLE`) y `savedInstanceState == null` (arranque nuevo: no al
   rotar ni al restaurar), y solo si el valor está en `MainActivity.RUTAS_DE_PRUEBA` (hoy `{"mapa"}`; otro valor se
@@ -1835,7 +1935,7 @@ Cuidados:
   sin `integrity` y las fuentes de Google Fonts, y llevan `user-scalable=no` en el `viewport` (decisión abierta 13).
 - Un `onAtras` por defecto que llama a `salir()` evita el defecto anterior (sin Leaflet, Atrás y Volver no hacían nada).
   Aun así, sin Leaflet la página nunca llama a `listo()` y la app no le envía datos.
-- `RecoleccionBridge` (7.4) es una página **embebida** en una tarjeta de Compose: usa `MapaBase.iniciar` y `crearMapa`, pero con `pasarInsets = false` y `manejarAtras = false` (Atrás lo maneja la pantalla); lleva ocultos `#top`, `#dock` y `#btn-back` por si `MapaBase.iniciar` no tolera que falten (5.5).
+- `RecoleccionBridge` (7.4) es una página **embebida** en una tarjeta de Compose: usa `MapaBase.iniciar` y `crearMapa`, pero con `pasarInsets = false` y `manejarAtras = false` (Atrás lo maneja la pantalla); lleva ocultos `#top`, `#dock` y `#btn-back` por si `MapaBase.iniciar` no tolera que falten (5.5). Desde FE-2.1 la misma página sirve al mapa de 7.5 (recorrido terminado): sin `setPosicion` y con `encuadrar()`.
 - `CalibracionBridge` (7.3b) es igual de embebido que `RecoleccionBridge` (`pasarInsets = false`, `manejarAtras = false`, mismos elementos ocultos); marca A y B con toques y pines arrastrables y usa el zoom nativo de Leaflet (5.5).
 
 #### Funciones de `AndroidBridge` (mapa público, 2.6)
@@ -1906,7 +2006,8 @@ Formato de los datos:
 > El contrato de la API (rutas, cuerpos, errores) es del backend: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5. Aquí se
 > fija solo **lo que hace la app** con él. Desde FE-1.1 existen el cliente, el mapeo de errores, el mapeo de datos y
 > `RemoteBackendHealth`; desde FE-1.2, el login (`RemoteAuthRepository`) y la sesión de las rutas protegidas
-> (`SesionInterceptor`). Los demás repositorios siguen siendo *stubs* o datos locales (§5.6) hasta su lote.
+> (`SesionInterceptor`); desde FE-2.1, la recolección (`/v1/collect/…`) y `GET /v1/admin/videos/{id}` desde la cola de
+> subida (`data/local/`, abajo). Los demás repositorios siguen siendo *stubs* o datos locales (§5.6) hasta su lote.
 
 **Configuración y cliente**
 - `ApiConfig.kt` (`object ApiConfig`, paquete raíz): `API_BASE_URL` = output `api_base_url` de Terraform
@@ -1932,7 +2033,7 @@ Formato de los datos:
 
 | Pieza | Archivo | Firma y uso |
 |---|---|---|
-| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
+| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
 | `ClienteApi` | `ClienteApi.kt` (`object`) | `ClienteApi.api: CampusApi` (instancia única, `lazy`, contra `ApiConfig.BASE_URL`, registra con `AppLog.i("Api", …)`; usa el `vigilante` que haya **al crearse**). `ClienteApi.vigilante: VigilanteSesion?` (`@Volatile var`, `null` por defecto; FE-1.2: `MyApp.onCreate` lo asigna antes de que nadie use `api`; sustituye al `proveedorToken` de FE-1.1, que ya no existe). `ClienteApi.crear(urlBase = ApiConfig.BASE_URL, token = { null }, registrar: (String) -> Unit, vigilante: VigilanteSesion? = null): CampusApi` (añade la barra final que exige Retrofit) y `ClienteApi.okHttp(token = { null }, registrar, vigilante = null): OkHttpClient` para pruebas (MockWebServer) o clientes propios. Con `vigilante`, las rutas protegidas pasan por `SesionInterceptor` y `token` no se usa; sin él, por `AutenticacionInterceptor(token)` |
 | `RequestIdInterceptor(registrar)` | `ClienteApi.kt` | Pone `X-Request-Id` y registra **una línea por petición**: `GET /v1/health -> 200 (85 ms) rid=<uuid>` o `GET /v1/health -> falla UnknownHostException (3 ms) rid=<uuid>`. Solo método, ruta sin parámetros, código y duración: nunca encabezados ni cuerpos. `rid` es el de la respuesta si la trae, si no el enviado. `validate11.py` C1a busca esta línea en `files/logs/app.log`: cambiar el formato exige cambiar `PATRON_SALUD` del validador. Una petición que `SesionInterceptor` no deja salir **no** deja línea `Api` (deja la `Sesion` del vigilante) |
 | `AutenticacionInterceptor(token)` | `ClienteApi.kt` | Regex `RUTA_PROTEGIDA` = `.*/v1/(admin\|collect)(/.*)?` sobre la ruta; `/v1/administrar` no la cumple. Solo cuando `ClienteApi` no tiene vigilante |
@@ -1946,7 +2047,7 @@ Formato de los datos:
 | `SinConexionException(requestId = null, causa = null)` | `ErroresApi.kt` | **Es una `IOException`**: `LoginViewModel` y los demás que ya atrapan `IOException` la tratan como «sin conexión» sin cambios |
 | `RespuestaInesperadaException(mensaje, causa)` | `ErroresApi.kt` | 2xx que no cumple el contrato (falta un campo obligatorio, rol desconocido, JSON roto). Para la UI es «Algo salió mal» |
 | `MapeoErroresApi` | `ErroresApi.kt` (`object`) | `clasificar(http: Int, cuerpo: String?): FalloApi` (lógica pura) · `excepcion(fallo, http, requestId): Exception` · `deExcepcion(t: Throwable): FalloApi` (para un `catch` genérico en un ViewModel; desde FE-1.2 reconoce `SinSesionException` como `SesionVencida(SIN_SESION_LOCAL)`) · `CODIGOS_SESION` (`TOKEN_EXPIRADO`, `TOKEN_INVALIDO`, `NO_AUTENTICADO`) · FE-1.2: `codigoError(cuerpo: String?): String?` (`error.codigo` de un cuerpo de §5.1, o `null`) y `SIN_SESION_LOCAL = "SIN_SESION_LOCAL"` (código de `SesionVencida` cuando la petición no salió del teléfono; el backend nunca lo envía) |
-| DTOs | `DtosApi.kt` | `SaludDto`, `LoginPeticionDto` (FE-1.2, el único que envía la app), `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto`, `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos de respuesta anulables y con valor por defecto** (trampa abajo) |
+| DTOs | `DtosApi.kt` | `SaludDto`, `LoginPeticionDto` (FE-1.2, el único que envía la app), `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto`, `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional y, desde FE-2.1, `conteo`) y, desde FE-2.1, los de la recolección (abajo). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos de respuesta anulables y con valor por defecto** (trampa abajo) |
 | `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `sesion(LoginRespuestaDto): Sesion` (FE-1.2: `token` no vacío + `usuario` + `expiraEnMs`; si falta algo, `RespuestaInesperadaException`) · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` |
 | `RemoteBackendHealth(api, limiteMs = 5_000)` | `RemoteBackendHealth.kt` | `BackendHealth` real: `true` solo con `200` y `"estado": "ok"`; cualquier otra cosa (sin red, *timeout*, 5xx, otro `estado`) es `false`; nunca lanza salvo cancelación. `LIMITE_MS = 5_000` |
 
@@ -1974,9 +2075,18 @@ Login (FE-1.2, hecho): `POST /v1/auth/login` con cuerpo `LoginPeticionDto` → `
   totalLugares, alertasActivas, ultimoVideo: UltimoVideoDto(numero, creadoEn)?)` · `ReferenciaDto(id, nombre)` ·
   `ImagenAdminDto(id, videoId, orden, lat, lng, rumbo: Double?, capturadaEn, estado, error, calidad, lugar:
   ReferenciaDto?, notas, url, urlMiniatura, urlExpiraEn)` · `VideoResumenDto(id, numero, nombre, refCliente, estado,
-  creadoEn, totalFotos, fotos: List<ImagenAdminDto>?)`. `VideoResumenDto` **no** trae todavía `iniciado_en`,
-  `finalizado_en`, `duracion_s`, `distancia_m`, `pasos`, `inicio`, `conteo` ni `creado_por`: el lote que los necesite
-  (FE-2.1, FE-4.1) los añade.
+  creadoEn, totalFotos, conteo: ConteoFotosDto?, fotos: List<ImagenAdminDto>?)` (`conteo` desde FE-2.1). `VideoResumenDto`
+  **no** trae todavía `iniciado_en`, `finalizado_en`, `duracion_s`, `distancia_m`, `pasos`, `inicio` ni `creado_por`: el
+  lote que los necesite (FE-4.1) los añade. FE-2.1, recolección (backend §5.4): **cuerpos que envía la app** (no
+  anulables salvo los opcionales del contrato; Gson omite los `null`) `InicioRecorridoDto(lat, lng, rumbo: Double?)` ·
+  `VideoCrearDto(refCliente ← ref_cliente, nombre?, iniciadoEn ← iniciado_en?, finalizadoEn ← finalizado_en?,
+  duracionS ← duracion_s: Long?, distanciaM ← distancia_m?, pasos?, inicio?, totalFotos ← total_fotos: Int = 0,
+  dispositivo?, appVersion ← app_version?)` · `ImagenRegistroDto(orden: Int, lat, lng, rumbo?, capturadaEn ←
+  capturada_en?, bytes: Long)` · `ImagenesRegistrarDto(imagenes)`; **respuestas** `SubidaPutDto(metodo, url,
+  encabezados: Map<String, String>?, expiraEn ← expira_en)` (su `toString()` oculta la URL) ·
+  `ImagenRegistradaDto(orden, id, estado, subida: SubidaPutDto?)` · `ImagenesRegistradasDto(imagenes)` ·
+  `ConteoFotosDto(pendienteSubida ← pendiente_subida, subida, procesada, error)` · `SubidaCompletadaDto(id, estado,
+  conteo)`.
 - Orden de los interceptores en `ClienteApi.okHttp`: primero `SesionInterceptor` (con vigilante, la app) o
   `AutenticacionInterceptor` (sin él), después `RequestIdInterceptor` (el que registra; ve el encabezado
   `Authorization` pero nunca lo escribe). Sin `HttpLoggingInterceptor`: no lo añadas, imprimiría el token.
@@ -1997,10 +2107,17 @@ Login (FE-1.2, hecho): `POST /v1/auth/login` con cuerpo `LoginPeticionDto` → `
 - `RemoteBackendHealth.estaEnLinea()` atrapa cualquier `Exception` (salvo `CancellationException`, que relanza) y
   devuelve `false`; `withTimeoutOrNull(limiteMs)` da `false` si se pasa del límite.
 - `MapeoDatosApi.usuario`: `nombre` ausente → `""`; `id`, `correo` y `rol` obligatorios.
-- **`PUT` a las URLs prefirmadas de S3 (FE-2.1):** **no** van por `ClienteApi.api` ni `ClienteApi.okHttp`
-  (`RequestIdInterceptor` añadiría `X-Request-Id` y el contrato pide «exactamente los encabezados recibidos»). Usar un
-  `OkHttpClient` propio sin interceptores, con los tiempos de `ApiConfig`. Nunca registrar la URL completa (la firma va
-  en la *query*); `RequestIdInterceptor` solo registra `encodedPath`.
+- **`PUT` a las URLs prefirmadas de S3 (FE-2.1, hecho: `SubidorS3`):** **no** van por `ClienteApi.api` ni
+  `ClienteApi.okHttp` (`RequestIdInterceptor` añadiría `X-Request-Id` y el contrato pide «exactamente los encabezados
+  recibidos»). `SubidorS3(cliente = SubidorS3.crearCliente())`: `OkHttpClient` propio **sin interceptores** (conexión 10
+  s, lectura 30 s, escritura `TIMEOUT_ESCRITURA_PUT_S` = 60 s). `subir(url, encabezados, archivo): Int` pone
+  `Content-Type` como tipo del cuerpo (`archivo.asRequestBody("image/jpeg")`: OkHttp no añade `charset` a un cuerpo de
+  archivo) y los demás encabezados tal cual; OkHttp añade `Host`, `Content-Length`, `Connection`, `Accept-Encoding` y
+  `User-Agent`, que no están firmados (`X-Amz-SignedHeaders=content-type;host`, backend §4.5). Devuelve el código; sin
+  respuesta lanza `IOException`. Nunca se registra la URL (la firma va en la *query*): `SubidaRecorrido` anota
+  `PUT S3 <rec_NNNN>/<foto> -> <código> (<ms> ms, <bytes> B)` con el tag `Subida`. Lo comprueba `SubidaRecorridoTest`
+  (encabezados recibidos por MockWebServer: `Content-Type: image/jpeg`, sin `X-Request-Id` ni `Authorization`; ninguna
+  línea de registro con la firma).
 - Pruebas: `ClienteApi.crear(urlBase = servidor.url("/v1").toString(), token = { "t" }, registrar = { lineas += it })`
   con `MockWebServer` (`okhttp3.mockwebserver`, `testImplementation(libs.okhttp.mockwebserver)`); las corrutinas con
   `kotlinx.coroutines.runBlocking` (no hay `kotlinx-coroutines-test` en el build). `SocketPolicy.DISCONNECT_AT_START`
@@ -2019,9 +2136,9 @@ Login (FE-1.2, hecho): `POST /v1/auth/login` con cuerpo `LoginPeticionDto` → `
   daría `BİBLİOTECA` y no coincidiría con el enum (lo prueba `MapeoDatosApiTest`).
 - **Fechas:** `isoAMilis` usa `SimpleDateFormat` en UTC y no `java.time`, porque `minSdk = 24` (`java.time` llega en la
   API 26 sin *desugaring*). Acepta solo la zona `Z` (la que usa el backend) y descarta las fracciones de segundo.
-- **`EstadoFoto` aún sin `PENDIENTE`:** `estadoFoto("pendiente_subida")` da `null` y `foto()` lo muestra como `SUBIDA`
-  hasta que FE-2.1 añada `EstadoFoto.PENDIENTE` y su caso en `MapeoDatosApi.estadoFoto` (y en el `when` de colores de
-  `GaleriaScreen`, que es exhaustivo).
+- **`EstadoFoto.PENDIENTE` (FE-2.1):** `MapeoDatosApi.estadoFoto` es un `when` explícito: `pendiente_subida` →
+  `PENDIENTE`, `subida`, `procesada` y `error` → el suyo; cualquier otro texto (también `pendiente`) → `null`, que
+  `foto()` muestra como `SUBIDA`. Ya no usa `enumDe` (el nombre del enum, `PENDIENTE`, no coincide con el del backend).
 - **URLs de fotos:** `url` y `url_miniatura` llegan `null` hasta BE-4.1; `foto()` las deja en `""`.
 - **Registrar:** el registrador por defecto (`AppLog.i`) llama a `android.util.Log`, que en las pruebas de la JVM no
   existe: las pruebas pasan su propio `registrar`.
@@ -2058,7 +2175,7 @@ fila.
 | `Alerta.radio_m` | `Alerta.radio` |
 | `GET /v1/admin/stats` | `ResumenAdmin`: `ultimo_video.numero` → `ultimoVideoNumero`; `ultimo_video.creado_en` (ISO-8601) → `ultimoVideoFecha` en milisegundos; `fotosPendientes` sale de la cola local de subida, no del backend |
 | `usuario` del login | `Usuario`; `expira_en` → `Sesion.expiraEnMs` (milisegundos) y se guarda con la sesión (`expira_en_ms`, §5.3) |
-| `VideoResumen` / `ImagenAdmin` | `Video` / `Foto`. El `id` del video pasa a ser UUID (hoy es el nombre de la carpeta); `uid` de `Foto` sigue siendo `videoId/id`. `EstadoFoto` necesita un valor `PENDIENTE` para `pendiente_subida` (FE-2.1) |
+| `VideoResumen` / `ImagenAdmin` | `Video` / `Foto`. El `id` del video pasa a ser UUID (hoy es el nombre de la carpeta); `uid` de `Foto` sigue siendo `videoId/id`. `pendiente_subida` → `EstadoFoto.PENDIENTE` (desde FE-2.1) |
 | Fechas ISO-8601 | `creadoEn` / `capturadaEn` siguen siendo texto en los modelos actuales; convertir solo donde se ordene o filtre |
 
 Implementación (FE-1.1), por fila: `MapeoDatosApi.enumDe` (desconocido → `null`; en `usuario`, un rol desconocido es
@@ -2083,27 +2200,125 @@ cubre `MapeoDatosApiTest` con los ejemplos JSON del contrato del backend.
 decisión abierta 15. `referencias[].rumbo_grados` es absoluto: la app lo convierte en «a tu derecha / izquierda / al
 frente / detrás» con el rumbo actual corregido.
 
-**Subida de un recorrido (7.5)**: cola persistente en `data/local/` (sobrevive al cierre de la app). Antes de subir, cada
-JPEG se re-codifica a lado mayor 1600 px y calidad 90, para quedar por debajo de los 4 MB que acepta el backend. Orden:
-`POST /v1/collect/videos` con `ref_cliente` = id local (`rec_NNNN`) → lotes de 50 en
-`POST /v1/collect/videos/{id}/images` → `PUT` de cada JPEG a la URL prefirmada con **exactamente** los encabezados
-recibidos → `POST …/complete`. Un `403` de S3 significa URL vencida: pedir URLs de nuevo. Todas las llamadas son
-idempotentes, así que reintentar es seguro. El progreso por foto se lee de `GET /v1/admin/videos/{id}`.
+**Subida de un recorrido (7.5; FE-2.1, hecho)**: cola persistente en `data/local/` (sobrevive al cierre de la app).
+Antes de subir, cada JPEG se re-codifica a lado mayor ≤ 1600 px y calidad 90 (bajando si hace falta) para quedar por
+debajo de los 4 MB que acepta el backend. Orden: `POST /v1/collect/videos` con `ref_cliente` = id local (`rec_NNNN`) →
+lotes de 50 en `POST /v1/collect/videos/{id}/images` → `PUT` de cada JPEG a la URL prefirmada con **exactamente** los
+encabezados recibidos → `POST …/complete`. Un `403` de S3 significa URL vencida: se piden URLs de nuevo. Todas las
+llamadas son idempotentes, así que reintentar es seguro. El progreso por foto sale del manifest (`sync`) y, con la
+subida completa, de `GET /v1/admin/videos/{id}`.
 La **cola** es el propio `manifest.json` de cada recorrido (§5.6, «Recolección»): `photos[].sync` pasa de `pendiente` a
-`subida` cuando su `PUT` responde 200, y se añaden dos claves de video, `remote_video_id` (UUID que devuelve
-`POST /v1/collect/videos`) y `subida_estado` (`sin_subir`, `subiendo`, `completada`). Al abrir la app se retoman los
-recorridos `finalizado` con `subida_estado = subiendo`. «Fotos pendientes» del Panel (7.2) = número de
-`photos[].sync = pendiente` en los manifests con `estado = finalizado`. Los recorridos `en_curso` (con la clave
-`progress` de FE-2.3, §5.6) no se suben: se retoman en 7.4.
+`subida` cuando su `PUT` responde 2xx (o el backend ya la tenía), y se añaden dos claves de video, `remote_video_id`
+(UUID que devuelve `POST /v1/collect/videos`) y `subida_estado` (`sin_subir`, `subiendo`, `completada`; ausente =
+`sin_subir`). Al abrir el Panel o la vista 7.5 con sesión se retoman los recorridos `finalizado` con
+`subida_estado = subiendo`. «Fotos pendientes» del Panel (7.2) = número de `photos[].sync = pendiente` en los
+manifests con `estado = finalizado` (`AlmacenRecorridos.contarFotosPendientes()`; el Panel aún muestra el valor del
+*stub*: conectarlo es FE-2.2). Los recorridos `en_curso` (con la clave `progress` de FE-2.3, §5.6) no se suben: se
+retoman en 7.4.
 
-*Subida y sesión* (FE-1.2; lo verificó el maestro en `dev` el 2026-10-25): toda llamada a `/v1/collect/…` pasa por
-`SesionInterceptor`, y `MyApp` borra la sesión en cada arranque en frío (§5.3), así que retomar una subida al abrir la
-app no puede llamar al backend hasta que el admin inicie sesión. Falla en el teléfono con
-`ApiException(FalloApi.SesionVencida("SIN_SESION_LOCAL"))`, sin red, y si la ruta actual no es `admin/…`, `AppNav` no
-navega. La cola debe tratarlo como «esperar sesión», no como error de red ni con reintentos en bucle; se retoma tras el
-login (al abrir el Panel o la vista 7.5, o cuando `SessionManager.obtener()` vuelva a dar sesión). Igual si la sesión
+Claves nuevas del manifest (FE-2.1; los lectores anteriores las ignoran):
+
+| Clave | Dónde | Valor | Quién la escribe |
+|---|---|---|---|
+| `subida_estado` | video | `sin_subir` (o ausente) · `subiendo` · `completada` | `SubidaRecorrido` (`subiendo` al empezar; vuelve a `sin_subir` si hay fotos ilegibles y el backend aún no conoce el video; `completada` tras `complete` sin pendientes) |
+| `remote_video_id` | video | UUID del backend | `SubidaRecorrido` tras `POST /v1/collect/videos` |
+| `photos[].sync` | foto | `pendiente` · `subida` (ya existía; ahora la usa la subida) | `RecoleccionRepositoryLocal` (`pendiente`) y `SubidaRecorrido` (`subida`) |
+| `photos[].upload` | foto | `{"bytes": 512345, "width": 1600, "height": 1200}`: la copia re-codificada que se sube (queda como registro al completar) | `SubidaRecorrido` tras re-codificar |
+| `photos[].estado` | foto | `subida` · `procesada` · `error` (estado remoto; nunca `pendiente`, que lo dice `sync`) | `SubidaRecorrido.actualizarEstados` (7.5, tras subir) |
+| `photos[].error` | foto | motivo del backend si `estado = error` (se quita si deja de estarlo) | ídem |
+
+La copia re-codificada de cada foto va a `files/recoleccion/rec_NNNN/subida/<id>.jpg` (los originales de `photos/` no se
+tocan); al completar se borra `subida/` y queda `upload`. Una copia vale (no se re-codifica otra vez) si existe y su
+tamaño es `upload.bytes`.
+
+Piezas (`com.example.myapplication.data.local`; todas sin Android salvo `MotorImagenAndroid` y `Subidas`):
+
+| Pieza | Firma | Qué hace / cuidado |
+|---|---|---|
+| `ManifestRecorrido` (`object`) | `parsear(texto): JsonObject` · `texto(json): String` · `estadoFoto(foto: JsonObject): EstadoFoto` · `video(videoId, json, url: (String) -> String, miniaturaExiste: (String) -> Boolean = { false }): Video` · `recorrido(videoId, json): RecorridoLocal` · `video(recorrido, carpeta: File): Video` · `fotos(json)` · `arregloFotos(json)` · constantes de claves (`VIDEO_REMOTO`, `SUBIDA_ESTADO`, `SYNC`, `SYNC_PENDIENTE`, `SYNC_SUBIDA`, `ESTADO`, `ERROR`, `UPLOAD`, `ESTADO_FINALIZADO`) | Parser compartido con **Gson** (`JsonParser`; `org.json` en la JVM son *stubs*). JSON roto, vacío o que no es un objeto → `ManifestException` (hereda de `IOException`, pero **no** es un fallo de red). Escribe con `GsonBuilder().disableHtmlEscaping()`: los números se conservan tal cual (`LazilyParsedNumber`) y las claves que no conoce (p. ej. `progress`) se mantienen. Un número que llega como texto se acepta |
+| `RecorridoLocal` | `id`, `nombre`, `creadoEn`, `finalizadoEn`, `finalizado`, `inicioLat`, `inicioLng`, `inicioRumbo`, `duracionSegundos`, `distanciaMetros`, `pasos`, `fotos: List<FotoLocal>`, `trayectoria: List<PuntoRecorrido>` (`progress.track`), `remoteVideoId`, `subida: EstadoSubida`; calculadas `fotosPendientes` y `editable` (= sin `remote_video_id` y no `completada`) | Lo arma `ManifestRecorrido.recorrido` |
+| `FotoLocal` | `id`, `archivo` (relativa: `photos/0001.jpg`), `lat`, `lng`, `rumbo: Double?`, `capturadaEn`, `subida: Boolean` (`sync = subida`), `estado: EstadoFoto` (regla de `estadoFoto`), `error`, `preparada: FotoPreparada?`; `orden` = el número del id si está en 1…`ORDEN_MAX` (200), si no `null` | El `orden` que se envía es el número del id: tras descartar fotos en 7.5 quedan huecos (1, 2, 4…), que el backend admite |
+| `FotoPreparada(bytes: Long, ancho: Int, alto: Int)` · `EstadoSubida(clave)` (`SIN_SUBIR`, `SUBIENDO`, `COMPLETADA`; `deClave(texto)` → `SIN_SUBIR` si no se reconoce) | | |
+| `CerrojoRecoleccion` (`object`) | `mutex: Mutex` | Cerrojo único de los manifests, compartido con `RecoleccionRepositoryLocal` (5.6). No reentrante |
+| `AlmacenRecorridos(raiz: File)` | `listar()` (todos los legibles, por id; los ilegibles se saltan) · `leer(id)` (`ManifestException` si no existe o está dañado) · `idsEnSubida()` (`finalizado` + `subiendo`) · `contarFotosPendientes()` · `renombrar(id, nombre): String` (recorta, ≤ `MAX_NOMBRE` = 40; vacío → `IllegalArgumentException`; no editable → `IllegalStateException`) · `descartarFoto(id, fotoId)` (quita la entrada y borra `photos/` y `subida/` de esa foto; no editable → `IllegalStateException`) · `descartar(id)` (borra la carpeta) · `cambiarEstadoSubida(id, EstadoSubida)` · `guardarVideoRemoto(id, uuid)` · `guardarPreparada(id, fotoId, FotoPreparada)` · `marcarSubidas(id, fotoIds)` · `guardarEstadosRemotos(id, Map<fotoId, Pair<EstadoFoto, motivo?>>)` · `borrarPreparadas(id)` · `carpeta(id)`, `archivoFoto(id, foto)`, `archivoPreparado(id, fotoId)` | Todo `suspend`, en `Dispatchers.IO` con `CerrojoRecoleccion`. Cada cambio relee y reescribe el manifest completo de forma atómica (`manifest.json.tmp` + renombrar, como `RecoleccionRepositoryLocal`). En la app, `raiz` = `files/recoleccion` |
+| `LimitesSubida` (`object`) | `LADO_MAX_PX = 1600` · `BYTES_MAX = 4_194_304` · `CALIDADES = [90, 85, 80, 75, 70, 60, 50]` · `LADO_MIN_REINTENTO_PX = 640` | Criterio C3 y `REC_MAX_BYTES_FOTO` del backend |
+| `Dimensiones(ancho, alto)` (`ladoMayor`) · `PlanRecodificacion` (`object`) | `orientada(d, orientacionExif)` (5–8 intercambian ancho y alto) · `destino(d, ladoMax)` (lado mayor a `ladoMax`, el otro redondeado y ≥ 1 px; nunca amplía: 4000×3000 → 1600×1200) · `muestreo(d, ladoMax)` (mayor potencia de 2 que deja el lado mayor decodificado ≥ `ladoMax`: 4000 → 2) | Lógica pura |
+| `MotorImagen<T>` (`interface`) | `medir(original): Dimensiones?` · `orientacion(original): Int` · `cargar(original, muestreo): T?` · `transformar(imagen, orientacion, destino): T` · `dimensiones(imagen)` · `comprimir(imagen, calidad, archivo): Long` · `liberar(imagen)` | Lo que la re-codificación necesita de la plataforma |
+| `Recodificador<T>(motor)` : `PreparadorFoto` | `preparar(original, destino): FotoPreparada` | Mide (sin decodificar) y lee la orientación EXIF; con lado 1600: decodifica con `muestreo`, gira y escala a `destino(orientada(…))`, y prueba `CALIDADES` hasta que quepa en 4 MB; si ninguna cabe, repite con el lado ×3/4 (1200, 900, 675) hasta `LADO_MIN_REINTENTO_PX`. Nunca devuelve más de 1600 px ni más de 4 194 304 bytes. Ilegible, sin decodificar o imposible de comprimir → `FotoIlegibleException` (borra la copia a medias). Libera cada imagen intermedia |
+| `fun interface PreparadorFoto` · `FotoIlegibleException` (`IOException`) | `preparar(original, destino): FotoPreparada` | Las pruebas pasan un doble (`SubidaRecorridoTest`) |
+| `MotorImagenAndroid` : `MotorImagen<Bitmap>` | — | `BitmapFactory` (`inJustDecodeBounds`, `inSampleSize`, ARGB_8888), `android.media.ExifInterface` (desde la API 5; **no** la dependencia `androidx.exifinterface`), `Matrix` con las matrices de orientación EXIF de Glide más la escala, `Bitmap.createBitmap(…, filter = true)` y `compress(JPEG, calidad)`. El JPEG nuevo **no lleva EXIF**: por eso la orientación se aplica a los píxeles (el `worker` del backend aplica la EXIF que encuentre: una copia sin girar saldría tumbada). Con la matriz identidad `createBitmap` devuelve la misma instancia (el `Recodificador` no la libera dos veces). ⚠ Sin probar en el teléfono: el EXIF que escribe CameraX en el Xiaomi (FE-2.1 C1) |
+| `SubidorS3` | arriba («Detalles internos del cliente») | |
+| `ConteoRemoto(pendienteSubida, subida, procesada, error)` (`total`; `ConteoRemoto.de(dto)`; `definitivo()` = sin `pendiente_subida` ni `subida`) · `FaseSubida` (`PREPARANDO`, `SUBIENDO`, `COMPLETANDO`) · `ProgresoSubida(fase, hechas, total)` | | |
+| `ResultadoSubida` (`sealed`) | `Completada(conteo?)` · `Pendiente(conteo)` (`complete` con `pendiente_subida` > 0: un `HEAD` de S3 falló) · `EsperandoSesion(codigo)` · `SinConexion(motivo)` (transitorio) · `Fallida(motivo)` (permanente) · `FotosIlegibles(ids)` | Lo que devuelve un intento |
+| `fun interface EjecutorSubida` | `suspend ejecutar(videoId, alProgreso: (ProgresoSubida) -> Unit): ResultadoSubida` | La cola solo conoce esto |
+| `SubidaRecorrido` : `EjecutorSubida` | `SubidaRecorrido(almacen, api: CampusApi, s3: SubidorS3, preparador: PreparadorFoto, dispositivo: String? = null, appVersion: String? = null, registrar: (String) -> Unit = {}, reloj = System::currentTimeMillis)` · `ejecutar(videoId, alProgreso)` · `actualizarEstados(videoId): EstadoRemoto?` (`EstadoRemoto(estado, conteo)`) · `companion`: `LOTE = 50`, `MAX_RONDAS_403 = 2`, `rumboContrato(grados)` | Pasos de abajo. Nunca lanza salvo cancelación: todo error se clasifica en un `ResultadoSubida` |
+| `FaseCola` · `EstadoCola(fase, videoId, hechas, total, mensaje, reintentoEnS, fotosIlegibles)` (`activa` = preparando, subiendo, completando o sin conexión) | `FaseCola`: `INACTIVA`, `PREPARANDO`, `SUBIENDO`, `COMPLETANDO`, `COMPLETADA`, `SIN_CONEXION`, `ESPERANDO_SESION`, `ERROR`, `FOTOS_ILEGIBLES` | Lo que muestran 7.5 y el Panel |
+| `ColaSubida(almacen, ejecutor: EjecutorSubida, haySesion: () -> Boolean, alcance: CoroutineScope, registrar = {}, esperasMs = ESPERAS_MS)` | `estado: StateFlow<EstadoCola>` · `cambios: StateFlow<Int>` (sube con cada progreso y cada fin de intento) · `cambiosVideos: StateFlow<Int>` (solo al terminar un intento) · `subir(videoId)` · `reanudar()` · `suspend procesar()` (una pasada; la llaman `subir`/`reanudar` en `alcance` y las pruebas directamente) · `ESPERAS_MS` = 5 s, 10 s, 20 s, 40 s, 60 s, 2 min, 5 min (la última se repite) · `MENSAJE_SIN_SESION` | Reglas de abajo. Una sola pasada a la vez (`trabajo`); `subir` y `reanudar` con la pasada en marcha cortan su espera (`Channel` `CONFLATED`) |
+| `Subidas` (`object`) | `iniciar(app, sesion: SessionManager)` (idempotente; la llama `MyApp.onCreate` tras asignar `ClienteApi.vigilante`) · `almacen` · `subida` · `cola` · `TAG = "Subida"` | Una instancia de cada pieza por proceso: `AlmacenRecorridos(files/recoleccion)`, `SubidaRecorrido(api = ClienteApi.api, SubidorS3(), Recodificador(MotorImagenAndroid()), dispositivo = "<fabricante> <modelo> / Android <versión>", appVersion = versionName, registrar = AppLog.i("Subida", …))` y `ColaSubida(haySesion = { sesion.obtener() != null }, alcance = CoroutineScope(SupervisorJob() + Dispatchers.IO))`. Usarlas antes de `iniciar` lanza `IllegalStateException`. No sube nada al iniciar (en frío no hay sesión) |
+
+Un intento (`SubidaRecorrido.ejecutar`):
+1. Lee el manifest. No `finalizado` → `Fallida` («se retoma en 7.4»); `completada` → `Completada(null)`; sin fotos →
+   `Fallida`; alguna foto sin `orden` válido → `Fallida`. Si no estaba `subiendo`, pasa a `subiendo`.
+2. Re-codifica las pendientes sin copia válida (`alProgreso(PREPARANDO, i, n)`) y anota `upload`. Una ilegible
+   (`FotoIlegibleException`) se apunta; otro `IOException` al escribir la copia (p. ej. sin espacio) → `Fallida`. Con
+   ilegibles: si aún no hay `remote_video_id`, vuelve a `sin_subir` (en 7.5 se pueden descartar) y devuelve
+   `FotosIlegibles(ids)`; no llama al backend.
+3. Sin `remote_video_id`: `POST /v1/collect/videos` con `VideoCrearDto(refCliente = id, nombre = name recortado a 40,
+   iniciadoEn = created_at, finalizadoEn = ended_at, duracionS = duration_s, distanciaM = distance_m (0…1 000 000),
+   pasos = steps, inicio = (start_lat, start_lng, rumboContrato(start_heading)), totalFotos = n.º de fotos, dispositivo,
+   appVersion)` y guarda el `id`. Las fechas del manifest ya llevan zona (`yyyy-MM-dd'T'HH:mm:ssXXX`), como pide el
+   backend.
+4. Las fotos con `sync = pendiente`, en lotes de 50: `registrarImagenes` con `ImagenRegistroDto(orden, lat, lng,
+   rumbo = rumboContrato(heading), capturadaEn = captured_at, bytes = upload.bytes)`. Por cada foto de la respuesta (se
+   casa por `orden`): sin `subida` y con `estado` ≠ `pendiente_subida` → se marca `subida` sin `PUT`; con `subida` →
+   `PUT` de `subida/<id>.jpg`: 2xx marca `subida` en el momento (`alProgreso(SUBIENDO, hechas, total)`), `403` la
+   apunta para pedir URLs de nuevo y otro código lanza `IOException` (→ `SinConexion`). Tras el lote, las de `403` se
+   vuelven a registrar (hasta `MAX_RONDAS_403` = 2 veces; después → `Fallida`).
+5. `completarSubida`: si el `estado` no es `pendiente` y `conteo.pendiente_subida` = 0 → `completada`, borra `subida/` y
+   devuelve `Completada(conteo)`; si no → `Pendiente(conteo)` (sigue `subiendo`).
+
+Clasificación de errores (`ejecutar` atrapa todo salvo la cancelación): `ApiException` con `SesionVencida` (también
+`SIN_SESION_LOCAL`) → `EsperandoSesion`; `429` o `5xx` del backend (`Desconocido`) → `SinConexion`; `409
+VIDEO_ELIMINADO` → `Fallida` («El video se eliminó en el servidor»; la app no crea otro `ref_cliente` por su cuenta);
+`409`/`422` → `Fallida` con `detalle.campos`; `404` → `Fallida` («ya no existe»); `403 SIN_PERMISOS` → `Fallida`;
+`ManifestException` → `Fallida`; `RespuestaInesperadaException` (incluida una foto `pendiente_subida` sin URL) →
+`Fallida`; `SinConexionException` y cualquier otro `IOException` (también los del `PUT`) → `SinConexion`. Cada fallo deja
+una línea `Subida` con el `X-Request-Id` si lo hay. **Rumbos** (`rumboContrato`): `((g % 360) + 360) % 360` redondeado a
+0,1° y 360,0 → 0,0 (el `real` de la base convertiría 359,9999999 en 360 y violaría su `CHECK`, trampa de backend §4.5).
+
+La cola (`ColaSubida.procesar`, una pasada):
+- Sin sesión (`haySesion()` falso: en la app, `SessionManager.obtener()` nulo, también si venció a las 12 h, que la
+  borra) → `ESPERANDO_SESION` y termina **sin llamar al backend**: así no emite `EventosSesion` (que llevaría a Login
+  desde 7.4 en plena grabación). Sigue cuando alguien llame a `reanudar()` con sesión.
+- Toma los pedidos de `subir()` más `almacen.idsEnSubida()` y los intenta en orden. `Completada` → `COMPLETADA`;
+  `EsperandoSesion` → `ESPERANDO_SESION` y termina (sin reintentos en bucle); `SinConexion` → deja los demás y espera;
+  `Pendiente` → sigue con los demás y espera; `Fallida` → `ERROR` con el motivo y no lo repite en esta pasada;
+  `FotosIlegibles` → `FOTOS_ILEGIBLES` con los ids, tampoco lo repite.
+- Espera `ESPERAS_MS[intento]` (`SIN_CONEXION` con `reintentoEnS`), o menos si llega `subir()`/`reanudar()`, y vuelve a
+  empezar. Sin nada pendiente termina (deja el último estado si era `COMPLETADA`, `ERROR`, `FOTOS_ILEGIBLES` o
+  `ESPERANDO_SESION`; si estaba en marcha, `INACTIVA`). La salida suelta `trabajo` dentro del mismo `synchronized`
+  que mira los pedidos: un `subir()` que llegue justo entonces lanza otra pasada.
+- Un fallo permanente no se reintenta solo: el siguiente `reanudar()` (otra apertura del Panel o de 7.5) o «Reintentar
+  subida» lo intenta **una vez** más.
+- Quién llama: `reanudar()` el Panel al abrirse con sesión (5.5), 7.5 al abrirse y en cada `ON_RESUME`; `subir(id)` el
+  botón «Subir y procesar» / «Reintentar subida» de 7.5. La cola trabaja mientras el proceso viva (también con la app
+  en segundo plano); si Android mata el proceso, lo pendiente queda en disco y sigue tras el siguiente login (ADR-FE-19).
+
+Lo cubren `SubidaRecorridoTest` (13: 60 fotos en dos lotes con los encabezados exactos del `PUT`, el cuerpo de
+`images`, retomar con `remote_video_id` sin repetir lo subido, foto que el backend ya tenía, `403` → URLs nuevas, corte
+de red en un `PUT` y reintento sin duplicar, sin sesión sin peticiones, `401` a mitad conservando lo subido, `complete`
+con pendientes, `409 VIDEO_ELIMINADO`, foto ilegible, recorrido `en_curso`, `actualizarEstados`), `ColaSubidaTest` (8),
+`AlmacenRecorridosTest` (13) y `RecodificacionFotoTest` (12).
+
+*Subida y sesión* (FE-1.2; lo verificó el maestro en `dev` el 2026-10-25; implementado en FE-2.1 como arriba): toda
+llamada a `/v1/collect/…` pasa por `SesionInterceptor`, y `MyApp` borra la sesión en cada arranque en frío (§5.3), así
+que retomar una subida al abrir la app no puede llamar al backend hasta que el admin inicie sesión. Falla en el teléfono
+con `ApiException(FalloApi.SesionVencida("SIN_SESION_LOCAL"))`, sin red, y si la ruta actual no es `admin/…`, `AppNav`
+no navega. La cola lo trata como «esperar sesión» (`ESPERANDO_SESION`), no como error de red ni con reintentos en bucle
+(y antes de llamar mira `haySesion()`); se retoma tras el login (al abrir el Panel o la vista 7.5). Igual si la sesión
 vence (12 h) o el backend la rechaza a mitad de la subida: la cola queda en `subiendo` y, por idempotencia, se retoma
-tras volver a entrar.
+tras volver a entrar. En 7.5, `ESPERANDO_SESION` muestra «Iniciar sesión», que emite `EventosSesion` (Login); el Panel,
+si sigue vivo en la pila sin sesión, va a Login él solo (5.5).
 
 **Alertas sin conexión (2.5)**: caché local en Room, base `campus_locator.db` (en `databases/` de la app), tabla
 `alertas` (los campos de `Alerta`) y tabla `sincronizacion` (clave `alertas_generado_en`). Primera vez,
@@ -2181,7 +2396,7 @@ validador nuevo sin leer el código; si cambian, se actualiza en el mismo cambio
 
 | Elemento | Qué hace |
 |---|---|
-| `Validador(lote=, validacion=, descripcion=, comprobaciones=[…], entornos=("local", "dev"), grupos={…})` | Ciclo de vida (infra §5.11). `comprobaciones`: IDs válidos para `--solo`; `grupos`: alias (`{"C4": ["C4a", "C4b"]}`). `v.correr(cuerpo, argv=None)` lee `--entorno`, `--informe`, `--solo`, `--sin-limpieza`, ejecuta `cuerpo(v)`, limpia (orden inverso, también si algo falló), escribe el informe y devuelve el código. Error de uso, entorno no admitido o excepción en `cuerpo` → 3. `v.entorno`, `v.sello` (`AAAAMMDD-HHMMSS` UTC) |
+| `Validador(lote=, validacion=, descripcion=, comprobaciones=[…], entornos=("local", "dev"), grupos={…})` | Ciclo de vida (infra §5.11). `comprobaciones`: IDs válidos para `--solo`; `grupos`: alias (`{"C4": ["C4a", "C4b"]}`). `v.correr(cuerpo, argv=None)` lee `--entorno`, `--informe`, `--solo`, `--sin-limpieza`, ejecuta `cuerpo(v)`, limpia (orden inverso, también si algo falló), escribe el informe y devuelve el código. Error de uso, entorno no admitido o excepción en `cuerpo` → 3. `v.entorno`, `v.sello` (`AAAAMMDD-HHMMSS` UTC). Desde FE-2.1, `argumentos=fn` (opcional): `fn(parser)` añade los argumentos propios del lote (contrato común: p. ej. `--video`) y `v.args` es el `argparse.Namespace` leído |
 | `v.precondicion(id, fn)` → `bool` | `fn()` devuelve el detalle. `Bloqueo` o `Falla` → 2; `ErrorConfiguracion` → 3 |
 | `v.precondicion_no_evaluada(id, motivo)`, `v.precondiciones_cumplidas()` | Las que dependen de una que falló; ¿pasaron todas? |
 | `v.comprobacion(id, fn)` | `omitida` si `--solo` la excluye; `Falla` → `falla` (1); `ErrorConfiguracion` o imprevisto → `error` (3, con la traza en stderr). Mide `duracion_ms` |
@@ -2237,13 +2452,29 @@ Ayuda que añadió FE-2.3:
 
 | Elemento | Qué hace |
 |---|---|
-| `listar_archivos_app(ruta)` → `list[str] \| None` | `adb exec-out run-as com.example.myapplication ls -1 <ruta>` (solo APK de depuración): nombres ordenados, sin líneas vacías; `None` si la carpeta no existe o `run-as` falla. `validate23.py` la usa con `files/recoleccion` (FE-2.1 puede reutilizarla para la cola de subida) |
+| `listar_archivos_app(ruta)` → `list[str] \| None` | `adb exec-out run-as com.example.myapplication ls -1 <ruta>` (solo APK de depuración): nombres ordenados, sin líneas vacías; `None` si la carpeta no existe o `run-as` falla. `validate23.py` la usa con `files/recoleccion` |
+
+Ayudas que añadió FE-2.1 (para los validadores que leen rutas protegidas, encienden `embedding` o miden fotos del
+dataset; FE-2.2, FE-3.2 y FE-4.1 las reutilizan):
+
+| Elemento | Qué hace |
+|---|---|
+| `http_get(url, *, timeout=15, token=None)`, `http_post_json(url, cuerpo, *, timeout=15, token=None)` | Como antes; `token` añade `Authorization: Bearer <token>` (rutas `/v1/admin/…` y `/v1/collect/…`). Nunca se imprime ni va a un mensaje de error |
+| `Validador(…, argumentos=fn)`, `v.args` | Argumentos propios del lote (arriba) |
+| `PLAN_BACKEND` | `BACKEND_FASTAPI/docs/PLAN.md` (para `lote_hecho` de BE-x.y; solo docs, nunca `project/` de otra carpeta) |
+| `ZONA_BOGOTA` (UTC−5 fijo), `hora_bogota(ahora=None)` → `datetime`, `HORA_APAGADO_NOCHE` (22) | Hora de Bogotá sin `tzdata` (Colombia no tiene horario de verano) |
+| `EmbeddingDev(cluster, servicio_embedding="embedding", servicio_worker="worker")` | El contrato de encendido de infra §5.10 con la CLI `aws` (las carpetas no comparten código; el backend tiene el suyo con boto3). `comprobar_inf21()` → detalle (objetivos escalables de los dos servicios con `application-autoscaling describe-scalable-targets`; si falta → `Bloqueo` «INF-2.1»). `latido(cuando=None)` → `cloudwatch put-metric-data` de `EmbeddingEncendidos` = 1 `Count` con `Timestamp` en `campus-locator/dev`. `encender(listo: () -> bool)` → segundos: `register-scalable-target` 0–1 de los dos, latido, hasta `LIMITE_ALARMA_S` (300) a que `get-metric-statistics` (`Sum`, 60 s, ±2 min) lo vea, 60 s más, hasta que `describe-alarms` de `ALARMA_INACTIVIDAD` no diga `ALARM`, `ecs update-service` de `embedding` a 1, hasta `LIMITE_ENCENDIDO_S` (600, desde el principio) a un despliegue `PRIMARY` `COMPLETED` con una tarea `HEALTHY` (`list-tasks` + `describe-tasks`) cuya IP privada esté en `servicediscovery list-instances` del `registryArn` del servicio (no `get-instances-health-status`, trampa de backend §5.11), y hasta `LIMITE_API_S` (120) a `listo()`; cada espera duerme `PAUSA_S` (15). Si no llega → `Bloqueo` (INF-2.1 o BE-2.2). `apagar()`: `register-scalable-target` 0–0 y `update-service` 0 de `embedding` y `worker` (no espera). Mientras espera, los códigos de `CODIGOS_TODAVIA_NO` (límites de peticiones) son «todavía no»; un permiso que falta es `ErrorConfiguracion` (por `aws_json`) |
+| `NAMESPACE_METRICAS` (`campus-locator/dev`), `METRICA_ENCENDIDOS` (`EmbeddingEncendidos`), `ALARMA_INACTIVIDAD` (`campus-locator-dev-embedding-inactivo`), `CODIGOS_TODAVIA_NO`, `recurso_ecs(cluster, servicio)` → `service/<cluster>/<servicio>` | Nombres de infra §5.10 |
+| `dimensiones_jpeg(datos: bytes)` → `(ancho, alto) \| None` | Lee el marcador SOF (`C0`–`CF` salvo `C4`, `C8`, `CC`) de los primeros bytes de un JPEG, saltando APPn (también un EXIF de 64 KB); no es JPEG, cortado o `SOS` antes del SOF → `None`. Sin Pillow |
+| `leer_objeto_s3(bucket, clave, *, primeros=131072)` → `ObjetoS3(clave, bytes, dimensiones)` | `aws s3api get-object --bucket … --key … --range bytes=0-<primeros−1> <temporal>` (solo lectura): el tamaño total sale de `ContentRange` (`bytes 0-131071/612345`; sin él, `ContentLength`) y las medidas, de `dimensiones_jpeg`. No existe → `ErrorAws` (`NoSuchKey`). No usa URLs prefirmadas |
+
 
 Forma de un validador (`validate11.py` es el ejemplo): `import comun`, `main(argv=None)` crea el `Validador` y devuelve
 `v.correr(cuerpo, argv)`, el módulo termina con `sys.exit(main())`. Sus pruebas (`tests/ops/test_validate11.py`)
 sustituyen `comun.gradle`, `comun.adb`, `comun.http_get`, etc. con `monkeypatch` y recorren `main()` entero; corren en
 el job `validadores` de `frontend.yml`. `uv run --frozen pytest` desde `project/` (29 casos al cerrar FE-1.1; 73 con
-FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_validate23.py`, 20).
+FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_validate23.py`, 20; 128 con FE-2.1:
+`test_validate21.py`, 20, y `test_comun_fe21.py`, 15).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -2301,6 +2532,39 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   datos: no registra limpiezas. `instrucciones(contexto)` da el texto de C3, C4 y C5. Las pruebas
   (`tests/ops/test_validate23.py`) simulan Gradle (escribe los XML) y adb (`getprop`, `run-as cat|ls`) y comprueban
   además que nunca se llama a `pm clear`.
+- `validate21.py` (FE-2.1; ejemplo de un validador que lee rutas protegidas con el token del admin, enciende `embedding`
+  y lee S3 sin teléfono): IDs `C1, C2a, C2b, C3a, C3b, C4` con grupos `C2 → [C2a, C2b]` y `C3 → [C3a, C3b]`; la manual
+  es `C2c`. Argumento propio `--video <nombre exacto>` (obligatorio en `dev`). Constantes: `CLASES_C2A`
+  (`SubidaRecorridoTest`, `ColaSubidaTest`, `AlmacenRecorridosTest`), `CLASES_C3A` (`RecodificacionFotoTest`),
+  `MINIMO_CASOS` (10, 6, 10 y 8; hoy 13, 8, 13 y 12), `MAIN_ACTIVITY`, `RUTA_RESUMEN` (`admin/recoleccion/resumen`),
+  `MINIMO_FOTOS` (50), `BYTES_MAX` (4 194 304), `LADO_MAX_PX` (1600), `LIMITE_PROCESADO_S` (15 min),
+  `PAUSA_PROCESADO_S` (30), `HORA_LIMITE` (21:30 de Bogotá), `PATRON_REF_CLIENTE` (`^rec_\d{4}$`), `HILOS_S3` (4).
+  Precondiciones, en orden y sin seguir si una falla (las siguientes quedan «no evaluada»): P1 Gradle (3); en `dev`, P2
+  `--video` (3) y, si C1 o C3b están incluidas, `cuenta_aws()` y `terraform_outputs()` con `bucket_dataset`,
+  `ecs_cluster` y `ecs_servicios` (falta uno → 2); P3 FE-1.2 «Hecho» (2), URL vigente (3), `GET /health` (2) y login
+  del admin (401 → 3; otro → 2); P4 la fila FE-2.3 de `PLAN_APP` en «Hecho» con «Última validación» no vacía ni «—»
+  (2); P5 BE-2.1 «Hecho» en `PLAN_BACKEND` y `POST /collect/videos {}` con token → `422 VALIDACION` (2); P6 BE-2.2
+  «Hecho» y `/health/ready` con `db = ok` (2); P7 `GET /admin/videos?q=<nombre>&por_pagina=100` con exactamente un video
+  de `nombre` igual (sin espacios alrededor; `video_exacto`) y su detalle (0 o varios → 3); P8 `embedding`: no hace
+  falta si C1 está excluida o el video ya está `procesado`; si `/health/ready` ya dice `embedding: ok`, un `latido()`;
+  si no, pasadas las 21:30 de Bogotá → 3; si no, `comprobar_inf21()`, registra `apagar` en la limpieza **antes** de
+  encender y `encender(listo = /health/ready dice embedding ok)`. Comprobaciones: C1 consulta el detalle cada 30 s hasta
+  15 min: `con_errores` falla en el acto (con el primer motivo de `error`); pasa con `procesado`, ≥ 50 fotos registradas
+  (suma del `conteo`) y `procesada` = registradas. C2a y C3a: una sola ejecución de Gradle con las clases incluidas
+  (como `validate12`). C2b (con el último detalle): `ref_cliente` `rec_NNNN`, órdenes sin repetir y
+  `len(fotos)` = suma del `conteo` = `total_fotos`. C3b: `leer_objeto_s3(bucket_dataset, "dataset/<video_id>/<foto_id>.jpg")`
+  de cada foto con 4 hilos; falla si alguna no es un JPEG legible, pasa de 4 194 304 bytes o de 1600 px de lado mayor
+  (detalle con las primeras 5). C4: `comprobar_ruta_resumen(texto)` sobre `MainActivity.kt`: no queda
+  `composable("admin/recoleccion/resumen") { /* placeholder */ }`, el bloque de `composable("admin/recoleccion/resumen…")`
+  (hasta el siguiente `composable(`) contiene `ResumenVideoScreen(` y el `onFinalizado = { … }` del bloque de
+  `composable("admin/recoleccion")` contiene `navigate("admin/recoleccion/resumen`. En `local`, C1, C2b y C3b quedan
+  `omitida`. `instruccion_c2(contexto)` da el texto de la manual. Nunca crea ni borra datos del backend; solo limpia
+  lo que encendió. Las pruebas (`tests/ops/test_validate21.py`) simulan Gradle, la API (`http_get`/`http_post_json` con
+  `token`), AWS (`cuenta_aws`, `terraform_outputs`, `leer_objeto_s3`, `EmbeddingDev` sustituido por un doble), la hora
+  y el reloj, recorren `main()` en `local` y `dev` (feliz, ya procesado, `embedding` ya encendido, sin `--video`, video
+  inexistente o repetido, FE-2.3 sin «Hecho», foto fuera de límites, `con_errores`, pocas fotos, espera agotada, hora
+  límite, encendido fallido con apagado, `--solo C4` sin AWS) y C4 contra el `MainActivity.kt` real y variantes rotas;
+  comprueban que ni el token ni la contraseña salen por stdout, stderr o el informe.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -2354,6 +2618,19 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 - **CLI `aws`:** `aws ecs wait tasks-stopped` se rinde a los 10 min (100 × 6 s) con código 255; `get-log-events` puede
   devolver vacío los primeros segundos (por eso los reintentos). `run-task` recibe la contraseña de `crear-usuario` por
   archivo y su error se resume solo con el código de AWS (`mostrar_error=False`).
+- **FE-2.1, `validate21.py` en `dev`:** C3b **no** puede descargar `url` de `GET /v1/admin/videos/{id}` (llega `null`
+  hasta BE-4.1, backend §5.5): mide los objetos de S3 con la CLI (`s3:GetObject` sobre `dataset/…`; con `campus-admin`,
+  sí). `aws s3api get-object … <archivo>` escribe el cuerpo en el archivo y por stdout el JSON de metadatos (con
+  `ContentRange` si se pidió `--range`): el archivo de salida va como argumento posicional y las opciones globales que
+  añade `comun.aws` pueden ir detrás. **Sin comprobar en `dev`:** el texto exacto de `ContentRange` que devuelve S3 a un
+  `--range` mayor que el objeto (la ayuda acepta `bytes 0-N/TOTAL` y, sin él, `ContentLength`).
+- **FE-2.1, `embedding`:** `--sin-limpieza` también se salta apagarlo si lo encendió el validador (se apaga con
+  `embedding.py apagar` de infra §5.11 o, sin él, `register-scalable-target` 0–0 y `update-service` 0 de `embedding` y
+  `worker`). Con el video ya `procesado`, P8 no lo enciende. Las fotos subidas con `embedding` apagado esperan en
+  `ingesta` (retención 4 días): al encenderlo, el `worker` sube solo (infra §3.4, con minutos de retraso de las
+  métricas) y las procesa durante la espera de C1. Hora límite para empezar: 21:30 de Bogotá (se apaga solo a las
+  22:00). **Sin comprobar en `dev`:** `EmbeddingDev` de la app no se ha ejecutado contra AWS (sigue el mismo contrato
+  que el `EmbeddingDev` del backend, que sí, BE-2.2 y BE-2.4).
 
 ---
 
@@ -2882,7 +3159,7 @@ a verificar en dispositivo (FE-2.3 C3 y C4). Diseño: `assets/recoleccion_en_cur
 | Estado y lógica | `ui/admin/recoleccion/RecoleccionState.kt`, `RecoleccionViewModel.kt` | Dueño del PDR (5.2, «Flujo de captura de la recolección») |
 | Mapa en vivo | `assets/recoleccion_mapa.html`, `assets/recoleccion_mapa.js`, `ui/admin/recoleccion/componentes/MapaRecoleccion.kt` | Puente `RecoleccionBridge` (5.5 y 5.9) |
 | Pantalla | `ui/admin/recoleccion/RecoleccionScreen.kt`, `componentes/PanelesRecoleccion.kt` | Dueña de CameraX (5.5) |
-| Navegación | `MainActivity.kt` (`AppNav`) | Rutas `admin/recoleccion` y `admin/recoleccion/resumen` (5.8) |
+| Navegación | `MainActivity.kt` (`AppNav`) | Rutas `admin/recoleccion` y `admin/recoleccion/resumen?video={video}` (5.8; 7.5 desde FE-2.1) |
 
 **Qué incluye la implementación actual:** mapa en vivo (posición con rumbo, trayectoria, fotos tomadas y alertas), vista previa
 de cámara, los cuatro contadores (fotos de 200, distancia, pasos, duración), calidad del seguimiento (precisión y deriva),
@@ -2901,7 +3178,7 @@ grabación se **retoma** en pausa en la misma carpeta, con la numeración de fot
 - **Distancia = pasos × longitud de paso calibrada** (7.3b; 0,72 m si no hay calibración): el `PdrTracker` de 7.4 la lee una vez al crearse, así que calibrar **antes** de entrar a 7.4.
 - **Retomar desde el manifest** (FE-2.3, ADR-FE-17): el progreso se guarda en el propio `manifest.json` y se retoma en pausa.
 
-**Pendiente:** está en `PLAN.md`: FE-2.1 (subida y vista 7.5, ver lo recolectado en Galería y Videos), FE-3.3
+**Pendiente:** está en `PLAN.md`: FE-2.1 C1 y C2 (prueba en el campus de la subida y de 7.5, ya construidas), FE-3.3
 (alertas existentes y persistencia de las nuevas), FE-3.4 («Marcar punto de interés»), FE-2.3 C3 y C4 (pruebas en
 dispositivo) y FE-4.3 (control de calidad de imagen y detalles de diseño).
 
@@ -2920,6 +3197,21 @@ dispositivo) y FE-4.3 (control de calidad de imagen y detalles de diseño).
 - Botón **"Guardar y subir después"**.
 - Botón **"Descartar video"** (con confirmación; borra el video y todas sus fotos locales).
 - Opción de **corregir la trayectoria** (re-anclar puntos) antes de subir.
+
+**Implementación actual (FE-2.1):** todo lo anterior salvo «corregir la trayectoria» (no entraba en los entregables del
+lote; queda pendiente, *decisión provisional del maestro, a confirmar por el usuario*). Detalle, firmas y cuidados en
+§5.5 («`ResumenVideoScreen` y `ResumenVideoViewModel`»); la subida, en §5.10 («Subida de un recorrido»); la ruta, en
+§5.8. Estados por foto: Pendiente (sin subir) · Subida (en S3, esperando al `worker`) · Procesada (embedding generado) ·
+Error (con el motivo del backend). «Guardar y subir después» deja el recorrido en el teléfono (`sin_subir`) y el Panel lo
+ofrece en su tarjeta de subidas; «Descartar video» y descartar fotos solo mientras el backend no conoce el video.
+⚠ A verificar en el teléfono y en el campus (FE-2.1 C1 y C2).
+
+| Módulo | Archivos |
+|---|---|
+| Pantalla, estado y ViewModel | `ui/admin/recoleccion/ResumenVideoScreen.kt`, `ResumenVideoState.kt`, `ResumenVideoViewModel.kt` |
+| Mapa | `ui/admin/recoleccion/componentes/MapaRecoleccion.kt` + `assets/recoleccion_mapa.js` (`encuadrar()`) |
+| Cola de subida y lectura del recorrido | `data/local/` (§5.10) |
+| Navegación | `MainActivity.kt` (`admin/recoleccion/resumen?video={video}`; Panel → `onAbrirSubida`) |
 
 ---
 
@@ -3069,16 +3361,16 @@ está en `PLAN.md`, FE-3.3.
 
 ![alt text](<../assets/galeria_de_imagenes.png>)
 
-**Implementación actual:** con datos locales (`assets/`). Lo que falta está en `PLAN.md`, FE-4.1.
+**Implementación actual:** con datos locales: `assets/` y, desde FE-2.1, los recorridos grabados `finalizado` de `files/recoleccion/` (`VideoRepositoryCompuesto`, §5.6). Lo que falta está en `PLAN.md`, FE-4.1.
 
 **Elementos:**
 - **Encabezado**: contador de imágenes (según los filtros activos) y chip "Página x de y".
 - **Búsqueda** por nombre de archivo, lugar o video, con botón para borrar el texto.
 - **Filtros** (menús desplegables, opción "Todos/Todas" para quitarlos): **lugar**, **video**,
-  **estado** (subida / procesada / error) y **calidad** (alta / normal / baja). Los filtros activos
+  **estado** (pendiente / subida / procesada / error) y **calidad** (alta / normal / baja). Los filtros activos
   se resaltan. Cambiar un filtro vuelve a la página 1 y limpia la selección.
 - **Cuadrícula** de 2 columnas. Cada tarjeta muestra la miniatura, el nombre del archivo, el lugar
-  ("Sin lugar" si no tiene), el estado con punto de color (azul = subida, verde = procesada,
+  ("Sin lugar" si no tiene), el estado con punto de color (gris = pendiente de subir, azul = subida, verde = procesada,
   rojo = error) y una estrella si es de alta calidad.
 - **Selección múltiple**: pulsación larga sobre la tarjeta o toque en el círculo de la esquina.
   Con una selección activa, un toque alterna la foto en vez de abrirla, y el botón Atrás primero
@@ -3160,7 +3452,7 @@ inspeccionarlo o eliminarlo.
 
 ![alt text](<../assets/detalle_de_video.png>)
 
-**Implementación actual:** con datos locales (`assets/`). Lo que falta está en `PLAN.md`, FE-4.1.
+**Implementación actual:** con datos locales: `assets/` y, desde FE-2.1, los recorridos grabados `finalizado` (`VideoRepositoryCompuesto`, §5.6; renombrar y eliminar siguen en memoria también para ellos). Lo que falta está en `PLAN.md`, FE-4.1.
 
 **Propósito:** al seleccionar un video, ver en el mapa **SOLO las fotos de ese video** y
 poder renombrarlo o eliminarlo por completo. Se llega desde la Lista de videos (7.13).
@@ -3373,6 +3665,40 @@ Panel, un *deep link* de Navigation o un extra del `Intent` leído por `MainActi
 cambia ninguna pantalla ni el Manifest y se usa con un `adb shell am start`. *Consecuencias:* FE-3.1 solo añade la
 entrada desde Inicio; en un APK de *release* el extra se ignora.
 
+**ADR-FE-19 — Cola de subida en el proceso, con su estado en el `manifest.json` (aceptada, 2026-10-25, FE-2.1).**
+Hacía falta una cola persistente que sobreviva al cierre de la app, reintente, retome sin duplicar y trate la falta de
+sesión como «esperar» (§5.10, «Subida y sesión»). Opciones: WorkManager (trabajo persistente que Android relanza),
+una tabla en Room o una corrutina del proceso con el estado en el propio manifest. Se eligió la tercera: la sesión solo
+vive mientras el proceso vive (`MyApp` la borra en cada arranque en frío, §5.3), así que un trabajo de WorkManager
+relanzado en un proceso nuevo no podría llamar a `/v1/collect/…` sin que el admin entre otra vez; el manifest ya se
+reescribe de forma atómica y por recorrido (ADR-FE-17), lo leen 7.5, el Panel y el repositorio compuesto, y §5.10 ya
+fijaba sus claves (`photos[].sync`, `remote_video_id`, `subida_estado`); no añade dependencias y se prueba en la JVM.
+*Consecuencias:* la subida avanza mientras el proceso viva (también en segundo plano) y se retoma al abrir el Panel o
+7.5 con sesión; con la app cerrada no sube (R10); un solo cerrojo por proceso para los manifests (`CerrojoRecoleccion`);
+las pantallas leen el progreso del disco y de `ColaSubida.estado`.
+
+**ADR-FE-20 — Re-codificar cada foto en el teléfono, aplicando la orientación EXIF a los píxeles, en una copia aparte
+(aceptada, 2026-10-25, FE-2.1).**
+El backend acepta ≤ 4 MB por foto y el criterio C3 pide además ≤ 1600 px de lado mayor (§5.10). Opciones: subir el
+original de CameraX (12 MP, 3–5 MB, a veces más), re-codificarlo al vuelo en cada intento o re-codificarlo una vez a
+`subida/<id>.jpg` y anotar `upload` en el manifest. Se eligió la última, con `BitmapFactory` (`inSampleSize`) + `Matrix`
++ `compress(JPEG)` y una escalera de calidades (90 → 50) y, si aún no cabe, de lados (×3/4): `bytes` se conoce antes de
+registrar la foto (el contrato lo pide), un reintento sube los mismos bytes (mismo ETag: el `worker` lo descarta como
+duplicado) y los originales no se tocan. Como el JPEG nuevo no lleva EXIF, la orientación se aplica a los píxeles (si
+no, la foto llegaría tumbada). *Consecuencias:* espacio extra temporal (~0,5 MB por foto, se borra al completar); la
+lógica de tamaños y calidades es pura y está probada (`RecodificacionFotoTest`); la parte de `android.graphics` se
+prueba en el teléfono (FE-2.1 C1, C3b mide lo que llegó a S3).
+
+**ADR-FE-21 — C3 se comprueba en S3 y sin Pillow (aceptada, 2026-10-25, FE-2.1).**
+`validation-2-1` decía «descarga `url` de cada foto y mide con Pillow», pero `url` llega `null` hasta BE-4.1
+(backend §5.5) y Pillow sería la primera dependencia del grupo `ops`. Opciones: esperar a BE-4.1, leer el manifest del
+teléfono (lo que la app *dice* que subió) o leer los objetos del bucket. Se eligió leer los objetos
+`dataset/{video_id}/{imagen_id}.jpg` (clave de infra §5.5 y backend §5.4) con `aws s3api get-object --range` (solo
+lectura, los primeros 128 KB: el total sale de `ContentRange` y las medidas del marcador SOF, `comun.dimensiones_jpeg`).
+Mide lo que de verdad recibió el backend y no necesita el teléfono ni BE-4.1. *Consecuencias:* C3b necesita
+`AWS_PROFILE` con `s3:GetObject` sobre el bucket del dataset; si el backend expusiera `bytes`, `ancho` y `alto` de cada
+imagen (ya están en su tabla `imagenes`), C3b podría hacerse solo con la API (propuesta para el backend, no pedida).
+
 ### 8.2 Decisiones abiertas
 
 La numeración se conserva: otras secciones y documentos citan «decisión abierta N».
@@ -3441,7 +3767,8 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
 | R3 | Los mapas dependen de internet (Leaflet en `unpkg.com`, teselas de OSM y su política de uso) | Media | Medio | Decisiones abiertas 1 y 13; empaquetar Leaflet en `assets/` |
 | R4 | Rumbos en referencias distintas (magnético en el escaneo, verdadero en el PDR) | Alta | Medio | Convertir antes de enviar (§5.10, FE-3.2) |
 | R5 | Reconocimiento de voz no disponible o voces superpuestas con TalkBack | Media | Alto | Proteger `SpeechRecognizer` con `isRecognitionAvailable`; probar con TalkBack (FE-3.5); toda acción tiene equivalente táctil |
-| R6 | La sesión se borra si Android mata el proceso durante una recolección larga | Media | Medio | La recolección guarda en disco y desde FE-2.3 se retoma sin login (no llama al backend); la subida (7.5) pide login de nuevo y retoma por idempotencia (§5.10, «Subida y sesión») |
+| R6 | La sesión se borra si Android mata el proceso durante una recolección larga | Media | Medio | La recolección guarda en disco y desde FE-2.3 se retoma sin login (no llama al backend); la subida (7.5) espera sesión sin reintentar en bucle y, tras el login, el Panel la retoma por idempotencia (FE-2.1; §5.10, «Subida y sesión») |
+| R10 | La subida solo avanza con el proceso vivo y con sesión (ADR-FE-19): con la app cerrada o sin login no sube | Media | Bajo | El progreso queda en el manifest; la tarjeta del Panel avisa de lo pendiente y lo retoma al entrar. Si hiciera falta subir en segundo plano sin abrir la app, valorar WorkManager con un token de larga vida (cambio de contrato del backend) |
 | R7 | Eventos de una sola vez perdidos (`SharedFlow` sin repetición) dejan pantallas atascadas | Baja | Medio | Ver 5.2 (escaneo) y 5.1; migrar a `Channel` donde importe |
 | R8 | En `dev` la ubicación no funciona mientras embeddings está apagado (por defecto, y siempre desde las 22:00) | Alta | Bajo | Mensaje claro con `503 EMBEDDING_NO_DISPONIBLE` (§5.10); encender embeddings antes de probar (infra §3.4) |
 | R9 | Ediciones de admin hechas sobre datos locales se pierden al cerrar la app (`EdicionesLocales`, editor de alertas) | Alta | Bajo | Desaparece al conectar los repositorios remotos (FE-3.3, FE-4.1) |

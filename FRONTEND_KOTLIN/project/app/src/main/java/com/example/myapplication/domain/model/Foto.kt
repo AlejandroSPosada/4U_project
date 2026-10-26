@@ -6,8 +6,12 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Estado de procesamiento de una foto en el dataset. */
+/**
+ * Estado de procesamiento de una foto en el dataset. `PENDIENTE` (FE-2.1): todavía no se subió (`pendiente_subida` del
+ * backend, o `sync = pendiente` en un recorrido local; ARCHITECTURE §5.6 y §5.10).
+ */
 enum class EstadoFoto(val etiqueta: String) {
+    PENDIENTE("Pendiente"),
     SUBIDA("Subida"),
     PROCESADA("Procesada"),
     ERROR("Error"),

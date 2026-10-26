@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.repository.AssetsVideoRepository
 import com.example.myapplication.data.repository.VideoRepository
+import com.example.myapplication.data.repository.VideoRepositoryCompuesto
 import com.example.myapplication.domain.model.Video
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,6 +99,6 @@ class VideoDetalleViewModel(
     class Factory(private val appContext: Context, private val videoId: String) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            VideoDetalleViewModel(videoId, AssetsVideoRepository(appContext)) as T
+            VideoDetalleViewModel(videoId, VideoRepositoryCompuesto.deLaApp(appContext)) as T // FE-2.1
     }
 }

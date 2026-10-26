@@ -669,6 +669,7 @@ private fun TarjetaFoto(
 }
 
 private fun EstadoFoto.color(): Color = when (this) {
+    EstadoFoto.PENDIENTE -> GaleriaColores.TextoSuave // FE-2.1: foto local aún sin subir
     EstadoFoto.SUBIDA -> GaleriaColores.Azul
     EstadoFoto.PROCESADA -> GaleriaColores.Verde
     EstadoFoto.ERROR -> GaleriaColores.Rojo

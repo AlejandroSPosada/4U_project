@@ -20,9 +20,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.myapplication.ui.inicio.InicioScreen
 import com.example.myapplication.ui.destino.SeleccionDestinoScreen
 import com.example.myapplication.ui.ubicacion.EscaneoScreen
@@ -35,6 +37,7 @@ import com.example.myapplication.ui.admin.videos.VideosScreen
 import com.example.myapplication.map.MapaPublicoScreen
 import com.example.myapplication.ui.admin.recoleccion.UbicacionManualScreen
 import com.example.myapplication.ui.admin.recoleccion.RecoleccionScreen
+import com.example.myapplication.ui.admin.recoleccion.ResumenVideoScreen
 import com.example.myapplication.ui.admin.calibracion.CalibracionScreen
 import com.example.myapplication.domain.model.SesionDeRecoleccion
 import com.example.myapplication.session.EventosSesion
@@ -204,6 +207,8 @@ fun AppNav(rutaInicial: String? = null) {
                 onSinSesion = {
                     nav.navigate("login") { popUpTo("admin/panel") { inclusive = true } }
                 },
+                // FE-2.1: tarjeta de subidas → 7.5 de ese recorrido (retomar una subida, «subir después»).
+                onAbrirSubida = { id -> nav.navigate("admin/recoleccion/resumen?video=$id") },
             )
         }
 
@@ -302,7 +307,7 @@ fun AppNav(rutaInicial: String? = null) {
                 RecoleccionScreen(
                     onFinalizado = { resumen ->
                         SesionDeRecoleccion.finalizar(resumen) // para 7.5; inofensivo si el ViewModel ya lo hizo
-                        nav.navigate("admin/recoleccion/resumen") {
+                        nav.navigate("admin/recoleccion/resumen?video=${resumen.videoId}") {
                             // saca 7.3 y 7.4 de la pila: el video ya terminó
                             popUpTo("admin/ubicacion-manual") { inclusive = true }
                         }
@@ -322,10 +327,31 @@ fun AppNav(rutaInicial: String? = null) {
             MapaPublicoScreen()
         }
 
+        // 7.5 Resumen de video (FE-2.1). `video` = rec_NNNN, opcional: sin él, el de SesionDeRecoleccion.resumen
+        // (o el recorrido sin subir más reciente). Navegar a "admin/recoleccion/resumen" sin argumento también vale.
+        composable(
+            "admin/recoleccion/resumen?video={video}",
+            arguments = listOf(
+                navArgument("video") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { entrada ->
+            ResumenVideoScreen(
+                videoId = entrada.arguments?.getString("video"),
+                onIrAlPanel = {
+                    // El Panel está debajo (7.4 → 7.5 saca 7.3 y 7.4; o se llegó desde el Panel).
+                    if (!nav.popBackStack("admin/panel", inclusive = false)) {
+                        nav.navigate("admin/panel") { popUpTo("inicio") }
+                    }
+                },
+            )
+        }
+
         // ── Placeholders para que los botones no cierren la app ──
         // (navegar a una ruta que no está registrada cierra la app con un error)
-        // 7.5 Resumen de video: falta ResumenVideoScreen (leerá SesionDeRecoleccion.resumen).
-        composable("admin/recoleccion/resumen") { /* placeholder */ }
         composable("admin/lugares") { /* placeholder */ }
         composable("admin/estadisticas") { /* placeholder */ }
         composable("ajustes") { /* placeholder */ }

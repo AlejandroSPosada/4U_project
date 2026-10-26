@@ -153,6 +153,8 @@ private fun TarjetaVideo(video: Video, onClick: () -> Unit) {
 
 private fun Video.estado(): Pair<String, Color> = when {
     fotos.isEmpty() -> "Sin fotos" to GaleriaColores.TextoSuave
+    // FE-2.1: un recorrido local con fotos sin subir (EstadoFoto.PENDIENTE)
+    fotos.any { it.estado == EstadoFoto.PENDIENTE } -> "Pendiente de subir" to GaleriaColores.TextoSuave
     fotos.any { it.estado == EstadoFoto.ERROR } -> "Con errores" to GaleriaColores.Rojo
     fotos.all { it.estado == EstadoFoto.PROCESADA } -> "Procesado" to GaleriaColores.Verde
     else -> "Pendiente de proceso" to GaleriaColores.Azul

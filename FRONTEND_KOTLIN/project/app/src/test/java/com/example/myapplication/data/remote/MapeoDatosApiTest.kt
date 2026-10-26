@@ -197,11 +197,13 @@ class MapeoDatosApiTest {
     }
 
     @Test
-    fun estadoFoto_pendienteSubida_aunSinValorPropio() {
+    fun estadoFoto_pendienteSubida_esPendiente() {
         assertEquals(EstadoFoto.SUBIDA, MapeoDatosApi.estadoFoto("subida"))
         assertEquals(EstadoFoto.PROCESADA, MapeoDatosApi.estadoFoto("procesada"))
         assertEquals(EstadoFoto.ERROR, MapeoDatosApi.estadoFoto("error"))
-        assertNull(MapeoDatosApi.estadoFoto("pendiente_subida")) // EstadoFoto.PENDIENTE llega con FE-2.1
+        assertEquals(EstadoFoto.PENDIENTE, MapeoDatosApi.estadoFoto("pendiente_subida")) // FE-2.1
+        assertNull(MapeoDatosApi.estadoFoto("pendiente")) // solo el valor del contrato
+        assertNull(MapeoDatosApi.estadoFoto(null))
     }
 
     // Fila 7: fechas ISO-8601 (texto en los modelos; a ms solo donde se ordena o filtra).

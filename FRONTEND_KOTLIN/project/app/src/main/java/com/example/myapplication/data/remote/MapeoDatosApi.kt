@@ -95,10 +95,16 @@ object MapeoDatosApi {
     )
 
     /**
-     * `estado` de `ImagenAdmin` → `EstadoFoto`. `pendiente_subida` (y cualquier valor desconocido) da `null`: la app
-     * aún no tiene `EstadoFoto.PENDIENTE` (lo añade FE-2.1). [foto] lo muestra entretanto como `SUBIDA`.
+     * `estado` de `ImagenAdmin` (backend §5.5) → `EstadoFoto`: `pendiente_subida` → `PENDIENTE` (FE-2.1), `subida`,
+     * `procesada` y `error` → el suyo. Cualquier otro valor da `null` ([foto] lo muestra como `SUBIDA`).
      */
-    fun estadoFoto(valor: String?): EstadoFoto? = enumDe<EstadoFoto>(valor)
+    fun estadoFoto(valor: String?): EstadoFoto? = when (valor?.trim()?.lowercase(Locale.ROOT)) {
+        "pendiente_subida" -> EstadoFoto.PENDIENTE
+        "subida" -> EstadoFoto.SUBIDA
+        "procesada" -> EstadoFoto.PROCESADA
+        "error" -> EstadoFoto.ERROR
+        else -> null
+    }
 
     /** `ImagenAdmin` → `Foto` del video [videoNombre]. URLs `null` (hasta BE-4.1) quedan como `""`. */
     fun foto(dto: ImagenAdminDto, videoNombre: String): Foto = Foto(

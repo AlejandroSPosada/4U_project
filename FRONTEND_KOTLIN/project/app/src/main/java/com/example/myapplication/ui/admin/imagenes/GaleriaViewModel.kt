@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.repository.AssetsVideoRepository
 import com.example.myapplication.data.repository.VideoRepository
+import com.example.myapplication.data.repository.VideoRepositoryCompuesto
 import com.example.myapplication.domain.model.CalidadFoto
 import com.example.myapplication.domain.model.EstadoFoto
 import com.example.myapplication.domain.model.Foto
@@ -148,6 +148,6 @@ class GaleriaViewModel(private val repositorio: VideoRepository) : ViewModel() {
     class Factory(private val appContext: Context) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            GaleriaViewModel(AssetsVideoRepository(appContext)) as T
+            GaleriaViewModel(VideoRepositoryCompuesto.deLaApp(appContext)) as T // FE-2.1: assets + files/recoleccion
     }
 }

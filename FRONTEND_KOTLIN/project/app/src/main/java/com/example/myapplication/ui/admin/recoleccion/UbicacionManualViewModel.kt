@@ -4,10 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.repository.AssetsVideoRepository
 import com.example.myapplication.data.repository.LugaresRepository
 import com.example.myapplication.data.repository.LugaresRepositoryStub
 import com.example.myapplication.data.repository.VideoRepository
+import com.example.myapplication.data.repository.VideoRepositoryCompuesto
 import com.example.myapplication.domain.model.Foto
 import com.example.myapplication.domain.model.InicioRecoleccion
 import com.example.myapplication.domain.model.Video
@@ -224,7 +224,8 @@ class UbicacionManualViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             UbicacionManualViewModel(
-                videos = AssetsVideoRepository(appContext),
+                // FE-2.1: también los recorridos grabados (última posición y nombre autonumerado sin repetir).
+                videos = VideoRepositoryCompuesto.deLaApp(appContext),
                 lugares = LugaresRepositoryStub(),
             ) as T
     }

@@ -24,7 +24,7 @@ import uuid
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 # --- Constantes -------------------------------------------------------------------------------------------------
@@ -35,6 +35,7 @@ DIR_INFORMES = PROYECTO / ".validacion"
 DIR_TF_DEV = RAIZ_REPO / "INFRASTRUCTURA_TERRAFORM" / "project" / "envs" / "dev"
 API_CONFIG = PROYECTO / "app" / "src" / "main" / "java" / "com" / "example" / "myapplication" / "ApiConfig.kt"
 PLAN_APP = PROYECTO.parent / "docs" / "PLAN.md"
+PLAN_BACKEND = RAIZ_REPO / "BACKEND_FASTAPI" / "docs" / "PLAN.md"  # FE-2.1: estado de BE-2.1 y BE-2.2 (solo docs)
 DIR_RESULTADOS_PRUEBAS = PROYECTO / "app" / "build" / "test-results" / "testDebugUnitTest"
 PAQUETE = "com.example.myapplication"
 ACTIVIDAD = f"{PAQUETE}/.MainActivity"
@@ -250,9 +251,19 @@ class ErrorRed(Exception):
     """No hubo respuesta HTTP: DNS, TLS, conexión o tiempo agotado."""
 
 
-def http_get(url: str, *, timeout: float = 15.0) -> RespuestaHttp:
-    """`GET` con `X-Request-Id` propio (como la app). Una respuesta 4xx/5xx se devuelve; sin respuesta → ErrorRed."""
-    peticion = urllib.request.Request(url, headers={"X-Request-Id": str(uuid.uuid4()), "User-Agent": "validacion-app"})
+def _encabezados(token: str | None, extra: dict[str, str] | None = None) -> dict[str, str]:
+    encabezados = {"X-Request-Id": str(uuid.uuid4()), "User-Agent": "validacion-app", **(extra or {})}
+    if token:
+        encabezados["Authorization"] = f"Bearer {token}"  # nunca se imprime
+    return encabezados
+
+
+def http_get(url: str, *, timeout: float = 15.0, token: str | None = None) -> RespuestaHttp:
+    """`GET` con `X-Request-Id` propio (como la app). Una respuesta 4xx/5xx se devuelve; sin respuesta → ErrorRed.
+
+    `token` (FE-2.1) añade `Authorization: Bearer <token>` para las rutas `/v1/admin/…` y `/v1/collect/…`; nunca se
+    imprime."""
+    peticion = urllib.request.Request(url, headers=_encabezados(token))
     inicio = time.monotonic()
     try:
         with urllib.request.urlopen(peticion, timeout=timeout) as r:  # noqa: S310 — URL https comprobada
@@ -266,11 +277,12 @@ def http_get(url: str, *, timeout: float = 15.0) -> RespuestaHttp:
         raise ErrorRed(f"{type(motivo).__name__}: {resumir(str(motivo), 150)}") from e
 
 
-def http_post_json(url: str, cuerpo: dict, *, timeout: float = 15.0) -> RespuestaHttp:
+def http_post_json(url: str, cuerpo: dict, *, timeout: float = 15.0, token: str | None = None) -> RespuestaHttp:
     """`POST` con cuerpo JSON y `X-Request-Id` propio. 4xx/5xx se devuelven; sin respuesta → ErrorRed.
 
     Nunca imprime ni devuelve en un error el cuerpo enviado (lleva contraseñas). Un `429` de API Gateway (cuerpo
-    `{"message": …}`, infra §5.13) se reintenta tras 1, 2 y 4 s; si no cede, se devuelve el último.
+    `{"message": …}`, infra §5.13) se reintenta tras 1, 2 y 4 s; si no cede, se devuelve el último. `token` (FE-2.1)
+    añade `Authorization: Bearer <token>`.
     """
     datos = json.dumps(cuerpo).encode("utf-8")
     respuesta = None
@@ -279,11 +291,7 @@ def http_post_json(url: str, cuerpo: dict, *, timeout: float = 15.0) -> Respuest
             url,
             data=datos,
             method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "X-Request-Id": str(uuid.uuid4()),
-                "User-Agent": "validacion-app",
-            },
+            headers=_encabezados(token, {"Content-Type": "application/json"}),
         )
         inicio = time.monotonic()
         try:
@@ -1034,6 +1042,333 @@ def enviar_credenciales(correo: str, password: str) -> float:
 # --- Validador -------------------------------------------------------------------------------------------------
 
 
+# --- FE-2.1: embedding en dev, objetos del dataset en S3 y tamaño de un JPEG ---------------------------------------
+
+ZONA_BOGOTA = timezone(timedelta(hours=-5))  # Colombia no tiene horario de verano
+HORA_APAGADO_NOCHE = 22  # embedding se apaga solo a las 22:00 de Bogotá (infra §3.4)
+NAMESPACE_METRICAS = "campus-locator/dev"
+METRICA_ENCENDIDOS = "EmbeddingEncendidos"
+ALARMA_INACTIVIDAD = "campus-locator-dev-embedding-inactivo"
+CODIGOS_TODAVIA_NO = {"ThrottlingException", "Throttling", "TooManyRequestsException", "RequestLimitExceeded"}
+
+
+def hora_bogota(ahora: datetime | None = None) -> datetime:
+    """Hora de Bogotá (UTC−5 fijo). Las pruebas pasan `ahora` (con zona)."""
+    return (ahora or datetime.now(UTC)).astimezone(ZONA_BOGOTA)
+
+
+def recurso_ecs(cluster: str, servicio: str) -> str:
+    return f"service/{cluster}/{servicio}"
+
+
+class EmbeddingDev:
+    """Encender y apagar `embedding` en `dev` con el contrato de infra §5.10, con la CLI `aws` (ADR-FE-15; el backend
+    lo reescribe con boto3 como `comun.EmbeddingDev`: las carpetas no comparten código de validación).
+
+    `encender(listo)`: 1) rango 0–1 de `embedding` y `worker` (`register-scalable-target`); 2) latido
+    (`put-metric-data` de `EmbeddingEncendidos` = 1); 3) hasta 5 min a que `get-metric-statistics` vea el latido, 60 s
+    más y que la alarma `campus-locator-dev-embedding-inactivo` no esté en `ALARM`; 4) `update-service` de `embedding`
+    a 1; 5) hasta 10 min desde el paso 1 a un despliegue `PRIMARY` `COMPLETED` con una tarea `HEALTHY` registrada en
+    Cloud Map (`servicediscovery list-instances` con su IP privada; no `get-instances-health-status`, trampa de backend
+    §5.11); 6) hasta 2 min a que `listo()` sea cierto (en la app: `/v1/health/ready` con `"embedding": "ok"`).
+    `apagar()`: rango 0–0 y `desiredCount = 0` de los dos (no espera). Los límites de peticiones de AWS mientras espera
+    son «todavía no» (`CODIGOS_TODAVIA_NO`); un permiso que falta es `ErrorConfiguracion`; el resto, `ErrorAws`.
+    """
+
+    LIMITE_ALARMA_S = 300
+    LIMITE_ENCENDIDO_S = 600
+    LIMITE_API_S = 120
+    PAUSA_S = 15
+
+    def __init__(self, cluster: str, servicio_embedding: str = "embedding", servicio_worker: str = "worker") -> None:
+        self.cluster = cluster
+        self.embedding = servicio_embedding
+        self.worker = servicio_worker
+
+    def comprobar_inf21(self) -> str:
+        """Los objetivos escalables de `embedding` y `worker` existen (los crea INF-2.1); si no → Bloqueo."""
+        datos = aws_json(
+            "application-autoscaling",
+            "describe-scalable-targets",
+            "--service-namespace",
+            "ecs",
+            "--resource-ids",
+            recurso_ecs(self.cluster, self.embedding),
+            recurso_ecs(self.cluster, self.worker),
+            accion="application-autoscaling describe-scalable-targets",
+        )
+        encontrados = {t.get("ResourceId") for t in (datos or {}).get("ScalableTargets", []) if isinstance(t, dict)}
+        faltan = [s for s in (self.embedding, self.worker) if recurso_ecs(self.cluster, s) not in encontrados]
+        if faltan:
+            raise Bloqueo(f"INF-2.1: no hay objetivo escalable de {', '.join(faltan)}")
+        return "objetivos escalables de embedding y worker"
+
+    def _rango(self, servicio: str, maximo: int) -> None:
+        aws_json(
+            "application-autoscaling",
+            "register-scalable-target",
+            "--service-namespace",
+            "ecs",
+            "--scalable-dimension",
+            "ecs:service:DesiredCount",
+            "--resource-id",
+            recurso_ecs(self.cluster, servicio),
+            "--min-capacity",
+            "0",
+            "--max-capacity",
+            str(maximo),
+            accion=f"register-scalable-target {servicio} 0-{maximo}",
+        )
+
+    def _poner(self, servicio: str, replicas: int) -> None:
+        aws_json(
+            "ecs",
+            "update-service",
+            "--cluster",
+            self.cluster,
+            "--service",
+            servicio,
+            "--desired-count",
+            str(replicas),
+            "--query",
+            "service.desiredCount",
+            accion=f"ecs update-service {servicio} → {replicas}",
+        )
+
+    def latido(self, cuando: datetime | None = None) -> datetime:
+        """`PutMetricData` de `EmbeddingEncendidos` = 1 (`Count`, con `Timestamp` explícito). Devuelve la marca."""
+        marca = (cuando or datetime.now(UTC)).replace(microsecond=0)
+        aws_json(
+            "cloudwatch",
+            "put-metric-data",
+            "--namespace",
+            NAMESPACE_METRICAS,
+            "--metric-data",
+            f"MetricName={METRICA_ENCENDIDOS},Value=1,Unit=Count,Timestamp={marca.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            accion="cloudwatch put-metric-data",
+        )
+        return marca
+
+    def _sondear(self, que: str, *argumentos: str) -> object | None:
+        """Una llamada de espera: los límites de peticiones son «todavía no» (None); el resto se traduce."""
+        try:
+            return aws_json(*argumentos, accion=que)
+        except ErrorAws as e:
+            if e.codigo in CODIGOS_TODAVIA_NO:
+                return None
+            raise
+
+    def _latido_visto(self, marca: datetime) -> bool:
+        inicio = (marca - timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        fin = (marca + timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        datos = self._sondear(
+            "cloudwatch get-metric-statistics",
+            "cloudwatch",
+            "get-metric-statistics",
+            "--namespace",
+            NAMESPACE_METRICAS,
+            "--metric-name",
+            METRICA_ENCENDIDOS,
+            "--start-time",
+            inicio,
+            "--end-time",
+            fin,
+            "--period",
+            "60",
+            "--statistics",
+            "Sum",
+        )
+        return isinstance(datos, dict) and any((p or {}).get("Sum", 0) >= 1 for p in datos.get("Datapoints", []))
+
+    def _alarma_en_alarm(self) -> bool | None:
+        datos = self._sondear(
+            "cloudwatch describe-alarms", "cloudwatch", "describe-alarms", "--alarm-names", ALARMA_INACTIVIDAD
+        )
+        if not isinstance(datos, dict):
+            return None
+        alarmas = datos.get("MetricAlarms") or []
+        if not alarmas:
+            raise Bloqueo(f"INF-2.1: no existe la alarma {ALARMA_INACTIVIDAD}")
+        return alarmas[0].get("StateValue") == "ALARM"
+
+    def _sano(self) -> tuple[bool, str]:
+        """¿Despliegue PRIMARY COMPLETED con una tarea HEALTHY registrada en Cloud Map? `(sí/no, lo que falta)`."""
+        servicio = self._sondear(
+            "ecs describe-services",
+            "ecs",
+            "describe-services",
+            "--cluster",
+            self.cluster,
+            "--services",
+            self.embedding,
+            "--query",
+            "services[0].{despliegues: deployments, registros: serviceRegistries}",
+        )
+        if not isinstance(servicio, dict):
+            return False, "describe-services sin respuesta"
+        primario = next((d for d in servicio.get("despliegues") or [] if d.get("status") == "PRIMARY"), None)
+        if not primario or primario.get("rolloutState") != "COMPLETED":
+            return False, "despliegue PRIMARY sin COMPLETED"
+        tareas = self._sondear(
+            "ecs list-tasks",
+            "ecs",
+            "list-tasks",
+            "--cluster",
+            self.cluster,
+            "--service-name",
+            self.embedding,
+            "--desired-status",
+            "RUNNING",
+            "--query",
+            "taskArns",
+        )
+        if not tareas:
+            return False, "sin tareas en marcha"
+        detalle = self._sondear(
+            "ecs describe-tasks",
+            "ecs",
+            "describe-tasks",
+            "--cluster",
+            self.cluster,
+            "--tasks",
+            *[str(t) for t in tareas],
+            "--query",
+            "tasks[].{salud: healthStatus, adjuntos: attachments}",
+        )
+        sanas = [t for t in detalle or [] if isinstance(t, dict) and t.get("salud") == "HEALTHY"]
+        if not sanas:
+            return False, "sin tarea HEALTHY"
+        ips = {
+            d.get("value")
+            for t in sanas
+            for a in t.get("adjuntos") or []
+            for d in a.get("details") or []
+            if d.get("name") == "privateIPv4Address"
+        }
+        registros = servicio.get("registros") or []
+        arn = registros[0].get("registryArn", "") if registros else ""
+        if not arn:
+            return True, ""  # sin registro en Cloud Map que mirar
+        instancias = self._sondear(
+            "servicediscovery list-instances",
+            "servicediscovery",
+            "list-instances",
+            "--service-id",
+            arn.rsplit("/", 1)[-1],
+            "--query",
+            "Instances[].Attributes.AWS_INSTANCE_IPV4",
+        )
+        if not instancias:
+            return False, "Cloud Map sin instancias registradas"
+        if ips and not ips.intersection(set(instancias)):
+            return False, "Cloud Map sin la IP de la tarea sana"
+        return True, ""
+
+    def encender(self, listo: Callable[[], bool]) -> float:
+        """El contrato de arriba. Devuelve los segundos que tardó; si no queda sano a tiempo → Bloqueo (INF-2.1)."""
+        inicio = reloj()
+        for servicio in (self.embedding, self.worker):
+            self._rango(servicio, 1)
+        marca = self.latido()
+        while not self._latido_visto(marca):
+            if reloj() - inicio > self.LIMITE_ALARMA_S:
+                raise Bloqueo("INF-2.1: CloudWatch no ve el latido de EmbeddingEncendidos en 5 min")
+            dormir(self.PAUSA_S)
+        dormir(60)
+        while self._alarma_en_alarm() is not False:
+            if reloj() - inicio > self.LIMITE_ALARMA_S + 60:
+                raise Bloqueo(f"INF-2.1: la alarma {ALARMA_INACTIVIDAD} sigue en ALARM")
+            dormir(self.PAUSA_S)
+        self._poner(self.embedding, 1)
+        falta = ""
+        while True:
+            sano, falta = self._sano()
+            if sano:
+                break
+            if reloj() - inicio > self.LIMITE_ENCENDIDO_S:
+                raise Bloqueo(f"INF-2.1: embedding no quedó sano en {self.LIMITE_ENCENDIDO_S // 60} min ({falta})")
+            dormir(self.PAUSA_S)
+        limite_api = reloj() + self.LIMITE_API_S
+        while not listo():
+            if reloj() > limite_api:
+                raise Bloqueo("BE-2.2: embedding está sano pero /v1/health/ready no dice embedding ok en 2 min")
+            dormir(self.PAUSA_S)
+        return reloj() - inicio
+
+    def apagar(self) -> None:
+        for servicio in (self.embedding, self.worker):
+            self._rango(servicio, 0)
+            self._poner(servicio, 0)
+
+
+def dimensiones_jpeg(datos: bytes) -> tuple[int, int] | None:
+    """`(ancho, alto)` del marcador SOF de un JPEG (los primeros bytes bastan), o None si no es un JPEG o no llega
+    al SOF. Sin Pillow: solo biblioteca estándar."""
+    if len(datos) < 4 or datos[0:2] != b"\xff\xd8":
+        return None
+    i = 2
+    sof = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
+    while i + 1 < len(datos):
+        if datos[i] != 0xFF:
+            i += 1
+            continue
+        marcador = datos[i + 1]
+        if marcador == 0xFF:  # relleno
+            i += 1
+            continue
+        if marcador in (0x01, 0xD8) or 0xD0 <= marcador <= 0xD7:
+            i += 2
+            continue
+        if marcador in (0xD9, 0xDA):  # fin o inicio de los datos: ya no hay SOF antes
+            return None
+        if i + 4 > len(datos):
+            return None
+        largo = int.from_bytes(datos[i + 2 : i + 4], "big")
+        if marcador in sof:
+            if i + 9 > len(datos):
+                return None
+            alto = int.from_bytes(datos[i + 5 : i + 7], "big")
+            ancho = int.from_bytes(datos[i + 7 : i + 9], "big")
+            return ancho, alto
+        i += 2 + largo
+    return None
+
+
+@dataclass
+class ObjetoS3:
+    clave: str
+    bytes: int
+    dimensiones: tuple[int, int] | None
+
+
+_PATRON_RANGO = re.compile(r"/(\d+)\s*$")
+
+
+def leer_objeto_s3(bucket: str, clave: str, *, primeros: int = 131072) -> ObjetoS3:
+    """Tamaño total y dimensiones de un JPEG del bucket sin bajarlo entero: `aws s3api get-object --range
+    bytes=0-<primeros-1>` a un temporal (el total sale de `ContentRange`). Solo lectura. No existe → ErrorAws
+    (`NoSuchKey`). Nunca usa ni imprime URLs prefirmadas."""
+    with tempfile.TemporaryDirectory(prefix="validacion-") as carpeta:
+        destino = Path(carpeta) / "objeto.jpg"
+        datos = aws_json(
+            "s3api",
+            "get-object",
+            "--bucket",
+            bucket,
+            "--key",
+            clave,
+            "--range",
+            f"bytes=0-{primeros - 1}",
+            str(destino),
+            accion=f"s3api get-object {clave}",
+        )
+        contenido = destino.read_bytes() if destino.is_file() else b""
+    rango = str((datos or {}).get("ContentRange") or "")
+    m = _PATRON_RANGO.search(rango)
+    total = int(m.group(1)) if m else int((datos or {}).get("ContentLength") or len(contenido))
+    return ObjetoS3(clave, total, dimensiones_jpeg(contenido))
+
+
 @dataclass
 class _Entrada:
     id: str
@@ -1052,9 +1387,12 @@ class Validador:
     comprobaciones: list[str]
     entornos: tuple[str, ...] = ENTORNOS
     grupos: dict[str, list[str]] = field(default_factory=dict)
+    # FE-2.1: argumentos propios del lote (contrato común, infra §5.11), p. ej. `--video`; quedan en `args`.
+    argumentos: Callable[[argparse.ArgumentParser], None] | None = None
     # Estado de la ejecución
     entorno: str = ""
     sello: str = ""
+    args: argparse.Namespace | None = None
     _solo: set[str] | None = None
     _sin_limpieza: bool = False
     _informe: Path | None = None
@@ -1072,7 +1410,10 @@ class Validador:
         p.add_argument("--informe", type=Path, default=None)
         p.add_argument("--solo", default=None, help="IDs separados por comas: " + ", ".join(self.comprobaciones))
         p.add_argument("--sin-limpieza", action="store_true")
+        if self.argumentos is not None:
+            self.argumentos(p)
         a = p.parse_args(argv)
+        self.args = a
         if a.entorno not in self.entornos:
             raise ErrorConfiguracion(f"{self.lote} no admite --entorno {a.entorno} (admite {', '.join(self.entornos)})")
         self.entorno = a.entorno

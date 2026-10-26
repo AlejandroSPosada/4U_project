@@ -23,6 +23,67 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.7.0] — 2026-10-25
+
+- **Lote que la motivó:** FE-2.1 (subida de recorridos y Resumen de video, 7.5).
+- **Qué cambió:**
+  - Código: vista 7.5 (`ui/admin/recoleccion/ResumenVideoScreen.kt`, `ResumenVideoState.kt`,
+    `ResumenVideoViewModel.kt`) y ruta `admin/recoleccion/resumen?video={video}` (antes un *placeholder* en blanco;
+    «Finalizar» de 7.4 navega con `?video=rec_NNNN`). Cola de subida en `data/local/` (paquete nuevo):
+    `ManifestRecorrido` (parser **compartido** del `manifest.json`, con Gson), `RecorridoLocal`/`FotoLocal`/
+    `FotoPreparada`/`EstadoSubida`, `AlmacenRecorridos` y `CerrojoRecoleccion`, `Recodificacion.kt`
+    (`LimitesSubida`, `PlanRecodificacion`, `MotorImagen`, `Recodificador`, `PreparadorFoto`,
+    `FotoIlegibleException`), `MotorImagenAndroid`, `SubidorS3` (`PUT` con un `OkHttpClient` sin interceptores),
+    `SubidaRecorrido` (crear video, lotes de 50, `PUT`, `403` → URLs nuevas, `complete`, `actualizarEstados`),
+    `ColaSubida` (reintentos con espera, «esperar sesión», retomar) y `Subidas` (una instancia por proceso; la inicia
+    `MyApp`). Rutas nuevas en `CampusApi` (`crearVideo`, `registrarImagenes`, `completarSubida`, `video`) y DTOs de la
+    recolección; `VideoResumenDto.conteo`. `EstadoFoto.PENDIENTE` (con su caso en `MapeoDatosApi.estadoFoto`, la
+    Galería y la Lista). `VideoRepositoryCompuesto`, `FuenteVideos` y `FuenteRecorridos` (Galería, Lista, Detalle de
+    video y 7.3 ven los recorridos `finalizado`); `AssetsVideoRepository` usa el parser compartido. Panel: retoma la
+    cola y muestra la tarjeta de subidas (`AvisoSubidas`, `onAbrirSubida`). `RecoleccionMapaControl.encuadrar()` y
+    `listo`, y la función JS `encuadrar()` de `recoleccion_mapa.js`. `RecoleccionRepositoryLocal`: cerrojo compartido y
+    `contarPendientes()` con la regla de §5.10.
+  - Pruebas JVM nuevas: `AlmacenRecorridosTest` (13), `RecodificacionFotoTest` (12), `SubidaRecorridoTest` (13),
+    `ColaSubidaTest` (8), `VideoRepositoryCompuestoTest` (3); `MapeoDatosApiTest` espera `PENDIENTE`. Total 151.
+  - Validadores: `src/ops/validate21.py` y en `comun.py` `token` en `http_get`/`http_post_json`, argumentos propios del
+    `Validador` (`argumentos`, `args`), `PLAN_BACKEND`, `EmbeddingDev` (encendido de infra §5.10 con la CLI),
+    `hora_bogota`, `dimensiones_jpeg`, `leer_objeto_s3`/`ObjetoS3`; pruebas `test_validate21.py` (20) y
+    `test_comun_fe21.py` (15). Total 128.
+  - Documento: §4.4 nuevo; §2.4; §3.2 (`data/local/`, pruebas, tag `Subida`); §4.1 (151 casos, tres trampas de las
+    pruebas); §5.5 (7.5, Panel, Galería, Lista, `RecoleccionMapaControl`, fábricas de los ViewModels de videos); §5.6
+    (repositorio compuesto, parser compartido, claves del manifest, regla del estado, `EstadoFoto.PENDIENTE`,
+    cerrojo); §5.8 (ruta de 7.5 con argumento, `onAbrirSubida`, Login → Panel retoma); §5.9 (`encuadrar()`); §5.10
+    (subida implementada: claves, piezas, pasos, errores, cola, sesión; DTOs y rutas; `SubidorS3`); §5.11 (ayudas
+    nuevas, `validate21.py`, trampas); §7.5, §7.11, §7.14; §9.1 (R6, R10 nuevo); ADR-FE-19 (cola en el proceso con el
+    estado en el manifest), ADR-FE-20 (re-codificar con EXIF aplicado a los píxeles, en `subida/`) y ADR-FE-21 (C3 en
+    S3 y sin Pillow).
+  - `validation-2-1` reescrita: entornos `local` y `dev`; precondiciones en el orden del contrato común (máquina → 3,
+    otros lotes → 2) y P8 de `embedding` (no hace falta si el video ya está procesado; hora límite 21:30); C1 sobre
+    las fotos registradas; C2 con apoyo automático (C2a pruebas JVM, C2b sin duplicados en el backend) y la manual C2c;
+    C3a (JVM) y C3b (objetos de S3); C4 estático con «Finalizar» → 7.5; §5 con variables, preparación y salida esperada.
+  - `PLAN.md`: FE-2.1 pasa a «En curso».
+- **Contratos tocados (§5):** §5.6 (formato del almacenamiento: claves nuevas `remote_video_id`, `subida_estado`,
+  `photos[].upload`, `photos[].estado`, `photos[].error` y carpeta `subida/`, compatibles; `EstadoFoto` con un valor
+  nuevo al principio, incompatible para un `when` exhaustivo; `VideoRepositoryCompuesto`); §5.8 (la ruta de 7.5 pasa a
+  `admin/recoleccion/resumen?video={video}`; navegar sin argumento sigue valiendo); §5.9 (función nueva `encuadrar()`);
+  §5.5 (`PanelAdminScreen(onAbrirSubida)`, `PanelAcciones.onAbrirSubida`, `PanelAdminViewModel(…, almacen, cola)`,
+  todos con valor por defecto); §5.10 (rutas, DTOs y piezas de `data/local/`); §5.11 (ayudas nuevas, compatibles).
+  Piezas, vista, ruta y ADR nuevos y un cambio incompatible en 0.x: sube la menor.
+- **Cómo se verificó:** en Windows, `.\gradlew.bat --console=plain testDebugUnitTest assembleDebug` con JBR 21 →
+  `BUILD SUCCESSFUL`, 151 casos sin fallos. En WSL, `uv run --frozen ruff check .` («All checks passed!»),
+  `ruff format --check .` («12 files already formatted»), `pytest -q` (128 passed) y `validate21.py --entorno local` →
+  código 0 (P1; C2a 13/13, 8/8, 13/13; C3a 12/12; C4; C1, C2b y C3b omitidas; la manual C2c). Sin teléfono, sin `adb`
+  y sin tocar AWS (lo coordina el maestro).
+- **Pendiente:** C1 y C2 en el campus con el teléfono y `validate21.py --entorno dev` (`validation-2-1` §3 y §5; para
+  validar hace falta FE-2.3 «Hecho»). Sin comprobar en el teléfono: el aspecto de 7.5 y de la tarjeta del Panel, la
+  re-codificación con `Bitmap` y el EXIF de CameraX, y `EmbeddingDev` de la app contra AWS. Decisiones provisionales
+  del maestro, a confirmar por el usuario: los recorridos `en_curso` no salen en Galería/Lista; renombrar y eliminar
+  un recorrido local desde 7.13/7.14 sigue en memoria; 7.3 cuenta los recorridos grabados para la última posición y el
+  nombre; «corregir la trayectoria» de 7.5 queda fuera; los originales se quedan en el teléfono tras subir. FE-2.2 debe
+  conectar «Fotos pendientes» a `AlmacenRecorridos.contarFotosPendientes()`.
+
+---
+
 ## [0.6.1] — 2026-10-25
 
 - **Lote que la motivó:** ninguno; decisión del usuario del 2026-10-25, «No necesitamos las alertas por el momento»

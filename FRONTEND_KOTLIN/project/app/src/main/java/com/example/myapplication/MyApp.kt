@@ -2,6 +2,7 @@ package com.example.myapplication
 
 import android.app.Application
 import android.os.Build
+import com.example.myapplication.data.local.Subidas
 import com.example.myapplication.data.remote.ClienteApi
 import com.example.myapplication.logs.AppLog
 import com.example.myapplication.session.EventosSesion
@@ -31,6 +32,10 @@ class MyApp : Application() {
             onSinSesion = EventosSesion::emitir,
             registrar = { AppLog.w(TAG_SESION, it) },
         )
+
+        // FE-2.1: cola de subida de recorridos (una por proceso). No sube nada aquí: no hay sesión en un arranque en
+        // frío; se retoma al abrir el Panel o la vista 7.5 (ARCHITECTURE §5.10).
+        Subidas.iniciar(this, sesion)
     }
 
     private companion object {

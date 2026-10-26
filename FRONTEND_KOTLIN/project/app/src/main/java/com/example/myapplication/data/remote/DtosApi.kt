@@ -123,5 +123,82 @@ data class VideoResumenDto(
     @SerializedName("estado") val estado: String? = null,
     @SerializedName("creado_en") val creadoEn: String? = null,
     @SerializedName("total_fotos") val totalFotos: Int? = null,
+    /** FE-2.1: conteo por estado (siempre las cuatro claves en el backend). */
+    @SerializedName("conteo") val conteo: ConteoFotosDto? = null,
     @SerializedName("fotos") val fotos: List<ImagenAdminDto>? = null,
+)
+
+// ---- Recolección (FE-2.1; backend §5.4). Los cuerpos que envía la app no son anulables salvo los opcionales del
+// contrato: Gson omite los `null` (el backend los trata como ausentes).
+
+/** `inicio` de `POST /v1/collect/videos`. `rumbo` en [0, 360) o `null`. */
+data class InicioRecorridoDto(
+    @SerializedName("lat") val lat: Double,
+    @SerializedName("lng") val lng: Double,
+    @SerializedName("rumbo") val rumbo: Double? = null,
+)
+
+/** Cuerpo de `POST /v1/collect/videos`. `ref_cliente` = id local `rec_NNNN` (idempotencia por admin + ref_cliente). */
+data class VideoCrearDto(
+    @SerializedName("ref_cliente") val refCliente: String,
+    @SerializedName("nombre") val nombre: String? = null,
+    @SerializedName("iniciado_en") val iniciadoEn: String? = null,
+    @SerializedName("finalizado_en") val finalizadoEn: String? = null,
+    @SerializedName("duracion_s") val duracionS: Long? = null,
+    @SerializedName("distancia_m") val distanciaM: Double? = null,
+    @SerializedName("pasos") val pasos: Int? = null,
+    @SerializedName("inicio") val inicio: InicioRecorridoDto? = null,
+    @SerializedName("total_fotos") val totalFotos: Int = 0,
+    @SerializedName("dispositivo") val dispositivo: String? = null,
+    @SerializedName("app_version") val appVersion: String? = null,
+)
+
+/** Un elemento de `POST /v1/collect/videos/{id}/images`. `bytes` = tamaño del JPEG re-codificado que se sube. */
+data class ImagenRegistroDto(
+    @SerializedName("orden") val orden: Int,
+    @SerializedName("lat") val lat: Double,
+    @SerializedName("lng") val lng: Double,
+    @SerializedName("rumbo") val rumbo: Double? = null,
+    @SerializedName("capturada_en") val capturadaEn: String? = null,
+    @SerializedName("bytes") val bytes: Long,
+)
+
+/** Cuerpo de `POST /v1/collect/videos/{id}/images` (1 a 50 imágenes). */
+data class ImagenesRegistrarDto(@SerializedName("imagenes") val imagenes: List<ImagenRegistroDto>)
+
+/** `subida` de una imagen registrada: URL prefirmada `PUT` y los encabezados que hay que enviar tal cual. */
+data class SubidaPutDto(
+    @SerializedName("metodo") val metodo: String? = null,
+    @SerializedName("url") val url: String? = null,
+    @SerializedName("encabezados") val encabezados: Map<String, String>? = null,
+    @SerializedName("expira_en") val expiraEn: String? = null,
+) {
+    /** Sin la URL: lleva la firma y nunca debe acabar en un registro. */
+    override fun toString(): String = "SubidaPutDto(metodo=$metodo, url=…, encabezados=$encabezados, expiraEn=$expiraEn)"
+}
+
+/** Un elemento de la respuesta de `images`: `subida` es `null` si la foto ya estaba en S3 o ya no está pendiente. */
+data class ImagenRegistradaDto(
+    @SerializedName("orden") val orden: Int? = null,
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("estado") val estado: String? = null,
+    @SerializedName("subida") val subida: SubidaPutDto? = null,
+)
+
+/** Respuesta 200 de `POST /v1/collect/videos/{id}/images` (mismo orden que la petición). */
+data class ImagenesRegistradasDto(@SerializedName("imagenes") val imagenes: List<ImagenRegistradaDto>? = null)
+
+/** `conteo` por estado de las fotos de un video (backend §5.4 y §5.5). */
+data class ConteoFotosDto(
+    @SerializedName("pendiente_subida") val pendienteSubida: Int? = null,
+    @SerializedName("subida") val subida: Int? = null,
+    @SerializedName("procesada") val procesada: Int? = null,
+    @SerializedName("error") val error: Int? = null,
+)
+
+/** Respuesta 200 de `POST /v1/collect/videos/{id}/complete`. */
+data class SubidaCompletadaDto(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("estado") val estado: String? = null,
+    @SerializedName("conteo") val conteo: ConteoFotosDto? = null,
 )

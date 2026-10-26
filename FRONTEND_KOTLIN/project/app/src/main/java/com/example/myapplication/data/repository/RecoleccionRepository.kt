@@ -1,6 +1,7 @@
 package com.example.myapplication.data.repository
 
 import android.content.Context
+import com.example.myapplication.data.local.CerrojoRecoleccion
 import com.example.myapplication.domain.model.DatosFoto
 import com.example.myapplication.domain.model.FotoRecolectada
 import com.example.myapplication.domain.model.InicioRecoleccion
@@ -28,8 +29,8 @@ import java.util.Locale
  * Todo se guarda **de forma continua** en disco: cada foto queda registrada en el manifest apenas
  * se toma, para no perder datos si la app se cierra.
  *
- * TODO: cuando exista el backend, la subida (`POST /collect/videos/{id}/images`) leerá de aquí y
- * marcará las fotos como subidas con [marcarSubida].
+ * La subida (vista 7.5, FE-2.1) no pasa por aquí: la hace la cola de `data/local/` (`AlmacenRecorridos`,
+ * `SubidaRecorrido`, `ColaSubida`) sobre los mismos manifests y con el mismo cerrojo (`CerrojoRecoleccion`).
  */
 interface RecoleccionRepository {
 
@@ -112,7 +113,10 @@ class RecoleccionRepositoryLocal(context: Context) : RecoleccionRepository {
 
     private val filesDir: File = context.applicationContext.filesDir
     private val raiz = File(filesDir, "recoleccion")
-    private val mutex = Mutex()
+
+    // FE-2.1: el mismo cerrojo que AlmacenRecorridos (7.5 y la cola de subida escriben en los mismos manifests).
+    // Antes era un Mutex por instancia: dos instancias (7.4 y 7.3) no se excluían entre sí.
+    private val mutex: Mutex = CerrojoRecoleccion.mutex
 
     override suspend fun crearVideo(inicio: InicioRecoleccion): String = withContext(Dispatchers.IO) {
         mutex.withLock {
@@ -279,12 +283,15 @@ class RecoleccionRepositoryLocal(context: Context) : RecoleccionRepository {
         }
     }
 
+    /** Regla de ARCHITECTURE §5.10 (FE-2.1): `sync = pendiente` en los manifests con `estado = finalizado`. */
     override suspend fun contarPendientes(): Int = withContext(Dispatchers.IO) {
         mutex.withLock {
             raiz.listFiles()?.filter { it.isDirectory }?.sumOf { dir ->
                 runCatching {
-                    val fotos = leer(dir.name).getJSONArray("photos")
-                    (0 until fotos.length()).count { fotos.getJSONObject(it).optString("sync") != SYNC_SUBIDA }
+                    val manifest = leer(dir.name)
+                    if (manifest.optString("estado") != ESTADO_FINALIZADO) return@runCatching 0
+                    val fotos = manifest.getJSONArray("photos")
+                    (0 until fotos.length()).count { fotos.getJSONObject(it).optString("sync") == SYNC_PENDIENTE }
                 }.getOrDefault(0)
             } ?: 0
         }
