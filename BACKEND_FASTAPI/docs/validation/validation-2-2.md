@@ -64,7 +64,9 @@ y C5) y 1 o 2 de `campus-locator-dev-worker` (`limpiar-validacion` al final, y a
 infra): 1) `RegisterScalableTarget` 0-1 de `embedding` y `worker`; 2) `PutMetricData` de `EmbeddingEncendidos` = 1 en
 `campus-locator/dev`; 3) espera a que `GetMetricStatistics` la devuelva, un minuto más y que la alarma
 `campus-locator-dev-embedding-inactivo` no esté en `ALARM` (hasta 5 min); 4) `UpdateService` de `embedding` a 1;
-5) espera tarea `HEALTHY`, despliegue `COMPLETED` e instancia sana en Cloud Map (hasta 10 min desde el paso 1) y,
+5) espera tarea `HEALTHY`, despliegue `COMPLETED` y esa tarea registrada en Cloud Map (`servicediscovery
+list-instances` con su IP privada: el servicio de Cloud Map no tiene configuración de salud, ARCHITECTURE §5.11
+«Trampa del arranque») (hasta 10 min desde el paso 1) y,
 además, `"embedding": "ok"` en `/v1/health/ready` (hasta 2 min). Cuesta ~0,10 USD/h mientras está encendido.
 
 Limpieza (siempre, también si algo falló; **no** con `--sin-limpieza`, que deja también `embedding` como esté), en
@@ -88,7 +90,7 @@ encienda, el `worker` los descarta (`video_no_existe`) si el video ya se borró.
 
 | Variable | `dev` |
 |---|---|
-| `AWS_PROFILE` | Obligatoria (`campus-admin`). Además de lo de BE-2.1 (secreto `admin-inicial`, S3 del dataset, `ecs run-task`/`describe-*`, `iam:PassRole` de `worker` y `validacion`, `logs:GetLogEvents`), necesita `sqs:GetQueueAttributes` y `sqs:SendMessage` en `ingesta` y su DLQ, `s3:GetObject` en `thumbs/*`, `logs:FilterLogEvents` en `/campus-locator/dev/worker`, `application-autoscaling:Describe*` y `RegisterScalableTarget`, `cloudwatch:PutMetricData`, `GetMetricStatistics` y `DescribeAlarms`, `ecs:UpdateService`, `ListTasks` y `DescribeTasks`, y `servicediscovery:GetInstancesHealthStatus` (con `campus-admin`, todo) |
+| `AWS_PROFILE` | Obligatoria (`campus-admin`). Además de lo de BE-2.1 (secreto `admin-inicial`, S3 del dataset, `ecs run-task`/`describe-*`, `iam:PassRole` de `worker` y `validacion`, `logs:GetLogEvents`), necesita `sqs:GetQueueAttributes` y `sqs:SendMessage` en `ingesta` y su DLQ, `s3:GetObject` en `thumbs/*`, `logs:FilterLogEvents` en `/campus-locator/dev/worker`, `application-autoscaling:Describe*` y `RegisterScalableTarget`, `cloudwatch:PutMetricData`, `GetMetricStatistics` y `DescribeAlarms`, `ecs:UpdateService`, `ListTasks` y `DescribeTasks`, y `servicediscovery:ListInstances` (con `campus-admin`, todo) |
 | `VALIDACION_API_URL` | Opcional (por defecto, output `api_base_url` + `/v1`) |
 | `VALIDACION_ADMIN_CORREO`, `VALIDACION_ADMIN_PASSWORD` | Opcionales (por defecto, el secreto `admin-inicial`) |
 

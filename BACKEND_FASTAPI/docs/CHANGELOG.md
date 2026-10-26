@@ -20,6 +20,32 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.9.2] — 2026-10-25
+
+- **Lote que la motivó:** BE-2.2 (segunda ejecución de `validate22.py` en `dev`, sobre `54fdf18`).
+- **Qué cambió:**
+  - P6 terminó con código 2 («embedding no quedó sano en 10 min: servicediscovery get-instances-health-status:
+    InstanceNotFound (aún no)») aunque ECS tenía la tarea `HEALTHY` desde las 18:59:34 y el servicio estable a las
+    19:01:00 (Bogotá). Causa (lecturas del maestro): el servicio de Cloud Map de `embedding` (`srv-josm7lql7ddxgzm6`) no
+    tiene `HealthCheckConfig` ni `HealthCheckCustomConfig`, y entonces `get-instances-health-status` responde siempre
+    `InstanceNotFound`: 0.9.1 lo tomó por «todavía no», pero nunca iba a cambiar. La limpieza apagó `embedding` bien.
+  - `comun.EmbeddingDev._sano_en_ecs` ya no usa `get-instances-health-status`: «instancia en Cloud Map» =
+    `servicediscovery list-instances` con una instancia cuya `AWS_INSTANCE_IPV4` es la IP privada de una tarea
+    `HEALTHY` (nueva `comun.ips_privadas(tarea)`, del ENI de `describe-tasks`); sin IP en la tarea, basta ≥ 1
+    instancia. Lista vacía o solo otras IP → se sigue esperando. `_sondear` se mantiene para el *throttling*.
+  - §5.11: la trampa del arranque reescrita con lo visto en `dev` (Cloud Map sin configuración de salud), la tabla de
+    `EmbeddingDev` (llamada y permiso `servicediscovery:ListInstances`) y el doble `CloudMap` de las pruebas.
+    `validation-2-2.md` §4 (paso 5 del encendido) y §5 (permiso) al día.
+  - Hueco de documentación en otra carpeta (no cambiado aquí; lo reporta el maestro): infra §5.10, paso 5 del contrato
+    de encendido, dice «instancia sana en Cloud Map» sin decir con qué llamada, y en este servicio no hay estado de
+    salud que consultar.
+- **Contratos tocados (§5):** ninguno (solo el validador y su documentación; versión de parche).
+- **Cómo se verificó:** `tests/ops/test_validate22.py` con un Cloud Map falso como el de `dev`
+  (`get-instances-health-status` siempre `InstanceNotFound`; `list-instances` vacía las 3 primeras veces y después con
+  la instancia): P6 pasa; con una instancia de otra IP, código 2; sin permiso, código 3; en los dos fallos la limpieza
+  apaga `embedding`. `ruff check`, `ruff format --check` y la suite completa con `PRUEBAS_DB_OBLIGATORIA=1`.
+- **Pendiente:** repetir `validate22.py --entorno dev` (el maestro, `validation-2-2.md` §5).
+
 ## [0.9.1] — 2026-10-25
 
 - **Lote que la motivó:** BE-2.2 (primera ejecución de `validate22.py` en `dev`, sobre `c5917bd`).

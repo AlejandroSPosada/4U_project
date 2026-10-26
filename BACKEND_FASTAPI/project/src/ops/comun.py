@@ -1363,11 +1363,23 @@ LIMITE_ALARMA_S = 300  # paso 3 del contrato: hasta 5 min a la muestra y a la al
 LIMITE_ENCENDIDO_S = 600  # paso 5: hasta 10 min desde el paso 1
 PAUSA_SONDEO_S = 15.0
 LOG_WORKER = "/campus-locator/dev/worker"
-#: Errores de AWS que, mientras `embedding` arranca, significan «todavía no» y no un fallo (BE-2.2, 0.9.1):
-#: Cloud Map responde `InstanceNotFound` hasta que ECS registra la tarea; y los límites de peticiones.
+#: Errores de AWS que, mientras `embedding` arranca, significan «todavía no» y no un fallo (BE-2.2, 0.9.1): los límites
+#: de peticiones e `InstanceNotFound` (desde 0.9.2 ya no se llama a `get-instances-health-status`, que lo daba siempre).
 CODIGOS_TODAVIA_NO = frozenset(
     {"InstanceNotFound", "ThrottlingException", "Throttling", "TooManyRequestsException", "RequestLimitExceeded"}
 )
+
+
+def ips_privadas(tarea: Mapping[str, Any]) -> set[str]:
+    """IPs privadas de una tarea de `describe-tasks` (Fargate, `awsvpc`): el detalle `privateIPv4Address` de sus
+    *attachments* `ElasticNetworkInterface`. Vacío si no las trae."""
+    return {
+        str(d.get("value"))
+        for a in tarea.get("attachments", [])
+        if a.get("type") == "ElasticNetworkInterface"
+        for d in a.get("details", [])
+        if d.get("name") == "privateIPv4Address" and d.get("value")
+    }
 
 
 def hora_bogota(ahora: datetime | None = None) -> datetime:
@@ -1413,8 +1425,9 @@ class EmbeddingDev:
       esperar a que `GetMetricStatistics` lo vea, un minuto más y la alarma `embedding-inactivo` fuera de `ALARM`
       —hasta 5 min—, `desiredCount = 1`, y hasta 10 min desde el paso 1 a tarea `HEALTHY`, despliegue `COMPLETED` e
       instancia sana en Cloud Map) y, además, hasta 2 min más a que `listo_en_api()` sea cierto (`api` lo ve por DNS).
-      Si no llega: `Falla`. Mientras espera, `InstanceNotFound` de Cloud Map (la tarea aún no está registrada) y los
-      límites de peticiones de AWS (`CODIGOS_TODAVIA_NO`) son «todavía no», no un error (`_sondear`).
+      Si no llega: `Falla`. «Instancia en Cloud Map» = la IP privada de la tarea `HEALTHY` en `AWS_INSTANCE_IPV4` de
+      `servicediscovery list-instances` (el servicio de Cloud Map no tiene configuración de salud). Mientras espera,
+      los límites de peticiones de AWS (`CODIGOS_TODAVIA_NO`) son «todavía no», no un error (`_sondear`).
     - `apagar()`: rango 0-0 y `desiredCount = 0` de `embedding` y `worker` (no espera a que paren).
     - `poner(nombre, n)`: solo `UpdateService` (C3a de BE-2.2 apaga `embedding` así, sin tocar los rangos).
     """
@@ -1487,9 +1500,9 @@ class EmbeddingDev:
             raise _errores_aws(exc, que) from None
 
     def _sano_en_ecs(self) -> str | None:
-        """`None` si `embedding` tiene una tarea `HEALTHY`, el despliegue `PRIMARY` `COMPLETED` y una instancia sana en
-        Cloud Map; si no, lo que falta. Lo que AWS responde mientras la tarea arranca (`InstanceNotFound` de Cloud Map,
-        *throttling*) es «falta», no un error (`_sondear`)."""
+        """`None` si `embedding` tiene una tarea `HEALTHY`, el despliegue `PRIMARY` `COMPLETED` y esa tarea registrada
+        en Cloud Map (`list-instances` con su IP privada; si la tarea no trae IP, basta ≥ 1 instancia); si no, lo que
+        falta. El *throttling* es «falta», no un error (`_sondear`)."""
         ecs = self.aws("ecs")
         respuesta, pendiente = self._sondear(
             "ecs describe-services embedding",
@@ -1517,21 +1530,29 @@ class EmbeddingDev:
         )
         if pendiente:
             return pendiente
-        estados = [t.get("healthStatus") for t in respuesta.get("tasks", [])]  # una tarea ya parada va en `failures`
-        if "HEALTHY" not in estados:
-            return f"tareas {estados}"
+        sanas = [t for t in respuesta.get("tasks", []) if t.get("healthStatus") == "HEALTHY"]  # paradas: `failures`
+        if not sanas:
+            return f"tareas {[t.get('healthStatus') for t in respuesta.get('tasks', [])]}"
         registros = datos.get("serviceRegistries") or []
         if registros:
+            # El servicio de Cloud Map de `embedding` no tiene configuración de salud (comprobado en dev, 0.9.2):
+            # `get-instances-health-status` responde `InstanceNotFound` siempre. Se mira que la tarea sana esté
+            # registrada: `list-instances` con su IP privada en `AWS_INSTANCE_IPV4`.
             servicio_id = registros[0]["registryArn"].rsplit("/", 1)[-1]
             respuesta, pendiente = self._sondear(
-                "servicediscovery get-instances-health-status",
-                lambda: self.aws("servicediscovery").get_instances_health_status(ServiceId=servicio_id),
+                "servicediscovery list-instances",
+                lambda: self.aws("servicediscovery").list_instances(ServiceId=servicio_id),
             )
             if pendiente:
                 return pendiente
-            salud = respuesta.get("Status", {})
-            if "HEALTHY" not in salud.values():
-                return f"Cloud Map {sorted(set(salud.values())) or 'sin instancias'}"
+            registradas = {
+                (i.get("Attributes") or {}).get("AWS_INSTANCE_IPV4") for i in respuesta.get("Instances", [])
+            } - {None}
+            if not respuesta.get("Instances"):
+                return "Cloud Map sin instancias registradas"
+            ips = {ip for t in sanas for ip in ips_privadas(t)}
+            if ips and not ips & registradas:
+                return f"Cloud Map sin la IP de la tarea sana ({len(registradas)} instancia(s) con otra IP)"
         return None
 
     # -- escritura -------------------------------------------------------------------------------------------------

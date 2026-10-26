@@ -42,6 +42,7 @@ OUTPUTS = {
 }
 TOKEN = "eyJ-token-falso-del-admin"
 FIRMA = "X-Amz-Signature=firma-falsa-que-no-debe-imprimirse"
+IP_TAREA = "10.0.1.57"  # IP privada de la tarea de embedding (ENI de describe-tasks)
 
 
 class Respuesta:
@@ -92,7 +93,8 @@ class Mundo:
         self.worker_duplica = False  # crea un segundo vector con un evento repetido
         self.worker_consume_sin_embedding = False
         self.inf21 = True
-        self.cloud_map_sin_instancia = 0  # llamadas a Cloud Map que responden InstanceNotFound (tarea sin registrar)
+        self.cloud_map_sin_instancia = 0  # llamadas a list-instances sin instancias (tarea aún sin registrar)
+        self.cloud_map_ip = IP_TAREA  # IP de la instancia registrada (otra = registro viejo de una tarea parada)
         self.cloud_map_error: str | None = None
 
     # -- reloj y simulación ----------------------------------------------------------------------------------------
@@ -412,7 +414,8 @@ class Ecs:
 
     def describe_tasks(self, cluster, tasks):
         if tasks[0] == "arn:emb/1":
-            return {"tasks": [{"healthStatus": "HEALTHY"}]}
+            eni = {"type": "ElasticNetworkInterface", "details": [{"name": "privateIPv4Address", "value": IP_TAREA}]}
+            return {"tasks": [{"healthStatus": "HEALTHY", "attachments": [eni]}]}
         contenedor = {"name": "app", "exitCode": self._codigos[tasks[0]]}
         return {"tasks": [{"taskDefinitionArn": "…", "containers": [contenedor]}]}
 
@@ -496,21 +499,27 @@ class Sesion:
 
 
 class CloudMap:
-    """Cloud Map: como en `dev`, responde `InstanceNotFound` mientras ECS aún no registró la tarea de `embedding`
-    (las primeras `mundo.cloud_map_sin_instancia` llamadas), o el error fijo `mundo.cloud_map_error`."""
+    """Cloud Map como en `dev` (servicio sin configuración de salud): `get-instances-health-status` responde siempre
+    `InstanceNotFound`; `list-instances` da una lista vacía las primeras `mundo.cloud_map_sin_instancia` llamadas (ECS
+    aún no registró la tarea) y después la instancia con `AWS_INSTANCE_IPV4 = mundo.cloud_map_ip`; o el error fijo
+    `mundo.cloud_map_error`."""
 
     def __init__(self, mundo: Mundo) -> None:
         self.mundo = mundo
         self.llamadas = 0
 
     def get_instances_health_status(self, ServiceId):
+        raise _client_error("InstanceNotFound")  # lo que se vio en dev, 2026-10-25 (54fdf18)
+
+    def list_instances(self, ServiceId):
         assert ServiceId == "srv-emb"
         self.llamadas += 1
         if self.mundo.cloud_map_error:
             raise _client_error(self.mundo.cloud_map_error)
         if self.llamadas <= self.mundo.cloud_map_sin_instancia:
-            raise _client_error("InstanceNotFound")
-        return {"Status": {"i-1": "HEALTHY"}}
+            return {"Instances": []}
+        instancia = {"Id": "053f7ed5", "Attributes": {"AWS_INSTANCE_IPV4": self.mundo.cloud_map_ip}}
+        return {"Instances": [instancia]}
 
 
 @pytest.fixture
@@ -602,15 +611,26 @@ def test_fuera_de_horario_es_codigo_3_sin_encender_nada(entorno_dev):
     assert mundo.cambios_embedding == [] and mundo.videos == {}
 
 
-def test_cloud_map_sin_instancia_al_arrancar_es_seguir_esperando(entorno_dev):
-    """`dev`, 2026-10-25 (c5917bd): Cloud Map respondió `InstanceNotFound` mientras la tarea arrancaba y P6 terminó con
-    código 3. Es «todavía no»: se sigue esperando hasta que la instancia está sana."""
+def test_cloud_map_sin_health_config_usa_list_instances_y_espera_el_registro(entorno_dev):
+    """`dev`, 2026-10-25: sobre c5917bd, `get-instances-health-status` dio `InstanceNotFound` y P6 terminó con 3; sobre
+    54fdf18 (que lo esperaba) dio `InstanceNotFound` durante 10 min y P6 terminó con 2, con `embedding` sano: el
+    servicio de Cloud Map no tiene configuración de salud y esa llamada nunca da un estado. Desde 0.9.2 se mira
+    `list-instances` (vacía hasta que ECS registra la tarea) y la IP de la tarea sana."""
     mundo = Mundo(embedding_encendido=False)
     mundo.cloud_map_sin_instancia = 3
     codigo, sesion, informe, _ = entorno_dev(mundo, "--solo", "C1a")
     assert codigo == 0, informe
     assert _estados(informe)["P6"] == "pasa" and "embedding encendido en" in _detalle(informe, "P6")
-    assert sesion.clientes["servicediscovery"].llamadas > 3  # lo intentó otra vez tras los InstanceNotFound
+    assert sesion.clientes["servicediscovery"].llamadas > 3  # volvió a mirar tras las listas vacías
+
+
+def test_instancia_de_cloud_map_con_otra_ip_no_cuenta(entorno_dev):
+    mundo = Mundo(embedding_encendido=False)
+    mundo.cloud_map_ip = "10.0.9.9"  # registro viejo de una tarea que ya paró
+    codigo, _, informe, _ = entorno_dev(mundo)
+    assert codigo == 2
+    assert "Cloud Map sin la IP de la tarea sana" in _detalle(informe, "P6")
+    assert mundo.deseado["embedding"] == 0  # la limpieza lo apagó
 
 
 def test_cloud_map_sin_permiso_es_codigo_3_y_apaga_lo_encendido(entorno_dev, capsys):
@@ -618,7 +638,7 @@ def test_cloud_map_sin_permiso_es_codigo_3_y_apaga_lo_encendido(entorno_dev, cap
     mundo.cloud_map_error = "AccessDeniedException"
     codigo, _, informe, _ = entorno_dev(mundo)
     assert codigo == 3
-    assert "sin permiso para servicediscovery get-instances-health-status" in _detalle(informe, "P6")
+    assert "sin permiso para servicediscovery list-instances" in _detalle(informe, "P6")
     assert "embedding apagado (lo encendió el validador)" in capsys.readouterr().out
     assert mundo.deseado["embedding"] == 0
 

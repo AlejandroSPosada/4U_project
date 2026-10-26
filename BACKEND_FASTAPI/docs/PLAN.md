@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.9.1**.
+Alineado con `ARCHITECTURE.md` **v0.9.2**.
 
 ---
 
@@ -205,7 +205,7 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 | BE-1.2 | 1 | Hecho | [1-2](./validation/validation-1-2.md) | `684f233` 2026-10-25 | 0.6.0 | Primera migración en dev por la tarea `migrate` (`campus-locator-dev-migrate:2`): revisión `0001` sobre PostgreSQL 17.9 y pgvector 0.8.1; `verificar-esquema` coincide, lo que confirma en PostgreSQL 17 los textos del catálogo de `esquema.py` (§4.3, R11). El admin inicial lo creó el paso migrate del despliegue: las dos ejecuciones de C1 dieron `ya_habia_admin` (§5.10) |
 | BE-1.3 | 1 | Hecho | [1-3](./validation/validation-1-3.md) | `78bae6d` 2026-10-25 | 0.7.1 | Desplegado por `backend.yml` (`migrate:3`, sin migraciones nuevas). C2: 401 idénticos en 1168 y 1116 ms con 0,25 vCPU (R12). Antes del push, una revisión independiente dio 5 defectos (NUL → 500, cola del hash sin tope, huecos del último admin, limpieza y reintentos del validador), corregidos en el mismo commit. Límite de intentos por cuenta (propuesta de infra 0.12.0, R7): pendiente de decisión |
 | BE-2.1 | 2 | Hecho | [2-1](./validation/validation-2-1.md) | `9f6ed19` 2026-10-25 | 0.8.0 | Desplegado por `backend.yml` (`api` y `worker:5` con la misma imagen). `validate21.py --entorno dev` con código 0 (informe `.validacion/BE-2.1-20261025-222036.json`): P1–P5 y C1a–C6b pasan; C3a confirmó el vencimiento de la URL prefirmada (403 «Request has expired», desfase 0 s); C6b sin videos reales para probar la negativa |
-| BE-2.2 | 2 | En curso | [2-2](./validation/validation-2-2.md) | — | — | Código, pruebas locales y `validate22.py` listos (ARCHITECTURE 0.9.1). Primera ejecución en `dev` (`c5917bd`): código 3 en P6 por `InstanceNotFound` de Cloud Map al arrancar `embedding`, corregido en 0.9.1; falta repetirla |
+| BE-2.2 | 2 | En curso | [2-2](./validation/validation-2-2.md) | — | — | Código, pruebas locales y `validate22.py` listos (ARCHITECTURE 0.9.2). En `dev`, P6 falló dos veces por Cloud Map: `c5917bd` código 3 y `54fdf18` código 2 (`get-instances-health-status` siempre `InstanceNotFound`: el servicio de Cloud Map no tiene configuración de salud); 0.9.2 usa `list-instances` con la IP de la tarea; falta repetirla |
 | BE-2.3 | 2 | Pendiente | [2-3](./validation/validation-2-3.md) | — | — | |
 | BE-2.4 | 2 | Pendiente | [2-4](./validation/validation-2-4.md) | — | — | Lo necesita EMB-3.2 |
 | BE-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | |
