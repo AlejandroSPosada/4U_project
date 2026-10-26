@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.5.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.6.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); las pruebas en dispositivo (FE-2.3 C3) siguen pendientes. El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -387,11 +387,12 @@ com.example.myapplication/
 ```
 
 Pruebas unitarias (JVM) en `app/src/test/java/com/example/myapplication/`: `data/remote/` (`MapeoErroresApiTest`,
-`MapeoDatosApiTest`, `ClienteApiTest`, `RemoteAuthRepositoryTest`) y `session/SesionVencidaTest` (lista y conteos en
-§4.1).
+`MapeoDatosApiTest`, `ClienteApiTest`, `RemoteAuthRepositoryTest`), `session/SesionVencidaTest`, desde FE-2.3
+`domain/usecase/` (`CalibracionPasoTest`, `DisparadorCapturaTest`, `DerivaTest`, `RetomarRecoleccionTest`) y `sensors/`
+(`StepDetectorTest`, `InterruptorSensoresTest`) (lista y conteos en §4.1).
 
 > Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
-> (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video y de la ubicación manual (`ubicacion_manual.html/js`), y la base común `mapa_base.js` (5.9).
+> (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`) y de la calibración (`calibracion_mapa.html/js`), y la base común `mapa_base.js` (5.9).
 
 > Actualmente en el repo existen `ui/`, `camera/`, `sensors/`, `map/`, `logs/`, `session/`,
 > `data/remote/` (desde FE-1.1), `data/repository/`, `domain/model/`, `domain/usecase/`, `ApiConfig.kt`, `MyApp.kt` y
@@ -403,7 +404,8 @@ Pruebas unitarias (JVM) en `app/src/test/java/com/example/myapplication/`: `data
 
 - Un único `NavHost`. ⚠ **Hoy vive en `MainActivity.kt` (composable `AppNav`)**, no en
   `ui/navigation/AppNavHost.kt` como se planeó; ver 5.8.
-- Rutas públicas: Inicio, Ubicación, Destino, Navegación, Ajustes, Login.
+- Rutas públicas: Inicio, Ubicación, Destino, Navegación, Ajustes, Login y, desde FE-2.3, `mapa` (mapa público; hoy solo
+  se abre en depuración con un extra del `Intent`, 5.8).
 - Rutas `admin/*` protegidas: si no hay sesión con rol `ADMIN` se redirige a Login. ⚠ **Hoy `AppNav`
   no aplica esa protección al entrar en la ruta**: el panel la comprueba en su `init` (`onSinSesion`) y, desde FE-1.2,
   `AppNav` vuelve a Login cuando una petición `/v1/admin/…` o `/v1/collect/…` se queda sin sesión estando en una
@@ -447,9 +449,11 @@ almacenamiento externo.
   Debe declararse en el Manifest con `android:name=".MyApp"`.
 - Cada escaneo abre una sesión (`AppLog.nuevaSesion("scan")`): sus líneas llevan un id como
   `[scan-12345]` para seguir una vuelta completa.
-- Tags usados: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`, desde FE-1.1 `Api` (una línea por petición HTTP
-  con su `X-Request-Id`; formato en §5.10) y desde FE-1.2 `Sesion` (`AppLog.w`: una ruta protegida sin sesión o un
-  `401` de sesión; sin token ni correo; §5.3).
+- Tags usados: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`, `RecoleccionVM` y `RecoleccionRepo` (7.4: video
+  creado, grabando, pausado, retomado, fotos, re-anclajes; verificado en FE-2.3), desde FE-1.1 `Api` (una línea por
+  petición HTTP con su `X-Request-Id`; formato en §5.10), desde FE-1.2 `Sesion` (`AppLog.w`: una ruta protegida sin
+  sesión o un `401` de sesión; sin token ni correo; §5.3) y desde FE-2.3 `Pdr` (`AppLog.i` en cada registro o retirada
+  de los sensores del PDR, p. ej. `sensores quitados (segundo plano)`; §5.2).
 - Registrar transiciones y decisiones, **no** cada lectura de sensor (50 por segundo).
 - No registrar datos sensibles (tokens, credenciales).
 
@@ -510,9 +514,14 @@ Componentes compartidos en `ui/components/`: `BotonGrande.kt`, `MapaCampus.kt`, 
 - Linux (CI): `chmod +x gradlew && ./gradlew --no-daemon testDebugUnitTest assembleDebug`.
 - Pruebas unitarias en la JVM: `app/src/test/java/…`. Desde FE-1.1: `data/remote/MapeoErroresApiTest` (14 casos),
   `MapeoDatosApiTest` (13) y `ClienteApiTest` (7), más el `ExampleUnitTest` de la plantilla. Desde FE-1.2:
-  `data/remote/RemoteAuthRepositoryTest` (6) y `session/SesionVencidaTest` (9). Total al cerrar FE-1.2: 50 casos. No
-  usan Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
-  `EncryptedSharedPreferences` (la sesión se prueba con un `AlmacenSesion` en memoria, §5.3).
+  `data/remote/RemoteAuthRepositoryTest` (6) y `session/SesionVencidaTest` (9). Desde FE-2.3:
+  `domain/usecase/CalibracionPasoTest` (13), `DisparadorCapturaTest` (10), `DerivaTest` (6), `RetomarRecoleccionTest`
+  (6), `sensors/StepDetectorTest` (11) e `InterruptorSensoresTest` (6). Total al terminar el código de FE-2.3: 102
+  casos. No usan Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
+  `EncryptedSharedPreferences` (la sesión se prueba con un `AlmacenSesion` en memoria, §5.3); lo de FE-2.3 es lógica
+  pura (`PdrEngine`, `StepDetector`, `CalibracionPaso`, `DisparadorCaptura`, `Deriva`, `RetomarRecoleccion`,
+  `InterruptorSensores`). `RecoleccionRepositoryLocal` (usa `org.json`, que en la JVM son *stubs* de `android.jar`) y
+  `PdrTracker` (sensores) no tienen pruebas en la JVM.
 
 **`frontend.yml`** (raíz del monorepo, `.github/workflows/`):
 
@@ -563,8 +572,30 @@ Qué se construyó (detalle y firmas en §5.3, §5.5, §5.6 y §5.10; validació
 | Validador | `src/ops/validate12.py` + ayudas nuevas de `comun.py` | Login en el teléfono con adb (C1 admin entra al Panel, C2 `user` ve «Sin permisos»), cuenta `user` de prueba con tareas sueltas de `migrate` (§5.11) |
 
 Verificado en local el 2026-10-25: `testDebugUnitTest assembleDebug` → `BUILD SUCCESSFUL` (50 casos, 0 fallos);
-`validate12.py --entorno local` → código 0. **Sin comprobar** todavía en `dev` con el teléfono (C1 y C2): lo corre el
-maestro (`validation-1-2` §5).
+`validate12.py --entorno local` → código 0. En `dev`: `validate12.py --entorno dev` con código 0 sobre `4d578c5` en el
+Xiaomi 23028RA60L (Android 14); C1 en 6,6 s y C2 en 2,9 s.
+
+### 4.3 Pruebas en dispositivo y robustez de la recolección (FE-2.3)
+
+Qué se construyó (detalle y firmas en §5.2, §5.5, §5.6, §5.7 y §5.8; validación en
+[`validation-2-3`](./validation/validation-2-3.md)):
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| Pruebas de C1 | `test/.../domain/usecase/CalibracionPasoTest.kt` (13), `sensors/StepDetectorTest.kt` (11), `domain/usecase/DisparadorCapturaTest.kt` (10), `domain/usecase/DerivaTest.kt` (6) | Lógica pura del PDR y de la recolección en la JVM; no hizo falta extraer nada de clases Android. Qué cubre cada una: §5.2 y §5.7 |
+| `InterruptorSensores`, `CambioSensores` | `sensors/InterruptorSensores.kt` (`internal`) | Lógica pura: sensores registrados ⇔ rastreo pedido **y** primer plano. Prueba `InterruptorSensoresTest` (6) |
+| `PdrTracker` con ciclo de vida | `sensors/PdrTracker.kt` | Sigue el ciclo de vida del **proceso** (`ProcessLifecycleOwner`, dependencia nueva `androidx.lifecycle:lifecycle-process:2.8.7`): en `ON_STOP` quita los sensores y en `ON_START` los vuelve a poner si el rastreo seguía pedido. Cubre mapa público, calibración y recolección (C5; ADR-FE-16) |
+| Progreso en el manifest | `data/repository/RecoleccionRepository.kt` (`guardarProgreso`, `leerEnCurso`), `domain/model/ProgresoRecoleccion.kt` (`ProgresoRecoleccion`, `VideoEnCurso`, `PuntoRecorrido`) | Clave nueva `progress` del `manifest.json` (§5.6) |
+| Retomar | `domain/usecase/RetomarRecoleccion.kt` (`RetomarRecoleccion`, `EstadoRetomado`), `ui/admin/recoleccion/RecoleccionViewModel.kt` | 7.4 abierta sin `InicioRecoleccion` retoma el video `en_curso` más reciente, en pausa (C4; ADR-FE-17). Prueba `RetomarRecoleccionTest` (6) |
+| «Retomar …» en 7.3 | `ui/admin/recoleccion/UbicacionManualScreen.kt` (`FilaRetomar`), `UbicacionManualState.kt` (`GrabacionPendiente`, `onRetomar`) | Entrada a la grabación sin finalizar cuando la app arranca desde Inicio (Android no restauró la pila) |
+| Ruta `mapa` | `MainActivity.kt` (`composable("mapa")`, `MainActivity.EXTRA_RUTA`) | El mapa público no tenía ruta: se abre con `am start … --es ruta mapa` en el APK de depuración, para C3 y C5 (ADR-FE-18) |
+| C2 | `assets/recoleccion_mapa.js`, `assets/calibracion_mapa.js` | Ya usaban `MapaBase.crearMapa` (sin cambios); lo comprueba el validador |
+| Validador | `src/ops/validate23.py`, `comun.listar_archivos_app` | C1 (Gradle), C2 (estático); en `dev` instala sin borrar datos e imprime teléfono, calibración y recorridos (§5.11) |
+
+Verificado el 2026-10-25: `testDebugUnitTest assembleDebug` en Windows → `BUILD SUCCESSFUL` (102 casos, 0 fallos);
+en WSL `ruff check`, `ruff format --check` y `pytest` (93 casos) en verde y `validate23.py --entorno local` → código 0.
+**A verificar en dispositivo (FE-2.3 C3, C4 y C5):** el PDR caminando, 7.3, 7.3b, 7.4, retomar tras `am kill` y que
+`dumpsys sensorservice` no muestre conexiones en segundo plano (`validation-2-3` §3 y §5).
 
 ---
 
@@ -631,8 +662,9 @@ llega igual (ver `VoiceController` arriba). Copiarlo en cualquier vista con diá
 
 #### Seguimiento de posición (PDR) (`sensors/PdrEngine.kt`, `sensors/StepDetector.kt`, `sensors/PdrTracker.kt`)
 
-> ⚠ Código entregado el 2026-10-10. Compila con el resto del proyecto (tanda 12, ver `CHANGELOG.md`), pero **no se ha
-> probado en dispositivo** (FE-2.3). Confirmar y quitar este aviso.
+> Código entregado el 2026-10-10. Compila con el resto del proyecto y, desde FE-2.3, su lógica pura (`PdrEngine`,
+> `StepDetector`, `InterruptorSensores`) tiene pruebas en la JVM. ⚠ **A verificar en dispositivo (FE-2.3 C3):**
+> caminando un recorrido conocido (posición, rumbo y pasos reales).
 
 Es el **único** sitio que calcula la posición a partir de pasos y rumbo (2.3). El mapa público lo usa
 a través de `map/MapaPublicoScreen.kt`; la recolección (7.4, ya lo usa desde `RecoleccionViewModel`) y la navegación (6.5) deben usar el mismo
@@ -640,17 +672,18 @@ a través de `map/MapaPublicoScreen.kt`; la recolección (7.4, ya lo usa desde `
 
 | Pieza | Firma | Qué hace / cuidado |
 |---|---|---|
-| `PdrEngine` | `PdrEngine(longitudPasoM = LONGITUD_PASO_DEFECTO_M, ventanaRumbo = 6, ventanaVelocidadMs = 5000)` · `companion { const val LONGITUD_PASO_DEFECTO_M = 0.72 }` | Lógica pura, sin Android (se puede probar con tests unitarios). Propiedades de lectura: `lat`, `lng` (`Double?`), `rumbo`, `pasos`, `distanciaMetros`, `velocidadMps`. |
+| `PdrEngine` | `PdrEngine(longitudPasoM = LONGITUD_PASO_DEFECTO_M, ventanaRumbo = 6, ventanaVelocidadMs = 5000)` · `companion { const val LONGITUD_PASO_DEFECTO_M = 0.72 }` | Lógica pura, sin Android (la usan en la JVM `CalibracionPasoTest` y `DisparadorCapturaTest`). Propiedades de lectura: `lat`, `lng` (`Double?`), `rumbo`, `pasos`, `distanciaMetros`, `velocidadMps`. Avanza `longitudPasoM` por paso con 111 320 m por grado de latitud (y `× cos(lat)` en longitud): frente a la haversine de `CalibracionPaso.distanciaEntre` difiere ~0,1 % (33,36 m → 33,32 m). |
 | `PdrEngine.fijarPosicion` | `(lat, lng)` | Fija el punto de partida y la posición actual. **No** reinicia `pasos`. |
 | `PdrEngine.reiniciar` | `()` | Pasos y velocidad a 0 y vuelve al punto de partida. |
 | `PdrEngine.onRumboSensor` | `(grados: Float)` | Promedio circular de las últimas 6 lecturas (359° y 1° dan 0°, no 180°). |
 | `PdrEngine.fijarRumboManual` | `(grados: Float)` | Rumbo directo, sin promedio (rueda manual). |
 | `PdrEngine.onPaso` | `(tMs: Long): Boolean` | Avanza `longitudPasoM` hacia `rumbo`; devuelve `false` si aún no hay posición inicial. Velocidad: pasos de los últimos 5 s (n − 1 intervalos). |
-| `StepDetector` | `procesar(x, y, z, tMs, detectar = true): Boolean` · `ultimaDesviacion` · `reiniciar()` | **Fuente única de pasos.** Magnitud − gravedad **con signo**, filtro pasa-bajos (`FILTRO` 0,5) y cuenta el paso en el **flanco de subida** del pico (latencia ~50–100 ms), con histéresis (rearma por debajo del 60 % del umbral) y pausa mínima `PAUSA_MS` = 250 ms. **Umbral adaptativo:** `FACTOR_UMBRAL` (0,5) × el pico típico reciente (media móvil, `PESO_PICO` 0,3, picos recortados a `PICO_MAX` 8), limitado a `UMBRAL_MIN` 1,1 … `UMBRAL_MAX` 4,0 m/s²; arranca en `UMBRAL` = 1,4. Solo cuentan picos positivos. `umbral` (lectura) da el valor vigente; `ultimaDesviacion` es `|filtrada|` para la gráfica; `detectar = false` solo la actualiza. Probado con una réplica en Python (no con el Kotlin): ~100 % de pasos en caminata normal, ~85–95 % en caminata muy suave, 0 pasos falsos quieto o con temblor de mano. `StepDetectorTest` (JUnit4, **no ejecutado en Gradle**) |
-| `PdrTracker` | `PdrTracker(context, longitudPasoM: Double = CalibracionPasoRepository(context).longitudPasoM())` | Une los sensores de Android con `PdrEngine`. Todo en el **hilo principal**. La longitud de paso (calibrada en 7.3b, o 0,72 m) se lee **una sola vez al crearlo**: recalibrar no cambia un tracker ya vivo. ⚠ `sensors` depende ahora de `data.repository` (alternativa: que la pantalla inyecte la longitud). |
-| `PdrTracker` (control) | `fijarPosicion(lat, lng)` · `fijarRumboManual(grados)` · `reiniciar()` · `iniciar()` · `detener()` · `liberar()` | Orden típico: `fijarPosicion` → `iniciar` → `detener` / `liberar` al salir. |
-| `PdrTracker.estado` | `StateFlow<PdrEstado>` | `lat`, `lng`, `rumboGrados`, `pasos`, `distanciaMetros`, `velocidadMps`, `activo`, `fuentePasos` (`FuentePasos`: `NINGUNA`, `ACELEROMETRO` y `ACELEROMETRO_SIN_SENSOR` si no hay acelerómetro; `HARDWARE` y `ACELEROMETRO_SIN_PERMISO` ya no se asignan y quedan solo por compatibilidad). ⚠ Se añadió `ACELEROMETRO`: un `when` exhaustivo sobre `FuentePasos` en otros archivos dejaría de compilar. |
-| `PdrTracker.eventos` | `SharedFlow<PdrEvento>` | Avisos de una sola vez, en cada `iniciar()`: `Brujula(disponible)` y `PasosPorAcelerometro("no_sensor")` (solo si no hay acelerómetro; ya no se emite `permission_denied`). |
+| `StepDetector` | `procesar(x, y, z, tMs, detectar = true): Boolean` · `ultimaDesviacion` · `reiniciar()` | **Fuente única de pasos.** Magnitud − gravedad **con signo**, filtro pasa-bajos (`FILTRO` 0,5) y cuenta el paso en el **flanco de subida** del pico (latencia ~50–100 ms), con histéresis (rearma por debajo del 60 % del umbral) y pausa mínima `PAUSA_MS` = 250 ms. **Umbral adaptativo:** `FACTOR_UMBRAL` (0,5) × el pico típico reciente (media móvil, `PESO_PICO` 0,3, picos recortados a `PICO_MAX` 8), limitado a `UMBRAL_MIN` 1,1 … `UMBRAL_MAX` 4,0 m/s²; arranca en `UMBRAL` = 1,4. Solo cuentan picos positivos. `umbral` (lectura) da el valor vigente; `ultimaDesviacion` es `|filtrada|` para la gráfica; `detectar = false` solo la actualiza. El último paso arranca en t = 0: con un reloj que empieza en 0, un paso en los primeros 250 ms no cuenta (con `elapsedRealtime` no pasa; las pruebas empiezan en t = 100 000 ms). `StepDetectorTest` (11 casos, en Gradle desde FE-2.3; señales sintéticas a 50 Hz, eje z con gravedad): quieto, temblor de 0,5 m/s² a 8 Hz y ruido de ±0,6 → 0 pasos; caminata senoidal a 2 pasos/s de amplitud 1,8, 3 y 6 m/s² → 20 ± 1 en 10 s; umbral que llega a 4,0 con picos de 20 (recortados a 8) y baja hasta ≥ 1,1 con picos de 1,5; pausa de 250 ms; paso en la primera muestra que cruza; valles que no cuentan; magnitud de los tres ejes; `detectar = false`; `reiniciar()`. Antes se probó con una réplica en Python: ~100 % de pasos en caminata normal, ~85–95 % en caminata muy suave. ⚠ Con pasos reales: a verificar en dispositivo (FE-2.3 C3) |
+| `PdrTracker` | `PdrTracker(context, longitudPasoM: Double = CalibracionPasoRepository(context).longitudPasoM(), cicloDeVida: Lifecycle? = ProcessLifecycleOwner.get().lifecycle)` | Une los sensores de Android con `PdrEngine`. Todo en el **hilo principal** (crearlo ahí: registra un observador en `cicloDeVida`). La longitud de paso (calibrada en 7.3b, o 0,72 m) se lee **una sola vez al crearlo**: recalibrar no cambia un tracker ya vivo. **Segundo plano (FE-2.3):** en `ON_STOP` del proceso quita los sensores aunque el rastreo siga pedido, y en `ON_START` los vuelve a registrar si nadie llamó a `detener()` mientras tanto (regla en `InterruptorSensores`, abajo). `cicloDeVida = null` desactiva ese seguimiento. ⚠ `sensors` depende de `data.repository` (alternativa: que la pantalla inyecte la longitud). |
+| `PdrTracker` (control) | `fijarPosicion(lat, lng)` · `fijarRumboManual(grados)` · `reiniciar()` · `iniciar()` · `detener()` · `liberar()` | Orden típico: `fijarPosicion` → `iniciar` → `detener` / `liberar` al salir. `iniciar()` en segundo plano solo pide el rastreo (los sensores llegan al volver). `detener()` quita los sensores y ya no vuelven solos. `liberar()` (hilo principal) además quita el observador del ciclo de vida. |
+| `PdrTracker.estado` | `StateFlow<PdrEstado>` | `lat`, `lng`, `rumboGrados`, `pasos`, `distanciaMetros`, `velocidadMps`, `activo` (= rastreo **pedido**: `iniciar()` sin `detener()`; sigue en `true` en segundo plano aunque los sensores estén quitados), `fuentePasos` (`FuentePasos`: `NINGUNA`, `ACELEROMETRO` y `ACELEROMETRO_SIN_SENSOR` si no hay acelerómetro; `HARDWARE` y `ACELEROMETRO_SIN_PERMISO` ya no se asignan y quedan solo por compatibilidad). ⚠ Se añadió `ACELEROMETRO`: un `when` exhaustivo sobre `FuentePasos` en otros archivos dejaría de compilar. |
+| `PdrTracker.eventos` | `SharedFlow<PdrEvento>` | Avisos de una sola vez, en cada `iniciar()` (no al volver solo del segundo plano): `Brujula(disponible)` y `PasosPorAcelerometro("no_sensor")` (solo si no hay acelerómetro; ya no se emite `permission_denied`). |
+| `InterruptorSensores` | `internal` · `InterruptorSensores(enPrimerPlano = true)` · `iniciar()`, `detener()`, `alPrimerPlano()`, `alSegundoPlano()` → `CambioSensores` (`REGISTRAR`, `QUITAR`, `NINGUNO`) · `pedido`, `enPrimerPlano`, `registrados` | FE-2.3, lógica pura: `registrados = pedido && enPrimerPlano`; cada operación devuelve qué hacer con los sensores. `InterruptorSensoresTest` (6): iniciar/detener, segundo plano quita y primer plano vuelve, `detener()` en segundo plano (o antes) no vuelve a registrar, `iniciar()` en segundo plano espera al primer plano. |
 | `PdrTracker.onAceleracion` | `((Float) -> Unit)?` | Desviación de la aceleración (m/s²), ~20 Hz, solo para gráficas. |
 
 Receta (Compose):
@@ -679,10 +712,15 @@ Cuidados:
 - `eventos` es un `SharedFlow` sin repetición: si nadie recoge en ese instante, el aviso se pierde
   (`MapaPublicoScreen` lo recoge antes de que el usuario pueda pulsar ▶).
 - `rumboGrados` vale 0 hasta la primera lectura: filtrar por `activo` antes de mostrarlo.
-- Los sensores no siguen el ciclo de vida: solo se liberan en `liberar()` (⚠ siguen activos en
-  segundo plano). `RecoleccionViewModel` lo resuelve para 7.4: la pausa llama a `tracker.detener()` y la pantalla pausa sola en `ON_STOP` (ver «Flujo de captura de la recolección»).
+- **Segundo plano (FE-2.3, ADR-FE-16):** el tracker sigue el ciclo de vida del **proceso** (`ProcessLifecycleOwner`),
+  que entrega `ON_STOP` ~700 ms después de que la última actividad pasa a segundo plano y no lo entrega al rotar. Lo
+  usan los tres: el mapa público (sin código propio: al volver, los sensores vuelven solos y la página sigue igual), la
+  calibración (su pantalla además cancela la medición en `ON_STOP` de la actividad y llama a `detener()`, así que no
+  vuelven) y la recolección (su pantalla pausa la grabación en `ON_STOP`: `detener()`, reloj y capturas parados,
+  progreso guardado; se reanuda a mano). El registro (`AppLog`, tag `Pdr`) deja `sensores registrados (iniciar|primer
+  plano; rotación …, acelerómetro …)` y `sensores quitados (detener|segundo plano)`: sirve de evidencia en C5.
 - **Longitud de paso (7.3b):** `RecoleccionViewModel` y `MapaPublicoScreen` crean `PdrTracker(app)` sin argumentos y recogen la longitud calibrada
-  sin cambios. `distanciaMetros` es `pasos × longitud`, así que el disparador por distancia de 7.4 dispara cada ≈ `metros / longitud` pasos.
+  sin cambios (`RecoleccionViewModel` lo crea en su constructor, al abrir la vista 7.4). `distanciaMetros` es `pasos × longitud`, así que el disparador por distancia de 7.4 dispara cada `ceil(metros / longitud)` pasos (lo prueba `DisparadorCapturaTest` con `PdrEngine`).
   La calibración usa **su propio** `PdrTracker` (`CalibracionViewModel`): si otra pantalla dejara uno sin liberar, habría dos escuchando sensores.
 - ⚠ `app.js` repite un umbral fijo de 2,2 (`accelThreshold`) solo para dibujar la línea de la gráfica; el detector ahora usa
   un umbral **adaptativo** que arranca en `StepDetector.UMBRAL` (1,4), así que la línea ya no coincide. Cambiar el valor de `app.js`
@@ -774,12 +812,12 @@ PDR (sobrevive a rotar la pantalla); la **pantalla es dueña de CameraX** (5.5).
 
 | Pieza | Detalle |
 |---|---|
-| `DisparadorCaptura` | Lógica pura, sin Android. `debeCapturar(distanciaTotalM, ahoraMs): Boolean` · `alCapturar(distanciaTotalM, ahoraMs)` (solo si la foto **se guardó**) · `cambiarModo(ModoCaptura)` · `alReanudar(ahoraMs)` · `reiniciar()` · `modo` (lectura) |
-| `ModoCaptura` | `PorDistancia(metros)` y `PorTiempo(segundos)`; `OPCIONES` (3, 5 y 10 m; 3 y 5 s), `POR_DEFECTO` (cada 5 m) y `etiqueta` |
-| `Deriva.estimar(distanciaDesdeAnclaM)` | Devuelve `EstimacionDeriva(derivaM, precisionM, nivel)`. **Heurística provisional:** deriva = 4 % de la distancia desde el último ancla (decisión 16). `NivelCalidad`: `ALTA` (< 15 m), `MEDIA` (< 30 m), `BAJA` |
-| `RecoleccionViewModel(app)` | `AndroidViewModel` **sin `Factory`**: crea `RecoleccionRepositoryLocal`, `PdrTracker`, `FeedbackCaptura` y `DisparadorCaptura`. Salidas: `ui: StateFlow<RecoleccionUiState>`, `eventos: Flow<RecoleccionEvento>` (`Channel(BUFFERED)`, un solo colector: `Capturar`, `Finalizado(resumen)`, `Descartado`) y `carpetaFotos(): File?` (`null` antes de crear el video) |
+| `DisparadorCaptura` | Lógica pura, sin Android. `debeCapturar(distanciaTotalM, ahoraMs): Boolean` · `alCapturar(distanciaTotalM, ahoraMs)` (solo si la foto **se guardó**) · `cambiarModo(ModoCaptura)` · `alReanudar(ahoraMs)` · `reiniciar()` · `modo` (lectura). Sin referencia (al crearlo o tras `reiniciar()`) `debeCapturar` da `true`; por distancia, `true` si `distanciaTotalM − última ≥ metros` (la hora no cuenta); por tiempo, si `ahoraMs − última ≥ segundos × 1000` (la distancia no cuenta). `cambiarModo` no dispara: cuenta desde la última foto. `alReanudar` mueve la referencia de tiempo a `ahoraMs` (no hace nada sin foto previa) |
+| `ModoCaptura` | `PorDistancia(metros)` y `PorTiempo(segundos)`; `OPCIONES` (3, 5 y 10 m; 3 y 5 s), `POR_DEFECTO` (cada 5 m) y `etiqueta` («Cada 5 m», «Cada 2.5 m» con punto, «Cada 3 s») |
+| `Deriva.estimar(distanciaDesdeAnclaM)` | Devuelve `EstimacionDeriva(derivaM, precisionM, nivel)`. **Heurística provisional:** `derivaM` = `FACTOR` (0,04) × la distancia desde el último ancla (negativa → 0; decisión 16); `precisionM` = máx(`derivaM` × 0,25; 1 m), lo que se muestra como «± N m»; `NivelCalidad` según la **deriva**: `ALTA` (< `UMBRAL_MEDIA_M` 15 m), `MEDIA` (< `UMBRAL_BAJA_M` 30 m), `BAJA`; etiquetas «Alta», «Media», «Baja» |
+| `RecoleccionViewModel(app)` | `AndroidViewModel` **sin `Factory`**: crea en su constructor `RecoleccionRepositoryLocal`, `PdrTracker`, `FeedbackCaptura` y `DisparadorCaptura`. Salidas: `ui: StateFlow<RecoleccionUiState>`, `eventos: Flow<RecoleccionEvento>` (`Channel(BUFFERED)`, un solo colector: `Capturar`, `Finalizado(resumen)`, `Descartado`) y `carpetaFotos(): File?` (`null` antes de crear o retomar el video) |
 
-Entradas del ViewModel (las llama la pantalla): `alAbrir()` (idempotente: consume `SesionDeRecoleccion.inicio`, crea el video, arranca el PDR; sin inicio, `error = SIN_INICIO`) · `onFotoTomada(File)` / `onFotoFallida()` · `alAlternarPausa()` · `alIrASegundoPlano()` · `alCambiarModo(ModoCaptura)` · `alReubicarse()`, `alMoverReanclaje(lat, lng)`, `alConfirmarReanclaje()`, `alCancelarReanclaje()` · `alAgregarAlerta()`, `alActualizarAlerta(a)`, `alGuardarAlerta()`, `alCancelarAlerta()` · `alPedirFinalizar()`, `alConfirmarFinalizar()`, `alCancelarFinalizar()` · `descartarAviso()`.
+Entradas del ViewModel (las llama la pantalla): `alAbrir()` (idempotente: consume `SesionDeRecoleccion.inicio`, crea el video, arranca el PDR; **sin inicio, retoma** el video `en_curso` más reciente en `PAUSADA` —FE-2.3, abajo— y solo si no hay ninguno, o no se puede leer, `error = SIN_INICIO`) · `onFotoTomada(File)` / `onFotoFallida()` · `alAlternarPausa()` · `alIrASegundoPlano()` · `alCambiarModo(ModoCaptura)` · `alReubicarse()`, `alMoverReanclaje(lat, lng)`, `alConfirmarReanclaje()`, `alCancelarReanclaje()` · `alAgregarAlerta()`, `alActualizarAlerta(a)`, `alGuardarAlerta()`, `alCancelarAlerta()` · `alPedirFinalizar()`, `alConfirmarFinalizar()`, `alCancelarFinalizar()` · `descartarAviso()`.
 
 `RecoleccionUiState` (`RecoleccionState.kt`): `fase` (`INICIANDO`, `GRABANDO`, `PAUSADA`, `FINALIZANDO`), `error`, `nombreVideo`, `lat` / `lng` (`Double?`), `rumbo` (0…360), `fotosTomadas`, `distanciaMetros`, `pasos`, `duracionSegundos`, `deriva`, `modo`, `destelloCaptura` (contador: la UI parpadea cuando sube), `avisos` (`AvisoRecoleccion`: foto borrosa, poca luz, batería baja, almacenamiento bajo), `aviso` (texto temporal), `fotosJson`, `trayectoriaJson`, `alertasJson`, `alertasActivas`, `reanclaje`, `confirmandoFinalizar`, `formularioAlerta`, `errorAlerta`; calculadas `reubicando`, `enCurso` y `llegoAlMaximo`. Constante pública `MAX_FOTOS_VIDEO = 200`.
 
@@ -787,19 +825,21 @@ Comportamiento:
 - **Primera foto inmediata**; luego `debeCapturar`. Solo captura en `GRABANDO`, sin otra captura en curso, sin re-anclaje abierto y con menos de 200 fotos.
 - **Foto fallida:** no se llama a `alCapturar`, así que `debeCapturar` seguiría en `true`; el ViewModel pone una **pausa de capturas** (1 s; 5 s tras 5 fallos seguidos), como `EscaneoViewModel.onFotoFallida`.
 - **Archivo:** `tomarFoto(ctx, carpetaFotos(), "tmp", …)`; `onFotoTomada` llama a `repo.registrarFoto`, que **renombra** el JPG a `NNNN.jpg` y lo anota en el manifest con la posición y el rumbo del PDR (las fotos no llevan metadatos, ver arriba).
-- **Pausa** detiene el PDR (`tracker.detener()`); `alIrASegundoPlano()` (la pantalla lo llama en `ON_STOP`) pausa sola.
+- **Pausa** detiene el PDR (`tracker.detener()`) y guarda el progreso; `alIrASegundoPlano()` (la pantalla lo llama en `ON_STOP`) pausa sola con el aviso «Grabación en pausa porque la app pasó a segundo plano.». Aunque no lo hiciera, el `PdrTracker` ya quita sus sensores en segundo plano (FE-2.3).
 - **Re-anclaje manual:** `tracker.fijarPosicion` + desplazamiento **uniforme** de fotos (`repo.desplazarFotos`) y trayectoria desde el último ancla; reinicia la deriva y frena las capturas mientras `reanclaje != null`.
-- **Reloj:** tiempo de grabación sin contar pausas (`elapsedRealtime`). Cada 30 s revisa la batería (aviso con ≤ 15 % y sin cargar) y el almacenamiento (aviso con < 200 MB; pausa sola con < 50 MB).
+- **Reloj:** tiempo de grabación sin contar pausas (`elapsedRealtime`). Cada 30 s revisa la batería (aviso con ≤ 15 % y sin cargar) y el almacenamiento (aviso con < 200 MB; pausa sola con < 50 MB) y, si está `GRABANDO`, guarda el progreso.
 - **Finalizar:** con 0 fotos el video se **borra** (`repo.descartar`) y se emite `Descartado`; si no, `repo.finalizar` y `Finalizado(resumen)`.
 - **Trayectoria:** un punto cada 3 pasos (`trayectoriaJson`).
-- **Distancia:** `pasos × longitud de paso` del `PdrTracker` (calibrada en 7.3b, leída una vez al crearlo en `alAbrir`; 0,72 m si nunca se calibró).
+- **Distancia:** `pasos × longitud de paso` del `PdrTracker` (calibrada en 7.3b, leída una vez al crear el ViewModel; 0,72 m si nunca se calibró). Pasos y distancia que ve la interfaz son del **video**: los acumulados antes de retomar (`pasosPrevios`, `distanciaPrevia`) más los del tracker actual.
+- **Progreso para retomar (FE-2.3):** `registrarProgreso()` toma una foto del estado (`ProgresoRecoleccion`: posición y rumbo de la interfaz, pasos, distancia, duración, `distanciaAncla`, índices de ancla, trayectoria, intervalo y hora) al crear el video, tras cada foto guardada, al pausar (también en `ON_STOP`), al confirmar un re-anclaje, al cambiar el intervalo y cada 30 s grabando. La deja en un `MutableStateFlow`; un **único colector** la escribe con `repo.guardarProgreso` (en orden, saltándose las intermedias si llegan varias seguidas; un error solo deja `AppLog.w`). Si el proceso muere en primer plano (*crash*), se pierde como mucho lo de los últimos 30 s o desde la última foto.
+- **Retomar (FE-2.3, C4):** sin `InicioRecoleccion` (Android restauró la pila en `admin/recoleccion` tras matar el proceso, o «Retomar …» de 7.3): `repo.buscarEnCurso()` → `repo.leerEnCurso(id)` → `RetomarRecoleccion.estado(video)` (§5.7). Carga fotos, trayectoria, anclas, contadores y duración; pone el intervalo guardado y, si ya hay fotos, `disparador.alCapturar(distancia, ahora)` (la siguiente foto llega a un intervalo, no repetida en el mismo sitio); fija la posición y el rumbo del tracker **sin iniciarlo** y deja la fase en `PAUSADA` con el aviso «Grabación retomada: N fotos guardadas. Revisa tu posición y pulsa Reanudar.» (sin `progress`: «Grabación retomada sin su último progreso: re-ánclate en el mapa antes de reanudar.»). Las fotos siguen numerándose desde el manifest (`0006` tras `0005`) en la **misma** carpeta `rec_NNNN`. Registra `Retomado rec_NNNN: N fotos, P pasos, S s, progreso sí|no` (tag `RecoleccionVM`). Mientras lee, la fase es `INICIANDO` (indicador de progreso).
 
 Cuidados:
 - Una foto que se está guardando en el instante del re-anclaje puede quedar con la coordenada vieja.
 - La brújula del PDR depende de la declinación magnética calculada al fijar la posición.
 - `validarMensajeAlerta` **duplica** la regla de `EditorMapaViewModel` (5.5 pide extraerla).
 - Foto borrosa y poca luz nunca se activan (control de calidad desactivado).
-- Sin retomar tras matar el proceso (`buscarEnCurso()` existe, pero no se usa).
+- **Retomar:** las alertas creadas durante la grabación siguen solo en memoria y **se pierden** al matar el proceso (FE-3.3). Si la persona empieza un video nuevo en 7.3 en vez de retomar, el anterior queda `en_curso` en disco (no se sube ni se borra solo; `buscarEnCurso` devuelve siempre el de mayor `rec_NNNN`). La sesión no hace falta para retomar (7.4 no llama al backend), aunque `MyApp` la haya borrado.
 
 ### 5.3 Permisos y sesión
 
@@ -932,9 +972,9 @@ pinta sus colores a mano. Un tema propio sería el sitio natural para unificar l
 | `Modifier.tarjeta(radio)` | ídem | `internal` | Fondo `Superficie` + borde de 1 dp `Borde` con esquinas redondeadas (`radio` 20 dp por defecto; `FilaLugar` usa 18 dp). Aplica recorte, fondo y borde, en ese orden. |
 | `CategoriaLugar.icono()` | ídem | `internal` | Ícono de cada categoría (el dominio no conoce Compose). Verificado: es un `when` **exhaustivo, sin `else`**, así que una categoría nueva no compila hasta que se le asigne ícono. Tabla abajo. |
 | `AlertaFormSheet` | `ui/admin/mapa/AlertaFormSheet.kt` (`public`) | `(alerta: Alerta, esNueva: Boolean, error: String?, onCambio: (Alerta) -> Unit, onGuardar, onCancelar, onEliminar)` | Hoja inferior (`ModalBottomSheet`) para crear o editar una alerta (vista 7.9). Detalle abajo. |
-| `MapaPublicoScreen` | `map/MapaPublicoScreen.kt` (`public`) | `MapaPublicoScreen(modifier: Modifier = Modifier)` | Mapa público (`index.html` + `app.js`) en un `WebView` con seguimiento por pasos. Crea su propio `PdrTracker`, registra el puente `AndroidBridge` (`PuentePdr`) y empuja la posición, el rumbo y los avisos a la página (tabla en 2.6). Aplica `systemBarsPadding()` (el mapa no maneja *insets*). Libera sensores y `WebView` al salir. ⚠ **Hoy no tiene ruta en §5.8** (`admin/ubicacion-manual` abre `UbicacionManualScreen`); comprobar en `AppNav` si queda algún uso. FE-3.1 le da la ruta pública `mapa`. |
+| `MapaPublicoScreen` | `map/MapaPublicoScreen.kt` (`public`) | `MapaPublicoScreen(modifier: Modifier = Modifier)` | Mapa público (`index.html` + `app.js`) en un `WebView` con seguimiento por pasos. Crea su propio `PdrTracker`, registra el puente `AndroidBridge` (`PuentePdr`) y empuja la posición, el rumbo y los avisos a la página (tabla en 2.6). Aplica `systemBarsPadding()` (el mapa no maneja *insets*). Libera sensores y `WebView` al salir. En segundo plano el `PdrTracker` quita los sensores solo y los vuelve a poner al volver (FE-2.3; la pantalla no maneja `ON_STOP`). Ruta `mapa` desde FE-2.3 (5.8): hoy solo se abre con `am start … --es ruta mapa` en el APK de depuración; la entrada desde Inicio es de FE-3.1. ⚠ A verificar en dispositivo (FE-2.3 C3). |
 | `CalibracionScreen` / `CalibracionContent` | `ui/admin/calibracion/CalibracionScreen.kt` (`public`) | `CalibracionScreen(onVolver, modifier, vm = viewModel())` · `CalibracionContent(ui, acciones, modifier)` | Vista 7.3b completa (detalle abajo, «CalibracionScreen y CalibracionBridge»). **No navega.** |
-| `UbicacionManualScreen` / `UbicacionManualContent` | `ui/admin/recoleccion/UbicacionManualScreen.kt` (`public`) | `UbicacionManualScreen(onVolver, onConfirmar: (InicioRecoleccion) -> Unit, onAjustes = {}, onCalibrar = {}, viewModel = viewModel(factory = …))` · `UbicacionManualContent(estado, acciones, modifier, longitudCalibradaM: Double? = null)` | Vista 7.3 completa (detalle abajo, «UbicacionManual»). Sustituye a `MapaPublicoScreen` en la ruta `admin/ubicacion-manual`. |
+| `UbicacionManualScreen` / `UbicacionManualContent` | `ui/admin/recoleccion/UbicacionManualScreen.kt` (`public`) | `UbicacionManualScreen(onVolver, onConfirmar: (InicioRecoleccion) -> Unit, onAjustes = {}, onCalibrar = {}, onRetomar = {}, viewModel = viewModel(factory = …))` · `UbicacionManualContent(estado, acciones, modifier, longitudCalibradaM: Double? = null, grabacionPendiente: GrabacionPendiente? = null)` | Vista 7.3 completa (detalle abajo, «UbicacionManual»). Sustituye a `MapaPublicoScreen` en la ruta `admin/ubicacion-manual`. `onRetomar` y `grabacionPendiente`: FE-2.3. |
 | `EditorMapaScreen` / `EditorMapaContent` | `ui/admin/mapa/EditorMapaScreen.kt` (`public`) | `EditorMapaContent(alertasJson, lugaresJson, pendientes, borradorJson, eventos, modifier, miPosicion)` | Mapa web de alertas dentro de un `WebView` (vista 7.8). Detalle abajo. |
 | `FilaCategorias`, `CampoBusqueda`, `EncabezadoLista`, `FilaLugar`, `EstadoVacio`, `BotonVolver` | `ui/destino/componentes/ListaLugares.kt` | `FilaCategorias(seleccionada: CategoriaLugar?, onElegir: (CategoriaLugar?) -> Unit)` · `CampoBusqueda(texto: String, onCambio: (String) -> Unit)` · `EncabezadoLista(orden: OrdenLugares, onCambiarOrden: () -> Unit)` · `FilaLugar(lugar: LugarDestino, onClick: () -> Unit)` · `EstadoVacio(mensaje: String?, accion: String, onAccion: () -> Unit)` · `BotonVolver(onClick: () -> Unit)` | Verificado contra el código (bache 2). Propios de Destino salvo `EstadoVacio` y `BotonVolver`, que son genéricos. Todos públicos; `ChipCategoria` es privado. Detalle abajo. |
 | `EncabezadoPregunta`, `TarjetaOpciones` | `ui/destino/componentes/PanelesVoz.kt` | `EncabezadoPregunta()` · `TarjetaOpciones(opciones: List<LugarDestino>, onElegir: (LugarDestino) -> Unit)` | Verificadas contra el código (bache 2): las firmas coinciden con las llamadas de `SeleccionDestinoScreen`. `TarjetaOpciones` muestra las coincidencias cuando hay varias (5.5, Destino). Detalle abajo. |
@@ -1194,14 +1234,15 @@ Cuidados:
 - **Infraestructura compartida:** la fábrica del `WebView` (tamaño, fondo `#0A0E1A`, ajustes, depuración, consola, errores, `setInsets`, `BackHandler`) vive ahora en `map/MapaWebView.kt` (`MapaWebView` y `PuenteWeb`, ver 5.9). Aquí solo quedan `VideoPuente` y los `LaunchedEffect` que empujan `cargarOtros` y `cargarVideo`.
 - El botón "Volver" de `NoEncontrado` es un `Button` estándar de Material: su alto mínimo (40 dp) queda bajo los 48 dp.
 
-**UbicacionManual (vista 7.3; ⚠ código entregado el 2026-10-11; compila con el proyecto (tanda 12), sin prueba completa en dispositivo (FE-2.3); `ui/admin/recoleccion/` y `assets/ubicacion_manual.*`)**
+**UbicacionManual (vista 7.3; código entregado el 2026-10-11; compila con el proyecto; ⚠ prueba completa a verificar en dispositivo (FE-2.3 C3); `ui/admin/recoleccion/` y `assets/ubicacion_manual.*`)**
 
 | Pieza | Detalle |
 |---|---|
 | `UbicacionManualViewModel` | `ViewModel(videos: VideoRepository, lugares: LugaresRepository)`; `Factory(appContext)` crea `AssetsVideoRepository` y `LugaresRepositoryStub` (**espera el contexto de la aplicación**). Estado en `ui: StateFlow<UbicacionManualUiState>`. Eventos por `Channel(BUFFERED)` + `receiveAsFlow()` (un solo colector; no se pierden). |
 | `UbicacionManualUiState` | `lugares`, `punto: PuntoMapa?` (`null` hasta tocar el mapa), `rumbo` (0…360), `brujulaDisponible`, `usandoBrujula`, `cargandoUltima`, `ultimaPosicion: UltimaPosicion?`, `ultimaAplicada`, `nombreVideo`, `nombreSugerido`, `edicion: EdicionCoordenada?`, `centrarSolicitud: Int`, `confirmando`. Calculadas: `puedeConfirmar` (hay punto y no está confirmando), `latitudTexto`, `longitudTexto` (6 decimales, siempre con punto). |
 | `UbicacionManualEvento` | Solo `Confirmado(inicio: InicioRecoleccion)`. **No navega.** |
-| `UbicacionManualAcciones` | `data class` con 14 lambdas (`{}` por defecto): `onVolver`, `onAjustes`, `onPuntoCambiado(lat, lng)`, `onRumbo`, `onAlternarBrujula`, `onEditarCoordenada`, `onTextoEdicion`, `onAceptarEdicion`, `onCancelarEdicion`, `onUsarUltima`, `onNombre`, `onCancelar`, `onConfirmar`, `onCalibrar`. |
+| `UbicacionManualAcciones` | `data class` con 15 lambdas (`{}` por defecto): `onVolver`, `onAjustes`, `onPuntoCambiado(lat, lng)`, `onRumbo`, `onAlternarBrujula`, `onEditarCoordenada`, `onTextoEdicion`, `onAceptarEdicion`, `onCancelarEdicion`, `onUsarUltima`, `onNombre`, `onCancelar`, `onConfirmar`, `onCalibrar`, `onRetomar` (FE-2.3). |
+| `GrabacionPendiente` | `UbicacionManualState.kt`: `data class GrabacionPendiente(nombre: String, fotos: Int)` (FE-2.3). La lee la pantalla, no el ViewModel |
 | `InicioRecoleccion` | `domain/model/InicioRecoleccion.kt`: `lat`, `lng`, `rumbo` (0…360), `nombreVideo` (recortado, nunca vacío) y `continuaVideoAnterior`. Es lo que debe recibir la vista 7.4. |
 | Acciones del ViewModel | `alAbrir(brujulaDisponible)` (idempotente) · `alPausar()` (ON_STOP: apaga la brújula) · `alReanudar()` (ON_RESUME: reactiva «Confirmar») · `alMoverPunto(lat, lng)` · `alUsarUltimaPosicion()` · `alElegirRumbo(grados)` · `alAlternarBrujula()` · `alLeerBrujula(acimut)` · `alEditarCoordenada(campo)` · `alCambiarTextoEdicion` · `alAceptarEdicion()` · `alCancelarEdicion()` · `alCambiarNombre` · `alConfirmar()`. |
 | Lógica pura (`internal`, sin Android) | `Rumbo` (`normalizar`, `diferencia`, `suavizar` —promedio exponencial **circular**—, `cardinal`, `nombreCardinal`), `parsearCoordenada(texto, limite)`, `siguienteNombre(videos)` y `calcularUltimaPosicion(videos)`. Se pueden probar sin emulador. |
@@ -1219,12 +1260,13 @@ Comportamiento:
 - **Nombre autonumerado:** `video_(N+1)`, con N = mayor número entre los videos llamados `video3` / `video_3`…; si ninguno cumple el patrón, la cantidad de videos. Salta nombres ya usados.
 - **Confirmar:** `confirmando` evita un doble toque; `alReanudar()` lo libera al volver a la pantalla (p. ej. desde 7.4).
 - **Calibrar mi paso (7.3b):** `FilaCalibracion` (privada) va entre «Usar mi última posición» y el nombre del video. La pantalla lee `CalibracionPasoRepository(contexto).guardada()` con `remember` (`null` = valor genérico; se relee al volver porque `NavHost` recompone la ruta) y se la pasa al contenido; no está en el `UiState` ni en el ViewModel. Tocar la fila llama a `onCalibrar`, que la ruta conecta con `navigate("admin/calibracion")` (5.8).
+- **Retomar una grabación sin finalizar (FE-2.3):** la pantalla lee con `produceState` `RecoleccionRepositoryLocal(contexto).buscarEnCurso()` y `leerEnCurso(id)` (`GrabacionPendiente(nombre, fotos.size)`; un error da `null`; se relee al volver a la ruta, como la calibración). Si hay una, `FilaRetomar` (privada; borde ámbar `#F59E0B`, «Retomar «nombre»» y «Quedó sin finalizar: N fotos guardadas. Retómala en pausa o empieza otra abajo.»; descripción para TalkBack «Retomar la grabación …») va justo debajo del encabezado. Tocarla llama a `onRetomar`, que la ruta conecta con `SesionDeRecoleccion.limpiar()` + `navigate("admin/recoleccion")`: 7.4, sin inicio, retoma (5.2). «Confirmar y comenzar» sigue creando un video nuevo aunque haya uno pendiente. ⚠ Cómo se ve: a verificar en dispositivo (no tiene `@Preview`).
 - **Scroll vs. mapa:** el JS avisa `gesto(true/false)` en `touchstart` / `touchend` y la pantalla deshabilita `verticalScroll` mientras haya un dedo sobre el mapa. ⚠ Deducido, no probado: el aviso llega con un pequeño retraso.
 - **Diseño adaptable:** la tarjeta de Orientación pone dial y botón lado a lado solo si `screenWidthDp >= 380` y `fontScale <= 1,15`; si no, los apila. (No usa `BoxWithConstraints`: no admite medidas intrínsecas dentro del `Row`.)
 - **Reutiliza** `BotonIcono` y `Modifier.tarjeta` de `ui/destino/componentes/Comun.kt` (`internal`, mismo módulo). Por la regla 4 de 11, conviene moverlos a `ui/components/` cuando se toque.
 
 Cuidados:
-- ⚠ **Kotlin sin compilar.** Supuestos no verificados contra el código: los paquetes de `AssetsVideoRepository`, `LugaresRepositoryStub`, `VideoRepository` y `LugaresRepository` (`data.repository`), la firma de `BotonIcono` (`icono: ImageVector`), `MapaWebView`, `PuenteWeb.enHiloPrincipal`, `rememberMapaWeb` y `literalJs` (5.9), y `androidx.compose.ui.platform.LocalLifecycleOwner` (deprecado en versiones recientes de Compose).
+- Compila (comprobado en FE-2.3 con el build completo): los paquetes y firmas que antes se marcaban como supuestos (`data.repository`, `BotonIcono`, `MapaWebView`, `PuenteWeb.enHiloPrincipal`, `rememberMapaWeb`, `literalJs`) son los de este documento. `androidx.compose.ui.platform.LocalLifecycleOwner` da un aviso de deprecación al compilar (también en 7.3b, 7.4, Inicio, Destino y `VistaCamara`): se movió a `androidx.lifecycle.compose`.
 - **No registra en `AppLog`** (su firma no está documentada aquí): un fallo al cargar videos o lugares no deja rastro. El mapa web usa `Log` con el tag `UbicacionMapa` (vía `MapaWebView`).
 - **Sin internet** Leaflet (`unpkg.com`) no carga: la página muestra «No se pudo cargar el mapa…» y **no** llama a `listo()`, así que la app nunca le envía datos. Aun así se pueden escribir las coordenadas a mano y confirmar. Decisión abierta 13 (todo en línea).
 - **Cancelar y atrás** hacen lo mismo (`onVolver`) y **no piden confirmación**: no hay nada guardado todavía.
@@ -1241,7 +1283,7 @@ Cuidados:
 | Pieza | Detalle |
 |---|---|
 | `RecoleccionScreen` | `(onFinalizado: (ResumenRecoleccion) -> Unit, onDescartado: () -> Unit, onVolver: () -> Unit, onAjustes = {}, modifier, vm: RecoleccionViewModel = viewModel())`. **No navega**; la ruta decide (5.8). Es dueña de CameraX: crea el `ImageCapture` con `remember { crearImageCapture() }`, lo enlaza con `VistaCamara` (vista previa en la esquina del mapa), llama a `tomarFoto` en el evento `Capturar` y hace `liberarCamara(ctx)` y `keepScreenOn = false` al salir |
-| Estados de la pantalla | `error` → texto «No se pudo iniciar la recolección» con «Volver»; `INICIANDO` → indicador de progreso; si no, columna con scroll: barra superior, aviso temporal, mapa (con «En vivo / Centrar», vista previa, +/− y leyenda), panel de re-anclaje (solo con el alfiler abierto), cuatro contadores, calidad, captura, Pausar / Reubicarme / Marcar punto, «Agregar alerta aquí», intervalo, «Finalizar video», alertas cercanas y panel de avisos |
+| Estados de la pantalla | `error` → texto «No se pudo iniciar la recolección», «Vuelve a fijar la ubicación de partida e inténtalo de nuevo. (SIN_INICIO)» (el nombre del enum, no su `mensaje`) y «Volver»; `INICIANDO` → indicador de progreso (también mientras retoma, FE-2.3); si no, columna con scroll: barra superior, aviso temporal, mapa (con «En vivo / Centrar», vista previa, +/− y leyenda), panel de re-anclaje (solo con el alfiler abierto), cuatro contadores, calidad, captura, Pausar / Reubicarme / Marcar punto, «Agregar alerta aquí», intervalo, «Finalizar video», alertas cercanas y panel de avisos |
 | Diálogos y hojas | `AlertaFormSheet` cuando `ui.formularioAlerta != null` (siempre `esNueva = true`); selector de intervalo con `ModoCaptura.OPCIONES`; confirmación de finalizar (con 0 fotos avisa que el video se borrará) |
 | `RecoleccionMapaContent` | `(control, lat, lng, rumbo: Float, fotosJson, trayectoriaJson, alertasJson, reanclaje: Pair<Double, Double>?, eventos, modifier)`. Solo dibuja el `WebView` (`MapaWebView` con `pasarInsets = false` y `manejarAtras = false`) y empuja el estado con `LaunchedEffect(mapa.listo, …)`. No conoce el ViewModel |
 | `RecoleccionMapaControl` | `rememberRecoleccionMapaControl()`; `centrar()`, `zoomMas()`, `zoomMenos()` (botones que dibuja la pantalla, como en 7.3) |
@@ -1253,9 +1295,9 @@ Cuidados:
 Formatos JSON: `fotosJson` = `[{id, lat, lng, rumbo|null}]`; `trayectoriaJson` = `[[lat, lng], …]`; `alertasJson` = los campos del editor (`id, lat, lng, mensaje, tipo, prioridad, radio, activa`).
 
 Comportamiento y cuidados:
-- **Atrás** (sistema y flecha): con error llama a `onVolver`; con el re-anclaje abierto lo cancela; si no, `alPedirFinalizar()`. `ON_STOP` → `alIrASegundoPlano()`.
+- **Atrás** (sistema y flecha): con error llama a `onVolver`; con el re-anclaje abierto lo cancela; si no, `alPedirFinalizar()`. `ON_STOP` → `alIrASegundoPlano()` (pausa y guarda el progreso). Tras matar el proceso, Android restaura la pila en esta ruta y la vista retoma el video en pausa (5.2, FE-2.3; ⚠ a verificar en dispositivo, C4).
 - **Mapa:** sigue al admin (`panTo`) hasta que arrastra el mapa con el dedo; «Centrar» reactiva el seguimiento. La primera posición encuadra a zoom 19. Fotos y alertas se actualizan por `id` (el re-anclaje las desplaza). Con el alfiler abierto **no** se sigue al admin y se **ignoran los ecos** de `setReanclaje` mientras se arrastra (patrón de 7.3). Mensajes de alerta con `textContent`.
-- **Usa `MapaBase.iniciar`** (a diferencia de 7.3). Como no tiene `#top`, `#dock` ni `#btn-back`, la página los incluye **ocultos** por si `mapa_base.js` no tolera que falten; si ya lo tolera, se pueden borrar. No define `setInsets` ni `onAtras` propio (los maneja la pantalla Compose).
+- **Usa `MapaBase.iniciar` y `MapaBase.crearMapa`** (a diferencia de 7.3; comprobado en FE-2.3 C2: una llamada a `MapaBase.crearMapa(` y ninguna a `base.crearMapa(`). Como no tiene `#top`, `#dock` ni `#btn-back`, la página los incluye **ocultos** por si `mapa_base.js` no tolera que falten; si ya lo tolera, se pueden borrar. No define `setInsets` ni `onAtras` propio (los maneja la pantalla Compose).
 - **Sin internet:** Leaflet (`unpkg.com`) no carga, `MapaBase.iniciar` avisa en pantalla y el mapa nunca llama a `listo()`; la grabación sigue funcionando sin mapa. Teselas de OSM, no satélite como el diseño (decisión 1 y 13).
 - Las alertas se dibujan **todas igual** (ámbar si están activas, gris si no): no distinguen `tipo` ni `prioridad`. El CSS de la página duplica estilos de las otras páginas de mapa (candidato `mapa_base.css`). El centro inicial del JS es **aproximado** (EAFIT) y solo se ve antes del primer fix.
 - **Prueba sin teléfono:** abrir `recoleccion_mapa.html` en un navegador de escritorio activa un modo demo (alguien camina en círculo, deja fotos y se ve una alerta).
@@ -1264,12 +1306,12 @@ Comportamiento y cuidados:
 - Reutiliza `BotonIcono` y `Modifier.tarjeta` de `ui/destino/componentes/Comun.kt` (`internal`): regla 4 de 11, conviene moverlos a `ui/components/`.
 - Con fuente grande, los cuatro contadores en fila pueden apretarse. Sin brújula «N» ni giro del mapa.
 
-**`CalibracionScreen` y `CalibracionBridge` (vista 7.3b; `ui/admin/calibracion/` y `assets/calibracion_mapa.*`; entregado el 2026-10-12, compila y se abre en dispositivo, ⚠ pasada completa sin probar)**
+**`CalibracionScreen` y `CalibracionBridge` (vista 7.3b; `ui/admin/calibracion/` y `assets/calibracion_mapa.*`; entregado el 2026-10-12, compila y se abre en dispositivo, ⚠ pasada completa a verificar en dispositivo (FE-2.3 C3))**
 
 | Pieza | Detalle |
 |---|---|
 | `CalibracionViewModel(app)` | `AndroidViewModel` **sin `Factory`**. Crea su **propio** `PdrTracker` y un `CalibracionPasoRepository`. Salida: `ui: StateFlow<CalibracionUiState>`. Fases `FaseCalibracion`: `PUNTOS → LISTO → CAMINANDO → RESULTADO → GUARDADA` |
-| Entradas del ViewModel | `alTocarMapa(lat, lng)` (1.º toque = A, 2.º = B; con ambos puestos se ignora: se arrastran; solo en `PUNTOS`/`LISTO`) · `alMoverPunto(ExtremoTramo, lat, lng)` · `alLimpiarPuntos()` · `alIniciar()` (fija la posición en A, `tracker.iniciar()`, anota `pasosInicio`, reloj de 500 ms) · `alFinalizar()` (lee `pasos − pasosInicio` **antes** de `detener()`, calcula con `CalibracionPaso.calcular` → `RESULTADO`) · `alCancelarMedicion()` · `alRepetir()` · `alGuardar()` (solo con `Valido` en `RESULTADO`) · `alRestablecer()` (vuelve a 0,72 m; no actúa en `CAMINANDO`) · `alIrASegundoPlano()` (ON_STOP: detiene el tracker y, si `CAMINANDO`, cancela con aviso) · `descartarAviso()` |
+| Entradas del ViewModel | `alTocarMapa(lat, lng)` (1.º toque = A, 2.º = B; con ambos puestos se ignora: se arrastran; solo en `PUNTOS`/`LISTO`) · `alMoverPunto(ExtremoTramo, lat, lng)` · `alLimpiarPuntos()` · `alIniciar()` (fija la posición en A, `tracker.iniciar()`, anota `pasosInicio`, reloj de 500 ms) · `alFinalizar()` (lee `pasos − pasosInicio` **antes** de `detener()`, calcula con `CalibracionPaso.calcular` → `RESULTADO`) · `alCancelarMedicion()` · `alRepetir()` · `alGuardar()` (solo con `Valido` en `RESULTADO`) · `alRestablecer()` (vuelve a 0,72 m; no actúa en `CAMINANDO`) · `alIrASegundoPlano()` (ON_STOP de la actividad: detiene el tracker —así no vuelve a leer sensores al volver— y, si `CAMINANDO`, cancela con aviso; el `PdrTracker` además quita los sensores solo en segundo plano, FE-2.3) · `descartarAviso()` |
 | `CalibracionUiState` | `fase`, `puntoA` / `puntoB` (`PuntoTramo(lat, lng)?`), `distanciaM`, `pasos`, `segundos`, `resultado`, `longitudActualM`, `calibrada`, `fuentePasos`, `aviso` (`AvisoCalibracion`, p. ej. `VALOR_RESTABLECIDO`, `CANCELADA_SEGUNDO_PLANO`). Calculadas: `puedeIniciar`, `hayPuntos`, `mapaBloqueado` (fuera de `PUNTOS`/`LISTO`), `pasosPorAcelerometro`. `ExtremoTramo`: `A`, `B` |
 | `CalibracionScreen` | `(onVolver, modifier, vm: CalibracionViewModel = viewModel())`. **No navega**; la ruta pide `Permisos.ACTIVIDAD` antes de mostrarla (5.8). ON_STOP → `alIrASegundoPlano()`; Atrás durante la medición la cancela, si no → `onVolver`; `keepScreenOn` solo mientras `CAMINANDO` |
 | `CalibracionContent` / `CalibracionAcciones` | Contenido sin lógica y `data class` de 11 lambdas (`{}` por defecto); 2 `@Preview` |
@@ -1280,7 +1322,7 @@ Comportamiento y cuidados:
 
 Comportamiento y cuidados:
 - El estado vive en el ViewModel; el JS **ignora `setPuntos` mientras se arrastra un pin** (patrón de 7.3) y encuadra el tramo al tener A y B por primera vez. Abrir `calibracion_mapa.html` en un navegador de escritorio activa un **modo demo**.
-- **Usa `MapaBase.iniciar` y `MapaBase.crearMapa`** (5.9). ⚠ **No** `base.crearMapa`: ese error dejaba el mapa negro y sin aviso (Logcat: `base.crearMapa is not a function`). La página lleva ocultos `#top`, `#dock` y `#btn-back`.
+- **Usa `MapaBase.iniciar` y `MapaBase.crearMapa`** (5.9; comprobado en FE-2.3 C2). **No** `base.crearMapa`: ese error dejaba el mapa negro y sin aviso (Logcat: `base.crearMapa is not a function`). La página lleva ocultos `#top`, `#dock` y `#btn-back`.
 - **Sin scroll:** el mapa ocupa el espacio sobrante (mín. 180 dp); con fuente muy grande en un teléfono pequeño el mapa se encoge y el resto puede recortarse. Usa el zoom nativo de Leaflet (abajo a la izquierda), no los botones +/− de Compose; el centro inicial es **aproximado** (EAFIT), no `CampusMapa.CENTRO`.
 - **Sin internet** Leaflet (`unpkg.com`) no carga, el mapa nunca llama a `listo()` y **no se pueden marcar A y B**: la calibración es inutilizable sin mapa (decisión 13).
 - El aviso de acelerómetro solo aparece tras el primer «Inicio» (la fuente de pasos se conoce al llamar a `iniciar()`).
@@ -1456,7 +1498,7 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 | `AuthRepository` | `suspend login(identificador: String, password: String): Sesion` (lanza `CredencialesInvalidasException` o `java.io.IOException`; con el backend real también `ApiException` y `RespuestaInesperadaException`) | **Real** (`RemoteAuthRepository`, `POST /v1/auth/login`, FE-1.2); queda `AuthRepositoryStub` sin uso | `LoginViewModel` (por `Factory`) |
 | `AdminRepository` | `suspend obtenerResumen(): ResumenAdmin` (lanza `IOException`, solo documentado en el KDoc) | Stub (`AdminRepositoryStub`, 600 ms) | `PanelAdminViewModel` (por `Factory`). Detalle abajo |
 | `VideoRepository` | `suspend obtenerVideos(): List<Video>` (cada `Video` ya trae sus `fotos`) · `suspend renombrarVideo(videoId, nombre)` · `suspend eliminarVideo(videoId)` · `suspend eliminarFoto(videoId, fotoId)` · `cambios(): Flow<Int>` | Local (`AssetsVideoRepository(context)`) | Galería, Lista y Detalle de video |
-| `RecoleccionRepository` | `crearVideo(inicio): String` · `carpetaFotos(videoId): File` · `registrarFoto(videoId, archivo, DatosFoto): FotoRecolectada` · `desplazarFotos(videoId, desdeIndice, dLat, dLng)` · `fotos(videoId)` · `finalizar(videoId, duracionS, distanciaM, pasos): ResumenRecoleccion` · `descartar(videoId)` · `buscarEnCurso(): String?` · `contarPendientes(): Int` · `marcarSubida(videoId, fotoIds)` · `espacioLibreBytes(): Long` | Local (`RecoleccionRepositoryLocal(context)`, `data/repository/RecoleccionRepository.kt`) | `RecoleccionViewModel` (lo crea directamente). Detalle abajo |
+| `RecoleccionRepository` | `crearVideo(inicio): String` · `carpetaFotos(videoId): File` · `registrarFoto(videoId, archivo, DatosFoto): FotoRecolectada` · `desplazarFotos(videoId, desdeIndice, dLat, dLng)` · `fotos(videoId)` · `finalizar(videoId, duracionS, distanciaM, pasos): ResumenRecoleccion` · `descartar(videoId)` · `buscarEnCurso(): String?` · `leerEnCurso(videoId): VideoEnCurso` (FE-2.3) · `guardarProgreso(videoId, ProgresoRecoleccion)` (FE-2.3) · `contarPendientes(): Int` · `marcarSubida(videoId, fotoIds)` · `espacioLibreBytes(): Long` | Local (`RecoleccionRepositoryLocal(context)`, `data/repository/RecoleccionRepository.kt`) | `RecoleccionViewModel` (lo crea directamente) y, desde FE-2.3, `UbicacionManualScreen` (solo `buscarEnCurso` y `leerEnCurso`, para «Retomar …»). Detalle abajo |
 | `CalibracionPasoRepository` | `guardada(): Double?` · `longitudPasoM(): Double` (la calibrada, o `PdrEngine.LONGITUD_PASO_DEFECTO_M`) · `guardar(Valido, ahoraMs = ahora)` · `restablecer()` (borra todo el archivo) | Local (`CalibracionPasoRepository(context)`, `data/repository/CalibracionPasoRepository.kt`; **sin interfaz**) | `PdrTracker` (valor por defecto del parámetro), `CalibracionViewModel` y `UbicacionManualScreen`. Detalle abajo |
 | `LugaresRepository` | `suspend obtenerLugares(): List<LugarDestino>` (lanza `IOException`, solo documentado en el KDoc) | Stub (`LugaresRepositoryStub`, 300 ms; devuelve `LUGARES_DE_PRUEBA`, 6 lugares) | `SeleccionDestinoViewModel` (lo crea directamente); futuras 6.3 y 7.6/7.7 |
 | `EscaneoBackend` | `suspend analizar(fotos: List<File>)` → `Unit` (lanza `IOException`). Vive en `ui/ubicacion/EscaneoBackend.kt`, **no** en `data/repository/` | Stub (`EscaneoBackendStub`, 2,5 s) | `EscaneoViewModel` (lo instancia directamente). Detalle en 5.2 |
@@ -1472,6 +1514,7 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 | `InicioRecoleccion` | `domain/model/InicioRecoleccion.kt` | `lat`, `lng`, `rumbo` (0…360, 0 = norte; norte magnético si vino de la brújula), `nombreVideo` y `continuaVideoAnterior`. Lo emite la vista 7.3 y lo consume la 7.4 a través de `SesionDeRecoleccion`. Detalle en 5.5 («UbicacionManual») |
 | `FotoRecolectada`, `DatosFoto`, `ResumenRecoleccion` | `domain/model/FotoRecolectada.kt` | Lo que guarda y devuelve `RecoleccionRepository`. `FotoRecolectada` tiene un `uid`. Detalle abajo |
 | `SesionDeRecoleccion` | `domain/model/SesionRecoleccion.kt` (`object`) | Holder en memoria entre 7.3, 7.4 y 7.5. Detalle abajo |
+| `ProgresoRecoleccion`, `VideoEnCurso`, `PuntoRecorrido` | `domain/model/ProgresoRecoleccion.kt` | FE-2.3: progreso de una grabación (clave `progress` del manifest), video `en_curso` leído para retomarlo y punto `(lat, lng)` de la trayectoria. Detalle abajo |
 
 **`AuthRepository` en detalle (verificado)**
 
@@ -1535,19 +1578,22 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 - **Formato del `manifest.json` que lee hoy el código:** `name` (si falta, usa el nombre de la carpeta), `created_at`, `photos[]` con `id`, `file`, `lat`, `lng` (obligatorios) y `thumb`, `heading`, `captured_at`, `lugar`, `estado`, `calidad` (opcionales). ⚠ **El código no lee `video_id`**: el id del video es el **nombre de la carpeta**, aunque la tabla de 7.11 lo menciona. `estado` y `calidad` se comparan con el **nombre** del enum sin importar mayúsculas (`"alta"`, `"ERROR"`), no con la etiqueta visible, y si falta o no se reconoce usan `PROCESADA` / `NORMAL`.
 - Las URLs que arma son `file:///android_asset/videos/<id>/<ruta>`; si la miniatura no existe en `thumbs/`, `urlMiniatura` es la foto original.
 
-**`RecoleccionRepository` y `SesionDeRecoleccion` en detalle** (entregado el 2026-10-11; compila y funciona, sin pruebas automáticas)
+**`RecoleccionRepository` y `SesionDeRecoleccion` en detalle** (entregado el 2026-10-11; compila; el repositorio no tiene pruebas automáticas —usa `org.json`—, pero la decisión de cómo retomar sí: `RetomarRecoleccionTest`, §5.7)
 
 - **Por qué es aparte de `VideoRepository`:** éste es la fuente de verdad (futuro `RemoteVideoRepository`); el almacenamiento local de la captura es otra responsabilidad y así no se toca lo que ya funciona.
 - **Carpeta:** `files/recoleccion/<rec_NNNN>/photos/NNNN.jpg` + `manifest.json`. El id del video es `rec_` + 4 dígitos (prefijo distinto de `vid_` para no chocar con los datos de prueba); el id de cada foto lleva 4 dígitos con ceros a la izquierda, para ordenar como texto (ver `VideoRepository`).
-- **Manifest:** usa las claves del formato de `assets/videos/` (`video_id`, `name`, `created_at`, `photos[].id`, `file`, `lat`, `lng`, `heading`, `captured_at`) más claves **propias que el lector actual ignora**: `estado` (`en_curso` / `finalizado`), `start_lat`, `start_lng`, `start_heading`, `ended_at`, `duration_s`, `distance_m`, `steps` y `photos[].sync` (`pendiente` / `subida`). Es compatible **solo en las claves**: `AssetsVideoRepository` lee de `assets/`.
+- **Manifest:** usa las claves del formato de `assets/videos/` (`video_id`, `name`, `created_at`, `photos[].id`, `file`, `lat`, `lng`, `heading`, `captured_at`) más claves **propias que el lector actual ignora**: `estado` (`en_curso` / `finalizado`), `start_lat`, `start_lng`, `start_heading`, `ended_at`, `duration_s`, `distance_m`, `steps`, `photos[].sync` (`pendiente` / `subida`) y, desde FE-2.3, `progress` (abajo). Es compatible **solo en las claves**: `AssetsVideoRepository` lee de `assets/`.
+- **`progress` (FE-2.3, solo mientras `estado = en_curso`; queda tal cual al finalizar):** objeto con `lat`, `lng`, `heading` (0…360), `steps`, `distance_m`, `duration_s` (sin pausas), `anchor_distance_m` (distancia en el último re-anclaje), `anchor_photo_index` y `anchor_track_index` (primera foto y primer punto de `track` posteriores al último re-anclaje), `track` (`[[lat, lng], …]`, la trayectoria completa: un punto cada 3 pasos más los de re-anclaje), `mode` (`{"type": "distance", "value": 5.0}` o `{"type": "time", "value": 3}`) y `saved_at` (ISO-8601, con segundos). Ejemplo: `"progress": {"lat": 6.20012, "lng": -75.57795, "heading": 92.5, "steps": 30, "distance_m": 21.6, "duration_s": 95, "anchor_distance_m": 0.0, "anchor_photo_index": 0, "anchor_track_index": 0, "track": [[6.2, -75.578], [6.20002, -75.57799]], "mode": {"type": "time", "value": 3}, "saved_at": "2026-10-25T15:04:10-05:00"}`. Lo escribe `guardarProgreso` y lo lee `leerEnCurso`; si falta `lat`/`lng` o algo no se puede leer, `progreso = null` (se retoma sin él, `AppLog.w` «progress ilegible»); un `mode` desconocido da el intervalo por defecto.
 - **Fechas** en ISO-8601 (`yyyy-MM-dd'T'HH:mm:ssXXX`): ordena como texto (decisión pendiente de la nota de `Video.creadoEn` en 7.14).
-- **`registrarFoto`** recibe el JPG que dejó `tomarFoto` (`tmp_<n>.jpg`), lo renombra a `NNNN.jpg` y actualiza el manifest en cada foto (se guarda de forma continua). `desplazarFotos` mueve de forma uniforme las fotos desde un índice (re-anclaje). `finalizar` marca el video como `finalizado` y devuelve el `ResumenRecoleccion`; `descartar` borra la carpeta. `buscarEnCurso`, `contarPendientes` y `marcarSubida` son para retomar y para la subida futura (**aún sin usar**). `espacioLibreBytes` alimenta el aviso de almacenamiento.
+- **`registrarFoto`** recibe el JPG que dejó `tomarFoto` (`tmp_<n>.jpg`), lo renombra a `NNNN.jpg` y actualiza el manifest en cada foto (se guarda de forma continua). `desplazarFotos` mueve de forma uniforme las fotos desde un índice (re-anclaje). `finalizar` marca el video como `finalizado` y devuelve el `ResumenRecoleccion`; `descartar` borra la carpeta. `contarPendientes` y `marcarSubida` son para la subida futura (**aún sin usar**). `espacioLibreBytes` alimenta el aviso de almacenamiento.
+- **Retomar (FE-2.3):** `buscarEnCurso()` recorre las carpetas de `files/recoleccion/` de mayor a menor nombre y devuelve la primera con `estado = en_curso` (las de manifest ilegible se saltan); la usan 7.4 (`alAbrir` sin inicio) y 7.3 (`FilaRetomar`). `leerEnCurso(id)` → `VideoEnCurso(videoId, nombre = name (o el id si está vacío), inicioLat/inicioLng = start_lat/start_lng (obligatorios: si faltan, `IOException` «Manifest incompleto»), inicioRumbo = start_heading (0 si falta), fotos (como `fotos()`), progreso)`. `guardarProgreso(id, p)` relee el manifest y escribe `progress` **solo si sigue `en_curso`** (un guardado que llega tras `finalizar` no lo reabre; tras `descartar` lanza `IOException` porque ya no hay manifest). Todo con el mismo `Mutex` y la misma escritura atómica que el resto, así `registrarFoto` y `guardarProgreso` no se pisan.
 - Usa `org.json` (disponible en Android; en pruebas unitarias JVM hace falta la dependencia).
-- **`SesionDeRecoleccion`** (`object`): `inicio: StateFlow<InicioRecoleccion?>` · `resumen: StateFlow<ResumenRecoleccion?>` · `iniciar(inicio)` (la llama 7.3 vía `AppNav`) · `consumirInicio()` (la llama 7.4; **devuelve y borra**) · `finalizar(resumen)` (la llama `AppNav` al terminar; la leerá 7.5) · `limpiar()`. Vive en memoria: se pierde si Android mata el proceso (7.4 muestra entonces `SIN_INICIO`).
+- **`SesionDeRecoleccion`** (`object`): `inicio: StateFlow<InicioRecoleccion?>` · `resumen: StateFlow<ResumenRecoleccion?>` · `iniciar(inicio)` (la llama 7.3 vía `AppNav`) · `consumirInicio()` (la llama 7.4; **devuelve y borra**) · `finalizar(resumen)` (la llama `AppNav` al terminar; la leerá 7.5) · `limpiar()` (también la llama la ruta antes de «Retomar», FE-2.3). Vive en memoria: se pierde si Android mata el proceso; desde FE-2.3, 7.4 retoma entonces el video `en_curso` desde el disco (antes mostraba `SIN_INICIO`).
+- **`ProgresoRecoleccion`** (FE-2.3): `lat`, `lng`, `rumbo` (0…360), `pasos`, `distanciaMetros`, `duracionSegundos`, `distanciaAnclaM`, `indiceAnclaFoto`, `indiceAnclaTrayectoria`, `trayectoria: List<PuntoRecorrido>`, `modo: ModoCaptura`, `guardadoEnMs`. **`VideoEnCurso`**: `videoId`, `nombre`, `inicioLat`, `inicioLng`, `inicioRumbo`, `fotos: List<FotoRecolectada>` (coordenadas ya corregidas por los re-anclajes), `progreso: ProgresoRecoleccion?`. **`PuntoRecorrido(lat, lng)`**: también es el tipo interno de la trayectoria de `RecoleccionViewModel`.
 
-**`CalibracionPasoRepository` en detalle** (entregado el 2026-10-12; la lógica pura de `CalibracionPaso` se verificó con kotlinc; el repositorio depende de Android y no se probó por separado)
+**`CalibracionPasoRepository` en detalle** (entregado el 2026-10-12; la lógica pura de `CalibracionPaso` tiene `CalibracionPasoTest` desde FE-2.3; el repositorio depende de Android y no se probó por separado)
 
-- **Almacén:** `SharedPreferences` `campus_calibracion` (sin cifrar; no es un dato sensible). Claves: `longitud_paso_m`, `pasos`, `distancia_m`, `fecha_ms`. No hay un almacén genérico de preferencias (`SessionManager` es solo de sesión).
+- **Almacén:** `SharedPreferences` `campus_calibracion` (sin cifrar; no es un dato sensible), archivo `shared_prefs/campus_calibracion.xml` de la app. Claves y tipos: `longitud_paso_m` (`putString` del `Double`, p. ej. `<string name="longitud_paso_m">0.7098</string>`), `pasos` (`putInt`), `distancia_m` (`putString`) y `fecha_ms` (`putLong`, milisegundos epoch). `validate23.py` lo lee con `run-as … cat` para la evidencia de C3 (§5.11). No hay un almacén genérico de preferencias (`SessionManager` es solo de sesión).
 - `longitudPasoM()` es lo que lee `PdrTracker` al crearse; un valor guardado **fuera de 0,40–1,20 m se ignora** y se usa el genérico. `restablecer()` borra todo el archivo. `guardar` solo acepta un `ResultadoCalibracion.Valido`.
 - La fuente de pasos es única (acelerómetro, `FuentePasos.ACELEROMETRO`), así que ya no hay que guardar con cuál se calibró. **Las calibraciones hechas antes del 2026-10-12 (sensor de hardware) deben rehacerse.**
 - Sin interfaz ni `Remote…`: la calibración es **por dispositivo** y no se sincroniza con el backend.
@@ -1638,9 +1684,10 @@ Qué casos **no** ejercitan estos datos de prueba:
 | `BuscarLugares.mejores(consulta, lugares)` | `domain/usecase/BuscarLugares.kt` | Devuelve 0 (nada se parece), 1 (claro) o 2–3 lugares (empate: hay que pedir que elija). | **Verificado contra el código.** Normaliza (minúsculas, sin tildes, solo letras y números) y quita muletillas (lista fija: «quiero», «ir», «a», «al», «la», «el», «los», «las», «de», «del», «un», «una», «llevame», «llevarme», «lleves», «vamos», «hacia», «hasta», «para», «por», «favor», «me», «en», «donde», «esta», «necesito», «busco», «buscar»); si solo hay muletillas, las conserva. El puntaje de un lugar es el mejor entre su nombre y cada alias: si el texto limpio es **igual** al nombre o alias limpio → 1,0; si no, promedio sobre las palabras **dichas** de su mejor coincidencia en el candidato (igual 1,0; prefijo de 3 letras o más 0,9; parecida por Levenshtein con similitud ≥0,75 → ×0,9), y × 0,95 si el candidato es un nombre (los alias no se penalizan). Umbral 0,70; empate dentro de 0,04 del mejor; máximo 3 (los demás se descartan por orden de la lista). |
 | `BuscarLugares.filtrar(lugares, texto)` | ídem | Filtro del buscador de una lista. | **Verificado.** Cada palabra escrita debe estar **contenida** (no solo al inicio) en alguna palabra del nombre, de un alias o de `categoria.etiqueta` (**singular**; no usa `etiquetaPlural`). Texto vacío → lista completa. No quita muletillas. |
 | `InterpretarRespuesta.interpretar(texto)` | ídem | Devuelve `Respuesta.SI`, `NO` o `NINGUNA`. | **Verificado.** Compara **palabras completas** tras normalizar. Sí: «si», «claro», «correcto», «dale», «ok», «okay», «vale», «confirmo», «afirmativo», «exacto», «listo», «vamos», «adelante». No: «no», «nop», «nope», «cancela», «cancelar», «negativo», «incorrecto», «otro», «equivocado». Solo sí → `SI`; solo no → `NO`; ambas o ninguna → `NINGUNA` (p. ej. «está bien» o «de acuerdo» dan `NINGUNA`). `Respuesta` vive en el mismo archivo. Sirve para cualquier confirmación por voz. ⚠ `VoiceController.listen` entrega hasta 3 hipótesis **unidas en un solo texto**: si el reconocimiento duda entre "sí" y "no", el texto trae ambas y el resultado es `NINGUNA` (se debe volver a preguntar, no asumir). |
-| `CalibracionPaso` | `domain/usecase/CalibracionPaso.kt` (`object`) | `calcular(distanciaM, pasos, duracionS): ResultadoCalibracion` y `distanciaEntre(lat1, lng1, lat2, lng2)` (haversine, R = 6 371 000 m; igual que `map.distance` de Leaflet). Constantes `MIN_PASO_M` 0,40 · `MAX_PASO_M` 1,20 · `MIN_PASOS` 15 · `MIN_DISTANCIA_M` 10 · `DISTANCIA_RECOMENDADA_M` 30. | **Verificado con kotlinc 2.0.21** (13 comprobaciones). `ResultadoCalibracion`: `Valido(longitudPasoM, pasos, distanciaM, duracionS, cadenciaPpm, velocidadMps)` o `Invalido(motivo, longitudPasoM?)`; `MotivoInvalido`: `TRAMO_CORTO`, `POCOS_PASOS`, `PASO_MUY_CORTO`, `PASO_MUY_LARGO` (orden de comprobación: tramo → pasos → rango). Con `duracionS = 0`, cadencia y velocidad valen 0. Los umbrales de 10 m y 15 pasos son elección propia. Test JUnit4 `CalibracionPasoTest` (**no ejecutado en Gradle**) |
-| `DisparadorCaptura` y `ModoCaptura` | `domain/usecase/DisparadorCaptura.kt` | Decide cuándo tomar la siguiente foto de la recolección (cada N metros o N segundos). Ver 5.2, «Flujo de captura de la recolección». | Sin estado de Android: se puede probar con pruebas unitarias (todavía no hay). Llamar a `alCapturar` **solo si la foto se guardó** |
-| `Deriva.estimar(distanciaDesdeAnclaM)` | ídem | `EstimacionDeriva(derivaM, precisionM, nivel)` con `NivelCalidad` `ALTA` (< 15 m), `MEDIA` (< 30 m) o `BAJA`. | Heurística **provisional**: 4 % de la distancia desde el último ancla (decisión 16) |
+| `CalibracionPaso` | `domain/usecase/CalibracionPaso.kt` (`object`) | `calcular(distanciaM, pasos, duracionS): ResultadoCalibracion` y `distanciaEntre(lat1, lng1, lat2, lng2)` (haversine, R = 6 371 000 m; igual que `map.distance` de Leaflet). Constantes `MIN_PASO_M` 0,40 · `MAX_PASO_M` 1,20 · `MIN_PASOS` 15 · `MIN_DISTANCIA_M` 10 · `DISTANCIA_RECOMENDADA_M` 30. | `ResultadoCalibracion`: `Valido(longitudPasoM, pasos, distanciaM, duracionS, cadenciaPpm, velocidadMps)` o `Invalido(motivo, longitudPasoM?)`; `MotivoInvalido`: `TRAMO_CORTO`, `POCOS_PASOS`, `PASO_MUY_CORTO`, `PASO_MUY_LARGO` (orden de comprobación: tramo → pasos → rango; los mínimos de 10 m y 15 pasos y los límites 0,40 y 1,20 m son **inclusivos**; `TRAMO_CORTO` y `POCOS_PASOS` no traen longitud, los de rango sí). `cadenciaPpm = pasos × 60 / duracionS`, `velocidadMps = distanciaM / duracionS`; con `duracionS = 0` valen 0. Los umbrales de 10 m y 15 pasos son elección propia. **`CalibracionPasoTest`** (13 casos en Gradle desde FE-2.3; antes, 13 comprobaciones con kotlinc): haversine (0,0003° de latitud ≈ 33,36 m, mismo punto 0, simetría), longitud, cadencia y velocidad, mínimos y límites inclusivos, `duracionS = 0`, los cuatro rechazos y su orden, y con `PdrEngine`: 0,72 m por defecto, sin posición no cuenta pasos, y con la longitud calibrada `distanciaMetros = pasos × longitud` (los 47 pasos de la calibración vuelven a dar el tramo) |
+| `DisparadorCaptura` y `ModoCaptura` | `domain/usecase/DisparadorCaptura.kt` | Decide cuándo tomar la siguiente foto de la recolección (cada N metros o N segundos). Reglas exactas en 5.2, «Flujo de captura de la recolección». | Sin estado de Android. Llamar a `alCapturar` **solo si la foto se guardó**. **`DisparadorCapturaTest`** (10, FE-2.3): primera foto inmediata, por distancia (no cuenta el tiempo), por tiempo (no cuenta la distancia), foto fallida, cambiar el intervalo, `alReanudar`, `reiniciar`, etiquetas y opciones, y con `PdrEngine` que «cada 5 m» dispara cada `ceil(5 / longitud)` pasos (0,50 → 10; 0,68 → 8; 0,72 → 7; 0,75 → 7; 0,90 → 6) |
+| `Deriva.estimar(distanciaDesdeAnclaM)` | ídem | `EstimacionDeriva(derivaM, precisionM, nivel)`: `derivaM` = 4 % de la distancia, `precisionM` = máx(25 % de la deriva; 1 m), `NivelCalidad` por la **deriva**: `ALTA` (< 15 m), `MEDIA` (< 30 m) o `BAJA`. | Heurística **provisional** (decisión 16). **`DerivaTest`** (6, FE-2.3): valores, precisión mínima, niveles (374 m → ALTA, 376 → MEDIA, 749 → MEDIA, 751 → BAJA), distancia negativa → 0, etiquetas |
+| `RetomarRecoleccion.estado(video: VideoEnCurso): EstadoRetomado` | `domain/usecase/RetomarRecoleccion.kt` | FE-2.3: con qué estado vuelve 7.4 a un video `en_curso`. `EstadoRetomado(lat, lng, rumbo, pasos, distanciaMetros, duracionSegundos, distanciaAnclaM, indiceAnclaFoto, indiceAnclaTrayectoria, trayectoria, modo, conProgreso)` | Con `progress`: se toma tal cual (rumbo normalizado a 0…360; índices recortados a `0..tamaño`; `distanciaAnclaM` entre 0 y la distancia; trayectoria vacía → el punto de partida); si la última foto es **posterior** al progreso (segundos enteros, `capturadaEnMs / 1000 > guardadoEnMs / 1000`), la posición y el rumbo salen de ella y su punto se añade a la trayectoria. Sin `progress`: posición y rumbo de la última foto (o el punto y rumbo de partida), trayectoria = partida + fotos, contadores y duración en 0, intervalo por defecto y el ancla **al final** (un re-anclaje no mueve las fotos que ya había). **`RetomarRecoleccionTest`** (6) |
 
 Se pueden probar sin emulador (solo Kotlin).
 
@@ -1666,14 +1713,15 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 | `destino` | `SeleccionDestinoScreen` | — | `onDestinoConfirmado(LugarDestino)` (hoy **descarta** el destino y abre `ubicarme`), `onAjustes` → `ajustes`, `onVolver` |
 | `login` | `LoginScreen` | — | `onLoginExitoso` → `admin/panel` (quita `login` de la pila), `onVolver` |
 | `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila) |
-| `admin/ubicacion-manual` | `UbicacionManualScreen` (7.3) | — | `onVolver` (flecha y «Cancelar») → `popBackStack()`, `onAjustes` → `ajustes`, `onCalibrar` → `navigate("admin/calibracion")`, `onConfirmar(InicioRecoleccion)` → `SesionDeRecoleccion.iniciar(inicio)` y `navigate("admin/recoleccion")` (7.3 queda en la pila: su ViewModel reactiva «Confirmar» con `alReanudar()`). Pide `Permisos.INICIALES` antes de mostrar la pantalla y descarta el resultado |
+| `admin/ubicacion-manual` | `UbicacionManualScreen` (7.3) | — | `onVolver` (flecha y «Cancelar») → `popBackStack()`, `onAjustes` → `ajustes`, `onCalibrar` → `navigate("admin/calibracion")`, `onConfirmar(InicioRecoleccion)` → `SesionDeRecoleccion.iniciar(inicio)` y `navigate("admin/recoleccion")` (7.3 queda en la pila: su ViewModel reactiva «Confirmar» con `alReanudar()`), `onRetomar` (FE-2.3) → `SesionDeRecoleccion.limpiar()` y `navigate("admin/recoleccion")` (sin inicio: 7.4 retoma). Pide `Permisos.INICIALES` antes de mostrar la pantalla y descarta el resultado |
 | `admin/calibracion` | `CalibracionScreen` (7.3b) | — | Pide `Permisos.ACTIVIDAD` antes de mostrar la pantalla y **descarta el resultado** (negarlo no cambia nada: los pasos salen siempre del acelerómetro; quitar este permiso es parte de FE-4.3). `onVolver` → `popBackStack()`. Se llega desde la fila «Calibrar mi paso» de 7.3. No devuelve datos: el resultado se guarda en `CalibracionPasoRepository` (5.6) y lo recoge cada `PdrTracker` al crearse |
-| `admin/recoleccion` | `RecoleccionScreen` (7.4) | `InicioRecoleccion` por `SesionDeRecoleccion` (no por la ruta) | Pide **solo la cámara** antes de mostrar la pantalla (como `ubicarme`; si se niega, `popBackStack()`). `onFinalizado(resumen)` → `SesionDeRecoleccion.finalizar(resumen)` y `navigate("admin/recoleccion/resumen") { popUpTo("admin/ubicacion-manual") { inclusive = true } }` (saca 7.3 y 7.4 de la pila); `onDescartado` (video sin fotos) → `popBackStack("admin/panel", inclusive = false)`; `onVolver` (solo con error, p. ej. `SIN_INICIO`) → `popBackStack()`; `onAjustes` → `ajustes` |
+| `admin/recoleccion` | `RecoleccionScreen` (7.4) | `InicioRecoleccion` por `SesionDeRecoleccion` (no por la ruta) | Pide **solo la cámara** antes de mostrar la pantalla (como `ubicarme`; si se niega, `popBackStack()`). `onFinalizado(resumen)` → `SesionDeRecoleccion.finalizar(resumen)` y `navigate("admin/recoleccion/resumen") { popUpTo("admin/ubicacion-manual") { inclusive = true } }` (saca 7.3 y 7.4 de la pila); `onDescartado` (video sin fotos) → `popBackStack("admin/panel", inclusive = false)`; `onVolver` (solo con error: `SIN_INICIO` —sin inicio ni video `en_curso` que retomar— o `NO_SE_PUDO_CREAR`) → `popBackStack()`; `onAjustes` → `ajustes`. Sin `InicioRecoleccion` (pila restaurada tras matar el proceso, o `onRetomar` de 7.3) retoma el video `en_curso` más reciente (FE-2.3, 5.2) |
 | `admin/recoleccion/resumen` | Placeholder (7.5, falta `ResumenVideoScreen`) | `SesionDeRecoleccion.resumen` | Pantalla en blanco: solo se sale con Atrás |
 | `admin/mapa` | `EditorMapaScreen` | `posicionAdmin: () -> Pair<Double, Double>?` (hoy `{ null }`) | `onVolver`, `onVerLista` (hoy vacío; el comentario dice «vista 17», que corresponde a la lista de alertas 7.10) |
 | `admin/imagenes` | `GaleriaScreen` | — | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
 | `admin/videos` | `VideosScreen` | — | `onVolver`, `onAbrirVideo(id)` → `admin/videos/<id>` |
 | `admin/videos/{videoId}` | `VideoDetalleScreen` | `videoId` (argumento de ruta, texto) | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
+| `mapa` | `MapaPublicoScreen` (2.6) | — | Ruta pública registrada en FE-2.3 para las pruebas en dispositivo; ninguna pantalla navega a ella todavía (la entrada desde Inicio, el comando de voz «mapa» y la acción de TalkBack son de FE-3.1). Se abre al arrancar con el extra `ruta` (abajo); Atrás vuelve a `inicio` |
 
 Rutas con placeholder vacío (pantalla en blanco, no cierran la app): `admin/recoleccion/resumen`, `admin/lugares`,
 `admin/estadisticas`, `ajustes`. Registrar una ruta **dos veces** hace que la última
@@ -1690,12 +1738,25 @@ registrada** cierra la app con un error.
 - **Sin protección al entrar en las rutas `admin/*`:** `AppNav` no comprueba la sesión al entrar en `admin/mapa`,
   `admin/imagenes` ni `admin/videos[/{id}]`; el panel dispara `onSinSesion` en su `init`. ⚠ Confirmar si cada
   pantalla admin lo comprueba por su cuenta. Ojo con la restauración tras matar el proceso: `MyApp`
-  ya habrá borrado la sesión (5.3) y Android puede restaurar la pila en una pantalla admin.
+  ya habrá borrado la sesión (5.3) y Android puede restaurar la pila en una pantalla admin (así retoma 7.4 su
+  grabación sin pedir login, FE-2.3: no llama al backend; ⚠ que el Xiaomi restaure la pila tras `am kill`, a verificar
+  en C4).
 - **Vuelta a Login por sesión perdida (FE-1.2):** `AppNav` tiene un `LaunchedEffect(nav)` que recoge
   `EventosSesion.sinSesion` (5.3). Si la ruta actual (`nav.currentDestination?.route`) empieza por `admin/`, hace
   `nav.navigate("login") { popUpTo("inicio"); launchSingleTop = true }`: la pila queda `inicio → login` y la app no se
   cierra. En cualquier otra ruta (flujo público, `login`) ignora el evento. Así cualquier pantalla admin que llame a
-  `/v1/admin/…` o `/v1/collect/…` con la sesión vencida o rechazada vuelve a Login sin código propio.
+  `/v1/admin/…` o `/v1/collect/…` con la sesión vencida o rechazada vuelve a Login sin código propio. Tras esa vuelta,
+  Login lleva a `admin/panel` (`onLoginExitoso`), **no** a la pantalla donde se perdió la sesión: la 7.5
+  (`admin/recoleccion/resumen`) se pierde de la pila. Lo que deba seguir (cola de subida, `SesionDeRecoleccion.resumen`)
+  tiene que sobrevivir en el holder o en disco y poder retomarse desde el Panel.
+- **Ruta de prueba al arrancar (FE-2.3, ADR-FE-18):** `MainActivity` lee el extra `MainActivity.EXTRA_RUTA` (`"ruta"`)
+  solo si la app es depurable (`ApplicationInfo.FLAG_DEBUGGABLE`) y `savedInstanceState == null` (arranque nuevo: no al
+  rotar ni al restaurar), y solo si el valor está en `MainActivity.RUTAS_DE_PRUEBA` (hoy `{"mapa"}`; otro valor se
+  ignora, porque navegar a una ruta no registrada cierra la app). `AppNav(rutaInicial)` la abre con
+  `LaunchedEffect(nav, rutaInicial) { nav.navigate(rutaInicial) }`, encima de `inicio` (que no se compone, así que no pide
+  permisos hasta volver). Comando: `adb shell am force-stop com.example.myapplication` y `adb shell am start -n
+  com.example.myapplication/.MainActivity --es ruta mapa` (sin el `force-stop`, una tarea viva solo pasa al frente y el
+  extra no llega).
 - **Permisos en la ruta:** `inicio` pide los iniciales y `ubicarme` la cámara antes de mostrar la
   pantalla (ver 5.3). `admin/recoleccion` pide solo la cámara; la ruta de navegación (6.5) deberá hacer lo mismo. `admin/calibracion` pide solo `Permisos.ACTIVIDAD`.
   `admin/ubicacion-manual` ya pide `Permisos.INICIALES` y descarta el resultado (la 7.3 en sí no necesita
@@ -1719,8 +1780,9 @@ sección; las de los tres últimos, en 5.5. Funciones y cuidados del `EditorBrid
 `env(safe-area-inset-*)` no funciona en `WebView`, así que la app pasa el alto de las barras en dp con
 `setInsets(top, bottom)` (el mapa público no lo usa: su pantalla aplica `systemBarsPadding()`).
 
-> ⚠ **Código entregado el 2026-10-10.** El lado web se probó con jsdom (27 comprobaciones, incluido el caso
-> «Leaflet no carga»); el lado Kotlin **no se compiló** ni se probó en dispositivo. Confirmar y quitar este aviso.
+> **Código entregado el 2026-10-10.** El lado web se probó con jsdom (27 comprobaciones, incluido el caso
+> «Leaflet no carga»); el lado Kotlin compila con el proyecto. ⚠ El mapa público con el PDR, **a verificar en
+> dispositivo (FE-2.3 C3)**.
 
 **Infraestructura común (dos piezas):**
 
@@ -1735,7 +1797,7 @@ sección; las de los tres últimos, en 5.5. Funciones y cuidados del `EditorBrid
   `salir()`), el botón `#btn-back`, las medidas (`--toph` / `--dockh` con `ResizeObserver`; usa los ids `top` y `dock`) y,
   si no hay Leaflet, el aviso «No se pudo cargar el mapa…». La página termina con `if (!base.leaflet) return;` y después
   reemplaza `window.onAtras` por el suyo. `call` devuelve `true` si había puente; si no, la página usa datos de demo.
-- ⚠ **`crearMapa` no es parte del objeto que devuelve `iniciar`:** se llama `MapaBase.crearMapa(...)`. Solo `base.existe`, `base.call` y `base.leaflet` cuelgan de `base`; `toast`, `dialogo`, `confirmar`, `medir`, `$`, `ic`, `esc` y `puente` también son de `MapaBase`. Escribir `base.crearMapa(...)` lanza `TypeError` y deja el mapa **negro y sin aviso** (pasó en `calibracion_mapa.js`, corregido el 2026-10-12). ⚠ **Revisar que `recoleccion_mapa.js` use `MapaBase.crearMapa`** (se escribió con el mismo supuesto).
+- ⚠ **`crearMapa` no es parte del objeto que devuelve `iniciar`:** se llama `MapaBase.crearMapa(...)`. Solo `base.existe`, `base.call` y `base.leaflet` cuelgan de `base`; `toast`, `dialogo`, `confirmar`, `medir`, `$`, `ic`, `esc` y `puente` también son de `MapaBase`. Escribir `base.crearMapa(...)` lanza `TypeError` y deja el mapa **negro y sin aviso** (pasó en `calibracion_mapa.js`, corregido el 2026-10-12). Comprobado en FE-2.3 (C2 de `validate23.py` y `grep`): `recoleccion_mapa.js`, `calibracion_mapa.js`, `editor_mapa.js` y `video_detalle.js` usan `MapaBase.crearMapa(`; ninguna página usa `base.crearMapa(`.
 - `crearMapa({ centro, zoom, maxZoom })` → mapa Leaflet con las teselas de OSM (nativas hasta el zoom 19; `maxZoom` mayor las
   amplía: el detalle de video usa 21), atribución «© OSM» y control de zoom, ambos abajo a la izquierda.
 - `toast`, `dialogo({ texto, label, peligro, input, valor, placeholder, valida, ok })`, `confirmar(texto, ok, label = 'Eliminar')`,
@@ -1764,7 +1826,7 @@ LaunchedEffect(mapa.listo, json) { if (mapa.listo) mapa.js("cargarX(${literalJs(
 Y en la página: `<script>` de Leaflet, `mapa_base.js`, el JS de la página; en este, `const base = MapaBase.iniciar({ puente: 'MiBridge' }); if (!base.leaflet) return;`.
 
 Cuidados:
-- **Falta migrar `MapaPublicoScreen`** (FE-4.3) (⚠ su código no se revisó en este cambio): sigue con su propia fábrica de `WebView`.
+- **Falta migrar `MapaPublicoScreen`** (FE-4.3): sigue con su propia fábrica de `WebView` (confirmado en FE-2.3: `AndroidView` con un `WebView` propio, `addJavascriptInterface(PuentePdr(tracker), "AndroidBridge")`, consola a `AppLog.d` con el tag `MapaPublico`, y no atiende la geolocalización).
   `MapaWebView` acepta cualquier objeto como `puente` (sirve `PuentePdr`) y `pasarInsets = false`, y el modificador
   `Modifier.systemBarsPadding()`; los `window.onNative*` se siguen enviando con `evaluateJavascript` desde esa pantalla.
 - Los datos del usuario o del repositorio siempre con `textContent` o `esc()`, nunca interpolados en `innerHTML` (excepción: `bindTooltip` del editor).
@@ -1787,7 +1849,7 @@ Cuidados:
 | Kotlin → Web | `window.onNativePosition(lat, lng, pasos, distanciaM, velocidadMps)` | Posición calculada tras cada paso (y al fijar o reiniciar). Con `pasos = 0` no se suma punto a la trayectoria |
 | Kotlin → Web | `window.onNativeHeading(grados)` | Rumbo 0–360, norte real, ya promediado (~20 Hz, solo con el seguimiento activo) |
 | Kotlin → Web | `window.onNativeAccel(desviacion)` | Desviación de la aceleración respecto a la gravedad (m/s²), solo para la gráfica |
-| Kotlin → Web | `window.onNativeBrujula(disponible)` | Se envía en cada `startSensors()`; si es `false` aparece la rueda manual |
+| Kotlin → Web | `window.onNativeBrujula(disponible)` | Se envía en cada `startSensors()` (no al volver del segundo plano, cuando el `PdrTracker` vuelve a registrar los sensores solo; FE-2.3); si es `false` aparece la rueda manual |
 | Kotlin → Web | `window.onNativeStepUnavailable(motivo)` | El teléfono no tiene acelerómetro (`'no_sensor'`); solo muestra un aviso. Ya no se envía `'permission_denied'` (el acelerómetro no necesita permiso) |
 
 Se eliminaron `onNativeStep(count)` y la firma anterior `onNativeAccel(x, y, z)`.
@@ -1934,6 +1996,10 @@ Login (FE-1.2, hecho): `POST /v1/auth/login` con cuerpo `LoginPeticionDto` → `
 - `RemoteBackendHealth.estaEnLinea()` atrapa cualquier `Exception` (salvo `CancellationException`, que relanza) y
   devuelve `false`; `withTimeoutOrNull(limiteMs)` da `false` si se pasa del límite.
 - `MapeoDatosApi.usuario`: `nombre` ausente → `""`; `id`, `correo` y `rol` obligatorios.
+- **`PUT` a las URLs prefirmadas de S3 (FE-2.1):** **no** van por `ClienteApi.api` ni `ClienteApi.okHttp`
+  (`RequestIdInterceptor` añadiría `X-Request-Id` y el contrato pide «exactamente los encabezados recibidos»). Usar un
+  `OkHttpClient` propio sin interceptores, con los tiempos de `ApiConfig`. Nunca registrar la URL completa (la firma va
+  en la *query*); `RequestIdInterceptor` solo registra `encodedPath`.
 - Pruebas: `ClienteApi.crear(urlBase = servidor.url("/v1").toString(), token = { "t" }, registrar = { lineas += it })`
   con `MockWebServer` (`okhttp3.mockwebserver`, `testImplementation(libs.okhttp.mockwebserver)`); las corrutinas con
   `kotlinx.coroutines.runBlocking` (no hay `kotlinx-coroutines-test` en el build). `SocketPolicy.DISCONNECT_AT_START`
@@ -2026,7 +2092,17 @@ La **cola** es el propio `manifest.json` de cada recorrido (§5.6, «Recolecció
 `subida` cuando su `PUT` responde 200, y se añaden dos claves de video, `remote_video_id` (UUID que devuelve
 `POST /v1/collect/videos`) y `subida_estado` (`sin_subir`, `subiendo`, `completada`). Al abrir la app se retoman los
 recorridos `finalizado` con `subida_estado = subiendo`. «Fotos pendientes» del Panel (7.2) = número de
-`photos[].sync = pendiente` en los manifests con `estado = finalizado`.
+`photos[].sync = pendiente` en los manifests con `estado = finalizado`. Los recorridos `en_curso` (con la clave
+`progress` de FE-2.3, §5.6) no se suben: se retoman en 7.4.
+
+*Subida y sesión* (FE-1.2; lo verificó el maestro en `dev` el 2026-10-25): toda llamada a `/v1/collect/…` pasa por
+`SesionInterceptor`, y `MyApp` borra la sesión en cada arranque en frío (§5.3), así que retomar una subida al abrir la
+app no puede llamar al backend hasta que el admin inicie sesión. Falla en el teléfono con
+`ApiException(FalloApi.SesionVencida("SIN_SESION_LOCAL"))`, sin red, y si la ruta actual no es `admin/…`, `AppNav` no
+navega. La cola debe tratarlo como «esperar sesión», no como error de red ni con reintentos en bucle; se retoma tras el
+login (al abrir el Panel o la vista 7.5, o cuando `SessionManager.obtener()` vuelva a dar sesión). Igual si la sesión
+vence (12 h) o el backend la rechaza a mitad de la subida: la cola queda en `subiendo` y, por idempotencia, se retoma
+tras volver a entrar.
 
 **Alertas sin conexión (2.5)**: caché local en Room, base `campus_locator.db` (en `databases/` de la app), tabla
 `alertas` (los campos de `Alerta`) y tabla `sincronizacion` (clave `alertas_generado_en`). Primera vez,
@@ -2154,11 +2230,17 @@ llaman a AWS; FE-2.1, FE-2.2, FE-3.3, FE-3.4 y FE-4.1 las reutilizan):
 Cambio de FE-1.2 en lo existente: `adb(…)` pasa la entrada estándar vacía (`entrada=""`), así `adb shell` no abre un
 PTY (con PTY se mezclan stderr y stdout y los finales de línea pasan a `\r\n`).
 
+Ayuda que añadió FE-2.3:
+
+| Elemento | Qué hace |
+|---|---|
+| `listar_archivos_app(ruta)` → `list[str] \| None` | `adb exec-out run-as com.example.myapplication ls -1 <ruta>` (solo APK de depuración): nombres ordenados, sin líneas vacías; `None` si la carpeta no existe o `run-as` falla. `validate23.py` la usa con `files/recoleccion` (FE-2.1 puede reutilizarla para la cola de subida) |
+
 Forma de un validador (`validate11.py` es el ejemplo): `import comun`, `main(argv=None)` crea el `Validador` y devuelve
 `v.correr(cuerpo, argv)`, el módulo termina con `sys.exit(main())`. Sus pruebas (`tests/ops/test_validate11.py`)
 sustituyen `comun.gradle`, `comun.adb`, `comun.http_get`, etc. con `monkeypatch` y recorren `main()` entero; corren en
 el job `validadores` de `frontend.yml`. `uv run --frozen pytest` desde `project/` (29 casos al cerrar FE-1.1; 73 con
-FE-1.2: `test_validate12.py` y `test_comun_login.py`).
+FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_validate23.py`, 20).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -2189,6 +2271,33 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`).
   con o sin `SecurityException`, teclado que tapa el botón) y sustituyen `comun.tarea_cli`, `comun.reloj` y
   `comun.dormir`; comprueban además que la contraseña, el token y `validacion-pw-` no salen ni por stdout, ni por
   stderr, ni en el informe.
+  **Para entrar como admin desde otro validador (FE-2.1):** copiar de `validate12.py` `Contexto.preparar_telefono()`
+  (no está en `comun.py`: `installDebug` + `pm grant` de `CAMERA`, `RECORD_AUDIO` y `ACTIVITY_RECOGNITION` con SDK ≥ 29)
+  y P5 (para `usuario.nombre`); después `comun.abrir_login()`,
+  `comun.enviar_credenciales(*comun.credenciales_admin("dev"))` y
+  `comun.esperar_nodo(lambda ns: comun.primero(ns, dice=saludo_esperado(nombre)), 15, "el Panel")`. `tarea_cli` solo
+  lanza la familia `campus-locator-dev-migrate` y lee `LOG_MIGRATE`; un lote que necesite `campus-locator-dev-worker`
+  (p. ej. `limpiar-validacion`) le añade un parámetro de familia y su log, y actualiza la tabla.
+- `validate23.py` (FE-2.3; ejemplo de un validador sin backend ni AWS, con comprobaciones estáticas y apoyo a
+  manuales): IDs `C1, C2` sin grupos; entornos `local` y `dev`. Constantes: `CLASES_C1` (`CalibracionPasoTest`,
+  `StepDetectorTest`, `DisparadorCapturaTest`, `DerivaTest`), `MINIMO_CASOS` (8, 6, 6 y 4; hoy 13, 11, 10 y 6),
+  `DIR_ASSETS` (`app/src/main/assets`), `ARCHIVOS_C2` (`recoleccion_mapa.js`, `calibracion_mapa.js`),
+  `PREFS_CALIBRACION` (`shared_prefs/campus_calibracion.xml`), `DIR_RECOLECCION` (`files/recoleccion`),
+  `CAMBIO_DETECTOR` (2026-10-12, ADR-FE-04), `ZONA_BOGOTA` (UTC−5). P1 como `validate12` (`--version`, código 3); P2
+  solo en `dev` (como `validate12`, código 3; en `local` no se anota). C1: borra los XML de las cuatro clases, una sola
+  ejecución `testDebugUnitTest --tests '*.<clase>'` × 4; falla si falta un XML, si una clase tiene fallos, errores,
+  casos omitidos o menos casos que su mínimo, o si Gradle no sale con 0. C2: `quitar_comentarios_js` (quita `//` y
+  `/* */` respetando cadenas `'…'`, `"…"` y `` `…` ``; no entiende expresiones regulares literales) y cuenta
+  `\bMapaBase\s*\.\s*crearMapa\s*\(` y `(?<![\w$.])base\s*\.\s*crearMapa\s*\(` (`llamadas_crear_mapa`). En `dev`, si
+  C1 y C2 (las incluidas) pasan, `preparar_telefono()`: `installDebug` (`INSTALL_FAILED_USER_RESTRICTED` u otro fallo →
+  `ErrorConfiguracion`, código 3), `leer_calibracion(xml)` → `Calibracion(longitud_m, pasos, distancia_m, fecha_ms)`
+  (`.fecha` en Bogotá, `.posterior_al_cambio` = fecha > 2026-10-12, `.en_rango` = 0,40–1,20 m) y
+  `recorridos_locales()` → `[Recorrido(id, estado, fotos, con_progreso)]` (con `leer_manifest`); el texto
+  (`describir_calibracion`, `describir_recorridos`) va por stderr y como prefijo `[…]` de las tres manuales, así queda
+  en el informe. Si una automática falla, no instala («APK sin instalar: C1 no pasan»). Nunca usa `pm clear` ni crea
+  datos: no registra limpiezas. `instrucciones(contexto)` da el texto de C3, C4 y C5. Las pruebas
+  (`tests/ops/test_validate23.py`) simulan Gradle (escribe los XML) y adb (`getprop`, `run-as cat|ls`) y comprueban
+  además que nunca se llama a `pm clear`.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -2209,8 +2318,20 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`).
 - **MIUI/HyperOS (Xiaomi):** además de «Instalar vía USB» (sin ella `installDebug` da `INSTALL_FAILED_USER_RESTRICTED`,
   FE-1.1), `pm grant` e `input` exigen **«Depuración USB (Configuración de seguridad)»** en Opciones de desarrollador;
   sin ella fallan con `SecurityException` (`GRANT_RUNTIME_PERMISSIONS`, `INJECT_EVENTS`). `exigir_adb_permitido` lo
-  convierte en código 3 con la solución. MIUI suele pedir una cuenta Mi y SIM para activarla (sin comprobar en el
-  Xiaomi del equipo).
+  convierte en código 3 con la solución. Comprobado en `dev` (FE-1.2, 2026-10-25): con el ajuste activo, `pm grant` e
+  `input` funcionan en el Xiaomi del equipo. **Sin comprobar:** el texto exacto de la `SecurityException` sin el ajuste
+  y si MIUI pide una cuenta Mi y SIM para activarlo.
+- **`-dirty` por archivos del IDE:** `commit_actual()` cuenta cualquier archivo versionado de `project/`. La primera
+  corrida de FE-1.2 en `dev` salió `-dirty` por `project/.idea/vcs.xml` (lo cambia Android Studio; sigue versionado, con
+  el mapeo a la raíz del monorepo desde `4d578c5`) y por un `.kotlin/sessions/*.salive` versionado (`.kotlin/` está en
+  `.gitignore` desde `4d578c5`). Antes de validar, `git -c core.autocrlf=input status -- FRONTEND_KOTLIN/project` debe
+  salir vacío.
+- **Manuales de FE-2.3 (sin comprobar en el Xiaomi):** el formato de `adb shell dumpsys sensorservice` (en AOSP, las
+  conexiones vivas salen bajo «active connections» con el paquete; el historial «Previous Registrations» también
+  nombra el paquete y **no** cuenta). El `PdrTracker` quita los sensores ~700 ms después de pasar a segundo plano
+  (`ProcessLifecycleOwner`), por eso C5 espera 10 s. `am start … --es ruta mapa` sin `am force-stop` antes solo trae al
+  frente la tarea que ya existe (el extra no llega). `am kill` solo mata procesos en segundo plano: primero Inicio del
+  sistema.
 - **`uiautomator dump` solo vuelca lo visible:** omite los nodos fuera de la pantalla (p. ej. «Cerrar sesión» al pie del
   Panel), por eso C1 desliza hasta 4 veces. Compose expone el árbol **sin fusionar**: el texto de un botón es un nodo
   hijo (`TextView text="Iniciar sesión"`) y el botón (`android.widget.Button`) no tiene texto; tocar el centro del
@@ -2219,8 +2340,7 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`).
   (por eso `textos_visibles` omite los campos y `volcar_pantalla` borra el XML del teléfono en la misma orden).
   `uiautomator dump` espera a que la interfaz quede quieta (hasta ~10 s); si una animación sin fin sigue mandando
   eventos de accesibilidad, responde «ERROR: could not get idle state» y no vuelca nada. Inicio tiene un orbe
-  animado: que no lo provoque está **sin comprobar** en el teléfono (en las capturas de FE-1.1 «Acceso administrador»
-  se ve sin desplazar).
+  animado y **no** lo provocó: C1 en `dev` volcó Inicio, Login y Panel (FE-1.2, 2026-10-25).
 - **`input text` y el `sh` del teléfono:** `adb shell input text X` une los argumentos y los pasa a `sh -c` en el
   teléfono: sin escapar, `$`, `'`, `;`, `&`… se interpretan; y `input` cambia cada `%s` por un espacio (no hay forma de
   escribir un `%s` literal). Probado con un `sh` de Linux (`test_comun_login.py`); **sin comprobar** con `"` o `\` a
@@ -2626,8 +2746,11 @@ de fuente del sistema; las tarjetas crecen en alto si el texto se agranda.
 
 **Implementación actual (2026-10-11):** en `ui/admin/recoleccion/UbicacionManualScreen.kt`
 (con `UbicacionManualViewModel.kt` y `UbicacionManualState.kt`) y su mapa `assets/ubicacion_manual.html` +
-`ubicacion_manual.js` (compila y se ha abierto en dispositivo, 2026-10-12; el JS pasó `node --check`; ⚠ sin prueba funcional completa).
+`ubicacion_manual.js` (compila y se ha abierto en dispositivo, 2026-10-12; el JS pasó `node --check`; ⚠ prueba funcional completa a verificar en dispositivo, FE-2.3 C3).
 Detalle de piezas y cuidados en 5.5 («UbicacionManual»).
+
+- **«Retomar …»** (FE-2.3): si quedó una grabación `en_curso` (la app se cerró sin finalizarla), una fila ámbar bajo el
+  encabezado la nombra con sus fotos y abre 7.4, que la retoma en pausa (5.5 y 5.2).
 
 - **Mapa** Leaflet/OSM con **marcador arrastrable** (o toque para colocarlo), flecha de rumbo y etiquetas de
   los lugares conocidos (`LugaresRepository`). «Centrar» y +/− los dibuja Compose encima del `WebView`.
@@ -2683,16 +2806,17 @@ recolección (7.4: contadores, disparador por distancia, deriva y trayectoria), 
 | Estado y lógica | `ui/admin/calibracion/CalibracionState.kt`, `CalibracionViewModel.kt` | Su propio `PdrTracker`; 5.5 |
 | Mapa A→B | `assets/calibracion_mapa.html`, `assets/calibracion_mapa.js`, `ui/admin/calibracion/componentes/MapaCalibracion.kt` | Puente `CalibracionBridge` (5.5 y 5.9) |
 | Pantalla | `ui/admin/calibracion/CalibracionScreen.kt` | Sin scroll: el mapa ocupa el espacio sobrante (mín. 180 dp) |
-| Pruebas | `test/.../domain/usecase/CalibracionPasoTest.kt` | JUnit4, **no ejecutado en Gradle** |
+| Pruebas | `test/.../domain/usecase/CalibracionPasoTest.kt` | JUnit4, 13 casos en Gradle (FE-2.3; antes el archivo no existía aunque este documento lo citaba) |
 | Navegación | `MainActivity.kt` (`Permisos.ACTIVIDAD`, ruta `admin/calibracion`), punto de entrada en `UbicacionManualScreen.kt` | 5.3 y 5.8 |
 
-**Verificado:** `CalibracionPaso.kt` y `PdrEngine.kt` compilan con kotlinc 2.0.21 y pasan 13 comprobaciones (haversine ≈ 33,4 m para
-0,0003° de latitud; `longitud = distancia/pasos`; los cuatro motivos de rechazo; límites 0,40 y 1,20 m válidos; `duracionS = 0` sin
-romper; sin posición no cuenta pasos; `distancia = pasos × longitud inyectada`; valor por defecto 0,72). El proyecto compila con todas las
-piezas y la pantalla se abre en dispositivo desde 7.3. **Error corregido en dispositivo:** el mapa salía en negro porque
-`calibracion_mapa.js` llamaba a `base.crearMapa(...)` (no existe) en vez de `MapaBase.crearMapa(...)` (5.9).
-⚠ **Falta la prueba funcional completa:** calibrar en un tramo de ≥ 30 m, guardar, iniciar una recolección y comprobar que
-`distanciaMetros ≈ pasos × longitud guardada` y que el disparador de 5 m dispara cada ≈ `5 / longitud` pasos.
+**Verificado:** `CalibracionPasoTest` (13 casos en Gradle, FE-2.3) cubre haversine ≈ 33,4 m para 0,0003° de latitud,
+`longitud = distancia/pasos`, los cuatro motivos de rechazo y su orden, límites 0,40 y 1,20 m válidos, `duracionS = 0` sin romper, sin
+posición no cuenta pasos, `distancia = pasos × longitud inyectada` y el valor por defecto 0,72; `DisparadorCapturaTest` comprueba con
+`PdrEngine` que «cada 5 m» dispara cada `ceil(5 / longitud)` pasos. El proyecto compila con todas las piezas y la pantalla se abre en
+dispositivo desde 7.3. **Error corregido en dispositivo:** el mapa salía en negro porque `calibracion_mapa.js` llamaba a
+`base.crearMapa(...)` (no existe) en vez de `MapaBase.crearMapa(...)` (5.9; C2 de FE-2.3 lo comprueba).
+⚠ **A verificar en dispositivo (FE-2.3 C3):** calibrar en un tramo de ≥ 30 m, guardar, iniciar una recolección y comprobar que
+`distanciaMetros ≈ pasos × longitud guardada` y que el disparador de 5 m dispara cada ≈ `5 / longitud` pasos con pasos reales.
 
 **Decisiones tomadas:**
 - **Calibración por dispositivo con una sola pasada A→B**, no por cadencia ni por altura: resuelve la decisión abierta 16 (longitud de paso).
@@ -2708,8 +2832,8 @@ piezas y la pantalla se abre en dispositivo desde 7.3. **Error corregido en disp
 - **Sin internet el mapa no carga** y no se pueden marcar A y B: la calibración es inutilizable sin mapa (decisión 13).
 - **No corrige la deriva de la brújula** ni hace fusión (`domain/fusion/`).
 
-Las tareas pendientes (probar la pasada completa en dispositivo, ejecutar `CalibracionPasoTest`, promediar varias
-pasadas y la relación con la unidad «metros / pasos» de Ajustes) están en `PLAN.md` (FE-2.3, FE-4.3 y FE-4.2).
+Las tareas pendientes (probar la pasada completa en dispositivo, promediar varias pasadas y la relación con la unidad
+«metros / pasos» de Ajustes) están en `PLAN.md` (FE-2.3 C3, FE-4.3 y FE-4.2).
 
 ---
 
@@ -2744,8 +2868,9 @@ pasadas y la relación con la unidad «metros / pasos» de Ajustes) están en `P
 guardándolas con coordenada y orientación; guarda localmente de forma continua para no
 perder datos si la app se cierra; mantiene la pantalla activa y funciona en primer plano.
 
-**Implementación actual (2026-10-11):** construida en cinco baches. Compila y funciona según quien la escribió
-(sin pruebas automáticas). Diseño: `assets/recoleccion_en_curso.png`.
+**Implementación actual (2026-10-11; robustez en FE-2.3):** construida en cinco baches. Compila; la lógica pura que usa
+(`DisparadorCaptura`, `Deriva`, `RetomarRecoleccion`, `PdrEngine`) tiene pruebas en la JVM desde FE-2.3; ⚠ la vista en sí,
+a verificar en dispositivo (FE-2.3 C3 y C4). Diseño: `assets/recoleccion_en_curso.png`.
 
 | Módulo | Archivos | Detalle |
 |---|---|---|
@@ -2762,6 +2887,8 @@ indicador de captura (destello y «Foto tomada»), Pausar / Reanudar, **Reubicar
 **Agregar alerta aquí** (con `AlertaFormSheet`), **Finalizar video** (con confirmación), nombre del video, intervalo de captura
 (cada 3, 5 o 10 m, o cada 3 o 5 s; por defecto 5 m) y avisos de batería baja y almacenamiento bajo. Se guarda en disco **de forma
 continua** (`manifest.json` actualizado en cada foto) y la pantalla se mantiene encendida; en segundo plano (`ON_STOP`) la grabación se pausa sola.
+Desde FE-2.3 también guarda su progreso (`progress` del manifest) y, si Android mata el proceso, al volver a abrir la app la
+grabación se **retoma** en pausa en la misma carpeta, con la numeración de fotos seguida (por la pila restaurada o con «Retomar …» en 7.3).
 
 **Decisiones tomadas:**
 - **Datos entre vistas con un holder en memoria** (`SesionDeRecoleccion`), no argumentos de ruta: resuelve la decisión abierta 15 para este flujo (7.3 → 7.4 → 7.5).
@@ -2769,10 +2896,11 @@ continua** (`manifest.json` actualizado en cada foto) y la pantalla se mantiene 
 - Fotos y manifest en `files/recoleccion/<rec_NNNN>/photos/NNNN.jpg` y `manifest.json` (misma forma que `assets/videos/`); prefijo `rec_` para no chocar con los datos de prueba (`vid_`); fechas en ISO-8601 (`yyyy-MM-dd'T'HH:mm:ssXXX`).
 - Deriva estimada = 4 % de la distancia desde el último ancla (heurística provisional; decisión abierta 16).
 - **Distancia = pasos × longitud de paso calibrada** (7.3b; 0,72 m si no hay calibración): el `PdrTracker` de 7.4 la lee una vez al crearse, así que calibrar **antes** de entrar a 7.4.
+- **Retomar desde el manifest** (FE-2.3, ADR-FE-17): el progreso se guarda en el propio `manifest.json` y se retoma en pausa.
 
 **Pendiente:** está en `PLAN.md`: FE-2.1 (subida y vista 7.5, ver lo recolectado en Galería y Videos), FE-3.3
-(alertas existentes y persistencia de las nuevas), FE-3.4 («Marcar punto de interés»), FE-2.3 (retomar tras matar el
-proceso) y FE-4.3 (control de calidad de imagen y detalles de diseño).
+(alertas existentes y persistencia de las nuevas), FE-3.4 («Marcar punto de interés»), FE-2.3 C3 y C4 (pruebas en
+dispositivo) y FE-4.3 (control de calidad de imagen y detalles de diseño).
 
 ---
 
@@ -3211,6 +3339,37 @@ añadido una dependencia, su `uv.lock` y dobles de botocore. *Consecuencias:* ha
 contraseña de `crear-usuario` va por un archivo temporal (`--overrides file://…`) y no por la línea de comandos; las
 consultas usan `--query` (JMESPath) para no traer de vuelta los *overrides*.
 
+**ADR-FE-16 — El `PdrTracker` sigue el ciclo de vida del proceso (aceptada, 2026-10-25, FE-2.3).**
+Hacía falta que el PDR dejara de leer sensores en segundo plano en el mapa público, la calibración y la recolección
+(C5); hasta ahora solo la recolección lo hacía, desde su ViewModel. Opciones: que cada pantalla observara `ON_STOP` y
+llamara a `detener()`/`iniciar()`; pasarle al tracker el `Lifecycle` de la pantalla; o que el tracker observe el del
+**proceso** (`ProcessLifecycleOwner`). Se eligió la tercera, con la regla en `InterruptorSensores` (lógica pura, con
+pruebas): ninguna pantalla nueva (navegación guiada, 6.5) puede olvidarlo, el tracker vive en ViewModels que no tienen
+`Lifecycle`, el proceso no cambia de estado al rotar y la vuelta al primer plano solo reactiva lo que seguía pedido.
+*Consecuencias:* dependencia explícita `androidx.lifecycle:lifecycle-process` 2.8.7 (Gradle ya la resolvía por
+transitividad); el tracker se crea en el hilo principal y `liberar()` quita el observador; `ON_STOP` llega ~700 ms tarde;
+`PdrEstado.activo` significa «rastreo pedido»; las pantallas que además necesitan cortar su propio flujo (pausar la
+grabación, cancelar la medición) siguen manejando `ON_STOP` de la actividad.
+
+**ADR-FE-17 — Retomar una grabación desde el `manifest.json` (aceptada, 2026-10-25, FE-2.3).**
+Al matar el proceso se perdía `SesionDeRecoleccion` y 7.4 mostraba `SIN_INICIO` aunque el video estaba en disco (C4).
+Opciones: `SavedStateHandle` del ViewModel (no sobrevive a `am kill` en todos los casos, no lo ve 7.3 y no lleva la
+trayectoria larga), una tabla en Room (no existe aún `data/local/`) o guardar el progreso en el propio manifest. Se
+eligió el manifest (clave `progress`, §5.6): ya se reescribe de forma atómica en cada foto, es por video, lo leen 7.4 y
+7.3 con el mismo repositorio, y los lectores actuales ignoran claves nuevas (cambio compatible). Se retoma **en pausa**
+para que la persona compruebe su posición (o se re-ancle) antes de seguir. *Consecuencias:* el ViewModel guarda el
+progreso en momentos fijos (crear, foto, pausa/`ON_STOP`, re-anclaje, intervalo, cada 30 s) con un solo escritor; sin
+`progress` (videos anteriores) se retoma con contadores en 0 y el ancla al final; las alertas en memoria siguen
+perdiéndose (FE-3.3).
+
+**ADR-FE-18 — Ruta de prueba al arrancar en el APK de depuración (aceptada, 2026-10-25, FE-2.3).**
+El mapa público (`MapaPublicoScreen`) no tenía ruta y FE-2.3 debe probarlo en el teléfono (C3 y C5); su entrada desde
+Inicio depende de decisiones de FE-3.1 y FE-3.5 (interacción de Inicio, decisión abierta 18). Opciones: un botón en el
+Panel, un *deep link* de Navigation o un extra del `Intent` leído por `MainActivity`. Se eligió el extra `ruta`
+(lista blanca `RUTAS_DE_PRUEBA`, solo con `FLAG_DEBUGGABLE` y en arranque nuevo) con la ruta `mapa` ya registrada: no
+cambia ninguna pantalla ni el Manifest y se usa con un `adb shell am start`. *Consecuencias:* FE-3.1 solo añade la
+entrada desde Inicio; en un APK de *release* el extra se ignora.
+
 ### 8.2 Decisiones abiertas
 
 La numeración se conserva: otras secciones y documentos citan «decisión abierta N».
@@ -3275,11 +3434,11 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
 | ID | Riesgo | Prob. | Impacto | Mitigación |
 |---|---|---|---|---|
 | R1 | La deriva del PDR (brújula, longitud de paso) etiqueta mal las fotos del dataset y empeora la ubicación | Alta | Alto | Calibrar el paso antes de recolectar, re-anclar en puntos conocidos (7.4), probar recorridos conocidos (FE-2.3) |
-| R2 | Varias piezas están marcadas ⚠ (sin probar en dispositivo) | Alta | Medio | FE-2.3: pruebas en dispositivo físico antes de recolectar el dataset real |
+| R2 | Varias piezas están marcadas ⚠ (sin probar en dispositivo) | Alta | Medio | FE-2.3: la lógica pura ya tiene pruebas en la JVM; falta C3 (pruebas en dispositivo físico) antes de recolectar el dataset real |
 | R3 | Los mapas dependen de internet (Leaflet en `unpkg.com`, teselas de OSM y su política de uso) | Media | Medio | Decisiones abiertas 1 y 13; empaquetar Leaflet en `assets/` |
 | R4 | Rumbos en referencias distintas (magnético en el escaneo, verdadero en el PDR) | Alta | Medio | Convertir antes de enviar (§5.10, FE-3.2) |
 | R5 | Reconocimiento de voz no disponible o voces superpuestas con TalkBack | Media | Alto | Proteger `SpeechRecognizer` con `isRecognitionAvailable`; probar con TalkBack (FE-3.5); toda acción tiene equivalente táctil |
-| R6 | La sesión se borra si Android mata el proceso durante una recolección larga | Media | Medio | La recolección ya guarda en disco; la subida (7.5) pide login de nuevo y retoma por idempotencia |
+| R6 | La sesión se borra si Android mata el proceso durante una recolección larga | Media | Medio | La recolección guarda en disco y desde FE-2.3 se retoma sin login (no llama al backend); la subida (7.5) pide login de nuevo y retoma por idempotencia (§5.10, «Subida y sesión») |
 | R7 | Eventos de una sola vez perdidos (`SharedFlow` sin repetición) dejan pantallas atascadas | Baja | Medio | Ver 5.2 (escaneo) y 5.1; migrar a `Channel` donde importe |
 | R8 | En `dev` la ubicación no funciona mientras embeddings está apagado (por defecto, y siempre desde las 22:00) | Alta | Bajo | Mensaje claro con `503 EMBEDDING_NO_DISPONIBLE` (§5.10); encender embeddings antes de probar (infra §3.4) |
 | R9 | Ediciones de admin hechas sobre datos locales se pierden al cerrar la app (`EdicionesLocales`, editor de alertas) | Alta | Bajo | Desaparece al conectar los repositorios remotos (FE-3.3, FE-4.1) |
@@ -3301,8 +3460,8 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
 - **PDR:** la posición acumula error (longitud de paso calibrada una sola vez, deriva de la brújula) y todavía no hay
   corrección visual. Probarlo caminando un recorrido conocido en un dispositivo físico antes de
   usarlo para etiquetar fotos (7.4).
-- Los sensores del PDR solo se liberan al salir de la composición (`PdrTracker.liberar()`): no hay
-  manejo de `ON_STOP`, así que siguen activos si la app pasa a segundo plano (FE-2.3).
+- Los sensores del PDR se quitan solos en segundo plano desde FE-2.3 (`PdrTracker` sigue el ciclo de vida del proceso,
+  ADR-FE-16); el tracker se libera con `PdrTracker.liberar()` al salir de la pantalla o al destruir su ViewModel.
 - Cualquier cambio de arquitectura debe reflejarse en este archivo (con su entrada en `CHANGELOG.md`) y, si cambia la
   estructura general, en el `README.md` raíz.
 - Al crear o cambiar una pieza que otra vista pueda reutilizar, actualizar su entrada en el

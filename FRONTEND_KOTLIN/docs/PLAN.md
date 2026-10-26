@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.5.0**. Este archivo contiene además el **catálogo único de historias de usuario**
+Alineado con `ARCHITECTURE.md` **v0.6.0**. Este archivo contiene además el **catálogo único de historias de usuario**
 del proyecto (§5), que los planes de las otras carpetas referencian.
 
 ---
@@ -156,8 +156,9 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
   popularidad queda para cuando exista BE-5.2); fotos de los lugares cuando el backend las tenga (hoy se muestra el
   ícono de la categoría si no hay `imagenUrl`); caché de alertas en Room con sincronización por diferencias y sus
   disparadores (§5.10, «Alertas sin conexión»); caso de uso `DetectarAlertasCercanas` (radio + incertidumbre, una vez
-  por aproximación, prioridad alta interrumpe; 2.5); ruta pública `mapa` para `MapaPublicoScreen` (desde Inicio, con
-  el comando de voz «mapa» y la acción de TalkBack «Ver mapa»), donde se anuncian las alertas mientras se camina.
+  por aproximación, prioridad alta interrumpe; 2.5); entrada a la ruta pública `mapa` de `MapaPublicoScreen` (la ruta
+  ya existe desde FE-2.3, que solo la abre con un extra del `Intent` en depuración; falta llegar desde Inicio, con el
+  comando de voz «mapa» y la acción de TalkBack «Ver mapa»), donde se anuncian las alertas mientras se camina.
 - **Criterios de cierre:**
   - C1. Selección de destino muestra los lugares de `GET /v1/places`.
   - C2. Una alerta creada en el backend llega al teléfono en la siguiente sincronización, y al borrarla desaparece.
@@ -323,7 +324,7 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
 | FE-1.2 | 1 | Hecho | [1-2](./validation/validation-1-2.md) | `4d578c5` 2026-10-25 | 0.5.0 | `dev` (`POST /v1/auth/login`; cuenta `validacion+user` por tarea suelta de `migrate`) | `validate12.py --entorno dev` con código 0 en el Xiaomi 23028RA60L (Android 14), informe `.validacion/FE-1.2-20261026-013200.json`: P1–P5; C1 Panel con «Hola, Administrador» y «Cerrar sesión» a los 6,6 s; C2 «Sin permisos» a los 2,9 s sin «Cerrar sesión»; C3 `SesionVencidaTest` 9/9; C4 `RemoteAuthRepositoryTest` 6/6. En MIUI/HyperOS hace falta además «Depuración USB (Configuración de seguridad)» (`pm grant` e `input`). La primera ejecución (sobre `a86649c`) pasó igual, pero salió `-dirty` por `.idea/vcs.xml` (Android Studio añade el mapeo a la raíz del monorepo) y un `.kotlin/sessions/*.salive` versionado por error; desde `4d578c5`, `.kotlin/` está en `.gitignore` y `vcs.xml` lleva ese mapeo |
 | FE-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | | |
 | FE-2.2 | 2 | Pendiente | [2-2](./validation/validation-2-2.md) | — | — | | |
-| FE-2.3 | 2 | Pendiente | [2-3](./validation/validation-2-3.md) | — | — | | Puede empezar ya: no depende del backend |
+| FE-2.3 | 2 | En curso | [2-3](./validation/validation-2-3.md) | — | — | Local (`files/recoleccion/`, `campus_calibracion`); no usa el backend | Código y pruebas listos (ARCHITECTURE 0.6.0, §4.3): C1 con las cuatro clases en Gradle (13, 11, 10 y 6 casos; `CalibracionPasoTest` y `StepDetectorTest` no existían), C2 sin cambios de código, retomar tras matar el proceso (C4) y `PdrTracker` que sigue el ciclo de vida del proceso (C5); ruta `mapa` de prueba (`--es ruta mapa`). `validate23.py --entorno local` con código 0 (2026-10-25). Falta `--entorno dev` con el teléfono y la evidencia de C3 (campo), C4 y C5 en `evidencia/fe-2-3/` |
 | FE-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | | |
 | FE-3.2 | 3 | Pendiente | [3-2](./validation/validation-3-2.md) | — | — | | Requiere decidir la decisión abierta 15 |
 | FE-3.3 | 3 | Pendiente | [3-3](./validation/validation-3-3.md) | — | — | | |

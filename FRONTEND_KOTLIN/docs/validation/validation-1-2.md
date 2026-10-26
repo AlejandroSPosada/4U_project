@@ -118,13 +118,14 @@ minuto). No necesita `embedding` (sin hora límite). El informe queda en `projec
    Esperado: una línea `<serial>	device` (no `unauthorized` ni `offline`).
 5. Solo en Xiaomi (MIUI/HyperOS): en Ajustes → Opciones de desarrollador, activar **«Instalar vía USB»** (ya hecho en
    FE-1.1; si al instalar aparece un diálogo en el teléfono, aceptarlo) y **«Depuración USB (Configuración de
-   seguridad)»** (sin ella `pm grant` e `input` fallan; MIUI suele pedir una cuenta Mi y SIM para activarla, sin
-   comprobar en el Xiaomi del equipo). Para comprobarlo:
+   seguridad)»** (sin ella `pm grant` e `input` fallan; con ella funcionan, comprobado en `dev` el 2026-10-25). **Sin
+   comprobar:** si MIUI pide una cuenta Mi y SIM para activarla. Para comprobarlo:
    ```bash
    $VALIDACION_ADB shell input keyevent 0
    ```
    Esperado: sin salida (la tecla 0 no hace nada). Si sale una `java.lang.SecurityException` que menciona
-   `INJECT_EVENTS`, falta «Depuración USB (Configuración de seguridad)» (texto exacto en el Xiaomi, sin comprobar).
+   `INJECT_EVENTS`, falta «Depuración USB (Configuración de seguridad)» (el texto exacto de la excepción en el Xiaomi,
+   sin comprobar).
 6. Acceso a AWS:
    ```bash
    aws sts get-caller-identity --query Account --output text

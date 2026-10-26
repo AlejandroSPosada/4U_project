@@ -760,6 +760,15 @@ def leer_archivo_app(ruta_relativa: str) -> str | None:
     return r.salida
 
 
+def listar_archivos_app(ruta_relativa: str) -> list[str] | None:
+    """Nombres (ordenados) dentro de una carpeta privada de la app (`run-as … ls -1`, solo APK de depuración), o None
+    si la carpeta no existe o no se puede leer (FE-2.3)."""
+    r = adb("exec-out", "run-as", PAQUETE, "ls", "-1", ruta_relativa, timeout=60)
+    if r.codigo != 0:
+        return None
+    return sorted(linea.strip() for linea in r.salida.splitlines() if linea.strip())
+
+
 # --- Manejar la interfaz del teléfono (FE-1.2) -----------------------------------------------------------------
 
 RUTA_UI = "/data/local/tmp/validacion-ui.xml"

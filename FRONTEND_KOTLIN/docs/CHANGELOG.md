@@ -23,6 +23,73 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.6.0] — 2026-10-25
+
+- **Lote que la motivó:** FE-2.3 (pruebas en dispositivo y robustez de la recolección), más los huecos de
+  documentación que dejó FE-1.2 (verificados por el maestro en `dev` el 2026-10-25).
+- **Qué cambió:**
+  - Código: pruebas JVM nuevas `CalibracionPasoTest` (13; el documento la citaba pero **no existía**),
+    `StepDetectorTest` (11; tampoco existía), `DisparadorCapturaTest` (10), `DerivaTest` (6), `RetomarRecoleccionTest`
+    (6) e `InterruptorSensoresTest` (6); no hizo falta extraer lógica de clases Android para las cuatro de C1.
+    `sensors/InterruptorSensores.kt` (lógica pura: sensores registrados ⇔ rastreo pedido y primer plano) y
+    `PdrTracker` con parámetro nuevo `cicloDeVida: Lifecycle? = ProcessLifecycleOwner.get().lifecycle`: quita los
+    sensores en `ON_STOP` del proceso y los vuelve a poner en `ON_START` si el rastreo seguía pedido; registra con el tag
+    `Pdr`; dependencia `androidx.lifecycle:lifecycle-process:2.8.7` (catálogo `lifecycleProcess`). Retomar una
+    grabación: `domain/model/ProgresoRecoleccion.kt` (`ProgresoRecoleccion`, `VideoEnCurso`, `PuntoRecorrido`),
+    `domain/usecase/RetomarRecoleccion.kt`, `RecoleccionRepository.leerEnCurso` y `guardarProgreso` (clave `progress`
+    del manifest), `RecoleccionViewModel` guarda el progreso y, sin `InicioRecoleccion`, retoma el video `en_curso` en
+    pausa (antes, `SIN_INICIO`); 7.3 muestra «Retomar …» (`FilaRetomar`, `GrabacionPendiente`, `onRetomar`). Ruta
+    `mapa` para `MapaPublicoScreen`, que se abre con el extra `ruta` del `Intent` solo en el APK de depuración
+    (`MainActivity.EXTRA_RUTA`, `RUTAS_DE_PRUEBA`). C2 no necesitó cambios: `recoleccion_mapa.js` y
+    `calibracion_mapa.js` ya usaban `MapaBase.crearMapa`.
+  - Validadores: `src/ops/validate23.py` y `comun.listar_archivos_app`; pruebas `tests/ops/test_validate23.py` (20);
+    total 93.
+  - Documento: §4.3 nuevo (lo construido en FE-2.3); §5.2 (`PdrTracker` con ciclo de vida, `InterruptorSensores`,
+    `StepDetectorTest`, reglas exactas de `DisparadorCaptura` y `Deriva`, progreso y retomar en «Flujo de captura de la
+    recolección»); §5.5 (`MapaPublicoScreen` con ruta, 7.3 con «Retomar …», 7.4 y 7.3b); §5.6 (`progress` del manifest
+    con ejemplo, `leerEnCurso`, `guardarProgreso`, modelos nuevos, tipos de `campus_calibracion`); §5.7 (qué cubre cada
+    prueba, `RetomarRecoleccion`); §5.8 (ruta `mapa`, extra `ruta`, `onRetomar`); §5.9 (C2 comprobado); §5.11
+    (`listar_archivos_app`, detalles de `validate23.py`, trampas de las manuales); §3.2 (pruebas, tags `Pdr`,
+    `RecoleccionVM`, `RecoleccionRepo`); §4.1 (102 casos); §7.3, §7.3b, §7.4; §9; ADR-FE-16 (PDR con el ciclo de vida
+    del proceso), ADR-FE-17 (retomar desde el manifest) y ADR-FE-18 (ruta de prueba por el `Intent`). Los ⚠ que solo
+    dependían de lo automático se quitaron (C2 de `recoleccion_mapa.js`, «Kotlin sin compilar» de 7.3, «no ejecutado en
+    Gradle», sensores en segundo plano, `MapaPublicoScreen` sin ruta, `buscarEnCurso` sin usar); los que dependen de la
+    prueba de campo quedan como «a verificar en dispositivo (FE-2.3 C3/C4/C5)».
+  - Huecos de FE-1.2 integrados aquí (sin una 0.5.1 aparte): §4.2 (resultado en `dev` sobre `4d578c5`: C1 6,6 s, C2
+    2,9 s); §5.10 «Subida y sesión» (la cola de FE-2.1 espera sesión ante `SIN_SESION_LOCAL`) y `PUT` a S3 con un
+    `OkHttpClient` propio sin interceptores; §5.8 (tras volver a Login, el login lleva a `admin/panel` y la 7.5 se pierde
+    de la pila); §5.11 (cómo entrar como admin desde otro validador copiando de `validate12.py`; `tarea_cli` solo para
+    `migrate`; el orbe de Inicio no provoca «could not get idle state»; MIUI comprobado con el ajuste activo; trampa
+    nueva de `-dirty` por archivos del IDE). `validation-1-2` §5 paso 5 deja como «sin comprobar» solo el texto exacto
+    de la excepción y si MIUI pide cuenta Mi y SIM. De los «Pendiente» de 0.5.0 ya están verificados en `dev`
+    `validate12.py` con el teléfono (C1 y C2) y que «Depuración USB (Configuración de seguridad)» activa deja usar
+    `pm grant` e `input`; siguen sin comprobar el nombre del campo de `dumpsys input_method` en el Xiaomi y el
+    `toString()` de `Sesion` y `Usuario` (FE-4.3).
+  - `validation-2-3`: P1 pasa a ser `--version` (código 3, como `validate12`; la compilación la prueba C1) y P2, de la
+    máquina (código 3; antes decía que cualquier precondición daba 2, contra el contrato común); C1 con mínimos de casos
+    y sin omitidos; C2 sin contar comentarios; manuales con procedimiento paso a paso, plantilla del «Registro de
+    pruebas en dispositivo» y evidencia en `evidencia/fe-2-3/`; §5 con variables, preparación y salida esperada.
+  - `PLAN.md`: FE-2.3 pasa a «En curso»; FE-3.1 aclara que la ruta `mapa` ya existe y solo falta su entrada desde
+    Inicio.
+- **Contratos tocados (§5):** §5.2 (`PdrTracker`: parámetro nuevo con valor por defecto, comportamiento en segundo
+  plano y `activo` = rastreo pedido); §5.6 (formato del almacenamiento: clave nueva `progress`, compatible; métodos
+  nuevos de `RecoleccionRepository`, incompatible solo para quien lo implemente —hoy solo `RecoleccionRepositoryLocal`—;
+  modelos nuevos); §5.5 (`UbicacionManualScreen(onRetomar)`, `UbicacionManualContent(grabacionPendiente)`,
+  `UbicacionManualAcciones.onRetomar`, todos con valor por defecto); §5.8 (ruta `mapa`, extra `ruta`, `onRetomar`);
+  §5.7 (`RetomarRecoleccion`); §5.11 (`listar_archivos_app`). Piezas, ruta y ADR nuevos: sube la menor.
+- **Cómo se verificó:** en Windows, `.\gradlew.bat --console=plain testDebugUnitTest assembleDebug` con JBR 21 →
+  `BUILD SUCCESSFUL`, 102 casos sin fallos (las seis clases nuevas, 52 casos, más los 50 de FE-1.1 y FE-1.2). Los casos
+  de `StepDetectorTest` se calcularon antes con una réplica en Python del detector. En WSL, `uv run --frozen ruff
+  check .` («All checks passed!»), `ruff format --check .` («9 files already formatted») y `pytest -q` (93 passed);
+  `validate23.py --entorno local` → código 0 (P1; C1 13/13, 11/11, 10/10 y 6/6; C2; tres manuales). Sin teléfono ni
+  `adb` (lo coordina el maestro).
+- **Pendiente:** `validate23.py --entorno dev` con el teléfono y las manuales C3 (campo), C4 y C5 con su evidencia en
+  `evidencia/fe-2-3/` (`validation-2-3` §3 y §5); después, quitar los «a verificar en dispositivo (FE-2.3 …)» que
+  confirme la evidencia y pasar FE-2.3 a «Hecho». `RecoleccionRepositoryLocal` sigue sin pruebas automáticas (usa
+  `org.json`). Las alertas creadas durante una grabación se pierden al retomar (FE-3.3).
+
+---
+
 ## [0.5.0] — 2026-10-25
 
 - **Lote que la motivó:** FE-1.2 (login contra el backend).

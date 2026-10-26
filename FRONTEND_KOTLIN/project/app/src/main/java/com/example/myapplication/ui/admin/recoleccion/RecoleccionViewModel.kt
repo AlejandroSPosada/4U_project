@@ -12,10 +12,14 @@ import com.example.myapplication.data.repository.RecoleccionRepositoryLocal
 import com.example.myapplication.domain.model.Alerta
 import com.example.myapplication.domain.model.DatosFoto
 import com.example.myapplication.domain.model.FotoRecolectada
+import com.example.myapplication.domain.model.ProgresoRecoleccion
+import com.example.myapplication.domain.model.PuntoRecorrido
 import com.example.myapplication.domain.model.SesionDeRecoleccion
+import com.example.myapplication.domain.model.VideoEnCurso
 import com.example.myapplication.domain.usecase.Deriva
 import com.example.myapplication.domain.usecase.DisparadorCaptura
 import com.example.myapplication.domain.usecase.ModoCaptura
+import com.example.myapplication.domain.usecase.RetomarRecoleccion
 import com.example.myapplication.logs.AppLog
 import com.example.myapplication.sensors.PdrEstado
 import com.example.myapplication.sensors.PdrEvento
@@ -28,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -48,6 +53,11 @@ private const val TAG = "RecoleccionVM"
  * [carpetaFotos], devolviendo el resultado por [onFotoTomada] / [onFotoFallida].
  *
  * Todo corre en el hilo principal (PdrTracker lo exige); el disco va por el repositorio.
+ *
+ * Retomar (FE-2.3): el progreso (posición, contadores, trayectoria, anclas, intervalo) se guarda en el manifest al
+ * crear el video, tras cada foto, al pausar (también en ON_STOP), al re-anclarse, al cambiar el intervalo y cada
+ * 30 s grabando. Si la vista se abre sin `InicioRecoleccion` (Android restauró la pila tras matar el proceso, o
+ * «Retomar» en 7.3), se retoma el video `en_curso` más reciente en pausa ([RetomarRecoleccion]).
  */
 class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -68,7 +78,7 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
     private var videoId: String? = null
 
     private val fotos = mutableListOf<FotoRecolectada>()
-    private val trayectoria = mutableListOf<Punto>()
+    private val trayectoria = mutableListOf<PuntoRecorrido>()
     private val alertas = mutableListOf<Alerta>()
 
     private var capturando = false
@@ -87,7 +97,12 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
     private var ultimoTickMs = 0L
     private var avisoMaximoDado = false
 
-    private data class Punto(val lat: Double, val lng: Double)
+    /** Lo acumulado antes de retomar (FE-2.3): el tracker nuevo empieza en 0 pasos y se le suma esto. */
+    private var pasosPrevios = 0
+    private var distanciaPrevia = 0.0
+
+    /** Último progreso pendiente de escribir: un solo colector lo guarda en orden y se salta los intermedios. */
+    private val progresos = MutableStateFlow<ProgresoRecoleccion?>(null)
 
     /** Carpeta donde la pantalla debe escribir la foto (prefijo recomendado: "tmp"). `null` antes de crear el video. */
     fun carpetaFotos(): File? = videoId?.let { repo.carpetaFotos(it) }
@@ -97,16 +112,14 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * La llama la pantalla al abrirse. Idempotente (rotar o volver no reinicia el video).
      *
-     * TODO: si no hay `inicio` pero `repo.buscarEnCurso()` devuelve un video, retomarlo (hoy se
-     * muestra SIN_INICIO si Android mató el proceso a mitad de una grabación).
+     * Sin `inicio` retoma el video `en_curso` más reciente (FE-2.3); si no hay ninguno, `SIN_INICIO`.
      */
     fun alAbrir() {
         if (iniciado) return
         iniciado = true
         val inicio = SesionDeRecoleccion.consumirInicio()
         if (inicio == null) {
-            AppLog.w(TAG, "Se abrió la recolección sin InicioRecoleccion")
-            _ui.update { it.copy(error = ErrorRecoleccion.SIN_INICIO) }
+            retomarEnCurso()
             return
         }
         val rumboInicial = inicio.rumbo.toFloat()
@@ -124,8 +137,9 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
             videoId = id
-            trayectoria.add(Punto(inicio.lat, inicio.lng))
+            trayectoria.add(PuntoRecorrido(inicio.lat, inicio.lng))
             _ui.update { it.copy(trayectoriaJson = trayectoriaAJson()) }
+            guardarProgresoAlCambiar(id)
 
             // Recoger ANTES de iniciar: `eventos` del PDR no se repite (11.2).
             escucharPdr()
@@ -137,9 +151,117 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
             ultimoTickMs = SystemClock.elapsedRealtime()
             _ui.update { it.copy(fase = FaseRecoleccion.GRABANDO) }
             AppLog.i(TAG, "Grabando $id (${inicio.nombreVideo})")
+            registrarProgreso()
             revisarRecursos()
             lanzarReloj()
         }
+    }
+
+    /**
+     * FE-2.3: la vista se abrió sin `InicioRecoleccion` (Android restauró la pila tras matar el proceso, o «Retomar»
+     * en 7.3). Retoma el video `en_curso` más reciente **en pausa**: la persona revisa la posición (o se re-ancla) y
+     * pulsa Reanudar. La numeración de las fotos sigue (el repositorio la calcula desde el manifest).
+     */
+    private fun retomarEnCurso() {
+        viewModelScope.launch {
+            val video: VideoEnCurso? = try {
+                repo.buscarEnCurso()?.let { repo.leerEnCurso(it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.e(TAG, "No se pudo leer el video en curso", e)
+                null
+            }
+            if (video == null) {
+                AppLog.w(TAG, "Se abrió la recolección sin InicioRecoleccion ni video en curso")
+                _ui.update { it.copy(error = ErrorRecoleccion.SIN_INICIO) }
+                return@launch
+            }
+            val r = RetomarRecoleccion.estado(video)
+            videoId = video.videoId
+            fotos.addAll(video.fotos)
+            trayectoria.addAll(r.trayectoria)
+            indiceAnclaFoto = r.indiceAnclaFoto
+            indiceAnclaTray = r.indiceAnclaTrayectoria
+            distanciaAncla = r.distanciaAnclaM
+            pasosPrevios = r.pasos
+            distanciaPrevia = r.distanciaMetros
+            pasosUltimoPunto = r.pasos
+            acumuladoMs = r.duracionSegundos * 1000
+            disparador.reiniciar()
+            disparador.cambiarModo(r.modo)
+            // La siguiente foto, a un intervalo de aquí (no una repetida en el mismo sitio).
+            if (fotos.isNotEmpty()) disparador.alCapturar(r.distanciaMetros, SystemClock.elapsedRealtime())
+            guardarProgresoAlCambiar(video.videoId)
+
+            escucharPdr()
+            tracker.fijarPosicion(r.lat, r.lng)
+            tracker.fijarRumboManual(r.rumbo)
+
+            ultimoTickMs = SystemClock.elapsedRealtime()
+            publicarFotos(destello = false)
+            _ui.update {
+                it.copy(
+                    fase = FaseRecoleccion.PAUSADA,
+                    nombreVideo = video.nombre,
+                    lat = r.lat, lng = r.lng, rumbo = r.rumbo,
+                    pasos = r.pasos, distanciaMetros = r.distanciaMetros, duracionSegundos = r.duracionSegundos,
+                    deriva = Deriva.estimar((r.distanciaMetros - r.distanciaAnclaM).coerceAtLeast(0.0)),
+                    modo = r.modo,
+                    trayectoriaJson = trayectoriaAJson(),
+                    aviso = if (r.conProgreso) {
+                        "Grabación retomada: ${fotos.size} fotos guardadas. Revisa tu posición y pulsa Reanudar."
+                    } else {
+                        "Grabación retomada sin su último progreso: re-ánclate en el mapa antes de reanudar."
+                    },
+                )
+            }
+            AppLog.i(
+                TAG,
+                "Retomado ${video.videoId}: ${fotos.size} fotos, ${r.pasos} pasos, " +
+                    "${r.duracionSegundos} s, progreso ${if (r.conProgreso) "sí" else "no"}",
+            )
+            registrarProgreso()
+            revisarRecursos()
+            lanzarReloj()
+        }
+    }
+
+    /** Un solo colector escribe el progreso: en orden, y solo el último si llegan varios seguidos. */
+    private fun guardarProgresoAlCambiar(id: String) {
+        viewModelScope.launch {
+            progresos.filterNotNull().collect { p ->
+                try {
+                    repo.guardarProgreso(id, p)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    AppLog.w(TAG, "No se pudo guardar el progreso de $id", e)
+                }
+            }
+        }
+    }
+
+    /** Foto del estado actual para retomar (FE-2.3). Se escribe en segundo plano ([guardarProgresoAlCambiar]). */
+    private fun registrarProgreso() {
+        if (videoId == null) return
+        val s = _ui.value
+        val lat = s.lat ?: return
+        val lng = s.lng ?: return
+        progresos.value = ProgresoRecoleccion(
+            lat = lat,
+            lng = lng,
+            rumbo = normalizar(s.rumbo),
+            pasos = s.pasos,
+            distanciaMetros = s.distanciaMetros,
+            duracionSegundos = acumuladoMs / 1000,
+            distanciaAnclaM = distanciaAncla,
+            indiceAnclaFoto = indiceAnclaFoto,
+            indiceAnclaTrayectoria = indiceAnclaTray,
+            trayectoria = trayectoria.toList(),
+            modo = disparador.modo,
+            guardadoEnMs = System.currentTimeMillis(),
+        )
     }
 
     private fun escucharPdr() {
@@ -165,8 +287,9 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
         val lng = e.lng ?: return
         val actual = _ui.value
         val rumbo = if (e.activo) e.rumboGrados.toFloat() else actual.rumbo
-        val dist = e.distanciaMetros.toDouble()
-        val pasos = e.pasos
+        // Totales del video: lo de antes de retomar (FE-2.3) más lo de este tracker.
+        val dist = distanciaPrevia + e.distanciaMetros
+        val pasos = pasosPrevios + e.pasos
 
         // El rumbo llega ~20 Hz: solo se publica si cambió de verdad.
         val cambio = lat != actual.lat || lng != actual.lng || pasos != actual.pasos ||
@@ -182,7 +305,7 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
 
         if (pasos - pasosUltimoPunto >= PASOS_POR_PUNTO) {
             pasosUltimoPunto = pasos
-            trayectoria.add(Punto(lat, lng))
+            trayectoria.add(PuntoRecorrido(lat, lng))
             _ui.update { it.copy(trayectoriaJson = trayectoriaAJson()) }
         }
 
@@ -222,6 +345,7 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
                 fallosSeguidos = 0
                 feedback.confirmar()
                 publicarFotos(destello = true)
+                registrarProgreso()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -283,6 +407,7 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
         tracker.detener()
         _ui.update { it.copy(fase = FaseRecoleccion.PAUSADA) }
         AppLog.i(TAG, "Pausado")
+        registrarProgreso() // también en ON_STOP: lo último antes de que Android pueda matar el proceso
     }
 
     private fun reanudar() {
@@ -294,7 +419,11 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
         AppLog.i(TAG, "Reanudado")
     }
 
-    /** La pantalla la llama en ON_STOP: la recolección solo funciona en primer plano (7.4). */
+    /**
+     * La pantalla la llama en ON_STOP: la recolección solo funciona en primer plano (7.4). El `PdrTracker` ya quita
+     * sus sensores por su cuenta en segundo plano (FE-2.3); esto además para el reloj y las capturas y guarda el
+     * progreso.
+     */
     fun alIrASegundoPlano() {
         if (_ui.value.fase == FaseRecoleccion.GRABANDO) {
             pausar()
@@ -305,6 +434,7 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
     fun alCambiarModo(modo: ModoCaptura) {
         disparador.cambiarModo(modo)
         _ui.update { it.copy(modo = modo) }
+        registrarProgreso()
     }
 
     // ---- Re-anclaje manual ------------------------------------------------------------------
@@ -351,9 +481,9 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
             fotos[i] = fotos[i].copy(lat = fotos[i].lat + dLat, lng = fotos[i].lng + dLng)
         }
         for (i in indiceAnclaTray until trayectoria.size) {
-            trayectoria[i] = Punto(trayectoria[i].lat + dLat, trayectoria[i].lng + dLng)
+            trayectoria[i] = PuntoRecorrido(trayectoria[i].lat + dLat, trayectoria[i].lng + dLng)
         }
-        trayectoria.add(Punto(destino.lat, destino.lng))
+        trayectoria.add(PuntoRecorrido(destino.lat, destino.lng))
         val desde = indiceAnclaFoto
         indiceAnclaFoto = fotos.size
         indiceAnclaTray = trayectoria.size
@@ -367,6 +497,7 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         AppLog.i(TAG, "Re-anclaje: ${fotos.size - desde} foto(s) desplazada(s)")
+        registrarProgreso()
         viewModelScope.launch {
             try {
                 repo.desplazarFotos(id, desde, dLat, dLng)
@@ -489,7 +620,10 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
                     acumularTiempo()
                     _ui.update { it.copy(duracionSegundos = acumuladoMs / 1000) }
                 }
-                if (++ticks % 30 == 0) revisarRecursos()
+                if (++ticks % 30 == 0) {
+                    revisarRecursos()
+                    if (_ui.value.fase == FaseRecoleccion.GRABANDO) registrarProgreso()
+                }
             }
         }
     }

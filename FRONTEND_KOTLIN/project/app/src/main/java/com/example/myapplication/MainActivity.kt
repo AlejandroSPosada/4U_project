@@ -1,6 +1,8 @@
 ﻿package com.example.myapplication
 
 import android.Manifest
+import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -42,11 +44,27 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // FE-2.3: solo en el APK de depuración y en un arranque nuevo (no al restaurar ni al rotar),
+        // `am start -n com.example.myapplication/.MainActivity --es ruta mapa` abre una ruta de prueba.
+        val rutaPrueba = if (savedInstanceState == null) rutaDePrueba(intent) else null
         setContent {
             MaterialTheme {
-                AppNav()
+                AppNav(rutaInicial = rutaPrueba)
             }
         }
+    }
+
+    private fun rutaDePrueba(intent: Intent?): String? {
+        val depurable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        return intent?.getStringExtra(EXTRA_RUTA)?.takeIf { depurable && it in RUTAS_DE_PRUEBA }
+    }
+
+    companion object {
+        /** Extra del `Intent` con la ruta de prueba (solo APK de depuración). */
+        const val EXTRA_RUTA = "ruta"
+
+        /** Rutas que se pueden abrir así; cualquier otra se ignora (navegar a una no registrada cierra la app). */
+        val RUTAS_DE_PRUEBA = setOf("mapa")
     }
 }
 
@@ -78,8 +96,13 @@ object Permisos {
 }
 
 @Composable
-fun AppNav() {
+fun AppNav(rutaInicial: String? = null) {
     val nav = rememberNavController()
+
+    // FE-2.3: ruta de prueba pedida al arrancar (MainActivity.EXTRA_RUTA). Queda encima de `inicio`: Atrás vuelve a Inicio.
+    LaunchedEffect(nav, rutaInicial) {
+        if (rutaInicial != null) nav.navigate(rutaInicial)
+    }
 
     // FE-1.2: una ruta protegida se quedó sin sesión (401 TOKEN_* / NO_AUTENTICADO, o expira_en pasado). Si se está
     // en una pantalla admin, vuelve a Login sin cerrar la app (pila: inicio → login). En el flujo público no navega.
@@ -236,7 +259,12 @@ fun AppNav() {
                         nav.navigate("admin/recoleccion")
                     },
                     onAjustes = { nav.navigate("ajustes") },
-                    onCalibrar = { nav.navigate("admin/calibracion") },   // ← esta línea
+                    onCalibrar = { nav.navigate("admin/calibracion") },
+                    // FE-2.3: sin InicioRecoleccion, 7.4 retoma el video `en_curso` más reciente.
+                    onRetomar = {
+                        SesionDeRecoleccion.limpiar()
+                        nav.navigate("admin/recoleccion")
+                    },
                 )
             }
         }
@@ -281,11 +309,17 @@ fun AppNav() {
                     },
                     // Video sin fotos: se borró. Vuelve al panel.
                     onDescartado = { nav.popBackStack("admin/panel", inclusive = false) },
-                    // Solo con error (p. ej. SIN_INICIO si Android restauró la pila tras matar el proceso).
+                    // Solo con error: SIN_INICIO (sin InicioRecoleccion ni video `en_curso` que retomar) o NO_SE_PUDO_CREAR.
                     onVolver = { nav.popBackStack() },
                     onAjustes = { nav.navigate("ajustes") },
                 )
             }
+        }
+
+        // Mapa público (2.6) con seguimiento por pasos. FE-2.3 registra la ruta para las pruebas en dispositivo
+        // (se abre con MainActivity.EXTRA_RUTA en el APK de depuración); la entrada desde Inicio es de FE-3.1.
+        composable("mapa") {
+            MapaPublicoScreen()
         }
 
         // ── Placeholders para que los botones no cierren la app ──
