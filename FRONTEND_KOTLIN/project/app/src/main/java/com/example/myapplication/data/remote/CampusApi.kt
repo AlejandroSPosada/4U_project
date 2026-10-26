@@ -4,9 +4,11 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -65,6 +67,29 @@ interface CampusApi {
      */
     @GET("admin/stats")
     suspend fun estadisticas(): Response<EstadisticasAdminDto>
+
+    /**
+     * `GET /v1/admin/places` (backend §5.5, BE-3.1; FE-3.4): todos los lugares con `descripcion`, `referencias` y
+     * `total_fotos`, por nombre. Ruta protegida. La app no usa `q` ni `categoria` (filtra en local), pero Retrofit los
+     * omite si son `null`.
+     */
+    @GET("admin/places")
+    suspend fun lugaresAdmin(
+        @Query("q") q: String? = null,
+        @Query("categoria") categoria: String? = null,
+    ): Response<ListaLugaresAdminDto>
+
+    /** `POST /v1/admin/places` (FE-3.4): `201` con el lugar guardado; `409 NOMBRE_DUPLICADO`, `422 VALIDACION`. */
+    @POST("admin/places")
+    suspend fun crearLugar(@Body cuerpo: LugarEntradaDto): Response<LugarAdminDto>
+
+    /** `PUT /v1/admin/places/{id}` (FE-3.4): reemplaza todos los campos; `200`, `404`, `409`, `422`. */
+    @PUT("admin/places/{id}")
+    suspend fun reemplazarLugar(@Path("id") id: String, @Body cuerpo: LugarEntradaDto): Response<LugarAdminDto>
+
+    /** `DELETE /v1/admin/places/{id}` (FE-3.4): `204` sin cuerpo (también si no existía): con [llamarSinCuerpo]. */
+    @DELETE("admin/places/{id}")
+    suspend fun borrarLugar(@Path("id") id: String): Response<Unit>
 
     /**
      * `POST /v1/localize` (backend §5.3; FE-3.2). Ruta pública (sin `Authorization`). `multipart/form-data`: las partes

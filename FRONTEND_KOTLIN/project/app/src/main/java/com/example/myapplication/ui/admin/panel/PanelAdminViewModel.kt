@@ -16,6 +16,7 @@ import com.example.myapplication.data.remote.FalloApi
 import com.example.myapplication.data.remote.MapeoErroresApi
 import com.example.myapplication.data.remote.RemoteAdminRepository
 import com.example.myapplication.data.repository.AdminRepository
+import com.example.myapplication.data.repository.CambiosLugares
 import com.example.myapplication.domain.model.ResumenAdmin
 import com.example.myapplication.domain.model.Rol
 import com.example.myapplication.session.SessionManager
@@ -86,6 +87,14 @@ internal fun resumenConPendientes(resumen: ResumenAdmin?, recorridos: List<Recor
  */
 internal fun errorVisibleDelResumen(e: Throwable): Boolean = MapeoErroresApi.deExcepcion(e) !is FalloApi.SesionVencida
 
+/**
+ * FE-3.4, `ON_RESUME`: ¿hay que volver a pedir el «Resumen rápido» al backend? Sí si los lugares cambiaron desde la
+ * última carga ([cargada] ≠ [actual] de `CambiosLugares`: se creó, editó o borró un lugar en 7.6, 7.7 o 7.4) y no hay
+ * una carga en curso. Sin contador ([actual] `null`, previews y pruebas), nunca. Lógica pura (`RecargaResumenTest`).
+ */
+internal fun debeRecargarResumen(cargada: Int?, actual: Int?, cargando: Boolean): Boolean =
+    !cargando && actual != null && cargada != actual
+
 sealed interface PanelEvento {
     /** El admin cerró sesión: volver al flujo público. */
     data object SesionCerrada : PanelEvento
@@ -99,7 +108,12 @@ class PanelAdminViewModel(
     // FE-2.1: cola de subida del proceso (`Subidas`); `null` en previews o pruebas sin subida.
     private val almacen: AlmacenRecorridos? = null,
     private val cola: ColaSubida? = null,
+    // FE-3.4: cambios de lugares del proceso (`CambiosLugares.version`); `null` en previews o pruebas.
+    private val cambiosLugares: StateFlow<Int>? = null,
 ) : ViewModel() {
+
+    /** Versión de `CambiosLugares` cuando empezó la última carga del resumen (FE-3.4). */
+    private var versionLugaresCargada: Int? = null
 
     private val _state = MutableStateFlow(PanelUiState())
     val state: StateFlow<PanelUiState> = _state.asStateFlow()
@@ -152,10 +166,14 @@ class PanelAdminViewModel(
      * FE-2.2, `ON_RESUME` de la pantalla: al volver al Panel (7.5 con «Guardar y subir después» o «Descartar video»
      * vuelve a esta misma entrada de la pila, con este ViewModel) relee los recorridos locales para la tarjeta de
      * subidas y «Fotos pendientes». No llama al backend: totales, lugares, alertas y último video se cargan en `init`
-     * y con «Reintentar».
+     * y con «Reintentar»; desde FE-3.4, también aquí si los lugares cambiaron desde la última carga
+     * ([debeRecargarResumen]): así «Lugares registrados» está al día al volver de 7.6/7.7.
      */
     fun alReanudar() {
         if (!conSesionAdmin) return
+        if (debeRecargarResumen(versionLugaresCargada, cambiosLugares?.value, _state.value.cargandoResumen)) {
+            cargarResumen()
+        }
         val c = cola ?: return
         val a = almacen ?: return
         viewModelScope.launch { refrescarLocal(a, c.estado.value) }
@@ -179,6 +197,7 @@ class PanelAdminViewModel(
     }
 
     fun cargarResumen() {
+        versionLugaresCargada = cambiosLugares?.value
         _state.update { it.copy(cargandoResumen = true, errorResumen = false) }
         viewModelScope.launch {
             try {
@@ -206,6 +225,7 @@ class PanelAdminViewModel(
                 SessionManager(context.applicationContext),
                 Subidas.almacen,
                 Subidas.cola,
+                CambiosLugares.version,
             ) as T
     }
 }

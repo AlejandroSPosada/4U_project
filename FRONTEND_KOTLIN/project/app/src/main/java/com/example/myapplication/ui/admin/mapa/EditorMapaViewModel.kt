@@ -3,7 +3,8 @@ package com.example.myapplication.ui.admin.mapa
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.domain.model.Alerta
-import com.example.myapplication.domain.model.Lugar
+import com.example.myapplication.domain.model.CategoriaLugar
+import com.example.myapplication.domain.model.LugarDestino
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +19,8 @@ const val MAX_MENSAJE = 200
 
 data class EditorMapaUi(
     val alertas: List<Alerta> = emptyList(),
-    val lugares: List<Lugar> = emptyList(),
+    // FE-3.4: el modelo único de lugar (antes `Lugar(nombre, lat, lng)`); el mapa web solo usa nombre, lat y lng.
+    val lugares: List<LugarDestino> = emptyList(),
     val pendientes: Set<String> = emptySet(),   // ids con cambios sin sincronizar
     val formulario: Alerta? = null,             // alerta en edición (borrador); null = sin formulario
     val formularioEsNuevo: Boolean = false,
@@ -55,7 +57,7 @@ class EditorMapaViewModel : ViewModel() {
                 Alerta("demo1", 6.2004, -75.5785, "Ten cuidado, hay bancas cerca, no te vayas a estrellar", "mobiliario", "normal", 15),
                 Alerta("demo2", 6.2010, -75.5777, "Rampa de acceso bloqueada por obras de mantenimiento.", "obra", "alta", 50),
             ),
-            lugares = listOf(Lugar("Biblioteca", 6.2007, -75.5781)),
+            lugares = listOf(LugarDestino("demo-biblioteca", "Biblioteca", CategoriaLugar.BIBLIOTECA, 6.2007, -75.5781)),
         )
     )
     val ui: StateFlow<EditorMapaUi> = _ui.asStateFlow()

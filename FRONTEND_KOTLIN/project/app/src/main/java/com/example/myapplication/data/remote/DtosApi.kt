@@ -65,6 +65,46 @@ data class ListaLugaresDto(
     @SerializedName("total") val total: Int? = null,
 )
 
+/**
+ * `LugarAdmin` de `/v1/admin/places` (backend §5.5; FE-3.4): `LugarPublico` sin `distancia_m`, más `creado_en`,
+ * `actualizado_en` y `total_fotos` (las fechas no pasan al modelo).
+ */
+data class LugarAdminDto(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("nombre") val nombre: String? = null,
+    @SerializedName("categoria") val categoria: String? = null,
+    @SerializedName("lat") val lat: Double? = null,
+    @SerializedName("lng") val lng: Double? = null,
+    @SerializedName("alias") val alias: List<String>? = null,
+    @SerializedName("descripcion") val descripcion: String? = null,
+    @SerializedName("referencias") val referencias: String? = null,
+    @SerializedName("imagen_url") val imagenUrl: String? = null,
+    @SerializedName("creado_en") val creadoEn: String? = null,
+    @SerializedName("actualizado_en") val actualizadoEn: String? = null,
+    @SerializedName("total_fotos") val totalFotos: Int? = null,
+)
+
+/** Respuesta 200 de `GET /v1/admin/places` (backend §5.5; FE-3.4): `{"items": [LugarAdmin…], "total": n}`. */
+data class ListaLugaresAdminDto(
+    @SerializedName("items") val items: List<LugarAdminDto>? = null,
+    @SerializedName("total") val total: Int? = null,
+)
+
+/**
+ * Cuerpo de `POST /v1/admin/places` y `PUT /v1/admin/places/{id}` (`LugarEntrada`, backend §5.5; FE-3.4). Es lo que
+ * envía la app: `categoria` en minúsculas; `alias` siempre (lista, quizá vacía); `descripcion` y `referencias` se
+ * omiten si son `null` (Gson no escribe los `null`), que el backend toma como `null`.
+ */
+data class LugarEntradaDto(
+    @SerializedName("nombre") val nombre: String,
+    @SerializedName("categoria") val categoria: String,
+    @SerializedName("lat") val lat: Double,
+    @SerializedName("lng") val lng: Double,
+    @SerializedName("alias") val alias: List<String>,
+    @SerializedName("descripcion") val descripcion: String? = null,
+    @SerializedName("referencias") val referencias: String? = null,
+)
+
 /** `Alerta` de `GET /v1/alerts` (y la base de `AlertaAdmin`). */
 data class AlertaDto(
     @SerializedName("id") val id: String? = null,

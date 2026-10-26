@@ -3,8 +3,10 @@ package com.example.myapplication.data.remote
 import com.example.myapplication.domain.model.Alerta
 import com.example.myapplication.domain.model.CalidadFoto
 import com.example.myapplication.domain.model.CategoriaLugar
+import com.example.myapplication.domain.model.DatosLugar
 import com.example.myapplication.domain.model.EstadoFoto
 import com.example.myapplication.domain.model.Foto
+import com.example.myapplication.domain.model.LugarAdmin
 import com.example.myapplication.domain.model.LugarCercano
 import com.example.myapplication.domain.model.LugarDestino
 import com.example.myapplication.domain.model.NivelConfianza
@@ -76,6 +78,40 @@ object MapeoDatosApi {
             imagenUrl = dto.imagenUrl,
         )
     }
+
+    /**
+     * `LugarAdmin` → [LugarAdmin] (FE-3.4). `null` si la categoría no la conoce la app (se descarta, como en
+     * [lugarDestino]). Obligatorios: `id`, `nombre`, `lat`, `lng`; `alias` ausente → `[]`, `total_fotos` ausente → 0.
+     * `creado_en` y `actualizado_en` no pasan al modelo.
+     */
+    fun lugarAdmin(dto: LugarAdminDto): LugarAdmin? {
+        val categoria = enumDe<CategoriaLugar>(dto.categoria) ?: return null
+        return LugarAdmin(
+            lugar = LugarDestino(
+                id = obligatorio(dto.id, "lugar.id"),
+                nombre = obligatorio(dto.nombre, "lugar.nombre"),
+                categoria = categoria,
+                lat = obligatorio(dto.lat, "lugar.lat"),
+                lng = obligatorio(dto.lng, "lugar.lng"),
+                alias = dto.alias.orEmpty(),
+                imagenUrl = dto.imagenUrl,
+            ),
+            descripcion = dto.descripcion,
+            referencias = dto.referencias,
+            totalFotos = dto.totalFotos ?: 0,
+        )
+    }
+
+    /** [DatosLugar] → cuerpo `LugarEntrada` (FE-3.4): la categoría en minúsculas (`Locale.ROOT`), el resto tal cual. */
+    fun entradaLugar(datos: DatosLugar): LugarEntradaDto = LugarEntradaDto(
+        nombre = datos.nombre,
+        categoria = datos.categoria.name.lowercase(Locale.ROOT),
+        lat = datos.lat,
+        lng = datos.lng,
+        alias = datos.alias,
+        descripcion = datos.descripcion,
+        referencias = datos.referencias,
+    )
 
     /** `Alerta` del backend → `Alerta` (`radio_m` → `radio`; `tipo` y `prioridad` quedan como texto). */
     fun alerta(dto: AlertaDto): Alerta = Alerta(

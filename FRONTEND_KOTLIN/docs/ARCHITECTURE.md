@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.11.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.12.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-27 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; probado en la JVM y con `validate34.py` en local, **sin probar en el teléfono ni en `dev`**). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -363,7 +363,7 @@ com.example.myapplication/
 │       ├── panel/
 │       ├── recoleccion/     # 7.3 ubicación manual, 7.4 recolección en curso y 7.5 resumen de video (FE-2.1)
 │       ├── calibracion/     # 7.3b calibración de la longitud de paso
-│       ├── lugares/
+│       ├── lugares/         # FE-3.4: 7.6 lista, 7.7 formulario; componentes/ (mapa)
 │       ├── mapa/            # Editor de mapa y alertas
 │       ├── imagenes/
 │       ├── videos/          # Lista y detalle de videos de recolección
@@ -397,11 +397,12 @@ Pruebas unitarias (JVM) en `app/src/test/java/com/example/myapplication/`: `data
 `ui/inicio/ComandoParserTest` y `sensors/ObservadorPrimerPlanoTest`, y desde FE-3.2
 `data/remote/RemoteLocalizacionRepositoryTest`, `domain/usecase/` (`ConversionRumboTest`, `DescribirUbicacionTest`),
 `domain/model/SesionDeNavegacionTest` y `ui/ubicacion/` (`FotosEscaneoTest`, `ErrorEscaneoTest`), y desde FE-2.2
-`data/remote/RemoteAdminRepositoryTest` y `ui/admin/panel/` (`TextosResumenTest`, `PendientesPanelTest`) (lista y
-conteos en §4.1).
+`data/remote/RemoteAdminRepositoryTest` y `ui/admin/panel/` (`TextosResumenTest`, `PendientesPanelTest`), y desde
+FE-3.4 `data/remote/RemoteLugaresAdminRepositoryTest`, `ui/admin/lugares/` (`FormularioLugarTest`, `ErroresLugarTest`)
+y `ui/admin/panel/RecargaResumenTest` (lista y conteos en §4.1).
 
 > Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
-> (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`) y de la calibración (`calibracion_mapa.html/js`), y la base común `mapa_base.js` (5.9).
+> (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`), de la calibración (`calibracion_mapa.html/js`) y, desde FE-3.4, de los lugares (`lugar_mapa.html/js`), y la base común `mapa_base.js` (5.9).
 
 > Actualmente en el repo existen `ui/`, `camera/`, `sensors/`, `map/`, `logs/`, `session/`,
 > `data/remote/` (desde FE-1.1), `data/local/` (desde FE-2.1), `data/repository/`, `domain/model/`, `domain/usecase/`,
@@ -466,8 +467,9 @@ almacenamiento externo.
   de los sensores del PDR, p. ej. `sensores quitados (segundo plano)`; §5.2) y desde FE-2.1 `Subida` (`AppLog.i` de la
   cola y de la subida: `PUT S3 rec_0003/0007 -> 200 (412 ms, 512345 B)`, `rec_0003: video creado en el backend`,
   `cola: reintento en 10 s (…)`; nunca URLs prefirmadas ni tokens; §5.10) y desde FE-3.1 `Lugares` (`AppLog.w` de
-  `RemoteLugaresRepository` solo si descarta lugares de `GET /v1/places`: categoría desconocida o `id` repetido; §5.10)
-  y desde FE-3.2 `ResultadoVM` (una línea al abrir la vista 6.3: nivel o «sin ubicación», y si hay destino). Desde FE-3.2
+  `RemoteLugaresRepository` solo si descarta lugares de `GET /v1/places`: categoría desconocida o `id` repetido; §5.10;
+  desde FE-3.4 también `RemoteLugaresAdminRepository` con `GET /v1/admin/places`, con el mismo formato y sin nombres de
+  lugares) y desde FE-3.2 `ResultadoVM` (una línea al abrir la vista 6.3: nivel o «sin ubicación», y si hay destino). Desde FE-3.2
   `EscaneoVM` deja además `Resultado: …`, `Localización falló (…)` y `Fotos del escaneo borradas (…)` (formato exacto en
   §5.2, «Flujo de captura del escaneo»; los lee `validate32.py`).
 - Registrar transiciones y decisiones, **no** cada lectura de sensor (50 por segundo).
@@ -514,7 +516,9 @@ almacenamiento externo.
 Componentes compartidos en `ui/components/`: hoy **solo `BannerEstado.kt`** (comprobado con `ls` el 2026-10-26, FE-3.2;
 el documento listaba además `BotonGrande.kt`, `MapaCampus.kt`, `MarcadorAlerta.kt`, `IndicadorVoz.kt`,
 `DialogoConfirmacion.kt` y `TopBarAccesible.kt`, que son nombres previstos y no existen). Los botones de cada vista
-viven en su paquete (5.5).
+viven en su paquete (5.5). Desde FE-3.4 las vistas de lugares de administración importan de `ui/destino/componentes/`
+`CampoBusqueda`, `FilaCategorias`, `EstadoVacio`, `BotonIcono`, `Modifier.tarjeta` y `CategoriaLugar.icono()` sin
+moverlos (moverlos a `ui/components/` es de FE-4.3, decisión del maestro del 2026-10-26).
 
 ### 4.1 Compilar, probar y CI (FE-1.1)
 
@@ -549,7 +553,10 @@ viven en su paquete (5.5).
   `ErrorEscaneoTest` (7); `MapeoErroresApiTest` pasa a 15 (`400 FOTOS_INVALIDAS`) y `RecodificacionFotoTest` a 14
   (límites de la localización). Total al terminar el código de FE-3.2: 221 casos. Desde FE-2.2:
   `data/remote/RemoteAdminRepositoryTest` (11), `ui/admin/panel/TextosResumenTest` (6) y `PendientesPanelTest` (5).
-  Total al terminar el código de FE-2.2: **243** casos. No usan
+  Total al terminar el código de FE-2.2: 243 casos. Desde FE-3.4: `data/remote/RemoteLugaresAdminRepositoryTest` (11),
+  `ui/admin/lugares/FormularioLugarTest` (10) y `ErroresLugarTest` (5) y `ui/admin/panel/RecargaResumenTest` (3); las
+  243 de antes no cambian. Total al terminar el código de FE-3.4: **272** casos (eran 274, y `FormularioLugarTest` 12,
+  hasta que el 2026-10-27 se quitó la hoja de 7.4, §4.8). No usan
   Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
   `EncryptedSharedPreferences` (la sesión se prueba con un `AlmacenSesion` en memoria, §5.3); lo de FE-2.3 es lógica
   pura (`PdrEngine`, `StepDetector`, `CalibracionPaso`, `DisparadorCaptura`, `Deriva`, `RetomarRecoleccion`,
@@ -557,7 +564,9 @@ viven en su paquete (5.5).
   imágenes es un doble (`MotorImagen`). `RecoleccionRepositoryLocal` (usa `org.json`, que en la JVM son *stubs* de
   `android.jar`), `MotorImagenAndroid` (`android.graphics`), los ViewModels y `PdrTracker` (sensores) no tienen
   pruebas en la JVM (desde FE-2.2 sí las funciones puras del archivo del Panel: `resumenConPendientes`,
-  `errorVisibleDelResumen`).
+  `errorVisibleDelResumen` y, desde FE-3.4, `debeRecargarResumen`; de FE-3.4, las piezas puras de `ui/admin/lugares/`:
+  `FormularioLugar`, `ErroresLugarMapeo`, `filtrarLugares`). `FormularioLugarTest` fija el idioma
+  por defecto en `es-CO` (coma decimal) y lo restaura al terminar.
 - **Ayuda de pruebas `ManifestPrueba`** (FE-2.1; `app/src/test/java/com/example/myapplication/data/local/ManifestPrueba.kt`,
   `object` público: se usa desde cualquier paquete de pruebas; FE-2.2 la usa en `data/remote/` y `ui/admin/panel/`):
   `ManifestPrueba.crear(raiz: File, id: String = "rec_0001", fotos: Int = 3, estado: String = "finalizado", subidas:
@@ -872,6 +881,8 @@ MockWebServer) y quedó «Hecho» antes de validar FE-2.2 en `dev` (backend 0.13
   vio `RemoteAdminRepositoryTest`). Por eso el repositorio mapea primero con `fotosPendientes = 0` y después hace `copy`.
 - 7.5 vuelve al Panel con `popBackStack("admin/panel")`: el Panel **no** se vuelve a crear ni recarga el backend. Lo
   local (tarjeta y «Fotos pendientes») se relee en `ON_RESUME`; totales, lugares, alertas y último video, no (ADR-FE-28).
+  Desde FE-3.4 (ADR-FE-32) el `ON_RESUME` sí vuelve a pedir `GET /v1/admin/stats` cuando los lugares cambiaron desde la
+  última carga (crear, editar o borrar en 7.6, 7.7 o 7.4); al volver de 7.5 sin tocar lugares sigue sin llamar.
 - «Fotos pendientes» cuenta lo que no es `sync = subida` (una foto sin `sync` también cuenta); en los manifests que
   escribe la app es lo mismo que `sync = pendiente` (§5.10).
 - Sin red, el Panel muestra «—» en los cinco datos (también en «Fotos pendientes», aunque es local) con «No se pudo cargar
@@ -897,6 +908,111 @@ antes de grabar (había 69) y al volver mostró 79 sin otro evento de la cola, a
 previo. **Sin comprobar en el teléfono:** el texto de la fecha del último video («Hoy, HH:mm», «Ayer…», «d MMM…»,
 solo probado en la JVM: `dev` no tenía videos) y números con separador de miles (todos < 1000). Hallazgos de 7.4 al
 grabar el recorrido de prueba: §5.5 («`RecoleccionScreen`», cuidados).
+
+### 4.8 Lugares de administración (FE-3.4)
+
+Qué se construyó (detalle y firmas en §5.5, §5.6, §5.8, §5.9, §5.10 y §5.11; validación en
+[`validation-3-4`](./validation/validation-3-4.md)). Contratos que consume: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.5,
+«Lugares: `/v1/admin/places` (BE-3.1)» (`LugarEntrada`, `LugarAdmin`, `409 NOMBRE_DUPLICADO` con `detalle: null`,
+`PUT` que reemplaza todo, `DELETE` idempotente) y §5.3, `GET /v1/places` (para comprobar C1 y C2). Decisiones: ADR-FE-30
+(modelo único de lugar) y ADR-FE-32 (`CambiosLugares`: 7.6 y el Panel se recargan tras un cambio), aceptadas por el
+maestro el 2026-10-26. **«Marcar punto de interés» (7.4) no se implementa** (decisión del usuario del 2026-10-27): la hoja
+que FE-3.4 había hecho para él se quitó antes de integrar el lote (ADR-FE-31, retirada), así que FE-3.4 **no toca 7.4**:
+`RecoleccionScreen.kt` es igual al de `main`, con el botón deshabilitado y «Próximamente» (quitarlo es de FE-4.3, PLAN
+§2.2).
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| Modelo único de lugar | `domain/model/LugarDestino.kt` (solo KDoc), `domain/model/Alerta.kt`, `ui/admin/mapa/EditorMapaViewModel.kt` | `Lugar(nombre, lat, lng)` desaparece: el editor de mapa usa `LugarDestino` (el JSON que recibe su página no cambia). `LugarDestino` no cambió: 6.3, 6.4 y `SesionDeNavegacion` siguen igual (ADR-FE-30) |
+| `LugarAdmin`, `DatosLugar` | `domain/model/LugarAdmin.kt` | `LugarAdmin(lugar: LugarDestino, descripcion, referencias, totalFotos)` (lo que da `GET /v1/admin/places`) y `DatosLugar` (lo que se envía, `LugarEntrada`) (§5.6) |
+| `LugaresAdminRepository`, `ContadorCambios`, `CambiosLugares` | `data/repository/LugaresAdminRepository.kt` | Contrato de la administración de lugares y el contador de cambios del proceso (§5.6; ADR-FE-32) |
+| `RemoteLugaresAdminRepository` | `data/remote/RemoteLugaresAdminRepository.kt` | `/v1/admin/places` real: listar, obtener (de la lista), crear, reemplazar y borrar; avisa a `CambiosLugares` tras cada escritura correcta (§5.10, «Lugares de administración») |
+| Rutas, DTOs y mapeo | `data/remote/CampusApi.kt`, `DtosApi.kt`, `MapeoDatosApi.kt` | `lugaresAdmin`, `crearLugar`, `reemplazarLugar`, `borrarLugar`; `LugarAdminDto`, `ListaLugaresAdminDto`, `LugarEntradaDto`; `MapeoDatosApi.lugarAdmin` y `entradaLugar` (§5.10) |
+| Vista 7.6 | `ui/admin/lugares/LugaresScreen.kt`, `LugaresState.kt`, `LugaresViewModel.kt` | Buscador y chips de categoría (los de 6.4), lista o mapa, «Nuevo lugar», tocar para editar, menú Editar / Eliminar (con confirmación) / «Ver fotos (próximamente)» (§5.5) |
+| Vista 7.7 | `ui/admin/lugares/LugarFormScreen.kt`, `LugarFormState.kt`, `LugarFormViewModel.kt` | Nombre, alias, descripción, categoría, punto de llegada en el mapa, referencias, nº de fotos; pie fijo «Punto: lat, lng» con Cancelar y Guardar; Eliminar al editar (§5.5) |
+| Reglas del formulario | `ui/admin/lugares/FormularioLugar.kt`, `ErroresLugarMapeo.kt` | Límites de `LugarEntrada`, coordenada a 6 decimales, alias por comas; errores del backend a su campo (el `409` bajo el nombre) (§5.5) |
+| Mapa de lugares | `assets/lugar_mapa.html`, `assets/lugar_mapa.js`, `ui/admin/lugares/componentes/MapaLugares.kt` | Página embebida con puente `LugarBridge`: modo editable (7.7: tocar o arrastrar el alfiler) y modo ver (7.6: tocar un lugar lo abre) (§5.9) |
+| Panel al día | `ui/admin/panel/PanelAdminViewModel.kt` (`debeRecargarResumen`, `cambiosLugares`) | Al volver al Panel (`ON_RESUME`) recarga el «Resumen rápido» si los lugares cambiaron desde la última carga: «Lugares registrados» al día (entregable que pidió el maestro al cerrar FE-2.2; ADR-FE-32) |
+| Rutas | `MainActivity.kt` (`AppNav`) | `admin/lugares` compone `LugaresScreen` (ya no es *placeholder*); ruta nueva `admin/lugares/form?id={id}` (§5.8) |
+| Pruebas | `RemoteLugaresAdminRepositoryTest` (11), `FormularioLugarTest` (10), `ErroresLugarTest` (5), `RecargaResumenTest` (3) | Apoyo de C1, C2 y C3 en la JVM; la recarga del Panel (§4.1) |
+| Validador | `src/ops/validate34.py` (sin ayudas nuevas en `comun.py`) | Local: C1a, C2a y C3a (JVM). Dev: además C1b (crear en 7.7 y verlo en `GET /v1/places`), C2b (posición), C1c (Destino) y C3b (409 en el formulario), con tres pasos guiados (§5.11) |
+
+**Flujo** (rutas en §5.8): Panel → «Lugares» → 7.6 → «Nuevo lugar» (o tocar una fila) → 7.7 → «Guardar» → vuelve a 7.6,
+que recarga sola por `CambiosLugares` → Atrás → Panel, que recarga el «Resumen rápido» porque cambiaron los lugares.
+
+**Trampas.**
+- **Coordenada a 6 decimales (≈ 0,11 m):** al editar un lugar creado por la API con más decimales, «Guardar» sin tocar el
+  mapa lo mueve como mucho ≈ 0,06 m y cambia su `actualizado_en`.
+- **La unicidad del nombre la decide el backend** (normaliza sin tildes ni mayúsculas, y junta ñ con n): la app no
+  avisa antes de «Guardar».
+- 7.6 y 7.7 (para el contexto del mapa y para leer el lugar que se edita) leen `GET /v1/admin/places` entero (sin
+  paginar; decenas de lugares, backend §4.9).
+- `total_fotos` es 0 hasta que BE-4.1 asigne lugares a las fotos; «Ver fotos» y el enlace a la galería esperan a FE-4.1.
+- El mapa de 7.7 está dentro de una columna con desplazamiento (como el de 7.4): tocar pone el alfiler; arrastrar el
+  mapa con un dedo puede desplazar la página (**sin comprobar** en el teléfono).
+- `CambiosLugares` es solo memoria: si Android mata el proceso, el Panel nuevo carga en `init` de todos modos.
+- **7.3 sigue con lugares de ejemplo:** `UbicacionManualViewModel.Factory` crea `LugaresRepositoryStub()` (sus
+  etiquetas de referencia en el mapa son los 6 `LUGARES_DE_PRUEBA`); FE-3.4 no lo cambió (toca la recolección antes
+  del día de campo). Pasarlo a `RemoteLugaresRepository()` es una línea en esa `Factory` (PLAN FE-4.3).
+
+**Para los lotes siguientes que tocan lo de FE-3.4** (todo lo necesario está en §5.5, «Lugares de administración»;
+§5.6; §5.8; §5.9, «`LugarBridge`»; §5.10, «Lugares de administración»):
+- **FE-3.3 (alertas en 7.4 y 7.8–7.10):**
+  - 7.4 tiene una sola hoja, `AlertaFormSheet` (estado en `RecoleccionViewModel`: `formularioAlerta`); FE-3.4 no la
+    cambió. Hoy 7.4 no llama al backend. Si las alertas de 7.4 pasan a hacerlo, un `401` lleva a Login (`AppNav`,
+    §5.3), que saca 7.4 de la pila (la grabación queda en disco y se retoma con «Retomar …» de 7.3); y navegar desde
+    7.4 pausa la grabación (`ON_STOP` de su entrada; hallazgo de FE-2.2 con «Ajustes», §5.5). Dos salidas: mirar antes
+    la sesión local (`SessionManager(appContext).obtener() != null`, como el `haySesion` de `ColaSubida`, §5.10) y, sin
+    ella, solo avisar; o guardar en local (Room) y sincronizar después, sin llamar desde 7.4.
+  - Editor 7.8: `EditorMapaUi.lugares` ya es `List<LugarDestino>` con un lugar de ejemplo (`demo-biblioteca`). Para los
+    reales basta `RemoteLugaresRepository().obtenerLugares()` (público, sin sesión, §5.10 «Lugares») o
+    `RemoteLugaresAdminRepository().listar().map { it.lugar }`; `lugaresJson` sigue siendo `[{nombre, lat, lng}]`
+    (`editor_mapa.js` no cambia). Para refrescarlos al volver de 7.6/7.7, recoger `CambiosLugares.version` (5.6).
+  - Contar cambios de alertas igual que los de lugares: otra instancia de `ContadorCambios` (p. ej. `object
+    CambiosAlertas : ContadorCambios()`); el Panel ya sabe comparar versiones (`debeRecargarResumen`, que habría que
+    generalizar a dos contadores si `alertas_activas` debe quedar al día).
+  - La lista 7.10 puede copiar la estructura de 7.6 (`LugaresScreen`: barra, aviso, buscador, lista con ⋮ y diálogo de
+    eliminar; `ColorBorrar`).
+- **FE-4.1 («Ver fotos» y la galería contra el backend):**
+  - 7.6: el menú ⋮ está en la composable privada `FilaLugarAdmin` (`LugaresScreen.kt`), con un `DropdownMenuItem` «Ver
+    fotos (próximamente)» `enabled = false`. Para habilitarlo: lambda nueva `onVerFotos(id)` en `LugaresAcciones` (y en
+    la pantalla `LugaresScreen(…, onVerFotos)`), y que `AppNav` abra la Galería filtrada (hoy la ruta `admin/imagenes` no
+    recibe argumentos, 5.8).
+  - 7.7: «Fotos asociadas» es un `Text` en `LugarFormContent` con `textoFotos(estado.totalFotos)`; el número sale de
+    `LugarAdmin.totalFotos` (`total_fotos` del backend: fotos de videos no eliminados en cualquier estado, backend §5.5).
+  - Filtrar por lugar: la Galería filtra hoy por **nombre** (`GaleriaFiltros.lugar`, `Foto.lugar` es el nombre); el
+    backend filtra por id (`GET /v1/admin/images?lugar_id=`, BE-4.1, backend §5.5). El id está en `LugarAdmin.id`.
+  - «Reasignar» de la Galería con lugares reales: `LugaresAdminRepository.listar()` da id y nombre. Tras reasignar o
+    borrar fotos, llamar a `CambiosLugares.avisar()` para que 7.6 (que muestra «N fotos») se recargue.
+- **FE-4.3 (renombrado y componentes):**
+  - Renombrar `LugarDestino` → `Lugar` (y el archivo `domain/model/LugarDestino.kt`): lo usan, en `main`,
+    `data/remote/MapeoDatosApi.kt` y `RemoteLugaresRepository.kt`, `data/repository/LugaresRepository.kt`,
+    `domain/model/LugarAdmin.kt` y `SesionNavegacion.kt`, `domain/usecase/BuscarLugares.kt` y `DescribirUbicacion.kt`,
+    `ui/admin/lugares/LugarFormState.kt` y `componentes/MapaLugares.kt`, `ui/admin/mapa/EditorMapaViewModel.kt`,
+    `ui/admin/recoleccion/UbicacionManualScreen.kt` y `UbicacionManualState.kt`, `ui/destino/SeleccionDestinoScreen.kt`,
+    `SeleccionDestinoState.kt`, `SeleccionDestinoViewModel.kt`, `componentes/ListaLugares.kt` y `componentes/PanelesVoz.kt`,
+    y `ui/ubicacion/ResultadoUbicacionViewModel.kt` (más un comentario en `domain/model/Alerta.kt`); en las pruebas,
+    `MapeoDatosApiTest`, `SesionDeNavegacionTest`, `DescribirUbicacionTest` y `FormularioLugarTest` (lista de `grep`
+    del 2026-10-26, la misma el 2026-10-27). Ningún validador depende del nombre de la clase. Después, cambiar el nombre en estos docs (§5.5,
+    §5.6, §5.7, §5.10 y otros).
+  - Mover a `ui/components/` lo que se importa de `ui/destino/componentes/` fuera de Destino (`grep` del 2026-10-26):
+    `BotonIcono` (`internal`, `Comun.kt`; lo usan 7.3b, 7.6, 7.7, 7.4, 7.5 y 7.3), `Modifier.tarjeta` (`internal`,
+    `Comun.kt`; 7.3b, 7.6, `PanelesRecoleccion.kt`, 7.5 y 7.3), `CategoriaLugar.icono()` (`internal`, `Comun.kt`; 7.6 y
+    7.7), `CampoBusqueda`, `FilaCategorias` (con su `ChipCategoria` privado) y `EstadoVacio` (públicos,
+    `ListaLugares.kt`; 7.6, y `EstadoVacio` también 7.7). Al moverlos cambian solo los `import` (lista revisada con
+    `grep` el 2026-10-27, tras quitar la hoja de 7.4).
+  - 7.3 con lugares reales (arriba, trampa de `LugaresRepositoryStub`).
+
+Verificado en local el 2026-10-26 (worktree de FE-3.4 sobre `e56e211`, con los cambios sin commit): `testDebugUnitTest
+assembleDebug` en Windows (`--rerun-tasks`) → `BUILD SUCCESSFUL` (274 casos, 0 fallos; sin avisos nuevos del
+compilador); en WSL `ruff check`, `ruff format --check` («20 files already formatted») y `pytest` (241 casos) en verde y
+`validate34.py --entorno local` → código 0 (P1; C1a 11/11; C2a 12/12; C3a 5/5; C1b, C2b, C1c y C3b omitidas). El
+2026-10-27, tras quitar la hoja de 7.4 (arriba), el maestro repitió en Windows `testDebugUnitTest assembleDebug` →
+`BUILD SUCCESSFUL`, **272 casos, 0 fallos** (`FormularioLugarTest` 10); `pytest` sigue en 241. `validate34.py --entorno
+local` **no se repitió** tras ese cambio (C2a pide como mínimo 8 casos de `FormularioLugarTest`, así que debería seguir
+pasando con 10/10; lo cubre la ejecución en `dev`). **Sin probar en el teléfono ni en `dev`** (lo coordina el maestro):
+las vistas 7.6 y 7.7, la recarga del Panel y `lugar_mapa.js`, que no se ejecutó en ninguna parte (no hay `node` ni jsdom
+en la máquina; se revisó leyéndolo, con la misma estructura que `recoleccion_mapa.js`).
 
 ---
 
@@ -934,12 +1050,12 @@ grabar el recorrido de prueba: §5.5 («`RecoleccionScreen`», cuidados).
 | Accesibilidad | `contentDescription` en todo; áreas de 48 dp o más (56–64 dp en las vistas públicas); avisos como *live region*. |
 
 **Variantes verificadas (vistas admin y públicas)** (no son errores, pero conviene unificarlas al tocar cada vista):
-- Nombre del `StateFlow` de estado: `state` (Panel, Login), `uiState` (Galería, Lista de videos), `ui` (Editor de mapa, Detalle de video) y `estado` (Inicio, Destino, Escaneo y, desde FE-3.2, Resultado).
-- `Factory`: la de `PanelAdminViewModel` recibe un `Context` y lo convierte a `applicationContext` por sí sola; las de `GaleriaViewModel` (`appContext`) y `VideoDetalleViewModel` (`appContext`, `videoId`) **esperan que ya se les pase el de la aplicación**: con el de una `Activity` se filtraría. Las pantallas actuales ya pasan `LocalContext.current.applicationContext`. `VideosViewModel.Factory(appContext)` también **espera el de la aplicación**; `LoginViewModel.Factory(context)` lo convierte por sí sola (como la de Panel). Inicio y Destino son `AndroidViewModel` y no llevan `Factory`.
+- Nombre del `StateFlow` de estado: `state` (Panel, Login), `uiState` (Galería, Lista de videos), `ui` (Editor de mapa, Detalle de video) y `estado` (Inicio, Destino, Escaneo, desde FE-3.2 Resultado y, desde FE-3.4, Lugares y Formulario de lugar).
+- `Factory`: la de `PanelAdminViewModel` recibe un `Context` y lo convierte a `applicationContext` por sí sola; las de `GaleriaViewModel` (`appContext`) y `VideoDetalleViewModel` (`appContext`, `videoId`) **esperan que ya se les pase el de la aplicación**: con el de una `Activity` se filtraría. Las pantallas actuales ya pasan `LocalContext.current.applicationContext`. `VideosViewModel.Factory(appContext)` también **espera el de la aplicación**; `LoginViewModel.Factory(context)` lo convierte por sí sola (como la de Panel). Inicio y Destino son `AndroidViewModel` y no llevan `Factory`. Desde FE-3.4: `LugaresViewModel.Factory()` (sin argumentos) y `LugarFormViewModel.Factory(lugarId)`.
 - El Editor de mapa y el Detalle de video no usan `XEvento`: los eventos llegan de JavaScript a través de una interfaz (`EditorMapaEventos`, `VideoDetalleEventos`; 5.5) y el estado del editor se llama `EditorMapaUi`. Galería, Lista y Detalle de video no tienen flujo de eventos en el ViewModel: salir y navegar lo resuelven las lambdas de la pantalla.
-- `@Preview`: lo tienen `PanelAdminContent` (3), `GaleriaContent` (2), `SeleccionDestinoContent` (1), `LoginContent` (4: vacío, cargando, credenciales inválidas y sin conexión; faltan sin permisos, desconocido y contraseña visible) y, desde FE-3.2, `ResultadoUbicacionContent` (2: con destino y sin coincidencias; `internal`). **No** lo tienen `VideosContent`, `EditorMapaContent`, `VideoDetalleContent` ni `InicioContent` (un `WebView` no se previsualiza, pero `VideosContent` sí podría). `PanelAdminContent` y `LoginContent` son `internal`; los demás `XContent` son públicos.
-- Recolección del estado: `collectAsStateWithLifecycle()` en Panel, Editor, Detalle de video, Login, Inicio y Destino; `collectAsState()` en Galería y Lista de videos (sigue recogiendo con la pantalla en segundo plano).
-- Acciones agrupadas: `PanelAcciones` (10 lambdas), `GaleriaAcciones` (14) y, desde FE-3.2, `ResultadoAcciones` (4), las tres `data class` con valores `{}` por defecto para los previews. `DestinoAcciones` (12 lambdas) es una `class` simple **sin** valores por defecto: su preview pasa doce `{}` a mano.
+- `@Preview`: lo tienen `PanelAdminContent` (3), `GaleriaContent` (2), `SeleccionDestinoContent` (1), `LoginContent` (4: vacío, cargando, credenciales inválidas y sin conexión; faltan sin permisos, desconocido y contraseña visible) , desde FE-3.2, `ResultadoUbicacionContent` (2: con destino y sin coincidencias; `internal`) y, desde FE-3.4, `LugaresContent` (1) y `LugarFormContent` (1, con `conMapa = false`). **No** lo tienen `VideosContent`, `EditorMapaContent`, `VideoDetalleContent` ni `InicioContent` (un `WebView` no se previsualiza, pero `VideosContent` sí podría). `PanelAdminContent` y `LoginContent` son `internal`; los demás `XContent` son públicos.
+- Recolección del estado: `collectAsStateWithLifecycle()` en Panel, Editor, Detalle de video, Login, Inicio, Destino y, desde FE-3.4, Lugares y Formulario de lugar; `collectAsState()` en Galería, Lista de videos y 7.4 (`RecoleccionScreen`) (sigue recogiendo con la pantalla en segundo plano).
+- Acciones agrupadas: `PanelAcciones` (10 lambdas), `GaleriaAcciones` (14), desde FE-3.2 `ResultadoAcciones` (4) y, desde FE-3.4, `LugaresAcciones` (12) y `LugarFormAcciones` (12), todas `data class` con valores `{}` por defecto para los previews. `DestinoAcciones` (12 lambdas) es una `class` simple **sin** valores por defecto: su preview pasa doce `{}` a mano.
 - Eventos de una sola vez (verificado en los ViewModels): Inicio y Destino usan `MutableSharedFlow(extraBufferCapacity = 1)` con `tryEmit` y **sin `replay`**: si nadie está recogiendo en ese instante, el evento **se pierde**. Login y, desde FE-3.2, Escaneo usan `Channel(BUFFERED)`, que sí espera al colector (pero admite **un solo** colector).
 - `InicioContent` recibe parámetros sueltos (`escuchando`, `backendEnLinea`, `permisosFaltantes`…) en vez de `InicioUiState`, y no tiene `modifier`.
 
@@ -1317,6 +1433,9 @@ pinta sus colores a mano. Un tema propio sería el sitio natural para unificar l
 | `FilaCategorias`, `CampoBusqueda`, `EncabezadoLista`, `FilaLugar`, `EstadoVacio`, `BotonVolver` | `ui/destino/componentes/ListaLugares.kt` | `FilaCategorias(seleccionada: CategoriaLugar?, onElegir: (CategoriaLugar?) -> Unit)` · `CampoBusqueda(texto: String, onCambio: (String) -> Unit)` · `EncabezadoLista(orden: OrdenLugares, onCambiarOrden: () -> Unit)` · `FilaLugar(lugar: LugarDestino, onClick: () -> Unit)` · `EstadoVacio(mensaje: String?, accion: String, onAccion: () -> Unit)` · `BotonVolver(onClick: () -> Unit)` | Verificado contra el código (bache 2). Propios de Destino salvo `EstadoVacio` y `BotonVolver`, que son genéricos. Todos públicos; `ChipCategoria` es privado. Detalle abajo. |
 | `EncabezadoPregunta`, `TarjetaOpciones` | `ui/destino/componentes/PanelesVoz.kt` | `EncabezadoPregunta()` · `TarjetaOpciones(opciones: List<LugarDestino>, onElegir: (LugarDestino) -> Unit)` | Verificadas contra el código (bache 2): las firmas coinciden con las llamadas de `SeleccionDestinoScreen`. `TarjetaOpciones` muestra las coincidencias cuando hay varias (5.5, Destino). Detalle abajo. |
 | `ResultadoUbicacionScreen` / `ResultadoUbicacionContent` | `ui/ubicacion/ResultadoUbicacionScreen.kt` | `ResultadoUbicacionScreen(onVolverAUbicarme, onIrALugar, onInicio, viewModel = viewModel())` · `internal ResultadoUbicacionContent(estado: ResultadoUiState, acciones: ResultadoAcciones, modifier)` | Vista 6.3 completa (FE-3.2; detalle abajo, «Resultado de ubicación»). **No navega**: las tres lambdas las conecta `AppNav` (5.8). Sus botones (`BotonPrincipal`, `BotonSecundario`) son `private`. |
+| `LugaresScreen` / `LugaresContent` | `ui/admin/lugares/LugaresScreen.kt` (`public`) | `LugaresScreen(onVolver, onNuevo, onEditar: (id: String) -> Unit, modifier, vm = viewModel(factory = LugaresViewModel.Factory()))` · `LugaresContent(estado: LugaresUiState, acciones: LugaresAcciones, modifier)` | Vista 7.6 (FE-3.4; detalle abajo, «Lugares de administración»). **No navega**. Un `@Preview` privado |
+| `LugarFormScreen` / `LugarFormContent` | `ui/admin/lugares/LugarFormScreen.kt` (`public`) | `LugarFormScreen(lugarId: String?, onListo: () -> Unit, modifier, vm = viewModel(key = "lugar-form-<id o nuevo>", factory = LugarFormViewModel.Factory(lugarId)))` · `LugarFormContent(estado: LugarFormUiState, acciones: LugarFormAcciones, modifier, conMapa = true)` | Vista 7.7 (FE-3.4; detalle abajo). `lugarId = null` = lugar nuevo. **No navega**: `onListo` (Atrás, «Cancelar», tras guardar o eliminar). `conMapa = false` dibuja el recuadro sin `WebView` (vista previa). Un `@Preview` privado |
+| `LugarMapaContent`, `LugarMapaEventos`, `lugaresJson` | `ui/admin/lugares/componentes/MapaLugares.kt` (`public`; el puente `LugarPuente` es `internal`) | `LugarMapaContent(lugaresJson: String, punto: Pair<Double, Double>?, editable: Boolean, eventos: LugarMapaEventos, modifier)` · `LugarMapaEventos(onPunto: (lat, lng) -> Unit = {…}, onLugarTocado: (id) -> Unit = {})` · `lugaresJson(lugares: List<LugarDestino>): String` (`[{id, nombre, lat, lng}]` con `org.json`) | Mapa de lugares embebido (FE-3.4; `lugar_mapa.html`, puente `LugarBridge`, §5.9). Crea su propio `rememberMapaWeb()`; `pasarInsets = false`, `manejarAtras = false`. Empuja en este orden `setModo`, `setPunto`/`quitarPunto` y `cargarLugares` (el primer encuadre usa el punto si lo hay) |
 
 **Componentes de `ui/destino/componentes/` en detalle (verificado, bache 2)**
 
@@ -1423,17 +1542,18 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| Constructor | `PanelAdminViewModel(repo: AdminRepository, session: SessionManager, almacen: AlmacenRecorridos? = null, cola: ColaSubida? = null)`. `Factory(context)` crea, desde FE-2.2, `RemoteAdminRepository(fotosPendientes = { Subidas.almacen.contarFotosPendientes() })` (antes `AdminRepositoryStub()`), `SessionManager(context.applicationContext)` (uno por ViewModel, como pide 5.3) y, desde FE-2.1, pasa `Subidas.almacen` y `Subidas.cola` (§5.10). |
+| Constructor | `PanelAdminViewModel(repo: AdminRepository, session: SessionManager, almacen: AlmacenRecorridos? = null, cola: ColaSubida? = null, cambiosLugares: StateFlow<Int>? = null)`. `Factory(context)` crea, desde FE-2.2, `RemoteAdminRepository(fotosPendientes = { Subidas.almacen.contarFotosPendientes() })` (antes `AdminRepositoryStub()`), `SessionManager(context.applicationContext)` (uno por ViewModel, como pide 5.3), desde FE-2.1 pasa `Subidas.almacen` y `Subidas.cola` (§5.10) y, desde FE-3.4, `CambiosLugares.version` (§5.6). |
 | `state: StateFlow<PanelUiState>` | `nombre` (primer nombre: lo que hay antes del primer espacio del nombre de la sesión), `rolTexto` (fijo: "Administrador del sistema"), `resumen: ResumenAdmin?`, `cargandoResumen` (empieza en `true`), `errorResumen` y, desde FE-2.1, `avisoSubidas: AvisoSubidas?`. |
 | Subidas (FE-2.1) | Con sesión ADMIN, en `init`: `cola.reanudar()` (retoma lo que quedó `subiendo`: tras volver a Login se cae aquí, 5.8) y recoge `combine(cola.estado, cola.cambiosVideos)`; en cada cambio relee los recorridos (`almacen.listar()`) y calcula `avisoSubidas` con `avisoSubidas(estado, recorridos)` (`internal`, lógica pura): si la cola trabaja sobre un video → «Preparando / Subiendo «nombre»» («N de M fotos»), «Subida de «nombre» en pausa» (sin conexión, «reintento en N s») o «La subida de «nombre» se detuvo» (error o fotos ilegibles, con el mensaje); si no, el `finalizado` `subiendo` más reciente → «Subida pendiente de «nombre»» («N fotos por subir»); si no, los `sin_subir` → «Recorridos sin subir» (el más reciente); nada pendiente → `null`. `AvisoSubidas(videoId, titulo, detalle, accion)`. Si la cola queda en `ESPERANDO_SESION` y `session.obtener()` ya es `null` (venció a las 12 h con el Panel vivo en la pila), emite `SinSesion` (a Login). Desde FE-2.2, con la misma lectura de los recorridos actualiza también `resumen.fotosPendientes` (abajo). |
 | «Fotos pendientes» al día (FE-2.2) | `resumenConPendientes(resumen, recorridos)` (`internal`, lógica pura): sin resumen o con `recorridos = null` (no se pudieron leer) lo deja igual; si no, `resumen.copy(fotosPendientes = fotosPendientesDe(recorridos))` (§5.10). La usan el recolector de la cola (cada cambio de `cola.estado` o `cola.cambiosVideos`) y **`alReanudar()`**, que la pantalla llama en cada `ON_RESUME`: relee `almacen.listar()` y recalcula tarjeta y pendientes **sin llamar al backend**. Sin la guarda de rol de `init` superada, o sin `cola`/`almacen`, `alReanudar()` no hace nada. Una lectura que falla (`listar()` lanza) deja la tarjeta como sin recorridos y las pendientes como estaban. |
 | `eventos` | `Channel(Channel.BUFFERED)` + `receiveAsFlow()`: cada evento lo recibe **un** recolector y queda guardado si llega antes de que alguien recoja. `PanelEvento.SesionCerrada` (volver al flujo público) y `PanelEvento.SinSesion` (ir a Login). |
-| `cargarResumen()` | Pone `cargandoResumen = true` y `errorResumen = false`, llama a `repo.obtenerResumen()` y, ante una `Exception`, deja `errorResumen = errorVisibleDelResumen(e)`: `true` salvo `FalloApi.SesionVencida` (sin sesión local, vencida o `401 TOKEN_*`: `AppNav` ya va a Login, §5.3 paso 4). Desde FE-2.2 relanza `CancellationException`. Sirve también de reintento. |
+| `cargarResumen()` | Pone `cargandoResumen = true` y `errorResumen = false`, llama a `repo.obtenerResumen()` y, ante una `Exception`, deja `errorResumen = errorVisibleDelResumen(e)`: `true` salvo `FalloApi.SesionVencida` (sin sesión local, vencida o `401 TOKEN_*`: `AppNav` ya va a Login, §5.3 paso 4). Desde FE-2.2 relanza `CancellationException`. Sirve también de reintento. Desde FE-3.4 anota antes `versionLugaresCargada = cambiosLugares?.value`. |
+| Recarga por lugares (FE-3.4, ADR-FE-32) | `debeRecargarResumen(cargada: Int?, actual: Int?, cargando: Boolean)` (`internal`, lógica pura; `RecargaResumenTest`) = `!cargando && actual != null && cargada != actual`. `alReanudar()` la evalúa **primero** (antes de mirar `cola`/`almacen`) con la versión anotada y `cambiosLugares.value`: si da `true`, llama a `cargarResumen()` (una petición `GET /v1/admin/stats`). Sin `cambiosLugares` (previews, pruebas) nunca recarga. |
 | `cerrarSesion()` | `session.cerrarSesion()` y emite `SesionCerrada`. |
 
 Cuidados:
 - **La guarda de rol corre solo en `init`:** sin sesión, con la sesión vencida (`expira_en` pasado, FE-1.2: `obtener()` da `null`) o con rol distinto de `ADMIN` emite `SinSesion` y no carga nada; mientras el ViewModel viva no se vuelve a comprobar. Las peticiones protegidas que haga después (desde FE-2.2, `GET /v1/admin/stats` en `cargarResumen()`) quedan cubiertas por `SesionInterceptor` + `EventosSesion` (5.3): `AppNav` vuelve a Login aunque el panel no lo pida, y el Panel no muestra su error propio.
-- **Qué se recarga y cuándo (FE-2.2, ADR-FE-28):** lo del backend (totales, lugares, alertas, último video) solo en `init` y con «Reintentar»; lo local (tarjeta de subidas y «Fotos pendientes») con cada cambio de la cola y en cada `ON_RESUME` (volver al Panel desde 7.5, 7.13, Ajustes… o desde otra app). Un `ON_RESUME` que llega antes de que cargue el resumen solo actualiza la tarjeta; el valor que trae `cargarResumen()` ya es reciente (`RemoteAdminRepository` cuenta la cola después de la respuesta). **Consecuencia para FE-3.4** (entregable suyo por decisión del maestro, PLAN §2.2): al volver al Panel desde 7.6/7.7 tras crear, editar o borrar un lugar, «Lugares registrados» sigue con el número de cuando se abrió el Panel. Para tenerlo al día, `alReanudar()` debe llamar también a `cargarResumen()` (o 7.6/7.7 deben pedir la recarga al volver); `validate22.py` no se rompe con eso (C1b lee `GET /v1/admin/stats` antes y después de mirar el Panel).
+- **Qué se recarga y cuándo (FE-2.2, ADR-FE-28):** lo del backend (totales, lugares, alertas, último video) solo en `init` y con «Reintentar»; lo local (tarjeta de subidas y «Fotos pendientes») con cada cambio de la cola y en cada `ON_RESUME` (volver al Panel desde 7.5, 7.13, Ajustes… o desde otra app). Un `ON_RESUME` que llega antes de que cargue el resumen solo actualiza la tarjeta; el valor que trae `cargarResumen()` ya es reciente (`RemoteAdminRepository` cuenta la cola después de la respuesta). **Desde FE-3.4 (ADR-FE-32, el entregable que pidió el maestro al cerrar FE-2.2):** el `ON_RESUME` vuelve a pedir también lo del backend **solo si los lugares cambiaron** desde la última carga (`CambiosLugares` subió al crear, editar o borrar en 7.6, 7.7 o 7.4): así «Lugares registrados» está al día al volver de 7.6/7.7, y volver de 7.5, 7.13 o de otra app sigue sin llamar al backend. `validate22.py` no cambia (C1b lee `GET /v1/admin/stats` antes y después de mirar el Panel). Si esa recarga falla, se ve «No se pudo cargar el resumen.» con los datos anteriores (como cualquier fallo de `cargarResumen()`).
 - `session.obtener()` se llama en el hilo principal y sin `try/catch`. ⚠ Deducido de unir esto con 5.3 (el primer acceso al almacén cifrado puede tardar y lanzar excepción si falla el Keystore): ese fallo cerraría la app al abrir el panel.
 - Si `cargarResumen()` falla después de haber cargado antes, `resumen` **conserva el dato anterior** junto con `errorResumen = true`: `PanelAdminScreen` muestra entonces el aviso de error **y** los datos viejos, con el chip "En tiempo real" (ver abajo).
 - Llamarla dos veces seguidas lanza dos cargas sin cancelar la primera; gana la que termine última.
@@ -1489,7 +1609,7 @@ Cuidados:
 Cuidados:
 - **No lee `cargandoResumen`:** mientras carga no hay indicador; los 5 datos muestran "—", igual que con error.
 - Con `errorResumen` aparece "No se pudo cargar el resumen." con un botón "Reintentar" (48 dp), pero si ya había un `resumen` anterior se sigue dibujando.
-- **`ChipTiempoReal` ("En tiempo real")** se muestra siempre que `resumen != null`, aunque `errorResumen` sea `true`. El ViewModel carga lo del backend **una sola vez** (y con «Reintentar»), sin sondeo: el texto promete más de lo que hace. Desde FE-2.2 «Fotos pendientes» sí se mantiene al día (ViewModel, arriba).
+- **`ChipTiempoReal` ("En tiempo real")** se muestra siempre que `resumen != null`, aunque `errorResumen` sea `true`. El ViewModel carga lo del backend **una sola vez** (y con «Reintentar»; desde FE-3.4 también al volver si cambiaron los lugares), sin sondeo: el texto promete más de lo que hace. Desde FE-2.2 «Fotos pendientes» sí se mantiene al día (ViewModel, arriba).
 - **"Cerrar sesión" actúa al primer toque, sin confirmación**, y se pinta con `CampusColors.Peligro` (morado, no rojo; 5.4).
 - `ResumenAdmin` (verificado contra `ResumenAdmin.kt`, bache 3; ver 5.6): `totalFotos`, `totalLugares`, `alertasActivas`, `ultimoVideoNumero`, `ultimoVideoFecha` (milisegundos) y `fotosPendientes`, en ese orden de constructor. Los textos salen, desde FE-2.2, de **`TextosResumen`** (`ui/admin/panel/TextosResumen.kt`, `internal object`, lógica pura con `TextosResumenTest`): `numero(valor, idioma = Locale.getDefault())` = `NumberFormat.getIntegerInstance(idioma)` («2.842» o «2,842») y `SIN_DATO` = «—» si es nulo; `fecha(millis, ahoraMs = ahora, zona = TimeZone.getDefault(), idioma = Locale.getDefault())` = «Hoy, HH:mm» (mismo día de calendario en `zona`), «Ayer, HH:mm» (el día anterior) o «d MMM, HH:mm» (también para una fecha futura; la abreviatura del mes depende del idioma, p. ej. `oct` u `oct.`). Antes eran `numero()` y `textoFecha()` privadas de la pantalla con `DateUtils.isToday` (mismo resultado salvo en un cambio de horario de verano, que Colombia no tiene).
 - **`content-desc` de cada dato** (lo lee `validate22.py`): `TileDato` hace `semantics(mergeDescendants = true) { contentDescription = "<valor> <etiqueta en minúsculas>" + ". <detalle>" si hay detalle }`: «2.842 fotos en el dataset», «48 lugares registrados», «3 alertas activas», «12 último video recolectado. Hoy, 09:24» (o «— último video recolectado» sin video), «27 fotos pendientes de subir». Mientras no hay resumen (primera carga, o error sin datos anteriores), los cinco valores son «—». Cambiar las etiquetas o el formato exige cambiar `ETIQUETAS` de `validate22.py`.
@@ -1497,7 +1617,7 @@ Cuidados:
 - `LaunchedEffect(Unit)` captura `onSesionCerrada` y `onSinSesion` de la primera composición (sin `rememberUpdatedState`): no pasar lambdas que dependan de estado que cambie.
 - Columna raíz con `systemBarsPadding()` + `verticalScroll`. "Versión X" sale de `packageManager.getPackageInfo(...)` dentro de `runCatching` ("—" si falla); "Panel de administración · Campus Navi" está fijo.
 - Accesibilidad: cada tarjeta y cada dato se anuncian combinados (`mergeDescendants`); los títulos llevan `heading()`; Ajustes mide 56 dp.
-- `onLugares`, `onEstadisticas` y `onAjustes` llevan hoy a rutas placeholder (5.8); `onRecolector` abre 7.3
+- `onEstadisticas` y `onAjustes` llevan hoy a rutas placeholder (5.8); `onLugares` abre 7.6 desde FE-3.4; `onRecolector` abre 7.3
   (`admin/ubicacion-manual`, comprobado en `MainActivity.kt` el 2026-10-26, FE-2.2; el documento lo contaba entre los
   placeholders).
 
@@ -1648,7 +1768,9 @@ Comportamiento y cuidados:
 - Las alertas se dibujan **todas igual** (ámbar si están activas, gris si no): no distinguen `tipo` ni `prioridad`. El CSS de la página duplica estilos de las otras páginas de mapa (candidato `mapa_base.css`). El centro inicial del JS es **aproximado** (EAFIT) y solo se ve antes del primer fix.
 - **Prueba sin teléfono:** abrir `recoleccion_mapa.html` en un navegador de escritorio activa un modo demo (alguien camina en círculo, deja fotos y se ve una alerta).
 - **Cámara:** la ruta la exige (5.8); la pantalla comprueba el permiso para activar `VistaCamara`. `VistaCamara` sigue sin manejar errores de `bindToLifecycle` (cuidado de 5.5).
-- «Marcar punto de interés» está **deshabilitado**. El aviso temporal (`ui.aviso`) es una tarjeta propia que se descarta al tocarla; no usa `BannerEstado`. `ColorFinalizar` y `ColorAviso` son propios porque `CampusColors.Peligro` es morado (5.4).
+- «Marcar punto de interés» está **deshabilitado** (`BotonAccion(…, habilitado = false, nota = "Próximamente")`, lambda
+  vacía). No se implementa (decisión del usuario del 2026-10-27; la hoja que había hecho FE-3.4 se quitó antes de
+  integrarlo, ADR-FE-31 retirada): quitar el botón es de FE-4.3 (PLAN §2.2). El aviso temporal (`ui.aviso`) es una tarjeta propia que se descarta al tocarla; no usa `BannerEstado`. `ColorFinalizar` y `ColorAviso` son propios porque `CampusColors.Peligro` es morado (5.4).
 - Reutiliza `BotonIcono` y `Modifier.tarjeta` de `ui/destino/componentes/Comun.kt` (`internal`): regla 4 de 11, conviene moverlos a `ui/components/`.
 - Con fuente grande, los cuatro contadores en fila pueden apretarse. Sin brújula «N» ni giro del mapa.
 - **Visto en el Xiaomi 23028RA60L al grabar el recorrido de prueba de FE-2.2** (2026-10-26, el maestro por `adb`):
@@ -1910,10 +2032,45 @@ Cuidados:
 - Los dos campos pierden el foco (y el teclado se cierra) al empezar la carga, porque se deshabilitan; tras un error hay que volver a tocar el campo.
 - Faltan `@Preview` para `SinPermisos`, `Desconocido` y contraseña visible.
 
+**Lugares de administración (7.6 y 7.7; FE-3.4, `ui/admin/lugares/`)**
+
+Todo usa `LugaresAdminRepository` (§5.6; en la app, `RemoteLugaresAdminRepository()`, §5.10). Colores de `CampusColors`
+más `ColorBorrar` (`internal val`, `#FF4D7D`, en `LugaresScreen.kt`: `CampusColors.Peligro` es morado, 5.4). Otras
+piezas `internal` que se pueden reutilizar en el módulo: `MensajeError(texto)` (`LugarFormScreen.kt`: texto rojo sobre
+fondo rojo suave, ancho completo, `liveRegion` Polite), `descripcionFila(l)` y `textoFotos(n)` (`LugaresScreen.kt`) y
+`filtrarLugares` (`LugaresState.kt`); las demás composables de
+detalle (`FilaLugarAdmin`, `SelectorModo`, `Aviso`, `Campo`, `Titulo`, `Chip`, `coloresCampo`) son `private`.
+Reutiliza de `ui/destino/componentes/` sin cambiarlos `CampoBusqueda` (placeholder «Buscar un lugar…»),
+`FilaCategorias`, `EstadoVacio`, `BotonIcono`, `Modifier.tarjeta` y `CategoriaLugar.icono()` (moverlos: FE-4.3).
+
+| Pieza | Detalle |
+|---|---|
+| `LugaresViewModel(repo: LugaresAdminRepository, cambios: StateFlow<Int> = CambiosLugares.version)` (7.6) | `Factory()` sin argumentos → `RemoteLugaresAdminRepository()`. Estado `estado: StateFlow<LugaresUiState>`. En `init`: `cargar()` y recoge `cambios.drop(1)` → `cargar(silencioso = true)` (cada crear, editar o borrar del proceso recarga la lista sin vaciarla). `cargar(silencioso = false)` cancela la carga anterior. Error al cargar: `ErroresLugarMapeo.errorDeCarga(e)` (sin red → «Sin conexión. Revisa tu conexión a internet e inténtalo de nuevo.»; otro → «No se pudo cargar la lista de lugares.»; sesión perdida → nada); en una recarga silenciosa con lista, va a `aviso`. `alBuscar`, `alCategoria`, `limpiarFiltros`, `alModo`, `descartarAviso`, `pedirBorrar(l)` / `cancelarBorrar()` / `confirmarBorrar()` (`DELETE`, lo quita de la lista al instante, aviso `"«<nombre>» eliminado."` o `"No se pudo eliminar: …"`) |
+| `LugaresUiState` (`LugaresState.kt`) | `cargando` (empieza en `true`), `error`, `todos: List<LugarAdmin>`, `busqueda`, `categoria: CategoriaLugar?`, `modo: ModoLugares` (`LISTA` / `MAPA`), `confirmandoBorrar: LugarAdmin?`, `borrando`, `aviso`; calculadas `visibles` (= `filtrarLugares(todos, busqueda, categoria)`) y `hayFiltros`. `filtrarLugares` (`internal`, pura): categoría exacta y `BuscarLugares.filtrar` (5.7) |
+| `LugaresAcciones` | `data class` con 12 lambdas (`{}` por defecto): `onVolver`, `onNuevo`, `onEditar(id)`, `onReintentar`, `onBusqueda`, `onCategoria`, `onLimpiarFiltros`, `onModo`, `onPedirBorrar(l)`, `onConfirmarBorrar`, `onCancelarBorrar`, `onDescartarAviso` |
+| Pantalla 7.6 | Barra (`BotonIcono` «Volver», título «Lugares» con `heading()` y «N lugares registrados»), aviso (tocar lo descarta, `liveRegion`), selector «Lista» / «Mapa» (`content-desc` «Vista de lista» / «Vista de mapa», `Role.Tab`), buscador y chips; cargando, error con «Reintentar», «Aún no hay lugares.» con «Nuevo lugar», «No hay lugares con estos filtros» con «Limpiar filtros»; la lista (`LazyColumn`, `key = id`) o el mapa (`LugarMapaContent` en modo ver: tocar un lugar → `onEditar`). Botón flotante «Nuevo lugar». Diálogo «¿Eliminar «X»?» («Deja de aparecer en Selección de destino. [Sus N fotos quedarán sin lugar.] No se puede deshacer.») |
+| Fila de 7.6 (privada `FilaLugarAdmin`) | Ícono de la categoría, nombre (18 sp), «‹categoría› · N fotos», coordenada `FormularioLugar.textoCoordenada`; tocarla edita; `BotonIcono` ⋮ «Opciones de ‹nombre›» con Editar, Eliminar y «Ver fotos (próximamente)» deshabilitado (FE-4.1). `content-desc` de la fila: `descripcionFila(l)` = «‹nombre›, ‹categoría›, N fotos. Toca para editar.» (`textoFotos`: «1 foto» / «N fotos») |
+| `LugarFormViewModel(lugarId: String?, repo)` (7.7) | `Factory(lugarId)`. Estado `estado: StateFlow<LugarFormUiState>`, eventos `eventos: Flow<LugarFormEvento>` (`Channel.BUFFERED`): `Guardado(nombre)` y `Eliminado(nombre)`. `cargar()` (en `init` y «Reintentar»): `repo.listar()`; los demás lugares van a `otros` (contexto del mapa); editando rellena `campos` con `FormularioLugar.campos(l)` y `totalFotos`, o `errorCarga` = «Este lugar ya no existe…» / «No se pudo leer el lugar: …»; creando, un fallo solo deja el mapa sin contexto. `alNombre`, `alAlias`, `alDescripcion`, `alReferencias`, `alCategoria`, `alPunto(lat, lng)` (redondea a 6 decimales) limpian el error de su campo y el general. `guardar()`: valida (`FormularioLugar.validar`); con errores los muestra y no envía; si no, `crear` o `reemplazar` con `FormularioLugar.datos`; éxito → `Guardado` (y se queda en `guardando = true` hasta salir); error → `ErroresLugarMapeo.deExcepcion(e)` (nada con la sesión perdida). `pedirBorrar` (solo editando) / `cancelarBorrar` / `confirmarBorrar` (`borrar` → `Eliminado`) |
+| `LugarFormUiState` / `LugarFormAcciones` (`LugarFormState.kt`) | `esNuevo`, `cargando`, `errorCarga`, `campos: CamposLugar`, `errores: ErroresLugar`, `otros: List<LugarDestino>`, `totalFotos`, `guardando`, `confirmandoBorrar`; calculada `textoPunto`. `LugarFormAcciones`: 12 lambdas (`{}` por defecto): `onVolver`, `onNombre`, `onAlias`, `onDescripcion`, `onCategoria`, `onPunto(lat, lng)`, `onReferencias`, `onGuardar`, `onReintentar`, `onPedirBorrar`, `onConfirmarBorrar`, `onCancelarBorrar` |
+| Pantalla 7.7 | Barra («Volver», título «Nuevo lugar» / «Editar lugar»); columna con desplazamiento: error general (`MensajeError`, `liveRegion`), campos «Nombre» (ayuda «Único: no distingue mayúsculas ni tildes.»), «Alias (separados por comas)», «Descripción» (contador /300), chips de las 8 categorías (`FilterChip`), «Punto de llegada» con el mapa de 300 dp (`LugarMapaContent` editable con los demás lugares), «Referencias cercanas» (contador /300), «Fotos asociadas» («N fotos con este lugar. Las fotos se asignan a un lugar desde la galería (próximamente).») y, editando, «Eliminar lugar». El error de un campo reemplaza su ayuda (`supportingText`, `liveRegion`). **Pie fijo** (fuera del desplazamiento, con `imePadding`): el texto `estado.textoPunto` y los botones «Cancelar» y «Guardar» (con indicador mientras guarda). `BackHandler` → `onListo`. Tras `Guardado`/`Eliminado`, `Toast` con `"«<nombre>» guardado."` o `"«<nombre>» eliminado."` y `onListo()` |
+| `FormularioLugar` (`FormularioLugar.kt`, `internal object`, puro; `FormularioLugarTest`) | Límites de `LugarEntrada` (backend §5.5) **tras recortar**: `NOMBRE_MIN` 2, `NOMBRE_MAX` 80, `ALIAS_MAX_ELEMENTOS` 20, `ALIAS_MAX` 60, `TEXTO_MAX` 300 (descripción y referencias). `DECIMALES` 6: `redondear(g)` = `Math.round(g · 10⁶) / 10⁶`; `textoCoordenada(lat, lng)` = `String.format(Locale.ROOT, "%.6f, %.6f")` (punto decimal en cualquier idioma); `textoPunto(punto)` = «Punto: ‹lat›, ‹lng›» o `SIN_PUNTO` «Punto: sin elegir (toca el mapa)». `aliasDeTexto` (separa por comas y saltos de línea, recorta, sin vacíos ni repetidos sin distinguir mayúsculas) / `textoDeAlias` («a, b»). `validar(CamposLugar): ErroresLugar` con los textos `ERROR_NOMBRE_CORTO` «Escribe un nombre de al menos 2 caracteres.», `ERROR_NOMBRE_LARGO` «Máximo 80 caracteres.», `ERROR_CATEGORIA` «Elige una categoría.», `ERROR_PUNTO` «Toca el mapa para elegir el punto de llegada.», `ERROR_ALIAS_MUCHOS`, `ERROR_ALIAS_LARGO`, `ERROR_TEXTO_LARGO`. `datos(CamposLugar): DatosLugar?` (`null` con errores; textos recortados, vacíos → `null`, coordenada redondeada). `campos(LugarAdmin)` (para editar). **No** comprueba la unicidad del nombre (la decide el backend, ADR-FE-30) |
+| `CamposLugar`, `ErroresLugar` (`FormularioLugar.kt`) | `CamposLugar(nombre, aliasTexto, descripcion, categoria?, punto: Pair<Double, Double>?, referencias)` (lo escrito, sin validar). `ErroresLugar(nombre, alias, descripcion, categoria, punto, referencias, general)` (`String?` cada uno), `hay`, `NINGUNO` |
+| `ErroresLugarMapeo` (`ErroresLugarMapeo.kt`, `internal object`, puro; `ErroresLugarTest`) | `deExcepcion(e)` / `deFallo(FalloApi): ErroresLugar?` (`null` = sesión perdida, no se muestra nada): `409` + `NOMBRE_DUPLICADO` → `nombre` = `NOMBRE_DUPLICADO` «Ya existe un lugar con ese nombre (sin distinguir mayúsculas ni tildes).»; `422` con `detalle.campos` → cada campo a su sitio por el **primer tramo conocido** de `campo` partido por puntos (`nombre`, `alias` —`alias.3`—, `descripcion`, `referencias`, `categoria`, `lat`/`lng` → `punto`; `body.descripcion` también vale), motivo vacío → `CAMPO_INVALIDO` «No es válido.», campos desconocidos → `general` «Revisa los datos (‹campo›: ‹motivo›; …).»; otro `409`/`422` sin campos → `general` con su `mensaje`; `404` → `NO_EXISTE` «Este lugar ya no existe (lo borró otra persona). Vuelve a la lista.»; sin red → `SIN_CONEXION`; `SinPermisos` → `SIN_PERMISOS`; `429` → `DEMASIADOS_INTENTOS`; el resto (y una respuesta fuera de contrato) → `ALGO_SALIO_MAL` «Algo salió mal. Inténtalo de nuevo.». `errorDeCarga(e): String?` para las lecturas (arriba, 7.6) y `ERROR_CARGA` |
+
+Cuidados:
+- Los textos que lee `validate34.py` (§5.11) son el pie «Punto: …» (`PATRON_PUNTO`, 6 decimales con punto), «Guardar»,
+  «Vista de lista», el comienzo de `NOMBRE_DUPLICADO` y los de error de 7.7, el `content-desc` de las filas de Destino
+  (`FilaLugar`) y el primer `EditText` de 7.7 (Nombre): cambiarlos exige cambiar sus constantes.
+- «Nuevo lugar» es a la vez el título de 7.7 y el botón flotante de 7.6: para saber en qué vista se está, `validate34`
+  usa el pie «Punto: …» (7.7) y «Vista de lista» (7.6).
+- 7.6 y 7.7 recogen el estado con `collectAsStateWithLifecycle()`. Ninguna registra en `AppLog` (solo la línea `Api`
+  de cada petición y, si se descartan lugares, `Lugares`).
+- **Sin probar en el teléfono** (FE-3.4 en `dev`): TalkBack en las dos y el mapa dentro del desplazamiento de 7.7.
+
 ### 5.6 Datos: repositorios y modelos
 
 Convención: `interface XRepository` + `XRepositoryStub` (o `AssetsX` si lee de `assets/`) + TODO `RemoteX`
-en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean su repositorio directamente (verificado: desde FE-2.1, las `Factory` de Galería, Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp(appContext)`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1), la `Factory` de Login, `RemoteAuthRepository` (FE-1.2), `SeleccionDestinoViewModel`, `RemoteLugaresRepository` (FE-3.1; con posición desde FE-3.2), `EscaneoViewModel`, `RemoteLocalizacionRepository` (FE-3.2), y la `Factory` del Panel, `RemoteAdminRepository` (FE-2.2).
+en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean su repositorio directamente (verificado: desde FE-2.1, las `Factory` de Galería, Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp(appContext)`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1), la `Factory` de Login, `RemoteAuthRepository` (FE-1.2), `SeleccionDestinoViewModel`, `RemoteLugaresRepository` (FE-3.1; con posición desde FE-3.2), `EscaneoViewModel`, `RemoteLocalizacionRepository` (FE-3.2), la `Factory` del Panel, `RemoteAdminRepository` (FE-2.2), y las de 7.6 y 7.7, `RemoteLugaresAdminRepository` (FE-3.4; sin *stub*).
 
 | Repositorio | Métodos | Implementación actual | Usado por |
 |---|---|---|---|
@@ -1922,7 +2079,8 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 | `VideoRepository` | `suspend obtenerVideos(): List<Video>` (cada `Video` ya trae sus `fotos`) · `suspend renombrarVideo(videoId, nombre)` · `suspend eliminarVideo(videoId)` · `suspend eliminarFoto(videoId, fotoId)` · `cambios(): Flow<Int>` | Local: desde FE-2.1 `VideoRepositoryCompuesto.deLaApp(appContext)` = `AssetsVideoRepository` (`assets/videos/`) + `FuenteRecorridos` (`files/recoleccion/`, solo `finalizado`) | Galería, Lista, Detalle de video y (FE-2.1) 7.3. Detalle abajo |
 | `RecoleccionRepository` | `crearVideo(inicio): String` · `carpetaFotos(videoId): File` · `registrarFoto(videoId, archivo, DatosFoto): FotoRecolectada` · `desplazarFotos(videoId, desdeIndice, dLat, dLng)` · `fotos(videoId)` · `finalizar(videoId, duracionS, distanciaM, pasos): ResumenRecoleccion` · `descartar(videoId)` · `buscarEnCurso(): String?` · `leerEnCurso(videoId): VideoEnCurso` (FE-2.3) · `guardarProgreso(videoId, ProgresoRecoleccion)` (FE-2.3) · `contarPendientes(): Int` · `marcarSubida(videoId, fotoIds)` · `espacioLibreBytes(): Long` | Local (`RecoleccionRepositoryLocal(context)`, `data/repository/RecoleccionRepository.kt`) | `RecoleccionViewModel` (lo crea directamente) y, desde FE-2.3, `UbicacionManualScreen` (solo `buscarEnCurso` y `leerEnCurso`, para «Retomar …»). La subida (FE-2.1) no pasa por aquí: usa `AlmacenRecorridos` (§5.10). Detalle abajo |
 | `CalibracionPasoRepository` | `guardada(): Double?` · `longitudPasoM(): Double` (la calibrada, o `PdrEngine.LONGITUD_PASO_DEFECTO_M`) · `guardar(Valido, ahoraMs = ahora)` · `restablecer()` (borra todo el archivo) | Local (`CalibracionPasoRepository(context)`, `data/repository/CalibracionPasoRepository.kt`; **sin interfaz**) | `PdrTracker` (valor por defecto del parámetro), `CalibracionViewModel` y `UbicacionManualScreen`. Detalle abajo |
-| `LugaresRepository` | `suspend obtenerLugares(): List<LugarDestino>` (lanza `IOException`; con el backend real `SinConexionException`, `ApiException` o `RespuestaInesperadaException`) | **Real** desde FE-3.1 (`RemoteLugaresRepository`, `GET /v1/places`, §5.10); queda `LugaresRepositoryStub` (300 ms, `LUGARES_DE_PRUEBA`, 6 lugares) para vistas previas y pruebas | `SeleccionDestinoViewModel` (lo crea directamente, desde FE-3.2 con `posicion = { SesionDeNavegacion.posicionVigente() }`); futuras 7.6/7.7 |
+| `LugaresRepository` | `suspend obtenerLugares(): List<LugarDestino>` (lanza `IOException`; con el backend real `SinConexionException`, `ApiException` o `RespuestaInesperadaException`) | **Real** desde FE-3.1 (`RemoteLugaresRepository`, `GET /v1/places`, §5.10); queda `LugaresRepositoryStub` (300 ms, `LUGARES_DE_PRUEBA`, 6 lugares) para vistas previas y pruebas, **y en 7.3** (abajo) | `SeleccionDestinoViewModel` (lo crea directamente, desde FE-3.2 con `posicion = { SesionDeNavegacion.posicionVigente() }`) y `UbicacionManualViewModel` (7.3, por su `Factory`, **con `LugaresRepositoryStub()`**: sus etiquetas de referencia en el mapa son los 6 lugares de ejemplo, no los reales; comprobado con `grep` en FE-3.4; 5.5, «UbicacionManual»). La administración (7.6, 7.7) **no** lo usa: tiene `LugaresAdminRepository` (abajo) |
+| `LugaresAdminRepository` (FE-3.4) | `suspend listar(): List<LugarAdmin>` · `suspend obtener(id): LugarAdmin?` (de `listar()`: el backend no tiene `GET` por id) · `suspend crear(datos: DatosLugar): LugarAdmin` · `suspend reemplazar(id, datos: DatosLugar): LugarAdmin` (reemplaza **todos** los campos) · `suspend borrar(id)` (idempotente). Excepciones en el KDoc: sin red `SinConexionException`; otro error `ApiException` (nombre repetido = `FalloApi.Validacion(409, "NOMBRE_DUPLICADO", …)`; un `PUT` a un lugar borrado = `Desconocido(404, "NO_ENCONTRADO")`); sesión perdida `ApiException(SesionVencida)`; `2xx` fuera de contrato `RespuestaInesperadaException`. `data/repository/LugaresAdminRepository.kt` | **Real** (`RemoteLugaresAdminRepository`, `/v1/admin/places`, §5.10, «Lugares de administración»); sin *stub* | `LugaresViewModel` y `LugarFormViewModel` (por sus `Factory`; 5.5) |
 | `LocalizacionRepository` (FE-3.2; reemplaza a `EscaneoBackend`, que vivía en `ui/ubicacion/` y no seguía esta convención) | `suspend localizar(fotos: List<FotoEscaneo>): ResultadoUbicacion` (`FotoEscaneo(archivo: File, rumboGrados: Double?)`, rumbo verdadero; 1 a 5 fotos, en orden). Lanza `SinConexionException`, `ApiException`, `RespuestaInesperadaException` o `FotoIlegibleException`. `data/repository/LocalizacionRepository.kt` | **Real** (`RemoteLocalizacionRepository`, `POST /v1/localize`, §5.10); queda `LocalizacionRepositoryStub(resultado = RESULTADO_DE_PRUEBA, esperaMs = 2_500)` para desarrollo y vistas previas. `RESULTADO_DE_PRUEBA` (`val` público del mismo archivo): `Ubicado` en (6.200104, −75.578612), radio 8,5 m, confianza 0,78 `ALTA`, corrección −6,0°, lugar cercano «Biblioteca Central» (`biblioteca-central`) a 12,4 m y referencias «Bloque de los Trillizos» (`bloque-trillizos`, 35,2 m, rumbo 95,0°) y «Cafetería Principal» (`cafeteria-principal`, 80,0 m, rumbo 270,0°), 5 fotos / 4 con coincidencia. Lo usa el `@Preview` «con destino» de la 6.3 (con `LUGARES_DE_PRUEBA.last()`, «Entrada Principal», como destino y rumbo 0) | `EscaneoViewModel` (lo crea directamente). Detalle en 5.2 («Flujo de captura del escaneo») |
 | `BackendHealth` | `suspend estaEnLinea(): Boolean` (no lanza). `data/repository/BackendHealth.kt` | **Real** (`RemoteBackendHealth`, `GET /v1/health`, §5.10) | `InicioViewModel` (lo fija en una propiedad). Detalle en 5.5 |
 
@@ -1930,8 +2088,10 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 |---|---|---|
 | `Usuario`, `Rol`, `Sesion` | `domain/model/Usuario.kt` | Verificado (bache 3; `Sesion` cambió en FE-1.2). `Rol` = `USER` / `ADMIN`; `Usuario(id, nombre, correo, rol)`; `Sesion(token, usuario, expiraEnMs)`. ⚠ El `toString()` de `Sesion` incluye el token. Detalle abajo |
 | `ResumenAdmin` | `domain/model/ResumenAdmin.kt` | Verificado (bache 3): 6 campos, 5 datos del panel (el último video usa número y fecha). Orígenes decididos en FE-2.2 (ADR-FE-28). Detalle abajo |
-| `Alerta`, `Lugar(nombre, lat, lng)` | `domain/model/Alerta.kt` | Detalle abajo. `Lugar` lo usa el editor de mapa |
-| `LugarDestino`, `CategoriaLugar` | `domain/model/LugarDestino.kt` | Verificado contra el código. `id`, `nombre`, `categoria`, `lat`, `lng`, `alias`, `distanciaMetros?`, `imagenUrl?`. Detalle más abajo |
+| `Alerta` | `domain/model/Alerta.kt` | Detalle abajo. Desde FE-3.4 ya no hay `Lugar(nombre, lat, lng)` en este archivo (ADR-FE-30) |
+| `LugarDestino`, `CategoriaLugar` | `domain/model/LugarDestino.kt` | Verificado contra el código. `id`, `nombre`, `categoria`, `lat`, `lng`, `alias`, `distanciaMetros?`, `imagenUrl?`. **El único modelo de lugar de la app** desde FE-3.4 (ADR-FE-30): 6.4, 6.3, el editor de mapa (7.8) y, dentro de `LugarAdmin`, 7.6 y 7.7. Detalle más abajo |
+| `LugarAdmin`, `DatosLugar` | `domain/model/LugarAdmin.kt` | FE-3.4: el lugar visto por la administración (envuelve un `LugarDestino`) y lo que se envía al crear o reemplazar. Detalle más abajo |
+| `ContadorCambios`, `CambiosLugares` | `data/repository/LugaresAdminRepository.kt` | FE-3.4: contador de cambios de lugares del proceso (ADR-FE-32). Detalle más abajo |
 | `Foto`, `Video`, `EstadoFoto`, `CalidadFoto` | `domain/model/Foto.kt` | Detalle abajo. Ver también 7.11 y 7.14. `EstadoFoto.PENDIENTE` desde FE-2.1 |
 | `RecorridoLocal`, `FotoLocal`, `FotoPreparada`, `EstadoSubida` | `data/local/RecorridoLocal.kt` | FE-2.1: un recorrido de `files/recoleccion/` tal como lo leen 7.5, la cola y el repositorio compuesto (de `ManifestRecorrido.recorrido`). Detalle en §5.10, «Subida de un recorrido» |
 | `InicioRecoleccion` | `domain/model/InicioRecoleccion.kt` | `lat`, `lng`, `rumbo` (0…360, 0 = norte; norte magnético si vino de la brújula), `nombreVideo` y `continuaVideoAnterior`. Lo emite la vista 7.3 y lo consume la 7.4 a través de `SesionDeRecoleccion`. Detalle en 5.5 («UbicacionManual») |
@@ -1970,7 +2130,7 @@ seguros.
 - **Cuentas del stub** (`AuthRepositoryStub`, sin uso desde FE-1.2; espera simulada de 1,2 s; la contraseña se ignora): `admin@campus.edu.co` → `ADMIN`; `user@campus.edu.co` → `USER`; `offline` → `IOException`; cualquier otro → credenciales inválidas. Se compara el identificador sin espacios y en minúsculas, pero `correo` queda como lo escribió la persona. Su sesión vence a las 12 h (`expiraEnMs = ahora + 12 h`). Cuidado: el stub devuelve `nombre = "Administrador"` y `token = "stub-token"` incluso para `USER`; no usar ese nombre en pruebas de interfaz.
 - Nunca registrar `password` ni `token` en `AppLog`.
 
-**`Alerta` y `Lugar` en detalle (verificado)**
+**`Alerta` en detalle (verificado)**
 
 | Campo de `Alerta` | Tipo y valores |
 |---|---|
@@ -1982,7 +2142,8 @@ seguros.
 
 - `tipo` y `prioridad` son **texto libre, no enums**, y el modelo **no valida** el rango del radio: un error de escritura pasa sin aviso y el mapa web no reconocería la clave. Validar en el formulario (7.9) o convertirlos en enums con las mismas claves.
 - `Alerta` no guarda quién la creó ni cuándo.
-- `Lugar(nombre, lat, lng)` no tiene `id` ni categoría; `LugarDestino` sí. Esa diferencia es lo que hay que resolver al unificarlos (ver la advertencia de `Lugar` y `LugarDestino` más abajo).
+- Hasta FE-3.4 el mismo archivo tenía `Lugar(nombre, lat, lng)` (sin `id` ni categoría), que usaba el editor de mapa;
+  se unificó en `LugarDestino` (más abajo, «Un solo modelo de lugar»).
 
 **`VideoRepository` en detalle (verificado)**
 
@@ -2085,7 +2246,7 @@ seguros.
 - `alias` son otros nombres que la persona puede decir (p. ej. «biblioteca», «los trillizos») y alimentan `BuscarLugares` (5.7): cuantos más alias cubran cómo habla la gente, mejor acierta la voz.
 - `distanciaMetros` son **metros enteros desde la posición actual**; `null` si aún no hay ubicación. Depende de la posición, no del lugar. Al ser `data class`, dos copias del mismo lugar con distinta distancia **no son iguales** (`equals`): comparar lugares por `id`.
 - `imagenUrl` es una URL o `file:///android_asset/...`; si es `null` o no carga (FE-3.1), la lista muestra el ícono de la categoría. Con el backend es `imagen_url`: una URL prefirmada de 1 h o `null` (hoy siempre `null`, backend §5.3).
-- Con el backend (FE-3.1): `id` es el UUID del lugar, `nombre` el guardado (recortado; único sin distinguir mayúsculas ni tildes), y `descripcion` y `referencias` de `LugarPublico` **no** pasan al modelo (no hay campos; FE-3.4 decide, abajo).
+- Con el backend (FE-3.1): `id` es el UUID del lugar, `nombre` el guardado (recortado; único sin distinguir mayúsculas ni tildes), y `descripcion` y `referencias` de `LugarPublico` **no** pasan al modelo: desde FE-3.4 solo la administración las usa, dentro de `LugarAdmin` (abajo).
 - `CategoriaLugar` tiene 8 valores. `etiqueta` va en singular (filas de la lista y filtro de texto de `BuscarLugares.filtrar`) y `etiquetaPlural`, en los chips de filtro:
 
 | Valor | `etiqueta` | `etiquetaPlural` | Grupo |
@@ -2101,12 +2262,28 @@ seguros.
 
 - `CategoriaLugar.DESTACADAS` = Biblioteca, Cafetería, Baño y Bloque: según el comentario del código, las que tienen chip propio en 6.4. `OTRAS` = el resto (`values()` sin las destacadas); según el mismo comentario van en el menú «Más». Una categoría nueva entra en `OTRAS` sola. Verificado en el bache 2: `FilaCategorias` dibuja `DESTACADAS` como chips y `OTRAS` en el menú «Más» (5.5), y `CategoriaLugar.icono()` (`Comun.kt`) es un `when` exhaustivo sin `else`: una categoría nueva no compila hasta que se le asigne ícono.
 
-⚠ **`Lugar` y `LugarDestino` conviven.** Al construir 7.6 y 7.7 (lista y formulario de lugares) hay que
-unificarlos en un solo modelo. Comparación (código y secciones 7.6 y 7.7):
-- `LugarDestino` ya trae `nombre`, `lat` y `lng` con los mismos nombres que `Lugar(nombre, lat, lng)`, más `id`, `categoria` y `alias`: es un **superconjunto**, y obtener un `Lugar` desde un `LugarDestino` es copiar tres campos.
-- 7.6 y 7.7 piden además descripción (texto que se lee al usuario), referencias cercanas y nº de fotos asociadas. `LugarDestino` **no tiene** ninguno. Sí cubre nombre, alias, categoría, coordenada e `imagenUrl`.
-- La validación de 7.7 (nombre único, coordenada obligatoria) no está en el modelo: el modelo no valida nada.
-- Sigue sin decidirse si se amplía `LugarDestino` con campos opcionales o se crea un modelo de edición aparte y `LugarDestino` queda como vista de lectura de 6.4.
+**Un solo modelo de lugar (FE-3.4, ADR-FE-30; antes, un ⚠ «`Lugar` y `LugarDestino` conviven»)**
+
+- `Lugar(nombre, lat, lng)` (en `Alerta.kt`, sin `id` ni categoría, solo para el editor de mapa) **desapareció**: el
+  editor usa `List<LugarDestino>` (su dato de ejemplo es `LugarDestino("demo-biblioteca", "Biblioteca", BIBLIOTECA,
+  6.2007, -75.5781)`; `lugaresJson` sigue siendo `[{nombre, lat, lng}]`, así que `editor_mapa.js` no cambia).
+- `LugarDestino` **no cambió** (solo su KDoc): sigue con su nombre y sus 8 campos, y 6.3, 6.4, `SesionDeNavegacion`,
+  `MapeoDatosApi.lugarDestino` y sus pruebas siguen igual. Renombrarlo a `Lugar` es una limpieza mecánica que espera a
+  FE-4.3 (decisión del maestro del 2026-10-26: tocaría el flujo público antes del día de campo).
+- Lo que solo usa la administración va en **`LugarAdmin`**, que envuelve un `LugarDestino` en lugar de duplicarlo:
+  `LugarAdmin(lugar: LugarDestino, descripcion: String? = null, referencias: String? = null, totalFotos: Int = 0)`, con
+  `id` y `nombre` (los del `lugar`) y `datos(): DatosLugar` (lo que se reenvía en un `PUT` sin cambios). Su `lugar`
+  trae `distanciaMetros = null` siempre. `creado_en` y `actualizado_en` no pasan al modelo.
+- **`DatosLugar(nombre, categoria, lat, lng, alias = emptyList(), descripcion = null, referencias = null)`**: el cuerpo
+  `LugarEntrada` (backend §5.5) del lado de la app. El modelo no valida nada: los límites, el redondeo de la coordenada
+  y los textos los pone `FormularioLugar` (5.5) y la unicidad del nombre, el backend (`409`).
+
+**`ContadorCambios` y `CambiosLugares` (FE-3.4, ADR-FE-32; `data/repository/LugaresAdminRepository.kt`)**: `open class
+ContadorCambios` con `version: StateFlow<Int>` (empieza en 0) y `avisar()` (suma 1); `object CambiosLugares :
+ContadorCambios()` es el del proceso. Lo sube `RemoteLugaresAdminRepository` después de cada `crear`, `reemplazar` o
+`borrar` correcto (un error no avisa); lo miran `LugaresViewModel` (recarga la lista) y `PanelAdminViewModel` (recarga el
+«Resumen rápido» en `ON_RESUME`). El número no significa nada (como `VideoRepository.cambios()`); solo memoria. Las
+pruebas usan su propia instancia (`ContadorCambios()`).
 
 **`ResumenAdmin`, `Usuario`, `AdminRepository` y `LugaresRepository` en detalle (verificado, bache 3)**
 
@@ -2129,7 +2306,7 @@ unificarlos en un solo modelo. Comparación (código y secciones 7.6 y 7.7):
 `Usuario.kt`: `enum class Rol { USER, ADMIN }`, `Usuario(id: String, nombre: String, correo: String, rol: Rol)` y `Sesion(token: String, usuario: Usuario, expiraEnMs: Long)` (FE-1.2: `expiraEnMs` = `expira_en` del login en milisegundos Unix; `fun vencida(ahoraMs: Long) = ahoraMs >= expiraEnMs`). Las tres son sin valores por defecto, y las dos últimas son `data class`. El KDoc de `Sesion` dice que el token nunca se registra en logs. Coincide con 5.3: `SessionManager.obtener()` devuelve `""` si faltan id, nombre o correo.
 - ⚠ **El `toString()` autogenerado de `Sesion` incluye el token y el de `Usuario`, el correo.** Interpolar una `Sesion` o un `Usuario` en un `AppLog` los escribiría en Logcat y en el archivo de logs, contra lo que dice el KDoc. Solución simple: sobrescribir `toString()` en ambas. No se buscó si algún código lo hace hoy.
 
-`LugaresRepository`: `suspend fun obtenerLugares(): List<LugarDestino>`, «con su distancia a la posición actual si se conoce» (`GET /v1/places`); las excepciones solo están en el KDoc. La implementación real es `RemoteLugaresRepository` (FE-3.1; firma, posición y errores en §5.10, «Lugares»). `LugaresRepositoryStub` (sin uso en la app desde FE-3.1) espera 300 ms y devuelve `LUGARES_DE_PRUEBA`, un `val` público del mismo archivo (coordenadas aproximadas), que usa la vista previa de Destino. Los 6 lugares (ids únicos, apto para `key = { it.id }`):
+`LugaresRepository`: `suspend fun obtenerLugares(): List<LugarDestino>`, «con su distancia a la posición actual si se conoce» (`GET /v1/places`); las excepciones solo están en el KDoc. La implementación real es `RemoteLugaresRepository` (FE-3.1; firma, posición y errores en §5.10, «Lugares»). `LugaresRepositoryStub` (en la app, solo en la `Factory` de 7.3, `UbicacionManualViewModel`, que dibuja sus lugares como etiquetas de referencia; hasta 0.12.0 este párrafo decía «sin uso en la app desde FE-3.1», que no era cierto) espera 300 ms y devuelve `LUGARES_DE_PRUEBA`, un `val` público del mismo archivo (coordenadas aproximadas), que usa la vista previa de Destino. Los 6 lugares (ids únicos, apto para `key = { it.id }`):
 
 | `id` | Nombre | Categoría | Alias | `distanciaMetros` |
 |---|---|---|---|---|
@@ -2183,7 +2360,7 @@ Qué casos **no** ejercitan estos datos de prueba (con el backend real, desde FE
 
 Se pueden probar sin emulador (solo Kotlin).
 
-Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(texto, todos)` → `List<LugarDestino>`, `BuscarLugares.filtrar(todos, busqueda)` e `InterpretarRespuesta.interpretar(texto)` → `Respuesta.SI / NO / NINGUNA`; las firmas coinciden con la tabla. Las **reglas** de la tabla se verificaron contra `BuscarLugares.kt` (bache 1). Dos matices del uso: `mejores` siempre busca en la lista **completa** (ignora la búsqueda y la categoría activas), y el «Di cuál quieres» tras ofrecer opciones vuelve a buscar sobre todos los lugares, no solo sobre las opciones ofrecidas.
+Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(texto, todos)` → `List<LugarDestino>`, `BuscarLugares.filtrar(todos, busqueda)` e `InterpretarRespuesta.interpretar(texto)` → `Respuesta.SI / NO / NINGUNA`; las firmas coinciden con la tabla. Las **reglas** de la tabla se verificaron contra `BuscarLugares.kt` (bache 1). Desde FE-3.4 `filtrar` también es el buscador de la lista 7.6 (a través de `filtrarLugares`, 5.5, con los `LugarDestino` de cada `LugarAdmin`). Dos matices del uso: `mejores` siempre busca en la lista **completa** (ignora la búsqueda y la categoría activas), y el «Di cuál quieres» tras ofrecer opciones vuelve a buscar sobre todos los lugares, no solo sobre las opciones ofrecidas.
 
 **Comportamientos a tener en cuenta en `BuscarLugares`** (leídos en el código y probados con una copia de la lógica en Python; no se ejecutó el Kotlin, y los ejemplos usan nombres de muestra, no los lugares reales del stub):
 
@@ -2205,19 +2382,21 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 | `resultado` | `ResultadoUbicacionScreen` (6.3, FE-3.2) | Ubicación y destino por `SesionDeNavegacion` (no por la ruta) | `onVolverAUbicarme` → `navigate("ubicarme") { popUpTo("resultado") { inclusive = true } }`; `onIrALugar` → `navigate("destino") { popUpTo("resultado") { inclusive = true } }` (Destino carga con la posición vigente); `onInicio` → `popBackStack("inicio", inclusive = false)`. Atrás del sistema: el del `NavHost` (vuelve a lo que haya debajo, normalmente Inicio) |
 | `destino` | `SeleccionDestinoScreen` | — | FE-3.2: `onDestinoConfirmado(lugar)` → `SesionDeNavegacion.elegirDestino(lugar)` y `navigate(siguiente) { popUpTo("destino") { inclusive = true } }` con `siguiente` = `resultado` si hay ubicación vigente (`ubicacionVigente() != null`), si no `ubicarme`; `onAjustes` → `ajustes`, `onVolver` → `popBackStack()` |
 | `login` | `LoginScreen` | — | `onLoginExitoso` → `admin/panel` (quita `login` de la pila), `onVolver` |
-| `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila); `onAbrirSubida(videoId)` (FE-2.1, tarjeta de subidas) → `navigate("admin/recoleccion/resumen?video=<id>")`. Al volver a esta entrada (p. ej. `popBackStack("admin/panel")` desde 7.4 o 7.5) se reutiliza su ViewModel: desde FE-2.2 relee los recorridos locales en `ON_RESUME` (5.5) |
+| `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila); `onAbrirSubida(videoId)` (FE-2.1, tarjeta de subidas) → `navigate("admin/recoleccion/resumen?video=<id>")`. Al volver a esta entrada (p. ej. `popBackStack("admin/panel")` desde 7.4 o 7.5) se reutiliza su ViewModel: desde FE-2.2 relee los recorridos locales en `ON_RESUME` y, desde FE-3.4, vuelve a pedir el «Resumen rápido» si cambiaron los lugares (5.5) |
 | `admin/ubicacion-manual` | `UbicacionManualScreen` (7.3) | — | `onVolver` (flecha y «Cancelar») → `popBackStack()`, `onAjustes` → `ajustes`, `onCalibrar` → `navigate("admin/calibracion")`, `onConfirmar(InicioRecoleccion)` → `SesionDeRecoleccion.iniciar(inicio)` y `navigate("admin/recoleccion")` (7.3 queda en la pila: su ViewModel reactiva «Confirmar» con `alReanudar()`), `onRetomar` (FE-2.3) → `SesionDeRecoleccion.limpiar()` y `navigate("admin/recoleccion")` (sin inicio: 7.4 retoma). Pide `Permisos.INICIALES` antes de mostrar la pantalla y descarta el resultado |
 | `admin/calibracion` | `CalibracionScreen` (7.3b) | — | Pide `Permisos.ACTIVIDAD` antes de mostrar la pantalla y **descarta el resultado** (negarlo no cambia nada: los pasos salen siempre del acelerómetro; quitar este permiso es parte de FE-4.3). `onVolver` → `popBackStack()`. Se llega desde la fila «Calibrar mi paso» de 7.3. No devuelve datos: el resultado se guarda en `CalibracionPasoRepository` (5.6) y lo recoge cada `PdrTracker` al crearse |
 | `admin/recoleccion` | `RecoleccionScreen` (7.4) | `InicioRecoleccion` por `SesionDeRecoleccion` (no por la ruta) | Pide **solo la cámara** antes de mostrar la pantalla (como `ubicarme`; si se niega, `popBackStack()`). `onFinalizado(resumen)` → `SesionDeRecoleccion.finalizar(resumen)` y `navigate("admin/recoleccion/resumen?video=${resumen.videoId}") { popUpTo("admin/ubicacion-manual") { inclusive = true } }` (saca 7.3 y 7.4 de la pila; FE-2.1 pasa el id); `onDescartado` (video sin fotos) → `popBackStack("admin/panel", inclusive = false)`; `onVolver` (solo con error: `SIN_INICIO` —sin inicio ni video `en_curso` que retomar— o `NO_SE_PUDO_CREAR`) → `popBackStack()`; `onAjustes` → `ajustes` (*placeholder* en blanco; al volver, la grabación queda en pausa: 5.5, «`RecoleccionScreen`», visto el 2026-10-26). Sin `InicioRecoleccion` (pila restaurada tras matar el proceso, o `onRetomar` de 7.3) retoma el video `en_curso` más reciente (FE-2.3, 5.2) |
 | `admin/recoleccion/resumen?video={video}` | `ResumenVideoScreen` (7.5, FE-2.1) | `video` = `rec_NNNN` (argumento opcional: `navArgument("video") { type = NavType.StringType; nullable = true; defaultValue = null }`); sin él, `SesionDeRecoleccion.resumen` o el recorrido sin subir más reciente (5.5). `navigate("admin/recoleccion/resumen")` sin argumento también vale | `onIrAlPanel` → `popBackStack("admin/panel", inclusive = false)`; si el Panel no está en la pila, `navigate("admin/panel") { popUpTo("inicio") }`. Atrás lo maneja la pantalla (`BackHandler` → «Guardar y subir después» o salir) |
+| `admin/lugares` | `LugaresScreen` (7.6, FE-3.4) | — | `onVolver` → `popBackStack()`; `onNuevo` → `navigate("admin/lugares/form")`; `onEditar(id)` → `navigate("admin/lugares/form?id=<id>")`. Se llega desde el Panel («Lugares», `onLugares`). Sin permisos ni guarda de rol propia (como el resto de `admin/*`) |
+| `admin/lugares/form?id={id}` | `LugarFormScreen` (7.7, FE-3.4) | `id` = UUID del lugar (argumento opcional: `navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null }`); sin él, lugar nuevo. `navigate("admin/lugares/form")` sin argumento también vale | `onListo` (Atrás, «Cancelar», tras guardar o eliminar) → `popBackStack()`: vuelve a 7.6, que recarga por `CambiosLugares` (5.6) |
 | `admin/mapa` | `EditorMapaScreen` | `posicionAdmin: () -> Pair<Double, Double>?` (hoy `{ null }`) | `onVolver`, `onVerLista` (hoy vacío; el comentario dice «vista 17», que corresponde a la lista de alertas 7.10) |
 | `admin/imagenes` | `GaleriaScreen` | — | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
 | `admin/videos` | `VideosScreen` | — | `onVolver`, `onAbrirVideo(id)` → `admin/videos/<id>` |
 | `admin/videos/{videoId}` | `VideoDetalleScreen` | `videoId` (argumento de ruta, texto) | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
 | `mapa` | `MapaPublicoScreen` (2.6) | — | Ruta pública registrada en FE-2.3. Desde FE-3.1 la abre `inicio` (`onVerMapa`); en el APK de depuración también se abre al arrancar con el extra `ruta` (abajo). Queda encima de `inicio`: Atrás (del sistema; la página no tiene botón Volver) vuelve a Inicio, que repite la bienvenida. No entrega nada |
 
-Rutas con placeholder vacío (pantalla en blanco, no cierran la app): `admin/lugares`, `admin/estadisticas`, `ajustes`
-(desde FE-2.1 `admin/recoleccion/resumen` ya no lo es). Registrar una ruta **dos veces** hace que la última
+Rutas con placeholder vacío (pantalla en blanco, no cierran la app): `admin/estadisticas` y `ajustes` (desde FE-2.1
+`admin/recoleccion/resumen` ya no lo es, y desde FE-3.4 tampoco `admin/lugares`). Registrar una ruta **dos veces** hace que la última
 reemplace a la primera (un placeholder puede tapar la pantalla real); navegar a una ruta **no
 registrada** cierra la app con un error.
 
@@ -2228,6 +2407,8 @@ registrada** cierra la app con un error.
   codificar (el id del video es el nombre de su carpeta, 5.6: no usar `/` ni caracteres especiales; si falta, la ruta
   no dibuja nada), y desde FE-2.1 `video` de `admin/recoleccion/resumen?video={video}` (opcional, con `navArgument`
   anulable; `rec_NNNN`). Android guarda los argumentos con la pila: tras matar el proceso, 7.5 vuelve al mismo recorrido.
+  Desde FE-3.4, `id` de `admin/lugares/form?id={id}` (opcional, `navArgument` anulable; UUID del lugar, sin codificar:
+  no lleva caracteres especiales): tras matar el proceso, 7.7 vuelve a leer ese lugar del backend.
 - **La recolección (7.3 → 7.4) no usa argumentos de ruta:** los datos viajan por `SesionDeRecoleccion` (5.6; decisión 15).
   7.5 recibe el id por la ruta (FE-2.1) y solo usa el holder si no viene.
 - **El flujo público tampoco (FE-3.2, decisión abierta 15 resuelta por el usuario, ADR-FE-24):** el destino de 6.4 y la
@@ -2237,7 +2418,8 @@ registrada** cierra la app con un error.
   `RemoteLugaresRepository`) y `Declinacion` (`ultimaPosicion`). Tras matar el proceso se pierde: la 6.3 restaurada dice
   «No tengo una ubicación reciente».
 - **Sin protección al entrar en las rutas `admin/*`:** `AppNav` no comprueba la sesión al entrar en `admin/mapa`,
-  `admin/imagenes` ni `admin/videos[/{id}]`; el panel dispara `onSinSesion` en su `init`. ⚠ Confirmar si cada
+  `admin/imagenes`, `admin/videos[/{id}]` ni (FE-3.4) `admin/lugares[/form]` (estas dos llaman a `/v1/admin/places`
+  al abrirse: sin sesión, `SesionInterceptor` + `EventosSesion` llevan a Login); el panel dispara `onSinSesion` en su `init`. ⚠ Confirmar si cada
   pantalla admin lo comprueba por su cuenta. Ojo con la restauración tras matar el proceso: `MyApp`
   ya habrá borrado la sesión (5.3) y Android puede restaurar la pila en una pantalla admin (así retoma 7.4 su
   grabación sin pedir login, FE-2.3: no llama al backend; ⚠ que el Xiaomi restaure la pila tras `am kill`, a verificar
@@ -2280,8 +2462,8 @@ guarda en `SesionDeNavegacion`); `EscaneoEvento.Completado` lleva el resultado (
 ### 5.9 Puentes WebView ↔ Android
 
 Cada mapa es una página en `assets/` (HTML + JS con Leaflet) con su puente Kotlin: `AndroidBridge`
-(mapa público, 2.6), `EditorBridge` (7.8), `VideoBridge` (7.14), `UbicacionBridge` (7.3), `RecoleccionBridge` (7.4) y `CalibracionBridge` (7.3b). Los datos viajan como JSON. Las funciones de los tres primeros están al final de esta
-sección; las de los tres últimos, en 5.5. Funciones y cuidados del `EditorBridge` y de `VideoBridge` en 5.5.
+(mapa público, 2.6), `EditorBridge` (7.8), `VideoBridge` (7.14), `UbicacionBridge` (7.3), `RecoleccionBridge` (7.4), `CalibracionBridge` (7.3b) y, desde FE-3.4, `LugarBridge` (7.6 y 7.7). Los datos viajan como JSON. Las funciones de los tres primeros y de `LugarBridge` están al final de esta
+sección; las de `UbicacionBridge`, `RecoleccionBridge` y `CalibracionBridge`, en 5.5. Funciones y cuidados del `EditorBridge` y de `VideoBridge` en 5.5.
 `env(safe-area-inset-*)` no funciona en `WebView`, así que la app pasa el alto de las barras en dp con
 `setInsets(top, bottom)` (el mapa público no lo usa: su pantalla aplica `systemBarsPadding()`).
 
@@ -2341,6 +2523,9 @@ Cuidados:
   Aun así, sin Leaflet la página nunca llama a `listo()` y la app no le envía datos.
 - `RecoleccionBridge` (7.4) es una página **embebida** en una tarjeta de Compose: usa `MapaBase.iniciar` y `crearMapa`, pero con `pasarInsets = false` y `manejarAtras = false` (Atrás lo maneja la pantalla); lleva ocultos `#top`, `#dock` y `#btn-back` por si `MapaBase.iniciar` no tolera que falten (5.5). Desde FE-2.1 la misma página sirve al mapa de 7.5 (recorrido terminado): sin `setPosicion` y con `encuadrar()`.
 - `CalibracionBridge` (7.3b) es igual de embebido que `RecoleccionBridge` (`pasarInsets = false`, `manejarAtras = false`, mismos elementos ocultos); marca A y B con toques y pines arrastrables y usa el zoom nativo de Leaflet (5.5).
+- `LugarBridge` (FE-3.4, 7.6 y 7.7) también es embebido (`pasarInsets = false`, `manejarAtras = false`, los mismos
+  `#top`, `#dock` y `#btn-back` ocultos); usa `MapaBase.iniciar` y `MapaBase.crearMapa` (zoom nativo de Leaflet abajo a
+  la izquierda). Funciones al final de esta sección.
 
 #### Funciones de `AndroidBridge` (mapa público, 2.6)
 
@@ -2405,6 +2590,28 @@ Formato de los datos:
   `"2026-10-09"`; `rumbo` puede ser `null`).
 - Otros videos: `[{ id, nombre, fotos: [{ lat, lng }] }]`.
 
+#### Funciones de `LugarBridge` (mapa de lugares, 7.6 y 7.7; FE-3.4)
+
+Página `assets/lugar_mapa.html` + `lugar_mapa.js`; lado Kotlin `ui/admin/lugares/componentes/MapaLugares.kt`
+(`LugarPuente : PuenteWeb`, `internal`; todo pasa al hilo principal). Dos modos: **editable** (formulario 7.7: tocar el
+mapa pone o mueve el alfiler rosa del punto de llegada; también se arrastra) y **ver** (lista 7.6 en modo mapa: los
+lugares son tocables). Los demás lugares se dibujan como puntos violeta con su nombre debajo (tooltip permanente, con
+`textContent`).
+
+| Dirección | Función | Descripción |
+|---|---|---|
+| Web → Kotlin | `listo()` | Heredado de `PuenteWeb`: la página cargó; Kotlin responde con `setModo`, el punto y los lugares |
+| Web → Kotlin | `puntoCambiado(lat, lng)` | Modo editable: tras un toque en el mapa o al **soltar** el alfiler (no durante el arrastre). Coordenada sin redondear: la redondea el ViewModel (6 decimales) |
+| Web → Kotlin | `lugarTocado(id)` | Modo ver: se tocó un lugar (texto, su `id`) |
+| Kotlin → Web | `setModo(editable)` | `true` en 7.7, `false` en 7.6; vuelve a dibujar los lugares (tocables solo en modo ver) |
+| Kotlin → Web | `cargarLugares(texto)` | **Texto** JSON `[{id, nombre, lat, lng}]` (`lugaresJson`, con `literalJs`): en 7.7 los demás lugares, en 7.6 los visibles con los filtros. Reemplaza la capa |
+| Kotlin → Web | `setPunto(lat, lng)` / `quitarPunto()` | El punto de llegada (la app es la dueña; mientras se arrastra se ignoran sus ecos) |
+| Kotlin → Web | `encuadrar()` | Encuadra lugares y punto (con uno solo, zoom 18). La página lo hace sola **una vez**, con el primer dato: el punto si lo hay, si no los lugares; sin nada, centro aproximado del campus (6.2007, −75.5783) y zoom 17 |
+
+Sin puente (abierta en un navegador) dibuja dos lugares de ejemplo en modo editable. **Sin probar:** no se ejecutó en
+ningún navegador ni en el teléfono (FE-3.4 no tenía `node` ni jsdom); se revisó leyéndola, con la estructura de
+`recoleccion_mapa.js`.
+
 ### 5.10 Consumo de la API del backend
 
 > El contrato de la API (rutas, cuerpos, errores) es del backend: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5. Aquí se
@@ -2413,7 +2620,8 @@ Formato de los datos:
 > (`SesionInterceptor`); desde FE-2.1, la recolección (`/v1/collect/…`) y `GET /v1/admin/videos/{id}` desde la cola de
 > subida (`data/local/`, abajo); desde FE-3.1, los lugares públicos (`GET /v1/places`, `RemoteLugaresRepository`);
 > desde FE-3.2, «Ubicarse» (`POST /v1/localize`, `RemoteLocalizacionRepository`); desde FE-2.2, el «Resumen rápido» del
-> Panel (`GET /v1/admin/stats`, `RemoteAdminRepository`). Los demás repositorios siguen siendo *stubs* o datos locales
+> Panel (`GET /v1/admin/stats`, `RemoteAdminRepository`); desde FE-3.4, los lugares de administración
+> (`/v1/admin/places`, `RemoteLugaresAdminRepository`). Los demás repositorios siguen siendo *stubs* o datos locales
 > (§5.6) hasta su lote.
 
 **Configuración y cliente**
@@ -2440,7 +2648,7 @@ Formato de los datos:
 
 | Pieza | Archivo | Firma y uso |
 |---|---|---|
-| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-2.2: `@GET("admin/stats") estadisticas(): Response<EstadisticasAdminDto>` (protegida). FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). FE-3.2: `@Multipart @POST("localize") localizar(@Part fotos: List<MultipartBody.Part>, @Part("metadatos") metadatos: RequestBody): Response<LocalizacionRespuestaDto>` (las partes van en el orden de la lista y después `metadatos`). Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
+| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-2.2: `@GET("admin/stats") estadisticas(): Response<EstadisticasAdminDto>` (protegida). FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). FE-3.2: `@Multipart @POST("localize") localizar(@Part fotos: List<MultipartBody.Part>, @Part("metadatos") metadatos: RequestBody): Response<LocalizacionRespuestaDto>` (las partes van en el orden de la lista y después `metadatos`). FE-3.4 (protegidas): `@GET("admin/places") lugaresAdmin(@Query("q") q: String? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresAdminDto>` (la app no pasa `q` ni `categoria`), `@POST("admin/places") crearLugar(@Body LugarEntradaDto): Response<LugarAdminDto>`, `@PUT("admin/places/{id}") reemplazarLugar(@Path("id") id, @Body LugarEntradaDto): Response<LugarAdminDto>` y `@DELETE("admin/places/{id}") borrarLugar(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`). Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
 | `ClienteApi` | `ClienteApi.kt` (`object`) | `ClienteApi.api: CampusApi` (instancia única, `lazy`, contra `ApiConfig.BASE_URL`, registra con `AppLog.i("Api", …)`; usa el `vigilante` que haya **al crearse**). `ClienteApi.vigilante: VigilanteSesion?` (`@Volatile var`, `null` por defecto; FE-1.2: `MyApp.onCreate` lo asigna antes de que nadie use `api`; sustituye al `proveedorToken` de FE-1.1, que ya no existe). `ClienteApi.crear(urlBase = ApiConfig.BASE_URL, token = { null }, registrar: (String) -> Unit, vigilante: VigilanteSesion? = null): CampusApi` (añade la barra final que exige Retrofit) y `ClienteApi.okHttp(token = { null }, registrar, vigilante = null): OkHttpClient` para pruebas (MockWebServer) o clientes propios. Con `vigilante`, las rutas protegidas pasan por `SesionInterceptor` y `token` no se usa; sin él, por `AutenticacionInterceptor(token)` |
 | `RequestIdInterceptor(registrar)` | `ClienteApi.kt` | Pone `X-Request-Id` y registra **una línea por petición**: `GET /v1/health -> 200 (85 ms) rid=<uuid>` o `GET /v1/health -> falla UnknownHostException (3 ms) rid=<uuid>`. Solo método, ruta sin parámetros, código y duración: nunca encabezados ni cuerpos. `rid` es el de la respuesta si la trae, si no el enviado. `validate11.py` C1a busca esta línea en `files/logs/app.log`: cambiar el formato exige cambiar `PATRON_SALUD` del validador. Una petición que `SesionInterceptor` no deja salir **no** deja línea `Api` (deja la `Sesion` del vigilante) |
 | `AutenticacionInterceptor(token)` | `ClienteApi.kt` | Regex `RUTA_PROTEGIDA` = `.*/v1/(admin\|collect)(/.*)?` sobre la ruta; `/v1/administrar` no la cumple. Solo cuando `ClienteApi` no tiene vigilante |
@@ -2450,6 +2658,7 @@ Formato de los datos:
 | `RemoteLugaresRepository(api = ClienteApi.api, posicion: () -> Pair<Double, Double>? = { null }, registrar = { AppLog.w("Lugares", it) })` | `RemoteLugaresRepository.kt` (FE-3.1) | `LugaresRepository` real (abajo, «Lugares») · `TAG = "Lugares"` |
 | `RemoteAdminRepository(api = ClienteApi.api, fotosPendientes: suspend () -> Int)` | `RemoteAdminRepository.kt` (FE-2.2) | `AdminRepository` real (abajo, «Panel»). `fotosPendientes` no tiene valor por defecto y va detrás de `api`, que sí lo tiene: se pasa **por nombre** (en la app, `RemoteAdminRepository(fotosPendientes = { Subidas.almacen.contarFotosPendientes() })`; en las pruebas, también `api = ClienteApi.crear(…)`). No registra nada propio (solo la línea `Api`) |
 | `RemoteLocalizacionRepository(api = ClienteApi.api, preparador: PreparadorFoto = Recodificador(MotorImagenAndroid(), LimitesRecodificacion.LOCALIZACION), appVersion: String? = null, gson = Gson())` | `RemoteLocalizacionRepository.kt` (FE-3.2) | `LocalizacionRepository` real (abajo, «Ubicarse») · `companion`: `MAX_FOTOS = 5`, `PARTE_FOTOS = "fotos"`, `ORIGEN = "escaneo"`, `PREFIJO_ENVIO = "envio_"`, `APP_VERSION_MAX = 40`. No registra nada propio (solo la línea `Api`) |
+| `RemoteLugaresAdminRepository(api = ClienteApi.api, cambios: ContadorCambios = CambiosLugares, registrar = { AppLog.w("Lugares", it) })` | `RemoteLugaresAdminRepository.kt` (FE-3.4) | `LugaresAdminRepository` real (abajo, «Lugares de administración») · `TAG = "Lugares"` (el mismo de `RemoteLugaresRepository`) |
 | `llamar(peticion): T` | `ErroresApi.kt` (función `suspend` de nivel superior) | `llamar { api.salud() }` devuelve el cuerpo de un 2xx o lanza: `SinConexionException` (red, *timeout*, 5xx de API Gateway), `CredencialesInvalidasException` (la de `data/repository/AuthRepository.kt`), `ApiException` (el resto, también la sesión perdida de `SesionInterceptor`) o `RespuestaInesperadaException` (2xx sin cuerpo o JSON roto). La cancelación de la corrutina se propaga |
 | `llamarSinCuerpo(peticion)` | `ErroresApi.kt` | Igual, para rutas `204` declaradas `Response<Unit>` (en un 204 Retrofit da `body() == null` y `llamar` lo trataría como respuesta inesperada) |
 | `FalloApi` | `ErroresApi.kt` (`sealed interface`) | `SinConexion`, `CredencialesInvalidas`, `SesionVencida(codigo)`, `SinPermisos`, `DemasiadosIntentos`, `EmbeddingNoDisponible`, `FotosInvalidas(indice: Int?, motivo: String?)` (FE-3.2), `Validacion(http, codigo, mensaje, campos: List<CampoInvalido(campo, motivo)>)`, `Desconocido(http: Int?, codigo: String?)`. Una fila por fila de la tabla de abajo. Añadir un caso no rompe ningún `when` de hoy (el de `SubidaRecorrido.clasificar` tiene `else`; comprobado con `grep` en FE-3.2) |
@@ -2457,8 +2666,8 @@ Formato de los datos:
 | `SinConexionException(requestId = null, causa = null)` | `ErroresApi.kt` | **Es una `IOException`**: `LoginViewModel` y los demás que ya atrapan `IOException` la tratan como «sin conexión» sin cambios |
 | `RespuestaInesperadaException(mensaje, causa)` | `ErroresApi.kt` | 2xx que no cumple el contrato (falta un campo obligatorio, rol desconocido, JSON roto). Para la UI es «Algo salió mal» |
 | `MapeoErroresApi` | `ErroresApi.kt` (`object`) | `clasificar(http: Int, cuerpo: String?): FalloApi` (lógica pura) · `excepcion(fallo, http, requestId): Exception` · `deExcepcion(t: Throwable): FalloApi` (para un `catch` genérico en un ViewModel; desde FE-1.2 reconoce `SinSesionException` como `SesionVencida(SIN_SESION_LOCAL)`) · `CODIGOS_SESION` (`TOKEN_EXPIRADO`, `TOKEN_INVALIDO`, `NO_AUTENTICADO`) · FE-1.2: `codigoError(cuerpo: String?): String?` (`error.codigo` de un cuerpo de §5.1, o `null`) y `SIN_SESION_LOCAL = "SIN_SESION_LOCAL"` (código de `SesionVencida` cuando la petición no salió del teléfono; el backend nunca lo envía) |
-| DTOs | `DtosApi.kt` | `SaludDto`, `LoginPeticionDto` (FE-1.2, el único que envía la app), `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto` (y, desde FE-3.1, `ListaLugaresDto`), `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional y, desde FE-2.1, `conteo`), desde FE-2.1 los de la recolección y desde FE-3.2 los de la localización (`MetadatosLocalizacionDto`, `LocalizacionRespuestaDto`, `PosicionDto`, `LugarCercanoDto`, `ReferenciaLugarDto`; abajo). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos de respuesta anulables y con valor por defecto** (trampa abajo) |
-| `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `sesion(LoginRespuestaDto): Sesion` (FE-1.2: `token` no vacío + `usuario` + `expiraEnMs`; si falta algo, `RespuestaInesperadaException`) · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` (desde FE-2.2, `ultimo_video` presente sin `numero` → `RespuestaInesperadaException`) · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` · FE-3.2: `resultadoUbicacion(LocalizacionRespuestaDto): ResultadoUbicacion` (reglas en «Ubicarse», abajo) |
+| DTOs | `DtosApi.kt` | `SaludDto`, `LoginPeticionDto` (FE-1.2; con los de la recolección, la localización y, desde FE-3.4, `LugarEntradaDto`, los que envía la app), `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto` (y, desde FE-3.1, `ListaLugaresDto`), `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional y, desde FE-2.1, `conteo`), desde FE-2.1 los de la recolección y desde FE-3.2 los de la localización (`MetadatosLocalizacionDto`, `LocalizacionRespuestaDto`, `PosicionDto`, `LugarCercanoDto`, `ReferenciaLugarDto`; abajo) y desde FE-3.4 los de lugares de administración (`LugarAdminDto`, `ListaLugaresAdminDto`, `LugarEntradaDto`). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos de respuesta anulables y con valor por defecto** (trampa abajo) |
+| `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `sesion(LoginRespuestaDto): Sesion` (FE-1.2: `token` no vacío + `usuario` + `expiraEnMs`; si falta algo, `RespuestaInesperadaException`) · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` (desde FE-2.2, `ultimo_video` presente sin `numero` → `RespuestaInesperadaException`) · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` · FE-3.2: `resultadoUbicacion(LocalizacionRespuestaDto): ResultadoUbicacion` (reglas en «Ubicarse», abajo) · FE-3.4: `lugarAdmin(LugarAdminDto): LugarAdmin?` (`null` = categoría desconocida) y `entradaLugar(DatosLugar): LugarEntradaDto` (abajo, «Lugares de administración») |
 | `RemoteBackendHealth(api, limiteMs = 5_000)` | `RemoteBackendHealth.kt` | `BackendHealth` real: `true` solo con `200` y `"estado": "ok"`; cualquier otra cosa (sin red, *timeout*, 5xx, otro `estado`) es `false`; nunca lanza salvo cancelación. `LIMITE_MS = 5_000` |
 
 **Cómo se añade una ruta**: 1) DTO en `DtosApi.kt` (campos anulables); 2) método en `CampusApi`
@@ -2520,6 +2729,36 @@ servidor), `401 TOKEN_EXPIRADO` (sesión cerrada y evento), sin red, `503` de AP
 `validate22.py` C1b, §4.7): el Panel mostró lo mismo que `GET /v1/admin/stats` con `ultimo_video = null`; el caso con
 último video (número y fecha) sigue sin comprobar fuera de la JVM.
 
+**Lugares de administración (FE-3.4): `RemoteLugaresAdminRepository`** (contrato: backend §5.5, «Lugares:
+`/v1/admin/places` (BE-3.1)»: `LugarEntrada`, `LugarAdmin`, errores y su orden). Rutas protegidas: con `ClienteApi.api`
+las lleva `SesionInterceptor` (sin sesión no salen y `AppNav` vuelve a Login).
+1. `listar()`: `llamar { api.lugaresAdmin() }` (`GET /v1/admin/places`, sin `q` ni `categoria`: todos, por nombre). Sin
+   `items` → `RespuestaInesperadaException`; cada `LugarAdmin` con `MapeoDatosApi.lugarAdmin` (falta `id`, `nombre`,
+   `lat` o `lng` → `RespuestaInesperadaException`; categoría desconocida → se descarta); después `distinctBy { id }`. Si
+   descarta algo, una línea `AppLog.w("Lugares", …)` con cuántos y qué categorías (sin nombres), como `RemoteLugaresRepository`.
+   `obtener(id)` = `listar().firstOrNull { it.id == id }` (no hay `GET` por id).
+2. `crear(datos)`: `llamar { api.crearLugar(MapeoDatosApi.entradaLugar(datos)) }` (`POST`, `201`); `reemplazar(id,
+   datos)`: `PUT /v1/admin/places/{id}` (`200`; reemplaza **todos** los campos: para cambiar uno se reenvía el resto,
+   como hace 7.7 con `FormularioLugar.datos`); `borrar(id)`: `llamarSinCuerpo { api.borrarLugar(id) }` (`204`, también si no existía).
+   Tras cada `2xx`, `cambios.avisar()` (`CambiosLugares`, §5.6), también si después la respuesta no se puede mapear (el
+   lugar ya está guardado); un error no avisa.
+3. Cuerpo enviado (`LugarEntradaDto`, Gson sin escribir `null`): `nombre`, `categoria` (el enum en minúsculas,
+   `Locale.ROOT`), `lat`, `lng` (los de `DatosLugar`, ya redondeados a 6 decimales por el formulario), `alias` (siempre,
+   quizá `[]`) y `descripcion`/`referencias` solo si no son `null` (el backend toma lo ausente como `null`). Ejemplo:
+   `{"nombre":"Bloque 19","categoria":"bloque","lat":6.200512,"lng":-75.578311,"alias":["diecinueve"],"referencias":"Junto a la cafetería"}`.
+4. Errores (los de `llamar`): sin red, *timeout* o `5xx` de API Gateway → `SinConexionException`; `401 TOKEN_*` o sin
+   sesión → `ApiException(SesionVencida)`; `409 NOMBRE_DUPLICADO` (`detalle: null`) → `ApiException(Validacion(409,
+   "NOMBRE_DUPLICADO", mensaje, campos = []))`; `422 VALIDACION` → `Validacion(422, …, detalle.campos)`; `404
+   NO_ENCONTRADO` (un `PUT` a un lugar borrado) → `Desconocido(404, "NO_ENCONTRADO")`; `403`, `503` → los de siempre.
+   Qué muestra cada vista: `ErroresLugarMapeo` (5.5).
+5. No registra nada más que la línea `Api` de cada petición (`POST /v1/admin/places -> 201 (… ms) rid=…`; sin cuerpos:
+   el nombre del lugar no sale en `app.log`).
+Lo cubre `RemoteLugaresAdminRepositoryTest` (11; MockWebServer y un `VigilanteSesion` real con un almacén en memoria,
+como `RemoteAdminRepositoryTest`): listar con la petición exacta y todos los campos, descartes con su línea sin nombres
+y valores por defecto, `obtener`, crear con el cuerpo exacto (claves y coordenada sin cambios) y el aviso, `409` (sin
+campos y sin aviso), `422` con campos, `PUT` con el id, `404` del `PUT`, `DELETE` `204`, sin sesión (no llega al
+servidor), sin red y sin `items`. **Sin comprobar contra el backend real** (FE-3.4 en `dev`, `validate34.py`).
+
 **Detalles internos del cliente (para no abrir `data/remote/`)**
 - Campos de los DTOs (propiedad Kotlin ← clave JSON; todos `T? = null` salvo el de la petición):
   `LoginPeticionDto(identificador: String, password: String)` (FE-1.2; su `toString()` no muestra los valores) ·
@@ -2527,6 +2766,11 @@ servidor), `401 TOKEN_EXPIRADO` (sesión cerrada y evento), sin red, `503` de AP
   `UsuarioDto(id, nombre, correo, rol)` · `LoginRespuestaDto(token, expiraEn ← expira_en, usuario: UsuarioDto?)` ·
   `LugarPublicoDto(id, nombre, categoria, lat, lng, alias: List<String>?, descripcion, referencias, imagenUrl ←
   imagen_url, distanciaM ← distancia_m)` · `ListaLugaresDto(items: List<LugarPublicoDto>?, total: Int?)` (FE-3.1) ·
+  FE-3.4: `LugarAdminDto(id, nombre, categoria, lat, lng, alias: List<String>?, descripcion, referencias, imagenUrl ←
+  imagen_url, creadoEn ← creado_en, actualizadoEn ← actualizado_en, totalFotos ← total_fotos: Int?)` ·
+  `ListaLugaresAdminDto(items: List<LugarAdminDto>?, total: Int?)` · **cuerpo que envía la app** `LugarEntradaDto(nombre:
+  String, categoria: String, lat: Double, lng: Double, alias: List<String>, descripcion: String? = null, referencias:
+  String? = null)` ·
   `AlertaDto(id, lat, lng, mensaje, tipo, prioridad, radioM ← radio_m:
   Int?, activa, vigenciaDesde, vigenciaHasta, actualizadoEn, version: Int?)` · `EstadisticasAdminDto(totalFotos,
   totalLugares, alertasActivas, ultimoVideo: UltimoVideoDto(numero, creadoEn)?)` · `ReferenciaDto(id, nombre)` ·
@@ -2617,7 +2861,7 @@ servidor), `401 TOKEN_EXPIRADO` (sesión cerrada y evento), sin red, `503` de AP
 | `429` (cuerpo `{"message": …}`) | «Demasiados intentos, espera un momento» |
 | `503 EMBEDDING_NO_DISPONIBLE` | Escaneo (6.2) termina en error hablado: «El servicio de ubicación no está disponible en este momento» (en `dev`, con embeddings apagado o arrancando, infra §3.4). Desde FE-3.2 (`ErrorEscaneo.SERVICIO_NO_DISPONIBLE`), también cualquier otro `503` de `POST /v1/localize` (`BASE_NO_DISPONIBLE`) |
 | `400 FOTOS_INVALIDAS` (`POST /v1/localize`, FE-3.2) | `FalloApi.FotosInvalidas(detalle.indice, detalle.motivo)`; el Escaneo dice «No pude procesar las fotos» y registra el motivo y el `X-Request-Id` |
-| `409` / `422` | Mensaje del campo afectado (`detalle.campos`) en formularios de admin. En `POST /v1/localize` (`metadatos`, FE-3.2) es un error de la app: «Algo salió mal» |
+| `409` / `422` | En formularios de admin, mensaje bajo el campo afectado: el `422` lo dice `detalle.campos`; el `409` **no** trae `detalle` (`detalle: null`, backend §5.6), así que el campo sale de su `codigo` (FE-3.4: `409 NOMBRE_DUPLICADO` → campo nombre, `ErroresLugarMapeo`, 5.5). En `POST /v1/localize` (`metadatos`, FE-3.2) es un error de la app: «Algo salió mal» |
 | Cualquier otro | «Algo salió mal» (`LoginError.Desconocido`, `ErrorDestino.DESCONOCIDO`) y se registra el `X-Request-Id` |
 
 Implementación (FE-1.1): `MapeoErroresApi.clasificar(http, cuerpo)` aplica estas reglas **en este orden** (la primera
@@ -2637,6 +2881,8 @@ fila.
 |---|---|
 | Enumerados en minúsculas (`"biblioteca"`, `"admin"`, `"alta"`) | `enum.valueOf(valor.uppercase())` (`CategoriaLugar`, `Rol`); `tipo` y `prioridad` de alertas se quedan como texto en `Alerta` |
 | `LugarPublico` | `LugarDestino` (`distancia_m` → `distanciaMetros: Int?` redondeado; `imagen_url` → `imagenUrl`; `descripcion` y `referencias` no se usan). Lista de `GET /v1/places` (`{items, total}`) → `ListaLugaresDto` (FE-3.1; `total` no se usa) |
+| `LugarAdmin` (FE-3.4) | `LugarAdmin` de la app: un `LugarDestino` (`distanciaMetros = null`) + `descripcion`, `referencias`, `totalFotos` (`total_fotos`; ausente → 0); `creado_en` y `actualizado_en` no se usan. Lista de `GET /v1/admin/places` → `ListaLugaresAdminDto` (`total` no se usa) |
+| `LugarEntrada` (FE-3.4, lo que envía la app) | De `DatosLugar` con `MapeoDatosApi.entradaLugar`: `categoria` = `name.lowercase(Locale.ROOT)`; lo demás tal cual |
 | `Alerta.radio_m` | `Alerta.radio` |
 | `GET /v1/admin/stats` | `ResumenAdmin`: `total_fotos`, `total_lugares`, `alertas_activas` tal cual; `ultimo_video.numero` → `ultimoVideoNumero`; `ultimo_video.creado_en` (ISO-8601 UTC con `Z`) → `ultimoVideoFecha` en milisegundos; `ultimo_video = null` → los dos `null`; `fotosPendientes` sale de la cola local de subida, no del backend (desde FE-2.2, `RemoteAdminRepository`; «Panel», arriba) |
 | `usuario` del login | `Usuario`; `expira_en` → `Sesion.expiraEnMs` (milisegundos) y se guarda con la sesión (`expira_en_ms`, §5.3) |
@@ -2653,7 +2899,9 @@ usuario, expiraEnMs)`) · `video` (fotos ordenadas por `orden`; `Foto.id` = UUID
 `RespuestaInesperadaException`): `id`, `correo` del usuario; `id`, `nombre`, `lat`, `lng` del lugar; `id`, `lat`, `lng`,
 `mensaje` de la alerta; los tres totales de `stats` y, desde FE-2.2, `ultimo_video.numero` si viene `ultimo_video`;
 `id`, `video_id`, `lat`, `lng` de la imagen; `id` del video. Lo
-cubre `MapeoDatosApiTest` con los ejemplos JSON del contrato del backend.
+cubre `MapeoDatosApiTest` con los ejemplos JSON del contrato del backend. `lugarAdmin` (FE-3.4) exige lo mismo que
+`lugarDestino` (`id`, `nombre`, `lat`, `lng`) y descarta igual la categoría desconocida; lo cubre
+`RemoteLugaresAdminRepositoryTest` (no `MapeoDatosApiTest`, que no cambió).
 
 **Rumbo (backend ADR-BE-12)**: todo rumbo que se envía va en grados [0, 360), **norte verdadero**, sentido horario.
 - Recolección (7.4) y `PdrTracker`: ya es norte verdadero; solo normalizar a [0, 360).
@@ -2998,7 +3246,7 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 `test_validate21.py`, 20, y `test_comun_fe21.py`, 15; 129 con el arreglo de 0.7.2; 159 con FE-3.1:
 `test_validate31.py`, 30, que incluye las pruebas de `http_delete` y `esperar_enter`; 190 con FE-3.2:
 `test_validate32.py`, 31, que incluye las de `cuerpo_multipart` y `http_post_multipart`; 222 con FE-2.2:
-`test_validate22.py`, 32).
+`test_validate22.py`, 32; 241 con FE-3.4: `test_validate34.py`, 19).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -3227,6 +3475,55 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   error del resumen, Panel que no relee al volver, otro nombre, sin finalizar, sin volver al Panel, restos locales y
   subidos, BE-2.3 sin «Hecho», stats `404` o fuera de contrato, credenciales malas, `--solo C1a,C2a`, JVM que falla, EOF
   en el paso guiado) y comprueban que ni la contraseña ni el token salen por stdout, stderr o el informe.
+- `validate34.py` (FE-3.4; ejemplo de un validador que **toca un botón de la app** tras un paso guiado y compara lo que
+  mostró un formulario con lo que guardó el backend): IDs `C1a, C1b, C1c, C2a, C2b, C3a, C3b` con grupos `C1 → [C1a,
+  C1b, C1c]`, `C2 → [C2a, C2b]` y `C3 → [C3a, C3b]`; sin manuales; entornos `local` y `dev`; sin ayudas nuevas en
+  `comun.py`. Constantes: `CLASES_C1A` (`RemoteLugaresAdminRepositoryTest`), `CLASES_C2A` (`FormularioLugarTest`),
+  `CLASES_C3A` (`ErroresLugarTest`), `MINIMO_CASOS` (8, 8 y 4; hoy 11, 10 y 5), `PREFIJO_PRUEBA` (`validacion-3-4`, el
+  `q` de la limpieza), `LUGAR_PRUEBA` (`validacion-3-4-lugar`), `CATEGORIA_PRUEBA` (`bloque`) y `ETIQUETA_CATEGORIA`
+  («Bloque»), `ALIAS_PRUEBA` (`validacion`), `LUGAR_DUPLICADO` (`validacion-3-4-dup`), `NOMBRE_DUPLICADO_ESCRITO`
+  («VALIDACIÓN-3-4-DUP»), `NOMBRES_PRUEBA` (los dos: lo único que borra), `POSICION_CAMPUS` (6.2006, −75.5783: donde va
+  el duplicado), `BUSQUEDA_DESTINO` (`validacion-3-4`), `PERMISOS_INICIO` + `PERMISO_ACTIVIDAD`, `LIMITE_LOGIN_S` (15),
+  `LIMITE_GUARDAR_S` (20), `LIMITE_DESTINO_S` (20), `MAX_DESPLAZAMIENTOS` (4), `DISTANCIA_MAXIMA_M` (1,0) y los textos de
+  la app (5.5, «Lugares de administración»): `PREFIJO_PUNTO` («Punto: »), `PATRON_PUNTO` (`^Punto: (-?\d{1,3}\.\d{6}),
+  (-?\d{1,3}\.\d{6})$`), `BOTON_GUARDAR`, `VISTA_LISTA` («Vista de lista»), `ERROR_DUPLICADO` («Ya existe un lugar con
+  ese nombre»), `ERRORES_FORMULARIO` (los mensajes de 7.7 que dicen que no se guardó), `ERRORES_LOGIN`,
+  `TITULO_DESTINO`, `FIN_FILA_DESTINO`, `ERROR_CARGA_DESTINO` y las tres `INSTRUCCION_C1B/C1C/C3B`. Piezas puras:
+  `normalizar_nombre` (la del backend §4.9, como `validate31`), `saludo_esperado` (como `validate22`),
+  `punto_del_formulario(nodos)` → `(lat, lng)` **como texto** o `None` (solo con 6 decimales y punto decimal),
+  `en_formulario(nodos)` (se ve el pie «Punto: …»), `error_del_formulario(nodos)`, `nombre_de_fila_destino(desc)` →
+  «‹nombre›, ‹categoría›» (del `content-desc` de `FilaLugar`) y `lugares_de_prueba(items)` (nombre normalizado igual a uno
+  de `NOMBRES_PRUEBA`). Precondiciones, en orden y sin seguir si una falla: P1 Gradle (3); en `dev` y solo si alguna de
+  C1b, C2b, C1c o C3b está incluida (si no, P2–P6 «no evaluada»): P2 dispositivo físico (3), P3 URL vigente +
+  `ApiConfig.BASE_URL` igual + `GET /health` 200 `ok` (2, o 3 sin URL), P4 login del admin por la API (401 o rol → 3;
+  otro → 2; guarda token y nombre), P5 FE-1.2 «Hecho» (2) y P6 BE-3.1 «Hecho» en `PLAN_BACKEND` + `GET /admin/places`
+  con el token y `GET /places` → 200 con `items` (2). Comprobaciones: C1a, C2a y C3a con una sola ejecución de Gradle;
+  si una falla, las del teléfono quedan `omitida` («no se hace: falló …»). Después, en este orden: **C1b**:
+  `preparar_datos()` (una vez: borra los restos de `NOMBRES_PRUEBA` con `GET /admin/places?q=validacion-3-4` y `DELETE`
+  y registra esa misma limpieza para el final), `abrir_panel()` (como `validate22`: `installDebug`, `pm grant`, login
+  por la interfaz, saludo), paso guiado (`INSTRUCCION_C1B`), `formulario_listo()` (vuelca; si no ve el pie o «Guardar»
+  y el teclado está abierto, Atrás y vuelve a volcar; sin «Punto: lat, lng» → «falta tocar el mapa»), exige que el
+  primer `EditText` (Nombre) diga exactamente `LUGAR_PRUEBA` (si no, falla **sin guardar**), toca «Guardar» y espera
+  hasta 20 s a 7.6 («Vista de lista» sin el pie; un mensaje de `ERRORES_FORMULARIO` con el formulario a la vista → falla
+  con ese texto); pasa si `GET /places` tiene exactamente un `LUGAR_PRUEBA`, con `categoria = bloque` y `alias =
+  [validacion]`, y guarda el punto leído. **C2b** (necesita C1b incluida y con lugar creado; si no, `omitida`):
+  `GET /places?lat=<texto>&lng=<texto>` con el punto tal como lo mostró el formulario; pasa si el primero es
+  `LUGAR_PRUEBA` con `distancia_m` < 1. **C1c** (también necesita C1b): paso guiado (`INSTRUCCION_C1C`: volver a Inicio y
+  decir «dos»), espera hasta 20 s a `TITULO_DESTINO` (con `ERROR_CARGA_DESTINO` falla), busca el buscador (hasta 4
+  desplazamientos), lo toca, escribe `BUSQUEDA_DESTINO` (`escribir_texto`), cierra el teclado con Atrás **solo si** está
+  abierto y busca la fila «validacion-3-4-lugar, Bloque» (hasta 4 desplazamientos). **C3b**: crea `LUGAR_DUPLICADO` por
+  la API, vuelve a entrar al Panel en frío, paso guiado (`INSTRUCCION_C3B`), exige un Nombre con el mismo nombre
+  normalizado (si no, falla sin guardar), toca «Guardar» y espera hasta 20 s a `ERROR_DUPLICADO` con el formulario a la
+  vista (si aparece 7.6 → «se cerró como si hubiera guardado»); pasa si además `GET /admin/places?q=validacion-3-4` sigue
+  con un solo `validacion-3-4-dup`. Limpieza (orden inverso): `DELETE` de los lugares de `NOMBRES_PRUEBA` y `am
+  force-stop`; nunca `pm clear` ni lugares de otros nombres (uno que solo **contiene** el prefijo se queda). Las pruebas
+  (`tests/ops/test_validate34.py`, 19) simulan el backend de lugares con la regla de nombre único (normalizado → `409`) y
+  `GET /places` con distancia haversine, el teléfono (Inicio, Login, Panel, 7.6, 7.7 con su pie y su «Guardar» que hace
+  el `POST` de la app, Destino con buscador y filas) y Gradle; recorren `main()` en `local` y `dev` (feliz con un resto
+  y un lugar real con el prefijo, la app que guarda otra posición, nombre equivocado, sin tocar el mapa, error al
+  guardar, la app que cierra el formulario con un `409`, Destino sin la fila, `--solo C2b` sin C1b, BE-3.1 sin
+  «Hecho», credenciales malas, `--solo C1a,C2a,C3a`, JVM que falla, EOF) y comprueban que ni la contraseña ni el token
+  salen por stdout, stderr o el informe y que nunca se llama a `pm clear`.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -3333,6 +3630,18 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   «d MMM» en el Xiaomi (el validador no la compara; `dev` no tenía videos, así que C1b no comparó ninguna fecha). Como
   siempre en MIUI, «Instalar vía USB» se apaga solo: el primer intento del cierre dio código 3 por
   `INSTALL_FAILED_USER_RESTRICTED`.
+- **FE-3.4, `validate34.py`:** los tres pasos guiados leen la entrada estándar (terminal interactiva o, como hizo el
+  maestro en FE-2.2, una FIFO). En C1b y C3b **la persona no pulsa «Guardar»**: lo toca el script después de leer el
+  pie «Punto: …» y el Nombre; si la persona guardó antes, C1b no ve el formulario y falla («no se ve el formulario de
+  lugar»; el lugar creado lo borra la limpieza). El pie se lee **como texto** y se envía tal cual en
+  `GET /v1/places?lat=&lng=`: si la app mostrara coma decimal (idioma del teléfono sin `Locale.ROOT`), `PATRON_PUNTO` no
+  lo reconoce. C1c necesita el micrófono para decir «dos» (permiso que concede `pm grant`) y escribe en el buscador de
+  Destino con `input text` (solo ASCII: por eso busca `validacion-3-4`). C3b crea `validacion-3-4-dup` por la API y la
+  persona escribe la variante con mayúsculas y tilde (`input text` no puede escribir la «Ó»). Crea y borra lugares en
+  `dev`: no correrlo a la vez que otro validador que cuente lugares (`validate22.py` C1b compara totales). **Sin comprobar
+  en `dev`** (la ejecución en `dev` la coordina el maestro): que uiautomator vuelque 7.7 con su `WebView` dentro del
+  desplazamiento (sin «could not get idle state»), que el toque en el texto «Guardar» pulse el botón (así funciona en
+  Login, FE-1.2), `input text` en el buscador de Destino en el Xiaomi y el `content-desc` de las filas de 7.6.
 
 ---
 
@@ -3868,7 +4177,8 @@ Las tareas pendientes (probar la pasada completa en dispositivo, promediar varia
 - Botón **"Reubicarme manualmente"** (re-anclar en el mapa para corregir el error
   acumulado).
 - Botón **"Marcar punto de interés"** (asocia la coordenada actual a un lugar existente
-  o nuevo).
+  o nuevo). **Descartado por decisión del usuario (2026-10-27):** no se implementa; hoy se dibuja deshabilitado
+  («Próximamente») y FE-4.3 lo quita de la pantalla (PLAN §2.2).
 - Botón **"Agregar alerta aquí"**: abre el formulario de alerta (vista 7.9) con la coordenada
   actual ya cargada; el admin escribe o dicta el mensaje y guarda sin interrumpir la
   recolección.
@@ -3913,8 +4223,8 @@ grabación se **retoma** en pausa en la misma carpeta, con la numeración de fot
 - **Retomar desde el manifest** (FE-2.3, ADR-FE-17): el progreso se guarda en el propio `manifest.json` y se retoma en pausa.
 
 **Pendiente:** está en `PLAN.md`: FE-2.1 C1 y C2 (prueba en el campus de la subida y de 7.5, ya construidas), FE-3.3
-(alertas existentes y persistencia de las nuevas), FE-3.4 («Marcar punto de interés»), FE-2.3 C3 y C4 (pruebas en
-dispositivo) y FE-4.3 (control de calidad de imagen y detalles de diseño).
+(alertas existentes y persistencia de las nuevas), FE-2.3 C3 y C4 (pruebas en dispositivo) y FE-4.3 (control de
+calidad de imagen, quitar el botón descartado y detalles de diseño).
 
 ---
 
@@ -3960,6 +4270,19 @@ ofrece en su tarjeta de subidas; «Descartar video» y descartar fotos solo mien
 - Toque en un lugar → editar. Opciones: editar, eliminar (con confirmación), ver fotos.
 - Alternar entre **vista de lista** y **vista de mapa**.
 
+**Implementación actual (FE-3.4):** todo lo anterior contra `GET`/`DELETE /v1/admin/places`, salvo **«Ver fotos»**, que
+está en el menú pero deshabilitado («Ver fotos (próximamente)»): las fotos con lugar llegan con BE-4.1 y la galería
+contra el backend es de FE-4.1. La vista de mapa usa `lugar_mapa.html` en modo ver (tocar un lugar lo edita). El buscador y
+los chips son los de 6.4. Detalle, firmas y textos en §5.5 («Lugares de administración»); ruta en §5.8; construido en
+§4.8. ⚠ Sin probar en el teléfono (FE-3.4 en `dev`).
+
+| Módulo | Archivos |
+|---|---|
+| Pantalla, estado y ViewModel | `ui/admin/lugares/LugaresScreen.kt`, `LugaresState.kt`, `LugaresViewModel.kt` |
+| Mapa | `ui/admin/lugares/componentes/MapaLugares.kt` + `assets/lugar_mapa.html` y `lugar_mapa.js` |
+| Datos | `data/repository/LugaresAdminRepository.kt`, `data/remote/RemoteLugaresAdminRepository.kt` (§5.6, §5.10) |
+| Navegación | `MainActivity.kt` (`admin/lugares`; Panel → «Lugares») |
+
 ### 7.7 Formulario de lugar — `ui/admin/lugares/LugarFormScreen.kt`
 
 ![alt text](<../assets/formulario_de_lugar.png>)
@@ -3972,6 +4295,22 @@ ofrece en su tarjeta de subidas; «Descartar video» y descartar fotos solo mien
 - Fotos asociadas (lista, solo lectura o con enlace a galería).
 - Botones **Guardar** / **Cancelar** / **Eliminar**.
 - Validaciones (nombre único, coordenada obligatoria).
+
+**Implementación actual (FE-3.4):** todo lo anterior contra `POST`/`PUT`/`DELETE /v1/admin/places`. Los alias se escriben
+separados por comas; el punto de llegada se elige tocando el mapa o arrastrando el alfiler (con los demás lugares como
+contexto) y se ve siempre en el pie fijo «Punto: lat, lng» (6 decimales: es exactamente lo que se guarda). Las
+validaciones locales son las de longitud y obligatorios de `LugarEntrada`; **el nombre único lo decide el backend**: su
+`409 NOMBRE_DUPLICADO` se muestra bajo el campo nombre sin salir del formulario (ADR-FE-30). «Fotos asociadas» es solo el
+número (`total_fotos`, 0 hasta BE-4.1), sin lista ni enlace a la galería (FE-4.1). Eliminar solo al editar, con
+confirmación. Detalle en §5.5 («Lugares de administración»); ruta en §5.8; construido en §4.8. ⚠ Sin probar en el
+teléfono (FE-3.4 en `dev`).
+
+| Módulo | Archivos |
+|---|---|
+| Pantalla, estado y ViewModel | `ui/admin/lugares/LugarFormScreen.kt`, `LugarFormState.kt`, `LugarFormViewModel.kt` |
+| Reglas | `ui/admin/lugares/FormularioLugar.kt`, `ErroresLugarMapeo.kt` |
+| Mapa | `ui/admin/lugares/componentes/MapaLugares.kt` + `assets/lugar_mapa.*` (modo editable) |
+| Navegación | `MainActivity.kt` (`admin/lugares/form?id={id}`; desde 7.6) |
 
 ---
 
@@ -4527,7 +4866,8 @@ Panel vuelve de 7.5 a **la misma** entrada de la pila (`popBackStack("admin/pane
 cargaba una sola vez: tras «Guardar y subir después» las fotos pendientes quedaban viejas. Se eligió releer la cola en
 `ON_RESUME` y con cada cambio de la cola (`resumenConPendientes`), sin volver a llamar al backend. *Consecuencias:*
 offline el resumen entero sale «—» con «No se pudo cargar el resumen», también las pendientes (la tarjeta de subidas
-sí se ve); totales, lugares, alertas y último video solo se recargan al abrir el Panel y con «Reintentar».
+sí se ve); totales, lugares, alertas y último video solo se recargan al abrir el Panel y con «Reintentar». **Enmendada en
+FE-3.4 (ADR-FE-32):** también se recargan en `ON_RESUME` si cambiaron los lugares desde la última carga.
 
 **ADR-FE-29 — Inicio con un orbe único (aceptada, 2026-10-26, decisión del usuario; aplica en FE-3.5).**
 Resuelve la decisión abierta 18. Pregunta del maestro: «Decisión abierta 18 (Inicio) para FE-3.5: ¿cómo debe ser la
@@ -4538,6 +4878,48 @@ hace después del día de campo (desde el 2026-10-28). *Consecuencias:* la espec
 micrófono, Ajustes) deja de ser el objetivo; FE-3.5 tiene que resolver cómo llega una persona con TalkBack a «Ir a un
 lugar» y «Ver mapa» (con TalkBack 17 el doble toque ejecuta la acción principal y no se encontró cómo abrir las
 acciones, §4.5), y ajustar los textos que hoy no corresponden al orbe (5.5, «Inicio»). Sin cambios de código en FE-2.2.
+
+**ADR-FE-30 — Un solo modelo de lugar: `LugarDestino`, envuelto por `LugarAdmin` en la administración (aceptada,
+2026-10-26, FE-3.4; aceptada por el maestro).**
+Resuelve el ⚠ «`Lugar` y `LugarDestino` conviven» (§5.6). Opciones: (a) ampliar `LugarDestino` con `descripcion`,
+`referencias` y `totalFotos` opcionales; (b) un modelo de edición aparte y `LugarDestino` como vista de lectura de 6.4;
+(c) quitar `Lugar` y **envolver** `LugarDestino` en un `LugarAdmin` con lo que solo usa la administración. Se eligió (c):
+un solo modelo de lugar (identidad, nombre, categoría, coordenada, alias, foto) sin tocar el flujo público el día antes
+del trabajo de campo (6.3, 6.4, `SesionDeNavegacion`, `MapeoDatosApi.lugarDestino` y sus pruebas siguen igual), sin
+campos de administración que 6.4 tendría que ignorar y sin cambiar el `equals` de los lugares públicos. El nombre
+`LugarDestino` se conserva por la misma razón; renombrarlo a `Lugar` y mover a `ui/components/` lo de Destino que ahora
+usa 7.6 son de FE-4.3 (decisión del maestro). Dos reglas del formulario van con la decisión: la coordenada se redondea a
+6 decimales (≈ 0,11 m) al elegirla y el pie muestra exactamente lo que se envía (C2 da `distancia_m` = 0); y **la
+unicidad del nombre no se comprueba en la app**: la decide el backend con su normalización (ADR-BE-17), y su `409` se
+muestra bajo el nombre (así C3 es el `409` real). *Consecuencias:* `LugarAdmin.lugar.distanciaMetros` siempre es `null`;
+editar un lugar con más decimales lo mueve ≤ 0,06 m al guardarlo.
+
+**ADR-FE-31 — «Marcar punto de interés» es una hoja dentro de 7.4, no una navegación a 7.7 (aceptada, 2026-10-26,
+FE-3.4, por el maestro; retirada (2026-10-27, decisión del usuario: no se implementa «Marcar punto de interés»)).**
+**Retirada:** la hoja (`PuntoInteresSheet`) y su ViewModel (`PuntoInteresViewModel`) se quitaron antes de integrar
+FE-3.4, junto con `FormularioLugar.moverA`; `RecoleccionScreen` quedó como en `main`, con el botón deshabilitado
+(«Próximamente»), y quitar el botón es de FE-4.3 (PLAN §2.2). Lo que sigue es la decisión tal como se tomó, como historia.
+Opciones: abrir 7.7 con la posición actual, o una hoja inferior en 7.4 (como «Agregar alerta aquí»). Navegar pasa la
+entrada de 7.4 a `ON_STOP`, que **pausa la grabación** (`alIrASegundoPlano`; visto en el Xiaomi con «Ajustes» al cerrar
+FE-2.2, §5.5): se eligió la hoja, con su propio `PuntoInteresViewModel` en la misma entrada de la pila, sin tocar
+`RecoleccionViewModel`, la cola de subida, `SesionDeRecoleccion` ni el manifest. La hoja toma la posición del PDR al
+abrirse (redondeada, fija) y ofrece «Lugar nuevo» (nombre y categoría; lo demás se completa en 7.7) o «Lugar existente»
+(por cercanía; `PUT` con todos sus datos y la llegada nueva). Son las únicas llamadas al backend de 7.4: un `401` llevaría
+a Login y sacaría 7.4 de la pila, así que la hoja mira antes la sesión local y, sin ella, solo avisa. *Consecuencias:*
+la grabación sigue (y puede tomar fotos) mientras la hoja está abierta; un `401` del backend con la sesión todavía vigente
+en el teléfono sigue llevando a Login (la grabación queda en disco y se retoma desde 7.3). El criterio de cierre quedó
+pendiente de decisión del usuario, que el 2026-10-27 decidió no implementarlo (arriba, «Retirada»).
+
+**ADR-FE-32 — `CambiosLugares`: la lista 7.6 y el Panel se recargan tras un cambio de lugares (aceptada, 2026-10-26,
+FE-3.4; aceptada por el maestro).**
+Al cerrar FE-2.2 el maestro pidió que «Lugares registrados» del Panel quede al día al volver de 7.6/7.7 (ADR-FE-28: el
+Panel solo pedía `GET /v1/admin/stats` al abrirse). Opciones: que `alReanudar()` llame siempre a `cargarResumen()` (una
+petición en cada vuelta al Panel, también desde 7.5, 7.13 u otra app), o un contador de cambios del proceso que suba tras
+cada escritura de lugares y que el Panel compare en `ON_RESUME`. Se eligió el contador (`ContadorCambios` /
+`CambiosLugares`, §5.6), que además usa 7.6 para recargarse al volver de 7.7 sin recargar en cada `ON_RESUME`.
+*Consecuencias:* el Panel solo vuelve a llamar al backend cuando hace falta; `validate22.py` no cambia; un cambio de
+lugares hecho fuera del teléfono (otro admin, la API) no se ve hasta abrir el Panel otra vez o «Reintentar»; el contador
+es solo memoria.
 
 ### 8.2 Decisiones abiertas
 

@@ -40,6 +40,8 @@ import com.example.myapplication.ui.admin.recoleccion.UbicacionManualScreen
 import com.example.myapplication.ui.admin.recoleccion.RecoleccionScreen
 import com.example.myapplication.ui.admin.recoleccion.ResumenVideoScreen
 import com.example.myapplication.ui.admin.calibracion.CalibracionScreen
+import com.example.myapplication.ui.admin.lugares.LugarFormScreen
+import com.example.myapplication.ui.admin.lugares.LugaresScreen
 import com.example.myapplication.domain.model.SesionDeNavegacion
 import com.example.myapplication.domain.model.SesionDeRecoleccion
 import com.example.myapplication.session.EventosSesion
@@ -373,9 +375,35 @@ fun AppNav(rutaInicial: String? = null) {
             )
         }
 
+        // 7.6 Lista de lugares (FE-3.4). Se llega desde el Panel («Lugares»).
+        composable("admin/lugares") {
+            LugaresScreen(
+                onVolver = { nav.popBackStack() },
+                onNuevo = { nav.navigate("admin/lugares/form") },
+                onEditar = { id -> nav.navigate("admin/lugares/form?id=$id") },
+            )
+        }
+
+        // 7.7 Formulario de lugar (FE-3.4). `id` = UUID del lugar, opcional: sin él, lugar nuevo. Tras guardar,
+        // eliminar, «Cancelar» o Atrás vuelve a 7.6 (que recarga por CambiosLugares).
+        composable(
+            "admin/lugares/form?id={id}",
+            arguments = listOf(
+                navArgument("id") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { entrada ->
+            LugarFormScreen(
+                lugarId = entrada.arguments?.getString("id"),
+                onListo = { nav.popBackStack() },
+            )
+        }
+
         // ── Placeholders para que los botones no cierren la app ──
         // (navegar a una ruta que no está registrada cierra la app con un error)
-        composable("admin/lugares") { /* placeholder */ }
         composable("admin/estadisticas") { /* placeholder */ }
         composable("ajustes") { /* placeholder */ }
     }

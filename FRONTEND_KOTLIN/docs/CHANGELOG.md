@@ -23,6 +23,93 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.12.0] — 2026-10-27
+
+- **Lote que la motivó:** FE-3.4 (Lugares de administración, 7.6 y 7.7). Además, el entregable que pidió el maestro al
+  cerrar FE-2.2: «Lugares registrados» del Panel al día al volver de 7.6/7.7.
+- **Contratos que consume:** backend §5.5, «Lugares: `/v1/admin/places` (BE-3.1)» (backend 0.11.0: `LugarEntrada`,
+  `LugarAdmin`, `409 NOMBRE_DUPLICADO` con `detalle: null`, `PUT` que reemplaza todo, `DELETE` idempotente) y §5.3,
+  `GET /v1/places` (para la validación). Los docs de la app los enlazan sin copiarlos (§4.8, §5.10, `validation-3-4`).
+- **Decisiones (aceptadas por el maestro el 2026-10-26; ADR-FE-30 y 32):** un solo modelo de lugar (`Lugar`
+  desaparece; `LugarDestino` no cambia y lo envuelve `LugarAdmin` en la administración; renombrarlo a `Lugar` y mover a
+  `ui/components/` lo de Destino que usa 7.6 pasan a FE-4.3); la coordenada se redondea a 6 decimales y el pie «Punto:
+  …» muestra exactamente lo que se guarda; la unicidad del nombre la decide el backend (`409` bajo el nombre); un
+  contador de cambios de lugares (`CambiosLugares`) recarga 7.6 y, en `ON_RESUME`, el «Resumen rápido» del Panel solo si
+  cambiaron los lugares (enmienda ADR-FE-28). Decisión del usuario del 2026-10-27: **«Marcar punto de interés» (7.4) no
+  se implementa** (ADR-FE-31, que lo ponía en una hoja de 7.4, queda retirada; abajo, «Retirado antes de integrar»).
+- **Qué cambió:**
+  - Código (`project/`): `domain/model/LugarAdmin.kt` (`LugarAdmin`, `DatosLugar`); `Alerta.kt` sin `Lugar`;
+    `LugarDestino.kt` (solo KDoc); `EditorMapaViewModel` con `List<LugarDestino>`; `data/repository/LugaresAdminRepository.kt`
+    (interfaz, `ContadorCambios`, `CambiosLugares`); `data/remote/RemoteLugaresAdminRepository.kt`; `CampusApi`
+    (`lugaresAdmin`, `crearLugar`, `reemplazarLugar`, `borrarLugar`), `DtosApi` (`LugarAdminDto`,
+    `ListaLugaresAdminDto`, `LugarEntradaDto`), `MapeoDatosApi` (`lugarAdmin`, `entradaLugar`); `ui/admin/lugares/`
+    (7.6: `LugaresScreen`, `LugaresState`, `LugaresViewModel`; 7.7: `LugarFormScreen`, `LugarFormState`,
+    `LugarFormViewModel`; `FormularioLugar`, `ErroresLugarMapeo`; `componentes/MapaLugares.kt`);
+    `assets/lugar_mapa.html` y `lugar_mapa.js` (puente `LugarBridge`); `MainActivity` (ruta `admin/lugares` real y
+    `admin/lugares/form?id={id}`); `PanelAdminViewModel` (`cambiosLugares`, `debeRecargarResumen`). 7.4
+    (`RecoleccionScreen.kt`) no cambia: es igual al de `main`.
+  - Pruebas JVM nuevas: `RemoteLugaresAdminRepositoryTest` (11), `FormularioLugarTest` (10), `ErroresLugarTest` (5),
+    `RecargaResumenTest` (3). Total 272; las 243 de antes no cambiaron.
+  - Validadores: `src/ops/validate34.py` (C1a, C2a y C3a en la JVM; en `dev`, C1b —crear en 7.7 y verlo en
+    `GET /v1/places`—, C2b —la posición del pie es la guardada—, C1c —la fila en Selección de destino— y C3b —el `409`
+    en el formulario—, con tres pasos guiados y el script tocando «Guardar»); `tests/ops/test_validate34.py` (19). Total
+    241. Sin ayudas nuevas en `comun.py`.
+  - Documento: encabezado; §3.2 (paquete, pruebas, tag `Lugares`, `lugar_mapa`); §4 (componentes de Destino
+    reutilizados); §4.1 (272 casos); §4.7 (trampa del Panel enmendada); **§4.8 nuevo** (con «Para los lotes
+    siguientes»: qué tocar en FE-3.3, FE-4.1 y FE-4.3, con las listas de archivos de `grep`); §5.1 (variantes); §5.5 (filas
+    nuevas, Panel —constructor, `cargarResumen`, recarga por lugares, «Qué se recarga y cuándo», `ChipTiempoReal`,
+    `onLugares`—, la sección «Lugares de administración» y una nota en «`RecoleccionScreen`»: el botón descartado sigue
+    deshabilitado); §5.6 (`LugaresAdminRepository`, `LugarAdmin`, `DatosLugar`, `CambiosLugares`, «Un solo modelo de
+    lugar» en lugar del ⚠);
+    §5.7 (`filtrar` en 7.6); §5.8 (rutas, argumento `id`, *placeholders*, sin guarda); §5.9 (`LugarBridge`); §5.10
+    (encabezado, `CampusApi`, piezas, «Lugares de administración», DTOs, fila 409/422, mapeo, obligatorios); §5.11
+    (`validate34.py`, 241 casos, trampas); §7.4 (el botón del diseño, descartado por el usuario); §7.6 y §7.7
+    (implementación actual); ADR-FE-28 enmendada; ADR-FE-30 y 32 nuevas; ADR-FE-31 nueva y retirada.
+  - `validation-3-4` reescrita como `validation-2-2`: entornos `local` y `dev`; precondiciones en el orden del contrato
+    común (P1 Gradle, P2 dispositivo, P3 API, P4 login, P5 FE-1.2, P6 BE-3.1); C1 → C1a, C1b, C1c; C2 → C2a, C2b; C3 →
+    C3a, C3b (automática, con paso guiado); §4 con el borrado por nombre exacto; §5 con variables, preparación,
+    ejecución, salida esperada y casos previstos.
+  - `PLAN.md`: FE-3.4 en «En curso» (§3; falta `dev`); §2.2 FE-3.4 («Hecho en el código» y «Marcar punto de interés»
+    retirado de los entregables); FE-3.3 (lugares reales en el editor); FE-4.1 («Ver fotos» de 7.6 y el enlace a la
+    galería de 7.7); FE-4.3 (renombrar `LugarDestino`, mover los componentes de Destino, pasar 7.3 a lugares reales y
+    quitar de 7.4 el botón deshabilitado «Marcar punto de interés»).
+  - **Retirado antes de integrar (decisión del usuario, 2026-10-27: no se implementa «Marcar punto de interés»):** la
+    hoja de 7.4 que el lote había construido y que nunca llegó a `main`: `ui/admin/lugares/PuntoInteresSheet.kt` y
+    `PuntoInteresViewModel.kt` (con `PuntoInteresUiState`, `PuntoInteresAcciones` y `lugaresPorCercania`),
+    `FormularioLugar.moverA`, las pruebas `moverA_conservaTodoMenosLaCoordenada_redondeada` y
+    `lugaresPorCercania_ordenaPorDistanciaAlPunto` de `FormularioLugarTest` (12 → 10; total 274 → 272), el parámetro
+    `puntoInteres` de `RecoleccionScreen` y su `Toast` (el botón vuelve a dibujarse deshabilitado con «Próximamente»,
+    como antes), las menciones en los KDoc y, en estos docs, sus filas de §5.5, sus trampas de §4.8 y el criterio
+    pendiente de PLAN (`validation-3-4` espera ahora 272 casos y C2a 10/10). ADR-FE-31 queda como retirada. Así FE-3.4
+    ya no toca 7.4.
+- **Contradicciones corregidas:**
+  - `validation-3-4` C3 decía que el `409` muestra `detalle.campos`: el backend lo da con `detalle: null` (backend §5.5 y
+    §5.6); la app reconoce el campo por el `codigo`. También tenía las precondiciones fuera del orden del contrato
+    común (y sin P3), solo `dev`, C1b con la acción de TalkBack «Ir a un lugar» (con TalkBack 17 no se consiguió, §4.5:
+    ahora la voz «dos») y C3 manual; no tenía preparación ni salida esperada.
+  - §5.10, «Errores → modelos de la app»: «`409` / `422` → mensaje del campo afectado (`detalle.campos`)» no vale para
+    el `409`; ahora lo dice.
+  - §5.8 y §5.5 (Panel) contaban `admin/lugares` como *placeholder*; §5.6 tenía el ⚠ de `Lugar` y `LugarDestino` y la
+    fila de `LugaresRepository` decía «futuras 7.6/7.7» (la administración usa otro repositorio).
+  - ADR-FE-28, §4.7 y §5.5 (`ChipTiempoReal`) decían que el Panel solo pide el backend al abrirse: desde ahora también al
+    volver si cambiaron los lugares.
+  - §5.6 decía que `LugaresRepositoryStub` no se usa en la app desde FE-3.1, pero la `Factory` de 7.3
+    (`UbicacionManualViewModel`) lo crea (lo decía bien §5.5, «UbicacionManual»; comprobado con `grep`): 7.3 dibuja
+    los 6 lugares de ejemplo como referencia. Corregido en §5.6 y anotado en §4.8 y PLAN FE-4.3 (sin cambio de código).
+- **Contratos tocados (§5):** §5.5 (piezas nuevas; `PanelAdminViewModel` con `cambiosLugares`; la firma de
+  `RecoleccionScreen` no cambia); §5.6 (`LugaresAdminRepository`, `LugarAdmin`, `DatosLugar`,
+  `CambiosLugares`; `Lugar` eliminado); §5.8 (rutas nuevas); §5.9 (`LugarBridge`); §5.10 (rutas, DTOs y mapeo).
+- **Cómo se verificó:** el 2026-10-26 (worktree de FE-3.4 sobre `e56e211`, sin commit, todavía con la hoja de 7.4):
+  `testDebugUnitTest assembleDebug` en Windows (`--rerun-tasks`) → `BUILD SUCCESSFUL`, 274 casos, 0 fallos; en WSL
+  `ruff check`, `ruff format --check` («20 files already formatted») y `pytest` (241) en verde; `validate34.py --entorno
+  local` → código 0 (C1a 11/11, C2a 12/12, C3a 5/5). El 2026-10-27, tras retirar la hoja (el maestro, en el worktree
+  rebasado sobre `main`, sin commit): `testDebugUnitTest assembleDebug` en Windows → `BUILD SUCCESSFUL`, 272 casos,
+  0 fallos (`FormularioLugarTest` 10); `pytest` sigue en 241. `validate34.py --entorno local` **no se repitió** tras
+  retirar la hoja (C2a exige como mínimo 8 casos de `FormularioLugarTest`; lo cubre la ejecución en `dev`).
+- **Pendiente:** `validate34.py --entorno dev` con el Xiaomi (lo coordina el maestro); probar en el teléfono las vistas,
+  la recarga del Panel y `lugar_mapa.js` (no se ejecutó en ninguna parte); «Ver fotos» (FE-4.1); renombrar
+  `LugarDestino` y quitar de 7.4 el botón deshabilitado (FE-4.3); lugares reales en el editor de mapa (FE-3.3).
+
 ## [0.11.0] — 2026-10-27
 - Lote que la motivó: ninguno; pedido del usuario en el día de campo, para comparar la posición que da `POST
   /v1/localize` con el punto real.

@@ -12,4 +12,4 @@ data class Alerta(
     val activa: Boolean = true,
 )
 
-data class Lugar(val nombre: String, val lat: Double, val lng: Double)
+// FE-3.4: el antiguo `Lugar(nombre, lat, lng)` del editor de mapa se unificó en `LugarDestino` (LugarDestino.kt).

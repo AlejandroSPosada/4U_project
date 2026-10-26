@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.10.1**. Este archivo contiene además el **catálogo único de historias de usuario**
+Alineado con `ARCHITECTURE.md` **v0.12.0**. Este archivo contiene además el **catálogo único de historias de usuario**
 del proyecto (§5), que los planes de las otras carpetas referencian.
 
 ---
@@ -211,6 +211,8 @@ públicas pasó a FE-3.6 (como en el backend, donde BE-3.1 queda con lugares y l
   - Lista de alertas (vista 7.10), conectada a `onVerLista`.
   - Pendiente heredado de 7.4: las alertas existentes **no se cargan** en el mapa en vivo y las creadas durante la
     grabación **se pierden al salir** (no hay `AlertasRepository`).
+  - Desde FE-3.4: el editor (7.8) sigue dibujando un lugar de ejemplo (`LugarDestino` «Biblioteca»): cargar los lugares
+    reales (`RemoteLugaresRepository` o `LugaresAdminRepository`, ARCHITECTURE §5.6).
 - **Criterios de cierre:**
   - C1. Una alerta creada durante la recolección aparece en el editor y en el backend tras sincronizar.
   - C2. Crear y borrar una alerta antes de sincronizar no produce errores ni deja rastro en el backend.
@@ -219,12 +221,19 @@ públicas pasó a FE-3.6 (como en el backend, donde BE-3.1 queda con lugares y l
 - Desde el 2026-10-25 la administración de alertas del backend es BE-3.3 (antes BE-3.1), fuera del núcleo como FE-3.6.
 
 #### FE-3.4 — Lugares de administración (7.6, 7.7)
-- **Entregables:** vistas 7.6 y 7.7 contra el backend; unificar `Lugar` y `LugarDestino` (§5.6); habilitar «Marcar
-  punto de interés» en 7.4 (hoy deshabilitado, «Próximamente»).
+- **Entregables:** vistas 7.6 y 7.7 contra el backend; unificar `Lugar` y `LugarDestino` (§5.6). (Habilitar «Marcar
+  punto de interés» en 7.4 se retiró de los entregables por decisión del usuario del 2026-10-27: no se implementa; el
+  botón sigue deshabilitado y lo quita FE-4.3.)
   - «Lugares registrados» del Panel al día al volver de 7.6/7.7 (decisión del maestro del 2026-10-26, al cerrar
     FE-2.2): hoy el Panel solo pide `GET /v1/admin/stats` al abrirse y con «Reintentar», y al volver a él solo relee la
     cola local (ARCHITECTURE ADR-FE-28 y §5.5, «Qué se recarga y cuándo»), así que tras crear un lugar el número queda
     viejo. Que `alReanudar()` llame también a `cargarResumen()`, o que 7.6/7.7 pidan la recarga al volver.
+  - Hecho en el código (ARCHITECTURE 0.12.0, §4.8; ADR-FE-30 y ADR-FE-32, aceptadas por el maestro el 2026-10-26):
+    7.6 y 7.7 sobre `/v1/admin/places` (`RemoteLugaresAdminRepository`) con el punto de llegada en un mapa
+    (`lugar_mapa.html`); un solo modelo de lugar (`Lugar` desaparece; `LugarDestino` sin cambios, envuelto por
+    `LugarAdmin` en la administración; renombrarlo a `Lugar` va a FE-4.3); la recarga del Panel con un
+    contador de cambios de lugares (`CambiosLugares`: el Panel vuelve a pedir el resumen en `ON_RESUME` solo si cambiaron
+    los lugares, y 7.6 se recarga sola). «Ver fotos» de 7.6 y el enlace a la galería de 7.7 pasan a FE-4.1.
 - **Criterios de cierre:**
   - C1. Un lugar creado en la app aparece en `GET /v1/places` y en Selección de destino.
   - C2. La posición elegida en el mapa de 7.7 es la que guarda el backend: `GET /v1/places?lat=<pos>&lng=<pos>` lo
@@ -307,6 +316,9 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
     `DELETE /v1/admin/videos/{id}` (`202`: el video sale de la búsqueda al instante) y manejo de error; persistir
     renombrar y eliminar; que la Galería se refresque al eliminar fotos desde aquí; navegar al Detalle de imagen; nombre
     editable en el encabezado; reutilizar la base común de mapas en el modo Mapa de la galería y en el minimapa de 7.12.
+  - Desde FE-3.4 (con BE-4.1, que asigna lugares a las fotos): «Ver fotos» del menú de cada lugar en 7.6 (hoy
+    deshabilitado, «Ver fotos (próximamente)») y la lista o el enlace a la galería en «Fotos asociadas» de 7.7 (hoy solo
+    el número `total_fotos`), filtrando la Galería por lugar.
 - **Criterios de cierre:**
   - C1. Las vistas 7.11 a 7.14 funcionan solo con datos del backend (`EdicionesLocales` ya no existe).
   - C2. Borrar un video desde 7.14 lo quita de la lista y de la Galería sin reiniciar la app.
@@ -329,6 +341,12 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
     «`RecoleccionScreen`»). Arreglo cosmético de una línea en cada uno de los tres sitios que anteponen «Cada» a
     `ModoCaptura.etiqueta`: la fila del intervalo y el selector en `RecoleccionScreen.kt`, y `TarjetaCaptura` en
     `componentes/PanelesRecoleccion.kt` («Tomando fotos cada …»).
+  - Quitar de 7.4 el botón deshabilitado «Marcar punto de interés» (decisión del usuario del 2026-10-27: no se
+    implementa). Es el `BotonAccion(…, "Marcar punto de interés", {}, …, habilitado = false, nota = "Próximamente")` de
+    `RecoleccionScreen.kt`, en la fila con «Pausar» y «Reubicarme manualmente», con el comentario viejo de encima
+    («Fuera de alcance (depende de 7.6 y 7.7)…») (ARCHITECTURE §5.5, «`RecoleccionScreen`»); quitarlo también de la
+    especificación de 7.4 (ARCHITECTURE §7.4) y de «Estados de la pantalla» de §5.5 («Pausar / Reubicarme / Marcar
+    punto»).
   - Quitar la dependencia sin uso de Coil 3 (`libs.coil.compose`, `io.coil-kt.coil3`); las vistas usan Coil 2
     (ARCHITECTURE §4.1, «Trampas»; visto en FE-3.1). Arreglar el error de `lintDebug` en `MapaWebView.kt:125` (§4.1).
   - Corregir el texto de `validate31.py` para la manual C2c y el paso guiado (hoy aún pide TalkBack, ▶ y `dumpsys`;
@@ -343,7 +361,14 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
     `mapa` (FE-3.1) y quitar el botón GPS que ya no se usa (decisión abierta 14); CSS de mapas duplicado →
     `mapa_base.css`.
   - Mover `BotonIcono` y `Modifier.tarjeta` a `ui/components/`; `GaleriaColores` y demás paletas privadas a
-    `CampusColors`; tema propio en lugar del `MaterialTheme` por defecto (5.4).
+    `CampusColors`; tema propio en lugar del `MaterialTheme` por defecto (5.4). Desde FE-3.4 (decisión del maestro del
+    2026-10-26) también `CampoBusqueda`, `FilaCategorias`, `EstadoVacio` y `CategoriaLugar.icono()`, que 7.6 y 7.7
+    importan de `ui/destino/componentes/`.
+  - Desde FE-3.4 (decisión del maestro del 2026-10-26): renombrar `LugarDestino` a `Lugar`, el único modelo de lugar
+    (ARCHITECTURE ADR-FE-30). Cambio mecánico que toca 6.3, 6.4, `SesionDeNavegacion` y sus pruebas: por eso no se
+    hizo antes del día de campo. Lista de archivos en ARCHITECTURE §4.8, «Para los lotes siguientes».
+  - Desde FE-3.4: 7.3 dibuja como etiquetas de referencia los 6 lugares de ejemplo (`UbicacionManualViewModel.Factory`
+    crea `LugaresRepositoryStub()`; ARCHITECTURE §4.8 y §5.6): pasarla a `RemoteLugaresRepository()` (una línea).
   - `toString()` de `Sesion` y `Usuario` sin token ni correo (5.6).
   - Guardas de rol en las rutas `admin/*` (5.8).
   - Enriquecer los *stubs* que queden (errores `IOException`, lugares de `DEPORTES` y `ADMINISTRACION`, `imagenUrl`,
@@ -404,7 +429,7 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
 | FE-3.1 | 3 | Hecho | [3-1](./validation/validation-3-1.md) | `b553390` 2026-10-26 | 0.8.1 | `dev` (`GET /v1/places`, 0 lugares; lugar de prueba `validacion-3-1-lugar` por `POST`/`DELETE /v1/admin/places`, borrado al terminar) | Código y pruebas (ARCHITECTURE 0.8.0, §4.5): `RemoteLugaresRepository` (`GET /v1/places`; sin posición hasta FE-3.2, ADR-FE-23), foto del lugar o ícono de respaldo, entrada al mapa desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»; Atrás vuelve) y el PDR del mapa atado al ciclo de vida de su pantalla (hallazgo de FE-2.3, ADR-FE-22); 171 casos JVM; `frontend.yml` en verde sobre `b553390`. `validate31.py --entorno dev` con código 0 sobre `b553390` (sin `-dirty`) en el Xiaomi 23028RA60L (Android 14), informe `.validacion/FE-3.1-20261026-142022.json` (14:20–14:23 UTC): P1–P5 (`GET /v1/places` → 0 lugares en `dev`); C1a 9/9; C1b «1 lugares en Selección de destino = GET /v1/places (incluye validacion-3-1-lugar; 2 desplazamientos)», con Destino abierto por el usuario con la voz «dos» y el Enter del paso guiado mandado por el maestro; C2a 5/5 y 6/6; C2b; limpieza: lugar borrado y `am force-stop`. El primer intento (14:17 UTC) dio código 3: C1b `INSTALL_FAILED_USER_RESTRICTED` (MIUI había apagado «Instalar vía USB»; se reactivó junto con «Depuración USB (Configuración de seguridad)»). C2c, solo por voz (09:24 de Bogotá): app abierta desde el lanzador, «mapa» → mapa público («StepTracker · Comenzar») → Atrás → Inicio («Te escucho…»); evidencia [`c2-1-inicio.png`, `c2-2-mapa-por-voz.png`, `c2-3-atras-a-inicio.png`](./validation/evidencia/fe-3-1/) (fotogramas de un `screenrecord` de 74 s, sin audio, que no se versiona: 14 MB); no se fijó punto ni se pulsó ▶, así que no hubo líneas `Pdr` ni `dumpsys sensorservice`. **Por decisión del usuario del 2026-10-26** (§2.2 FE-3.1, «Si, por favor. Cambialo y demos por hecho lo que llevamos.») C2 queda solo con la voz y pasan a FE-3.6 la prueba con TalkBack («Ver mapa», fijar inicio y ▶) y el punto de inicio sin tocar el mapa (desde Ubicarme). Hallazgos con TalkBack 17.0.1 en el Xiaomi: al activarlo sale primero su tutorial; el toque con tres dedos abre «Search screen», no el menú de TalkBack; el doble toque en el botón principal de Inicio ejecuta su acción principal (Ubicarme), no «Ver mapa»; cómo abrir las acciones, sin comprobar. Orden por popularidad: BE-5.2 |
 | FE-3.2 | 3 | En curso | [3-2](./validation/validation-3-2.md) | — | — | `dev` (`POST /v1/localize`, `GET /v1/admin/videos` para el dataset, `embedding`); local (`files/camera/photos/`, `app.log`) | Código y pruebas listos (ARCHITECTURE 0.9.0, §4.6): `POST /v1/localize` real (`RemoteLocalizacionRepository`: fotos re-codificadas a 1024 px, rumbos en norte verdadero con `ConversionRumbo` y la declinación), `CONSERVAR_FOTOS = false` con la carpeta del escaneo borrada al recibir la respuesta (también las fotos tardías), errores hablados (503 → «El servicio de ubicación no está disponible en este momento»), vista 6.3 y `SesionDeNavegacion` (decisión abierta 15: «En memoria», decisión del usuario del 2026-10-26), destino de 6.4 que llega a 6.3 con su distancia y dirección (sin 6.5 hasta FE-5.1) y distancias reales en Destino con una ubicación vigente. 221 casos JVM (C1a 11, 11 y 5; C2 7; C3a 6; C4a 7); `validate32.py --entorno local` con código 0 (2026-10-26; P1, C1a, C2, C3a, C4a). **Falta** `validate32.py --entorno dev` (hoy da código 2: BE-3.2 «En curso», sin dataset ni calibración) con C1 en el campus (10 puntos, `embedding` encendido, paso guiado C1b y evidencia C1c), C4 de noche (`embedding` apagado, C4b y C4c) y C3b; `validation-3-2` §3 y §5. **Primera ejecución en `dev` (2026-10-26, el maestro, sobre `e3f3d12`):** P1–P5 pasan, `[FALLA] P6 BE-3.2 no está «Hecho»`, P7 no evaluada, `Resultado: bloqueado (código 2)` (informe `.validacion/FE-3.2-20261026-153456.json`): lo esperado hasta que BE-3.2 tenga dataset y calibración. **Prueba de humo en casa (2026-10-26, decisión del usuario; no cuenta como criterio):** Xiaomi con el APK de `076c853`, `embedding` encendido y dataset vacío: Ubicarme → `POST /v1/localize` 200 en 1911 ms con `sin_coincidencias`, 6.3 «No reconocí este lugar», declinación −7,9° y las 10 copias del escaneo borradas ([evidencia](./validation/evidencia/fe-3-2/); ARCHITECTURE §4.6, 0.9.2) |
 | FE-3.3 | 3 | Pendiente | [3-3](./validation/validation-3-3.md) | — | — | | Para validar espera BE-3.3 (alertas del backend, fuera del núcleo) |
-| FE-3.4 | 3 | Pendiente | [3-4](./validation/validation-3-4.md) | — | — | | |
+| FE-3.4 | 3 | En curso | [3-4](./validation/validation-3-4.md) | — | — | `dev` (`GET`/`POST`/`PUT`/`DELETE /v1/admin/places`, `GET /v1/places`; lugares de prueba `validacion-3-4-lugar`, creado desde la app, y `validacion-3-4-dup`, por la API, borrados al terminar) | Código y pruebas listos (ARCHITECTURE 0.12.0, §4.8; ADR-FE-30 y 32): vistas 7.6 y 7.7 sobre `/v1/admin/places` (`RemoteLugaresAdminRepository`) con el punto de llegada en un mapa (`lugar_mapa.html`, puente `LugarBridge`; el pie «Punto: lat, lng» con 6 decimales es lo que se guarda), un solo modelo de lugar (`LugarDestino`, envuelto por `LugarAdmin`; `Lugar` desaparece), el `409 NOMBRE_DUPLICADO` bajo el nombre y el Panel al día al volver (`CambiosLugares`). No toca 7.4 (la hoja que había hecho se quitó el 2026-10-27, antes de integrar; §2.2). 272 casos JVM (C1a 11; C2a 10; C3a 5; más `RecargaResumenTest` 3; el maestro, 2026-10-27, en Windows); `pytest` 241; `validate34.py --entorno local` con código 0 (2026-10-26, worktree sobre `e56e211` sin commit, todavía con la hoja y C2a 12/12; P1, C1a, C2a, C3a; no se repitió tras quitarla). **Falta** `validate34.py --entorno dev` con el Xiaomi (C1b, C2b, C1c y C3b, con tres pasos guiados; `validation-3-4` §5) |
 | FE-3.5 | 3 | Pendiente | [3-5](./validation/validation-3-5.md) | — | — | | Decisión abierta 18 resuelta por el usuario el 2026-10-26: «Orbe único» (ARCHITECTURE ADR-FE-29); falta decidir cómo llega TalkBack a «Ir a un lugar» y «Ver mapa» (§2.2). Se hace después del día de campo, desde el 2026-10-28 (decisión del usuario) |
 | FE-3.6 | 3 | Pendiente | [3-6](./validation/validation-3-6.md) | — | — | | Fuera del núcleo (decisión del usuario del 2026-10-25: «No necesitamos las alertas por el momento»). Sale de FE-3.1 y FE-3.2. Desde el 2026-10-26 (decisión del usuario al cerrar FE-3.1) lleva también la prueba con TalkBack del mapa (C5) y el punto de inicio del mapa sin tocarlo |
 | FE-4.1 | 4 | Pendiente | [4-1](./validation/validation-4-1.md) | — | — | | |
