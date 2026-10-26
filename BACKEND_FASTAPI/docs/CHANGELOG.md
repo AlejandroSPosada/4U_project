@@ -75,7 +75,8 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 - **Pendiente:** las pruebas con base en el CI; integrar en `main` **después** del día de campo del 2026-10-27 (cambia
   el bucle del `worker`); `validate41.py --entorno dev` con código 0 y entonces la fila BE-4.1 de PLAN §3 a «Hecho».
   Del frontend (a decidir con FE-4.1): 7.12 pide «dispositivo» y 7.13 «reprocesar embeddings» y «reintentar subida» de
-  un video entero, que §5.5 no tiene (hoy: foto a foto). ADR-BE-20, decisión del lote a confirmar por el maestro.
+  un video entero, que §5.5 no tiene (hoy: foto a foto); se decide en FE-4.1. ADR-BE-20 aprobada por el maestro
+  (2026-10-26).
 
 ## [0.14.1] — 2026-10-26
 
