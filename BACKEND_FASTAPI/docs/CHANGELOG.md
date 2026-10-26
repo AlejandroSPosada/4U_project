@@ -20,6 +20,20 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.11.1] — 2026-10-25
+
+- **Lote que la motivó:** BE-3.1 (cierre: `validate31.py --entorno dev` con código 0 sobre `86fc024`, PLAN §3), antes
+  de empezar BE-3.2.
+- **Qué cambió:** encabezado y §4.9 con la validación en `dev`. §4.9, «Guía para BE-3.2», con lo que faltaba para
+  hacerlo solo con docs: los importes (`app.servicios.lugares`, `app.dominio.geo`), qué trae `leer_todos` y qué no,
+  el redondeo coherente con `GET /v1/places` (`DECIMALES_DISTANCIA`) y el cuidado con un `rumbo_grados` redondeado a
+  360, cómo reutilizar en pruebas los ayudantes de `tests/base/test_lugares_base.py` (son de un módulo de pruebas:
+  `importlib`, la API o una receta SQL con `nombre_normalizado`) y cómo crea y borra lugares de prueba el validador de
+  BE-3.2 con las ayudas de `comun.py`.
+- **Contratos tocados (§5):** ninguno (versión de parche).
+- **Cómo se verificó:** solo documentación.
+- **Pendiente:** nada de BE-3.1.
+
 ## [0.11.0] — 2026-10-25
 
 - **Lote que la motivó:** BE-3.1 (Lugares), y la decisión del usuario del 2026-10-25 «no necesitamos las alertas por

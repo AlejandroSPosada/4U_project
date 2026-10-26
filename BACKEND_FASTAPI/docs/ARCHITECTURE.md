@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.11.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.11.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.2, BE-2.4 y BE-3.1 (`project/`); todo validado en `dev` salvo BE-3.1 (probado en `local`, sin validar en `dev`). Lo de los demás lotes es diseño propuesto; las alertas pasaron a BE-3.3, fuera del núcleo y sin código (§4.9) |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.2, BE-2.4 y BE-3.1 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`). Lo de los demás lotes es diseño propuesto; las alertas pasaron a BE-3.3, fuera del núcleo y sin código (§4.9) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -827,7 +827,8 @@ destino 6.4 y lugares de administración 7.6–7.7: FE-3.1 y FE-3.4) y BE-3.2 (l
 **Construido (ADR-BE-17).** Probado en local con PostgreSQL 17.11 y pgvector 0.8.7 (`db` del compose):
 `tests/base/test_lugares_base.py` (endpoints contra la base), `tests/unit/test_lugares.py` (nombre normalizado,
 geometría, `LugarEntrada`), `tests/contrato/test_contrato_lugares.py` (ejemplos de §5 contra los esquemas) y
-`validate31.py --entorno local` contra el compose (validation-3-1 §5). **Sin validar en `dev`** (PLAN §3). Sin
+`validate31.py --entorno local` contra el compose (validation-3-1 §5); en `dev`, `validate31.py` con código 0 sobre
+`86fc024` (2026-10-25, informe `BE-3.1-20261026-030207.json`: C1a–C4b en verde, 3 lugares de prueba borrados). Sin
 migración: la tabla `lugares` y sus restricciones existen desde `0001` (§5.7).
 
 **Lectura pública** (`GET /v1/places`, router `api/v1/lugares.router_publico`, sin `requiere_admin`: ignora
@@ -899,6 +900,25 @@ comprobar en `dev`). El lote que la añada (sin asignar en PLAN) define primero 
 `await lugares.leer_todos(conexion)`; con la posición calculada, `geo.distancia_m` a cada lugar para el más cercano a
 ≤ `LOC_LUGAR_CERCANO_M` y las referencias a ≤ `LOC_REFERENCIAS_M`, y `geo.rumbo_grados(posición → lugar)` para
 `referencias[].rumbo_grados`. Para probarlo sin dataset real, `crear` de las pruebas de arriba (coordenadas propias).
+Detalles (0.11.1):
+- Importes: `from app.servicios import lugares` (`lugares.leer_todos`, `lugares.LugarRef`) y `from app.dominio import
+  geo`. `leer_todos` solo trae `id`, `nombre`, `categoria`, `lat` y `lng` (no `alias` ni textos) y lee la tabla entera
+  (decenas de filas); `geo.*` reciben y devuelven `float` crudos (grados y metros, sin redondear).
+- Redondeo: `GET /v1/places` da `distancia_m` con `dominio.lugares.DECIMALES_DISTANCIA` (1); usar la misma constante
+  para `lugar_cercano.distancia_m` y `referencias[].distancia_m` deja las dos rutas coherentes (el ejemplo de §5.3 ya
+  va con 1 decimal). Cómo redondear `rumbo_grados` lo decide BE-3.2 (un `round` puede dar 360.0: normalizar a
+  [0, 360)).
+- Pruebas con base: `entrada`, `crear`, `sql` y la fixture `api` son funciones de un **módulo de pruebas**
+  (`tests/base/test_lugares_base.py`), no de un paquete. Para reutilizarlas, cargarlo con `importlib.util`
+  (`spec_from_file_location` + `exec_module`, como `tests/ops/test_validate24.py` con `test_validate22.py`) o crear
+  los lugares con la API (`POST /v1/admin/places` con un admin, como `crear`) o por SQL: `INSERT INTO lugares (nombre,
+  nombre_normalizado, categoria, lat, lng, creado_por) SELECT :nombre, :normalizado, 'bloque', :lat, :lng, id FROM
+  usuarios LIMIT 1`, con `normalizado = normalizar_nombre(nombre)` (único: dos nombres iguales al normalizar violan
+  `lugares_nombre_normalizado_key`).
+- Validador de BE-3.2 en `dev`: P2 de `validation-3-2.md` pide `GET /v1/places` con `total` ≥ 1. Si necesita lugares
+  propios cerca de sus puntos de prueba, los crea con `POST /v1/admin/places` y nombre `validacion-32-<ts> …`, los
+  borra con `comun.borrar_lugares` y barre restos con `comun.borrar_lugares_restos` en su `preparacion` (§5.11, ayudas
+  de BE-3.1); nunca toca lugares reales.
 
 **Guía para BE-4.1** (imágenes con lugar): un `PATCH` de imagen con `lugar_id` bloquea video → imagen (§4.5) y la FK
 toma `KEY SHARE` del lugar al escribir: compatible con el orden de `borrar` de arriba y con el `FOR NO KEY UPDATE` de
