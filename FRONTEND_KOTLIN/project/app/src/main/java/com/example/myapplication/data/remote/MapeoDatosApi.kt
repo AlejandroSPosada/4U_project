@@ -89,12 +89,17 @@ object MapeoDatosApi {
         activa = dto.activa ?: true,
     )
 
-    /** `GET /v1/admin/stats` → `ResumenAdmin`. [fotosPendientes] sale de la cola local de subida, no del backend. */
+    /**
+     * `GET /v1/admin/stats` → `ResumenAdmin`. [fotosPendientes] sale de la cola local de subida, no del backend.
+     * FE-2.2: el último video es el del backend (`ultimo_video`); si viene, su `numero` es obligatorio y `creado_en`
+     * (UTC con `Z`, backend §5.1) pasa a milisegundos con [isoAMilis] (en otro formato queda `null`: el Panel muestra
+     * el número sin fecha). `ultimo_video = null` (sin videos) → número y fecha `null` (el Panel muestra «—»).
+     */
     fun resumenAdmin(dto: EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin = ResumenAdmin(
         totalFotos = obligatorio(dto.totalFotos, "total_fotos"),
         totalLugares = obligatorio(dto.totalLugares, "total_lugares"),
         alertasActivas = obligatorio(dto.alertasActivas, "alertas_activas"),
-        ultimoVideoNumero = dto.ultimoVideo?.numero,
+        ultimoVideoNumero = dto.ultimoVideo?.let { obligatorio(it.numero, "ultimo_video.numero") },
         ultimoVideoFecha = isoAMilis(dto.ultimoVideo?.creadoEn),
         fotosPendientes = fotosPendientes,
     )

@@ -23,6 +23,74 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.10.0] — 2026-10-26
+
+- **Lote que la motivó:** FE-2.2 (Panel con datos reales). Además, solo en documentos, la decisión abierta 18 que el
+  usuario resolvió hoy (abajo).
+- **Contrato que consume:** backend §5.5, subsección «`GET /v1/admin/stats` (BE-2.3)» (backend 0.13.0), que fija qué
+  video es el último, qué cuenta cada total, el formato de `creado_en` y los errores. Los docs de la app lo enlazan
+  (§4.7, §5.6, §5.10 «Panel», ADR-FE-28, `validation-2-2`) sin copiarlo; `isoAMilis` acepta exactamente su formato de
+  fecha (UTC con `Z`, sin fracciones).
+- **Decisión del usuario del 2026-10-26** (decisión abierta 18, Inicio, para FE-3.5). Pregunta del maestro: «Decisión
+  abierta 18 (Inicio) para FE-3.5: ¿cómo debe ser la pantalla de Inicio?», opciones «Dos botones (Recomendado)» / «Orbe
+  único» / «Decidir después». Respuesta literal: «Orbe único» (como hoy: un orbe que lleva a Ubicarme; «Ir a un lugar»
+  y «mapa» por voz o por acciones de TalkBack). También decidió que FE-3.5 se hace después del día de campo (desde el
+  2026-10-28). Queda en ADR-FE-29 y §8.2 (18 resuelta); FE-3.5 debe resolver cómo llega TalkBack a «Ir a un lugar» y
+  «Ver mapa» (hallazgo de FE-3.1, §4.5), sin decidirlo aquí.
+- **Qué cambió:**
+  - Código: `RemoteAdminRepository` (`data/remote/`, nuevo): `GET /v1/admin/stats` con `MapeoDatosApi.resumenAdmin` y,
+    después de validar la respuesta, las fotos pendientes de la cola local (`fotosPendientes: suspend () -> Int`).
+    `CampusApi.estadisticas()` (`@GET("admin/stats")`). `MapeoDatosApi.resumenAdmin`: con `ultimo_video` presente,
+    `numero` obligatorio. `fotosPendientesDe(recorridos)` (función de nivel superior de `AlmacenRecorridos.kt`; la usa
+    `contarFotosPendientes()`). Panel: la `Factory` usa `RemoteAdminRepository(fotosPendientes = {
+    Subidas.almacen.contarFotosPendientes() })` (antes `AdminRepositoryStub`); `alReanudar()` (lo llama la pantalla en
+    cada `ON_RESUME`) y el recolector de la cola recalculan tarjeta y «Fotos pendientes» (`resumenConPendientes`) sin
+    llamar al backend; `cargarResumen()` relanza `CancellationException` y no muestra su error con una sesión perdida
+    (`errorVisibleDelResumen`). `TextosResumen` (`ui/admin/panel/`, nuevo): `numero()` y `fecha()` salen de la pantalla
+    (antes privadas con `DateUtils`) para probarlos en la JVM. `AdminRepositoryStub` queda sin uso.
+  - Pruebas JVM nuevas: `RemoteAdminRepositoryTest` (11), `TextosResumenTest` (6), `PendientesPanelTest` (5). Total 243.
+  - Validadores: `src/ops/validate22.py` (C1a y C2a en la JVM; en `dev`, C1b —Panel leído con uiautomator = `GET
+    /v1/admin/stats` antes y después, con el lugar de prueba `validacion-2-2-lugar`— y C2b —paso guiado: grabar
+    `validacion-2-2` y «Guardar y subir después»; «Fotos pendientes» = manifests del teléfono; borra del teléfono el
+    recorrido de prueba al terminar—); `tests/ops/test_validate22.py` (32). Total 222. Sin ayudas nuevas en `comun.py`.
+  - Documento: §4.7 nuevo; encabezado; §3.2 (pruebas); §4.1 (243 casos); §5.5 (`PanelAdminViewModel`: `Factory`,
+    `alReanudar`, `resumenConPendientes`, `cargarResumen`, qué se recarga y cuándo; `PanelAdminScreen`: `ON_RESUME`,
+    `TextosResumen`, `content-desc` de `TileDato`; «Inicio»: decisión 18); §5.6 (`AdminRepository` real, `ResumenAdmin`
+    sin el ⚠ de orígenes); §5.8 (`admin/panel` relee al volver); §5.10 (encabezado, `CampusApi`, `RemoteAdminRepository`,
+    «Panel» nuevo, mapeo y obligatorios de `stats`, regla de «Fotos pendientes», `fotosPendientesDe`, qué salta
+    `listar()`); §5.11 (`validate22.py`, trampas, 222 casos); §6.1 (nota de la decisión 18); §7.2; ADR-FE-18 (referencia
+    a la 18); ADR-FE-28 y ADR-FE-29 nuevas; §8.2 (18 resuelta).
+  - `validation-2-2` reescrita: entornos `local` y `dev`; precondiciones en el orden del contrato común (P1 Gradle, P2
+    dispositivo, P3 FE-2.1, P4 API, P5 login, P6 BE-2.3); C1 → C1a (JVM) y C1b (teléfono); C2 → C2a (JVM) y C2b (paso
+    guiado); §4 sin alertas; §5 con variables, preparación y salida esperada.
+  - `PLAN.md`: FE-2.2 pasa a «En curso» (§3); FE-3.5 con la decisión 18 resuelta (§2.2 y §3).
+- **Contradicciones corregidas:**
+  - `validation-2-2` §4 creaba una alerta con `PUT /v1/admin/alerts/{id}`: esa ruta es de BE-3.3, sin implementar
+    (responde `404`, backend §5.5). Ahora solo crea el lugar de prueba; `alertas_activas` se compara tal cual (0 mientras
+    no exista BE-3.3).
+  - `validation-2-2` evaluaba primero los otros lotes (P1 FE-2.1, P2 BE-2.3) y después la máquina (P3), al revés que el
+    contrato común; con credenciales malas en P2 daba 3 dentro de una precondición de otro lote; contaba solo
+    `"sync": "pendiente"` (la app cuenta lo que no es `sync = subida`); dejaba el video de prueba para que la persona lo
+    descartara a mano; y no tenía entorno `local`, preparación ni salida esperada.
+  - §5.10 decía que «Fotos pendientes» = `photos[].sync = pendiente`; el código (`RecorridoLocal.fotosPendientes`)
+    cuenta las fotos sin `sync = subida` (iguales en los manifests de la app; ahora se dice así).
+  - §5.5 (`PanelAdminScreen`) contaba `onRecolector` entre las rutas *placeholder*: abre 7.3 (`admin/ubicacion-manual`).
+  - §5.6 decía que FE-2.2 podía usar `contarPendientes()` o `contarFotosPendientes()`; usa el segundo.
+- **Contratos tocados (§5):** §5.5 (`PanelAdminViewModel.alReanudar()` nuevo; `cargarResumen()` ya no marca error con
+  una sesión perdida; `TextosResumen` nuevo, `internal`); §5.6 (`AdminRepository` real, sin cambiar la interfaz); §5.10
+  (ruta `estadisticas()`, `RemoteAdminRepository`, `fotosPendientesDe`; `resumenAdmin` rechaza `ultimo_video` sin
+  `numero`, compatible con el contrato del backend); §5.11 (validador nuevo). Pieza, ruta y ADR nuevos: sube la menor.
+- **Cómo se verificó:** en Windows, `.\gradlew.bat --console=plain testDebugUnitTest assembleDebug` con el JBR 21
+  (`C:\Users\frank\.jdks\jbr-21.0.11`) → `BUILD SUCCESSFUL`, 243 casos sin fallos. En WSL, `uv run --frozen ruff check .`
+  («All checks passed!»), `ruff format --check .` («18 files already formatted»), `pytest -q` (222 passed) y
+  `validate22.py --entorno local` → código 0 (P1; C1a 11/11 y 6/6; C2a 5/5; C1b y C2b omitidas). Sin teléfono y sin
+  tocar `dev` (BE-2.3 se construye en paralelo y no está desplegado; lo coordina el maestro).
+- **Pendiente:** `validate22.py --entorno dev` con el Xiaomi cuando BE-2.3 esté «Hecho» (C1b y C2b; `validation-2-2`
+  §5). Sin comprobar en el teléfono: el `content-desc` de los `TileDato` con uiautomator, el formato «d MMM» del
+  Android del teléfono, `adb shell date +%z` y `run-as … rm -rf` en MIUI, y que `ON_RESUME` relea la cola al volver de
+  7.5. Esta entrada es autocontenida: si al integrarla hace falta otro número (p. ej. por un parche de FE-3.2 en
+  `main`), se renumera sin cambiar su contenido.
+
 ## [0.9.2] — 2026-10-26
 - Lote que la motivó: FE-3.2 (sigue «En curso»), prueba de humo en el teléfono pedida por el usuario.
 - Qué cambió: §4.6 y la fila FE-3.2 de PLAN §3 anotan la prueba de Ubicarme en casa (Xiaomi 23028RA60L, APK de

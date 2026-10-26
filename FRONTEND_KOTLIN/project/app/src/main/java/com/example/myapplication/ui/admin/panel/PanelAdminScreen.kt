@@ -1,6 +1,5 @@
 package com.example.myapplication.ui.admin.panel
 
-import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,6 +44,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -67,15 +67,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.BorderStroke
 import com.example.myapplication.domain.model.ResumenAdmin
 import com.example.myapplication.ui.theme.CampusColors as C
-import java.text.NumberFormat
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /** Callbacks de navegación y acciones del panel. */
 data class PanelAcciones(
@@ -125,6 +124,16 @@ fun PanelAdminScreen(
                 PanelEvento.SinSesion -> onSinSesion()
             }
         }
+    }
+    // FE-2.2: al volver al Panel (p. ej. desde 7.5 con «Guardar y subir después», que regresa a esta misma entrada de
+    // la pila con el mismo ViewModel), relee los recorridos locales: tarjeta de subidas y «Fotos pendientes» al día.
+    val ciclo = LocalLifecycleOwner.current
+    DisposableEffect(ciclo, viewModel) {
+        val observador = LifecycleEventObserver { _, evento ->
+            if (evento == Lifecycle.Event.ON_RESUME) viewModel.alReanudar()
+        }
+        ciclo.lifecycle.addObserver(observador)
+        onDispose { ciclo.lifecycle.removeObserver(observador) }
     }
 
     PanelAdminContent(
@@ -394,16 +403,16 @@ private fun ResumenRapido(state: PanelUiState, onReintentar: () -> Unit) {
         }
 
         val datos = listOf(
-            Dato(Icons.Outlined.PhotoCamera, numero(r?.totalFotos), "Fotos en el dataset"),
-            Dato(Icons.Outlined.Place, numero(r?.totalLugares), "Lugares registrados"),
-            Dato(Icons.Outlined.WarningAmber, numero(r?.alertasActivas), "Alertas activas"),
+            Dato(Icons.Outlined.PhotoCamera, TextosResumen.numero(r?.totalFotos), "Fotos en el dataset"),
+            Dato(Icons.Outlined.Place, TextosResumen.numero(r?.totalLugares), "Lugares registrados"),
+            Dato(Icons.Outlined.WarningAmber, TextosResumen.numero(r?.alertasActivas), "Alertas activas"),
             Dato(
                 Icons.Outlined.Videocam,
-                numero(r?.ultimoVideoNumero),
+                TextosResumen.numero(r?.ultimoVideoNumero),
                 "Último video recolectado",
-                r?.ultimoVideoFecha?.let(::textoFecha),
+                r?.ultimoVideoFecha?.let { TextosResumen.fecha(it) },
             ),
-            Dato(Icons.Outlined.CloudUpload, numero(r?.fotosPendientes), "Fotos pendientes de subir"),
+            Dato(Icons.Outlined.CloudUpload, TextosResumen.numero(r?.fotosPendientes), "Fotos pendientes de subir"),
         )
         Row(
             modifier = Modifier.height(IntrinsicSize.Max),
@@ -474,20 +483,6 @@ private fun Pie() {
             Text("Panel de administración · Campus Navi", color = C.TextoSuave, fontSize = 14.sp)
         }
         Text("Versión $version", color = C.TextoSuave, fontSize = 14.sp)
-    }
-}
-
-// ───────────────────────────── Utilidades ─────────────────────────────
-
-private fun numero(valor: Int?): String =
-    valor?.let { NumberFormat.getIntegerInstance().format(it) } ?: "—"
-
-private fun textoFecha(millis: Long): String {
-    val hora = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(millis))
-    return when {
-        DateUtils.isToday(millis) -> "Hoy, $hora"
-        DateUtils.isToday(millis + DateUtils.DAY_IN_MILLIS) -> "Ayer, $hora"
-        else -> SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(millis))
     }
 }
 

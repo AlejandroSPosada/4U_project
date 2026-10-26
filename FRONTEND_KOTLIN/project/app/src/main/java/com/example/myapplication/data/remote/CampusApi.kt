@@ -60,6 +60,13 @@ interface CampusApi {
     suspend fun video(@Path("id") videoId: String): Response<VideoResumenDto>
 
     /**
+     * `GET /v1/admin/stats` (backend §5.5, BE-2.3; FE-2.2): totales del dataset, lugares, alertas activas y último
+     * video del «Resumen rápido» del Panel. Ruta protegida: va con la sesión del admin (`SesionInterceptor`).
+     */
+    @GET("admin/stats")
+    suspend fun estadisticas(): Response<EstadisticasAdminDto>
+
+    /**
      * `POST /v1/localize` (backend §5.3; FE-3.2). Ruta pública (sin `Authorization`). `multipart/form-data`: las partes
      * [fotos] (cada una `fotos`, `image/jpeg`, en el orden de `rumbos`) y la parte [metadatos] (JSON de
      * [MetadatosLocalizacionDto]). Las arma `RemoteLocalizacionRepository`.

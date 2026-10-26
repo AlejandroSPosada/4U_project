@@ -11,11 +11,15 @@ import com.example.myapplication.data.local.EstadoSubida
 import com.example.myapplication.data.local.FaseCola
 import com.example.myapplication.data.local.RecorridoLocal
 import com.example.myapplication.data.local.Subidas
+import com.example.myapplication.data.local.fotosPendientesDe
+import com.example.myapplication.data.remote.FalloApi
+import com.example.myapplication.data.remote.MapeoErroresApi
+import com.example.myapplication.data.remote.RemoteAdminRepository
 import com.example.myapplication.data.repository.AdminRepository
-import com.example.myapplication.data.repository.AdminRepositoryStub
 import com.example.myapplication.domain.model.ResumenAdmin
 import com.example.myapplication.domain.model.Rol
 import com.example.myapplication.session.SessionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,6 +72,20 @@ internal fun avisoSubidas(estado: EstadoCola, recorridos: List<RecorridoLocal>):
     return AvisoSubidas(ultimo.id, "Recorridos sin subir", detalle, "Revisar y subir")
 }
 
+/**
+ * FE-2.2: el resumen con «Fotos pendientes» recalculado desde los recorridos locales (lógica pura; regla de
+ * [fotosPendientesDe]). Sin resumen (cargando o con error) o sin poder leer los recorridos (`null`), lo deja como
+ * está; los datos del backend nunca se tocan.
+ */
+internal fun resumenConPendientes(resumen: ResumenAdmin?, recorridos: List<RecorridoLocal>?): ResumenAdmin? =
+    if (resumen == null || recorridos == null) resumen else resumen.copy(fotosPendientes = fotosPendientesDe(recorridos))
+
+/**
+ * FE-2.2: ¿el Panel muestra «No se pudo cargar el resumen» por este fallo? No para una sesión perdida
+ * (`FalloApi.SesionVencida`, también sin sesión local): `AppNav` ya vuelve a Login (ARCHITECTURE §5.3, paso 4).
+ */
+internal fun errorVisibleDelResumen(e: Throwable): Boolean = MapeoErroresApi.deExcepcion(e) !is FalloApi.SesionVencida
+
 sealed interface PanelEvento {
     /** El admin cerró sesión: volver al flujo público. */
     data object SesionCerrada : PanelEvento
@@ -89,12 +107,16 @@ class PanelAdminViewModel(
     private val _eventos = Channel<PanelEvento>(Channel.BUFFERED)
     val eventos = _eventos.receiveAsFlow()
 
+    /** Pasó la guarda de rol de `init` (sin ella, [alReanudar] no hace nada). */
+    private var conSesionAdmin = false
+
     init {
         val sesion = session.obtener()
         if (sesion == null || sesion.usuario.rol != Rol.ADMIN) {
             // Guarda de rol: sin sesión ADMIN no se muestra el panel.
             _eventos.trySend(PanelEvento.SinSesion)
         } else {
+            conSesionAdmin = true
             _state.update {
                 it.copy(
                     nombre = sesion.usuario.nombre.trim().substringBefore(' '),
@@ -108,7 +130,7 @@ class PanelAdminViewModel(
 
     /**
      * FE-2.1: con sesión ADMIN, retoma la cola (lo que quedó `subiendo`; ARCHITECTURE §5.8: tras volver a Login se cae
-     * aquí) y mantiene [PanelUiState.avisoSubidas] al día.
+     * aquí) y mantiene [PanelUiState.avisoSubidas] al día. FE-2.2: también «Fotos pendientes» del resumen.
      */
     private fun vigilarSubidas() {
         val c = cola ?: return
@@ -116,8 +138,7 @@ class PanelAdminViewModel(
         c.reanudar()
         viewModelScope.launch {
             combine(c.estado, c.cambiosVideos) { estado, _ -> estado }.collect { estado ->
-                val recorridos = runCatching { a.listar() }.getOrDefault(emptyList())
-                _state.update { it.copy(avisoSubidas = avisoSubidas(estado, recorridos)) }
+                refrescarLocal(a, estado)
                 // La cola se paró por falta de sesión y el Panel (vivo en la pila) ya no la tiene (p. ej. venció a las
                 // 12 h): a Login, como haría su guarda de `init`. Con sesión vigente (recién entró) no pasa nada.
                 if (estado.fase == FaseCola.ESPERANDO_SESION && runCatching { session.obtener() }.getOrNull() == null) {
@@ -127,14 +148,46 @@ class PanelAdminViewModel(
         }
     }
 
+    /**
+     * FE-2.2, `ON_RESUME` de la pantalla: al volver al Panel (7.5 con «Guardar y subir después» o «Descartar video»
+     * vuelve a esta misma entrada de la pila, con este ViewModel) relee los recorridos locales para la tarjeta de
+     * subidas y «Fotos pendientes». No llama al backend: totales, lugares, alertas y último video se cargan en `init`
+     * y con «Reintentar».
+     */
+    fun alReanudar() {
+        if (!conSesionAdmin) return
+        val c = cola ?: return
+        val a = almacen ?: return
+        viewModelScope.launch { refrescarLocal(a, c.estado.value) }
+    }
+
+    /** Relee los recorridos y actualiza la tarjeta de subidas y «Fotos pendientes» (si ya hay resumen). */
+    private suspend fun refrescarLocal(a: AlmacenRecorridos, estado: EstadoCola) {
+        val recorridos = try {
+            a.listar()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        _state.update {
+            it.copy(
+                avisoSubidas = avisoSubidas(estado, recorridos.orEmpty()),
+                resumen = resumenConPendientes(it.resumen, recorridos),
+            )
+        }
+    }
+
     fun cargarResumen() {
         _state.update { it.copy(cargandoResumen = true, errorResumen = false) }
         viewModelScope.launch {
             try {
                 val resumen = repo.obtenerResumen()
                 _state.update { it.copy(resumen = resumen, cargandoResumen = false) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _state.update { it.copy(cargandoResumen = false, errorResumen = true) }
+                _state.update { it.copy(cargandoResumen = false, errorResumen = errorVisibleDelResumen(e)) }
             }
         }
     }
@@ -148,7 +201,8 @@ class PanelAdminViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             PanelAdminViewModel(
-                AdminRepositoryStub(),
+                // FE-2.2: GET /v1/admin/stats + la cola local de subida (ARCHITECTURE §5.6 y §5.10).
+                RemoteAdminRepository(fotosPendientes = { Subidas.almacen.contarFotosPendientes() }),
                 SessionManager(context.applicationContext),
                 Subidas.almacen,
                 Subidas.cola,

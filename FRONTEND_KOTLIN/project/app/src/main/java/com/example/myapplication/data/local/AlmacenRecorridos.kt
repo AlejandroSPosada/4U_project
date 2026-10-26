@@ -18,6 +18,14 @@ object CerrojoRecoleccion {
 }
 
 /**
+ * Regla única de «Fotos pendientes» (7.2, ARCHITECTURE §5.10; lógica pura): las fotos sin `sync = subida`
+ * ([RecorridoLocal.fotosPendientes]) de los recorridos `finalizado`. La usan [AlmacenRecorridos.contarFotosPendientes]
+ * y el Panel cuando relee los recorridos (FE-2.2).
+ */
+fun fotosPendientesDe(recorridos: List<RecorridoLocal>): Int =
+    recorridos.filter { it.finalizado }.sumOf { it.fotosPendientes }
+
+/**
  * Lo que la vista 7.5, la cola de subida y el `VideoRepository` compuesto hacen sobre `files/recoleccion/` (FE-2.1,
  * ARCHITECTURE §5.6 y §5.10). La **cola** es el propio manifest: `photos[].sync`, `photos[].upload`,
  * `remote_video_id` y `subida_estado`. Cada operación relee y reescribe el manifest completo de forma atómica
@@ -41,10 +49,10 @@ class AlmacenRecorridos(val raiz: File) {
         listar().filter { it.finalizado && it.subida == EstadoSubida.SUBIENDO }.map { it.id }
 
     /**
-     * «Fotos pendientes» del Panel (7.2, ARCHITECTURE §5.10): fotos con `sync = pendiente` de los recorridos con
-     * `estado = finalizado`. Los `en_curso` no cuentan (se retoman en 7.4).
+     * «Fotos pendientes» del Panel (7.2, ARCHITECTURE §5.10): [fotosPendientesDe] sobre [listar] (las fotos sin
+     * `sync = subida` de los recorridos con `estado = finalizado`; los `en_curso` no cuentan, se retoman en 7.4).
      */
-    suspend fun contarFotosPendientes(): Int = listar().filter { it.finalizado }.sumOf { it.fotosPendientes }
+    suspend fun contarFotosPendientes(): Int = fotosPendientesDe(listar())
 
     /**
      * Cambia `name` (recortado, como mucho [MAX_NOMBRE] caracteres). Solo mientras el backend no conoce el video

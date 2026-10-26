@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.9.2** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.10.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; probado en la JVM y con `validate22.py` en local, **sin probar en el teléfono ni en `dev`**: BE-2.3 aún no está desplegado). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -396,8 +396,9 @@ Pruebas unitarias (JVM) en `app/src/test/java/com/example/myapplication/`: `data
 `data/repository/VideoRepositoryCompuestoTest`, desde FE-3.1 `data/remote/RemoteLugaresRepositoryTest`,
 `ui/inicio/ComandoParserTest` y `sensors/ObservadorPrimerPlanoTest`, y desde FE-3.2
 `data/remote/RemoteLocalizacionRepositoryTest`, `domain/usecase/` (`ConversionRumboTest`, `DescribirUbicacionTest`),
-`domain/model/SesionDeNavegacionTest` y `ui/ubicacion/` (`FotosEscaneoTest`, `ErrorEscaneoTest`) (lista y conteos en
-§4.1).
+`domain/model/SesionDeNavegacionTest` y `ui/ubicacion/` (`FotosEscaneoTest`, `ErrorEscaneoTest`), y desde FE-2.2
+`data/remote/RemoteAdminRepositoryTest` y `ui/admin/panel/` (`TextosResumenTest`, `PendientesPanelTest`) (lista y
+conteos en §4.1).
 
 > Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
 > (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`) y de la calibración (`calibracion_mapa.html/js`), y la base común `mapa_base.js` (5.9).
@@ -546,7 +547,9 @@ viven en su paquete (5.5).
   `data/remote/RemoteLocalizacionRepositoryTest` (11), `domain/usecase/ConversionRumboTest` (7) y
   `DescribirUbicacionTest` (11), `domain/model/SesionDeNavegacionTest` (5), `ui/ubicacion/FotosEscaneoTest` (6) y
   `ErrorEscaneoTest` (7); `MapeoErroresApiTest` pasa a 15 (`400 FOTOS_INVALIDAS`) y `RecodificacionFotoTest` a 14
-  (límites de la localización). Total al terminar el código de FE-3.2: **221** casos. No usan
+  (límites de la localización). Total al terminar el código de FE-3.2: 221 casos. Desde FE-2.2:
+  `data/remote/RemoteAdminRepositoryTest` (11), `ui/admin/panel/TextosResumenTest` (6) y `PendientesPanelTest` (5).
+  Total al terminar el código de FE-2.2: **243** casos. No usan
   Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
   `EncryptedSharedPreferences` (la sesión se prueba con un `AlmacenSesion` en memoria, §5.3); lo de FE-2.3 es lógica
   pura (`PdrEngine`, `StepDetector`, `CalibracionPaso`, `DisparadorCaptura`, `Deriva`, `RetomarRecoleccion`,
@@ -827,6 +830,45 @@ mensaje con `embedding` apagado (C4), los 10 puntos del campus (C1), C3b con el 
 `validate32.py --entorno dev` → P1–P5 pasan, `[FALLA] P6 BE-3.2 no está «Hecho»`, P7 «no evaluada», `Resultado:
 bloqueado (código 2)`: lo esperado mientras BE-3.2 siga sin dataset ni calibración. El maestro repitió también en local
 Gradle (`--rerun-tasks`, 221 casos), ruff, pytest (190) y `validate32.py --entorno local` (código 0).
+
+### 4.7 Panel con datos reales (FE-2.2)
+
+Qué se construyó (detalle y firmas en §5.5, §5.6, §5.10 y §5.11; validación en
+[`validation-2-2`](./validation/validation-2-2.md)). Contrato que consume: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.5,
+subsección «`GET /v1/admin/stats` (BE-2.3)» (desde backend 0.13.0; qué video es el último, qué cuenta cada total,
+formato de `creado_en` y errores). BE-2.3 se construyó en paralelo y está **sin desplegar**: el código sigue el
+contrato y se probó con MockWebServer. Decisiones: ADR-FE-28 (origen del último video, fecha, dos orígenes y releer al volver).
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| `RemoteAdminRepository(api = ClienteApi.api, fotosPendientes: suspend () -> Int)` | `data/remote/RemoteAdminRepository.kt` | `AdminRepository` real: `llamar { api.estadisticas() }` → `MapeoDatosApi.resumenAdmin` y, **después** de validar la respuesta, `fotosPendientes()` (§5.10, «Panel») |
+| `CampusApi.estadisticas()` | `data/remote/CampusApi.kt` | `@GET("admin/stats")` → `Response<EstadisticasAdminDto>` (el DTO ya existía desde FE-1.1). Ruta protegida: `SesionInterceptor` |
+| `MapeoDatosApi.resumenAdmin` | `data/remote/MapeoDatosApi.kt` | Desde FE-2.2, con `ultimo_video` presente su `numero` es obligatorio (`RespuestaInesperadaException`); la fecha sigue con `isoAMilis` (otro formato → `null`) |
+| `fotosPendientesDe(recorridos)` | `data/local/AlmacenRecorridos.kt` (función de nivel superior) | Regla única de «Fotos pendientes»: fotos sin `sync = subida` de los recorridos `finalizado`. `AlmacenRecorridos.contarFotosPendientes()` = `fotosPendientesDe(listar())` |
+| Panel | `ui/admin/panel/PanelAdminViewModel.kt` (`resumenConPendientes`, `errorVisibleDelResumen`, `alReanudar()`), `PanelAdminScreen.kt` (observador de `ON_RESUME`) | `Factory` con `RemoteAdminRepository(fotosPendientes = { Subidas.almacen.contarFotosPendientes() })`. Relee los recorridos en `ON_RESUME` y con cada cambio de la cola y actualiza tarjeta de subidas y «Fotos pendientes» sin llamar al backend. Una sesión perdida no muestra «No se pudo cargar el resumen» (`AppNav` va a Login). Relanza `CancellationException` (§5.5) |
+| `TextosResumen` | `ui/admin/panel/TextosResumen.kt` (`internal object`) | `numero(valor, idioma)` y `fecha(millis, ahoraMs, zona, idioma)`: los textos del «Resumen rápido», sacados de la pantalla (antes `numero()` y `textoFecha()` privadas con `DateUtils`) para probarlos en la JVM; mismo resultado |
+| Pruebas | `RemoteAdminRepositoryTest` (11), `TextosResumenTest` (6), `PendientesPanelTest` (5) | Apoyo de C1 y C2 en la JVM (§4.1) |
+| Validador | `src/ops/validate22.py` (sin ayudas nuevas en `comun.py`) | Local: C1a y C2a (JVM). Dev: además C1b (Panel leído con uiautomator = `GET /v1/admin/stats` antes y después, con un lugar de prueba) y C2b (paso guiado: grabar `validacion-2-2` y «Guardar y subir después»; «Fotos pendientes» = manifests del teléfono) (§5.11) |
+
+**Trampas.**
+- En Kotlin los argumentos se evalúan de izquierda a derecha **antes** de entrar en la función:
+  `MapeoDatosApi.resumenAdmin(dto, fotosPendientes())` contaba la cola aunque la respuesta no cumpliera el contrato (lo
+  vio `RemoteAdminRepositoryTest`). Por eso el repositorio mapea primero con `fotosPendientes = 0` y después hace `copy`.
+- 7.5 vuelve al Panel con `popBackStack("admin/panel")`: el Panel **no** se vuelve a crear ni recarga el backend. Lo
+  local (tarjeta y «Fotos pendientes») se relee en `ON_RESUME`; totales, lugares, alertas y último video, no (ADR-FE-28).
+- «Fotos pendientes» cuenta lo que no es `sync = subida` (una foto sin `sync` también cuenta); en los manifests que
+  escribe la app es lo mismo que `sync = pendiente` (§5.10).
+- Sin red, el Panel muestra «—» en los cinco datos (también en «Fotos pendientes», aunque es local) con «No se pudo cargar
+  el resumen» y «Reintentar».
+- `ultimo_video.creado_en` en un formato que no sea UTC con `Z` deja el número sin fecha; `ultimo_video` sin `numero`
+  hace fallar el resumen entero (respuesta inesperada).
+
+Verificado en local el 2026-10-26: `testDebugUnitTest assembleDebug` en Windows → `BUILD SUCCESSFUL` (243 casos, 0
+fallos); en WSL `ruff check`, `ruff format --check` («18 files already formatted») y `pytest` (222 casos) en verde y
+`validate22.py --entorno local` → código 0 (P1; C1a 11/11 y 6/6; C2a 5/5; C1b y C2b omitidas). **Sin probar en el
+teléfono ni en `dev`** (necesita BE-2.3 «Hecho» y el Xiaomi; lo coordina el maestro): que uiautomator lea el
+`content-desc` de los cinco `TileDato`, el formato «d MMM» del Android del teléfono, `adb shell date +%z` y
+`run-as … rm -rf` en MIUI.
 
 ---
 
@@ -1353,19 +1395,21 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| Constructor | `PanelAdminViewModel(repo: AdminRepository, session: SessionManager, almacen: AlmacenRecorridos? = null, cola: ColaSubida? = null)`. `Factory(context)` crea `AdminRepositoryStub()`, `SessionManager(context.applicationContext)` (uno por ViewModel, como pide 5.3) y, desde FE-2.1, pasa `Subidas.almacen` y `Subidas.cola` (§5.10). |
+| Constructor | `PanelAdminViewModel(repo: AdminRepository, session: SessionManager, almacen: AlmacenRecorridos? = null, cola: ColaSubida? = null)`. `Factory(context)` crea, desde FE-2.2, `RemoteAdminRepository(fotosPendientes = { Subidas.almacen.contarFotosPendientes() })` (antes `AdminRepositoryStub()`), `SessionManager(context.applicationContext)` (uno por ViewModel, como pide 5.3) y, desde FE-2.1, pasa `Subidas.almacen` y `Subidas.cola` (§5.10). |
 | `state: StateFlow<PanelUiState>` | `nombre` (primer nombre: lo que hay antes del primer espacio del nombre de la sesión), `rolTexto` (fijo: "Administrador del sistema"), `resumen: ResumenAdmin?`, `cargandoResumen` (empieza en `true`), `errorResumen` y, desde FE-2.1, `avisoSubidas: AvisoSubidas?`. |
-| Subidas (FE-2.1) | Con sesión ADMIN, en `init`: `cola.reanudar()` (retoma lo que quedó `subiendo`: tras volver a Login se cae aquí, 5.8) y recoge `combine(cola.estado, cola.cambiosVideos)`; en cada cambio relee los recorridos (`almacen.listar()`) y calcula `avisoSubidas` con `avisoSubidas(estado, recorridos)` (`internal`, lógica pura): si la cola trabaja sobre un video → «Preparando / Subiendo «nombre»» («N de M fotos»), «Subida de «nombre» en pausa» (sin conexión, «reintento en N s») o «La subida de «nombre» se detuvo» (error o fotos ilegibles, con el mensaje); si no, el `finalizado` `subiendo` más reciente → «Subida pendiente de «nombre»» («N fotos por subir»); si no, los `sin_subir` → «Recorridos sin subir» (el más reciente); nada pendiente → `null`. `AvisoSubidas(videoId, titulo, detalle, accion)`. Si la cola queda en `ESPERANDO_SESION` y `session.obtener()` ya es `null` (venció a las 12 h con el Panel vivo en la pila), emite `SinSesion` (a Login). |
+| Subidas (FE-2.1) | Con sesión ADMIN, en `init`: `cola.reanudar()` (retoma lo que quedó `subiendo`: tras volver a Login se cae aquí, 5.8) y recoge `combine(cola.estado, cola.cambiosVideos)`; en cada cambio relee los recorridos (`almacen.listar()`) y calcula `avisoSubidas` con `avisoSubidas(estado, recorridos)` (`internal`, lógica pura): si la cola trabaja sobre un video → «Preparando / Subiendo «nombre»» («N de M fotos»), «Subida de «nombre» en pausa» (sin conexión, «reintento en N s») o «La subida de «nombre» se detuvo» (error o fotos ilegibles, con el mensaje); si no, el `finalizado` `subiendo` más reciente → «Subida pendiente de «nombre»» («N fotos por subir»); si no, los `sin_subir` → «Recorridos sin subir» (el más reciente); nada pendiente → `null`. `AvisoSubidas(videoId, titulo, detalle, accion)`. Si la cola queda en `ESPERANDO_SESION` y `session.obtener()` ya es `null` (venció a las 12 h con el Panel vivo en la pila), emite `SinSesion` (a Login). Desde FE-2.2, con la misma lectura de los recorridos actualiza también `resumen.fotosPendientes` (abajo). |
+| «Fotos pendientes» al día (FE-2.2) | `resumenConPendientes(resumen, recorridos)` (`internal`, lógica pura): sin resumen o con `recorridos = null` (no se pudieron leer) lo deja igual; si no, `resumen.copy(fotosPendientes = fotosPendientesDe(recorridos))` (§5.10). La usan el recolector de la cola (cada cambio de `cola.estado` o `cola.cambiosVideos`) y **`alReanudar()`**, que la pantalla llama en cada `ON_RESUME`: relee `almacen.listar()` y recalcula tarjeta y pendientes **sin llamar al backend**. Sin la guarda de rol de `init` superada, o sin `cola`/`almacen`, `alReanudar()` no hace nada. Una lectura que falla (`listar()` lanza) deja la tarjeta como sin recorridos y las pendientes como estaban. |
 | `eventos` | `Channel(Channel.BUFFERED)` + `receiveAsFlow()`: cada evento lo recibe **un** recolector y queda guardado si llega antes de que alguien recoja. `PanelEvento.SesionCerrada` (volver al flujo público) y `PanelEvento.SinSesion` (ir a Login). |
-| `cargarResumen()` | Pone `cargandoResumen = true` y `errorResumen = false`, llama a `repo.obtenerResumen()` y, ante **cualquier** `Exception`, deja `errorResumen = true`. Sirve también de reintento. |
+| `cargarResumen()` | Pone `cargandoResumen = true` y `errorResumen = false`, llama a `repo.obtenerResumen()` y, ante una `Exception`, deja `errorResumen = errorVisibleDelResumen(e)`: `true` salvo `FalloApi.SesionVencida` (sin sesión local, vencida o `401 TOKEN_*`: `AppNav` ya va a Login, §5.3 paso 4). Desde FE-2.2 relanza `CancellationException`. Sirve también de reintento. |
 | `cerrarSesion()` | `session.cerrarSesion()` y emite `SesionCerrada`. |
 
 Cuidados:
-- **La guarda de rol corre solo en `init`:** sin sesión, con la sesión vencida (`expira_en` pasado, FE-1.2: `obtener()` da `null`) o con rol distinto de `ADMIN` emite `SinSesion` y no carga nada; mientras el ViewModel viva no se vuelve a comprobar. Las peticiones protegidas que haga después (FE-2.2: `GET /v1/admin/stats`) quedan cubiertas por `SesionInterceptor` + `EventosSesion` (5.3): `AppNav` vuelve a Login aunque el panel no lo pida.
+- **La guarda de rol corre solo en `init`:** sin sesión, con la sesión vencida (`expira_en` pasado, FE-1.2: `obtener()` da `null`) o con rol distinto de `ADMIN` emite `SinSesion` y no carga nada; mientras el ViewModel viva no se vuelve a comprobar. Las peticiones protegidas que haga después (desde FE-2.2, `GET /v1/admin/stats` en `cargarResumen()`) quedan cubiertas por `SesionInterceptor` + `EventosSesion` (5.3): `AppNav` vuelve a Login aunque el panel no lo pida, y el Panel no muestra su error propio.
+- **Qué se recarga y cuándo (FE-2.2, ADR-FE-28):** lo del backend (totales, lugares, alertas, último video) solo en `init` y con «Reintentar»; lo local (tarjeta de subidas y «Fotos pendientes») con cada cambio de la cola y en cada `ON_RESUME` (volver al Panel desde 7.5, 7.13, Ajustes… o desde otra app). Un `ON_RESUME` que llega antes de que cargue el resumen solo actualiza la tarjeta; el valor que trae `cargarResumen()` ya es reciente (`RemoteAdminRepository` cuenta la cola después de la respuesta).
 - `session.obtener()` se llama en el hilo principal y sin `try/catch`. ⚠ Deducido de unir esto con 5.3 (el primer acceso al almacén cifrado puede tardar y lanzar excepción si falla el Keystore): ese fallo cerraría la app al abrir el panel.
 - Si `cargarResumen()` falla después de haber cargado antes, `resumen` **conserva el dato anterior** junto con `errorResumen = true`: `PanelAdminScreen` muestra entonces el aviso de error **y** los datos viejos, con el chip "En tiempo real" (ver abajo).
 - Llamarla dos veces seguidas lanza dos cargas sin cancelar la primera; gana la que termine última.
-- `catch (e: Exception)` también traga `CancellationException`; no copiarlo en código que deba cancelarse (Detalle de video sí la relanza). No registra nada en `AppLog`.
+- Desde FE-2.2 `cargarResumen()` y la relectura de los recorridos relanzan `CancellationException` (antes el `catch (e: Exception)` la tragaba). No registran nada en `AppLog` (la petición deja su línea `Api`, §5.10).
 - Con el stub (`nombre = "Administrador"`) el saludo sale "Administrador", no un nombre propio.
 
 **`GaleriaViewModel` (verificado, `ui/admin/imagenes/GaleriaViewModel.kt`)**
@@ -1409,7 +1453,7 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| `PanelAdminScreen` | `(onRecolector, onLugares, onMapaAlertas, onImagenes, onVideos, onEstadisticas, onAjustes, onVolverModoPublico, onSesionCerrada, onSinSesion, onAbrirSubida: (videoId: String) -> Unit = {}, viewModel = viewModel(factory = PanelAdminViewModel.Factory(LocalContext.current.applicationContext)))`. Recoge `viewModel.eventos` en un `LaunchedEffect(Unit)`: `SesionCerrada` → `onSesionCerrada()`, `SinSesion` → `onSinSesion()`. El `Channel` con búfer es lo que permite que un `SinSesion` emitido en `init` llegue aunque aún no haya colector. `onAbrirSubida` (FE-2.1): la tarjeta de subidas → 7.5 de ese recorrido. |
+| `PanelAdminScreen` | `(onRecolector, onLugares, onMapaAlertas, onImagenes, onVideos, onEstadisticas, onAjustes, onVolverModoPublico, onSesionCerrada, onSinSesion, onAbrirSubida: (videoId: String) -> Unit = {}, viewModel = viewModel(factory = PanelAdminViewModel.Factory(LocalContext.current.applicationContext)))`. Recoge `viewModel.eventos` en un `LaunchedEffect(Unit)`: `SesionCerrada` → `onSesionCerrada()`, `SinSesion` → `onSinSesion()`. El `Channel` con búfer es lo que permite que un `SinSesion` emitido en `init` llegue aunque aún no haya colector. `onAbrirSubida` (FE-2.1): la tarjeta de subidas → 7.5 de ese recorrido. Desde FE-2.2, un `DisposableEffect(ciclo, viewModel)` con un `LifecycleEventObserver` sobre `LocalLifecycleOwner.current` (la entrada de la pila) llama a `viewModel.alReanudar()` en cada `ON_RESUME` (como 7.5). |
 | `PanelAdminContent` | `internal` · `(state: PanelUiState, acciones: PanelAcciones)`. Sin lógica; 4 `@Preview` privados (normal, subiendo —FE-2.1—, cargando, error). |
 | `PanelAcciones` | `data class` con 11 lambdas (`{}` por defecto): `onRecolector`, `onLugares`, `onMapaAlertas`, `onImagenes`, `onVideos`, `onEstadisticas`, `onAjustes`, `onCerrarSesion`, `onVolverModoPublico`, `onReintentarResumen` y (FE-2.1) `onAbrirSubida(videoId)`. |
 | Piezas privadas | `Encabezado`, `TarjetaSubidas` (FE-2.1: va justo debajo del encabezado si `avisoSubidas != null`; borde `Acento`, ícono de nube, título, detalle y la acción —«Ver», «Revisar», «Revisar y subir»—; toda la fila es un botón de ≥ 64 dp con `liveRegion` Polite), `FilaTarjetas` / `TarjetaAcceso` (con `Acceso`), `ResumenRapido`, `TileDato`, `ChipTiempoReal`, `Pie`. No se reutilizan sin extraerlas. |
@@ -1417,14 +1461,17 @@ Cuidados:
 Cuidados:
 - **No lee `cargandoResumen`:** mientras carga no hay indicador; los 5 datos muestran "—", igual que con error.
 - Con `errorResumen` aparece "No se pudo cargar el resumen." con un botón "Reintentar" (48 dp), pero si ya había un `resumen` anterior se sigue dibujando.
-- **`ChipTiempoReal` ("En tiempo real")** se muestra siempre que `resumen != null`, aunque `errorResumen` sea `true`. El ViewModel carga **una sola vez**, sin sondeo: el texto promete más de lo que hace.
+- **`ChipTiempoReal` ("En tiempo real")** se muestra siempre que `resumen != null`, aunque `errorResumen` sea `true`. El ViewModel carga lo del backend **una sola vez** (y con «Reintentar»), sin sondeo: el texto promete más de lo que hace. Desde FE-2.2 «Fotos pendientes» sí se mantiene al día (ViewModel, arriba).
 - **"Cerrar sesión" actúa al primer toque, sin confirmación**, y se pinta con `CampusColors.Peligro` (morado, no rojo; 5.4).
-- `ResumenAdmin` (verificado contra `ResumenAdmin.kt`, bache 3; ver 5.6): `totalFotos`, `totalLugares`, `alertasActivas`, `ultimoVideoNumero`, `ultimoVideoFecha` (milisegundos) y `fotosPendientes`, en ese orden de constructor. `numero()` usa `NumberFormat.getIntegerInstance()` (separador de miles según la región) y "—" si es nulo; `textoFecha` da "Hoy, HH:mm", "Ayer, HH:mm" o "d MMM, HH:mm".
+- `ResumenAdmin` (verificado contra `ResumenAdmin.kt`, bache 3; ver 5.6): `totalFotos`, `totalLugares`, `alertasActivas`, `ultimoVideoNumero`, `ultimoVideoFecha` (milisegundos) y `fotosPendientes`, en ese orden de constructor. Los textos salen, desde FE-2.2, de **`TextosResumen`** (`ui/admin/panel/TextosResumen.kt`, `internal object`, lógica pura con `TextosResumenTest`): `numero(valor, idioma = Locale.getDefault())` = `NumberFormat.getIntegerInstance(idioma)` («2.842» o «2,842») y `SIN_DATO` = «—» si es nulo; `fecha(millis, ahoraMs = ahora, zona = TimeZone.getDefault(), idioma = Locale.getDefault())` = «Hoy, HH:mm» (mismo día de calendario en `zona`), «Ayer, HH:mm» (el día anterior) o «d MMM, HH:mm» (también para una fecha futura; la abreviatura del mes depende del idioma, p. ej. `oct` u `oct.`). Antes eran `numero()` y `textoFecha()` privadas de la pantalla con `DateUtils.isToday` (mismo resultado salvo en un cambio de horario de verano, que Colombia no tiene).
+- **`content-desc` de cada dato** (lo lee `validate22.py`): `TileDato` hace `semantics(mergeDescendants = true) { contentDescription = "<valor> <etiqueta en minúsculas>" + ". <detalle>" si hay detalle }`: «2.842 fotos en el dataset», «48 lugares registrados», «3 alertas activas», «12 último video recolectado. Hoy, 09:24» (o «— último video recolectado» sin video), «27 fotos pendientes de subir». Mientras no hay resumen (primera carga, o error sin datos anteriores), los cinco valores son «—». Cambiar las etiquetas o el formato exige cambiar `ETIQUETAS` de `validate22.py`.
 - Los 5 datos van en **una sola fila** (`weight(1f)` cada uno) con etiquetas de 11 sp: en ~390 dp ya quedan muy angostos. ⚠ No se probó con la fuente grande del sistema.
 - `LaunchedEffect(Unit)` captura `onSesionCerrada` y `onSinSesion` de la primera composición (sin `rememberUpdatedState`): no pasar lambdas que dependan de estado que cambie.
 - Columna raíz con `systemBarsPadding()` + `verticalScroll`. "Versión X" sale de `packageManager.getPackageInfo(...)` dentro de `runCatching` ("—" si falla); "Panel de administración · Campus Navi" está fijo.
 - Accesibilidad: cada tarjeta y cada dato se anuncian combinados (`mergeDescendants`); los títulos llevan `heading()`; Ajustes mide 56 dp.
-- `onRecolector`, `onLugares`, `onEstadisticas` y `onAjustes` llevan hoy a rutas placeholder (5.8).
+- `onLugares`, `onEstadisticas` y `onAjustes` llevan hoy a rutas placeholder (5.8); `onRecolector` abre 7.3
+  (`admin/ubicacion-manual`, comprobado en `MainActivity.kt` el 2026-10-26, FE-2.2; el documento lo contaba entre los
+  placeholders).
 
 **`GaleriaScreen` y `GaleriaColores` (verificado, `ui/admin/imagenes/GaleriaScreen.kt`)**
 
@@ -1674,7 +1721,7 @@ Pantalla:
 - `BannerPermisos` lista los faltantes con nombre legible («Cámara», «Micrófono», «Sensores de actividad») y dos acciones: «Permitir» (relanza el diálogo) y «Ajustes» (`ACTION_APPLICATION_DETAILS_SETTINGS`). La lista se refresca tras cada solicitud y al volver de Ajustes.
 
 Cuidados:
-- ⚠ **El orbe ya no escucha, navega.** `alPresionarOrbe()` va directo a Ubicarme (un comentario del código dice que antes hacía `stopAll(); escuchar()`). Consecuencias: (1) la spec 6.1 pide dos botones grandes («Ubicarme» e «Ir a un lugar»), un botón de micrófono y un botón de Ajustes; el código tiene **un solo orbe** y ninguno de los otros; (2) por toque solo se llega a «Ir a un lugar» con la acción de TalkBack; sin TalkBack hay que decir «dos»; (3) el texto en pantalla («Presiona para ubicarte o para llegar a un lugar») y el mensaje hablado tras 3 fallos («Presiona el botón central…») ya no corresponden a lo que hace el toque. Hay que decidir el diseño (decisión abierta); `ubicarme()` e `irALugar()` ya existen para dos botones.
+- ⚠ **El orbe ya no escucha, navega.** `alPresionarOrbe()` va directo a Ubicarme (un comentario del código dice que antes hacía `stopAll(); escuchar()`). Consecuencias: (1) la spec 6.1 pide dos botones grandes («Ubicarme» e «Ir a un lugar»), un botón de micrófono y un botón de Ajustes; el código tiene **un solo orbe** y ninguno de los otros; (2) por toque solo se llega a «Ir a un lugar» con la acción de TalkBack; sin TalkBack hay que decir «dos»; (3) el texto en pantalla («Presiona para ubicarte o para llegar a un lugar») y el mensaje hablado tras 3 fallos («Presiona el botón central…») ya no corresponden a lo que hace el toque. **Decisión abierta 18 resuelta el 2026-10-26 por el usuario: «Orbe único»** (ADR-FE-29): se queda el orbe; FE-3.5 corrige los textos de (3) y resuelve (2), cómo llega una persona con TalkBack a «Ir a un lugar» y «Ver mapa» (§4.5, «Hallazgos con TalkBack 17»). `ubicarme()` e `irALugar()` siguen existiendo.
 - ⚠ **Doble solicitud de permisos (verificado en `MainActivity.kt`).** La ruta `inicio` muestra `PedirPermisos` **antes** de `InicioScreen` y descarta el resultado (5.8). Cuando por fin se compone la pantalla, o ya están todos (entra directo en `alAbrir()` y **la explicación hablada nunca suena**) o alguno quedó negado (suena la explicación y el diálogo se repite). Es la «explicación previa» que 6.1 y la `PLAN.md` dan por pendiente: el código existe, pero nunca queda antes del primer diálogo. Para arreglarlo, la ruta no debería pedir nada y dejar que `InicioScreen` lo haga.
 - Sin micrófono, `listen` responde `onFail` al instante (5.2): la pantalla dice «No te entendí…» tres veces y luego «Presiona el botón central…», sin explicar que falta el micrófono.
 - ⚠ Sin token (5.2): un `alTerminar` encolado puede llamar a `escuchar()` justo después de `alPausar()` o `navegar()`.
@@ -1821,12 +1868,12 @@ Cuidados:
 ### 5.6 Datos: repositorios y modelos
 
 Convención: `interface XRepository` + `XRepositoryStub` (o `AssetsX` si lee de `assets/`) + TODO `RemoteX`
-en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean su repositorio directamente (verificado: desde FE-2.1, las `Factory` de Galería, Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp(appContext)`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1), la `Factory` de Login, `RemoteAuthRepository` (FE-1.2), `SeleccionDestinoViewModel`, `RemoteLugaresRepository` (FE-3.1; con posición desde FE-3.2), y `EscaneoViewModel`, `RemoteLocalizacionRepository` (FE-3.2).
+en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean su repositorio directamente (verificado: desde FE-2.1, las `Factory` de Galería, Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp(appContext)`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1), la `Factory` de Login, `RemoteAuthRepository` (FE-1.2), `SeleccionDestinoViewModel`, `RemoteLugaresRepository` (FE-3.1; con posición desde FE-3.2), `EscaneoViewModel`, `RemoteLocalizacionRepository` (FE-3.2), y la `Factory` del Panel, `RemoteAdminRepository` (FE-2.2).
 
 | Repositorio | Métodos | Implementación actual | Usado por |
 |---|---|---|---|
 | `AuthRepository` | `suspend login(identificador: String, password: String): Sesion` (lanza `CredencialesInvalidasException` o `java.io.IOException`; con el backend real también `ApiException` y `RespuestaInesperadaException`) | **Real** (`RemoteAuthRepository`, `POST /v1/auth/login`, FE-1.2); queda `AuthRepositoryStub` sin uso | `LoginViewModel` (por `Factory`) |
-| `AdminRepository` | `suspend obtenerResumen(): ResumenAdmin` (lanza `IOException`, solo documentado en el KDoc) | Stub (`AdminRepositoryStub`, 600 ms) | `PanelAdminViewModel` (por `Factory`). Detalle abajo |
+| `AdminRepository` | `suspend obtenerResumen(): ResumenAdmin` (las excepciones solo están en el KDoc: con el backend real `SinConexionException` —una `IOException`—, `ApiException` o `RespuestaInesperadaException`) | **Real** desde FE-2.2 (`RemoteAdminRepository`: `GET /v1/admin/stats` + la cola local, §5.10, «Panel»); queda `AdminRepositoryStub` (600 ms) sin uso | `PanelAdminViewModel` (por `Factory`). Detalle abajo |
 | `VideoRepository` | `suspend obtenerVideos(): List<Video>` (cada `Video` ya trae sus `fotos`) · `suspend renombrarVideo(videoId, nombre)` · `suspend eliminarVideo(videoId)` · `suspend eliminarFoto(videoId, fotoId)` · `cambios(): Flow<Int>` | Local: desde FE-2.1 `VideoRepositoryCompuesto.deLaApp(appContext)` = `AssetsVideoRepository` (`assets/videos/`) + `FuenteRecorridos` (`files/recoleccion/`, solo `finalizado`) | Galería, Lista, Detalle de video y (FE-2.1) 7.3. Detalle abajo |
 | `RecoleccionRepository` | `crearVideo(inicio): String` · `carpetaFotos(videoId): File` · `registrarFoto(videoId, archivo, DatosFoto): FotoRecolectada` · `desplazarFotos(videoId, desdeIndice, dLat, dLng)` · `fotos(videoId)` · `finalizar(videoId, duracionS, distanciaM, pasos): ResumenRecoleccion` · `descartar(videoId)` · `buscarEnCurso(): String?` · `leerEnCurso(videoId): VideoEnCurso` (FE-2.3) · `guardarProgreso(videoId, ProgresoRecoleccion)` (FE-2.3) · `contarPendientes(): Int` · `marcarSubida(videoId, fotoIds)` · `espacioLibreBytes(): Long` | Local (`RecoleccionRepositoryLocal(context)`, `data/repository/RecoleccionRepository.kt`) | `RecoleccionViewModel` (lo crea directamente) y, desde FE-2.3, `UbicacionManualScreen` (solo `buscarEnCurso` y `leerEnCurso`, para «Retomar …»). La subida (FE-2.1) no pasa por aquí: usa `AlmacenRecorridos` (§5.10). Detalle abajo |
 | `CalibracionPasoRepository` | `guardada(): Double?` · `longitudPasoM(): Double` (la calibrada, o `PdrEngine.LONGITUD_PASO_DEFECTO_M`) · `guardar(Valido, ahoraMs = ahora)` · `restablecer()` (borra todo el archivo) | Local (`CalibracionPasoRepository(context)`, `data/repository/CalibracionPasoRepository.kt`; **sin interfaz**) | `PdrTracker` (valor por defecto del parámetro), `CalibracionViewModel` y `UbicacionManualScreen`. Detalle abajo |
@@ -1837,7 +1884,7 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 | Modelo | Archivo | Notas |
 |---|---|---|
 | `Usuario`, `Rol`, `Sesion` | `domain/model/Usuario.kt` | Verificado (bache 3; `Sesion` cambió en FE-1.2). `Rol` = `USER` / `ADMIN`; `Usuario(id, nombre, correo, rol)`; `Sesion(token, usuario, expiraEnMs)`. ⚠ El `toString()` de `Sesion` incluye el token. Detalle abajo |
-| `ResumenAdmin` | `domain/model/ResumenAdmin.kt` | Verificado (bache 3): 6 campos, 5 datos del panel (el último video usa número y fecha). Detalle abajo |
+| `ResumenAdmin` | `domain/model/ResumenAdmin.kt` | Verificado (bache 3): 6 campos, 5 datos del panel (el último video usa número y fecha). Orígenes decididos en FE-2.2 (ADR-FE-28). Detalle abajo |
 | `Alerta`, `Lugar(nombre, lat, lng)` | `domain/model/Alerta.kt` | Detalle abajo. `Lugar` lo usa el editor de mapa |
 | `LugarDestino`, `CategoriaLugar` | `domain/model/LugarDestino.kt` | Verificado contra el código. `id`, `nombre`, `categoria`, `lat`, `lng`, `alias`, `distanciaMetros?`, `imagenUrl?`. Detalle más abajo |
 | `Foto`, `Video`, `EstadoFoto`, `CalidadFoto` | `domain/model/Foto.kt` | Detalle abajo. Ver también 7.11 y 7.14. `EstadoFoto.PENDIENTE` desde FE-2.1 |
@@ -1961,7 +2008,7 @@ seguros.
 - **Manifest:** usa las claves del formato de `assets/videos/` (`video_id`, `name`, `created_at`, `photos[].id`, `file`, `lat`, `lng`, `heading`, `captured_at`) más claves propias: `estado` (`en_curso` / `finalizado`), `start_lat`, `start_lng`, `start_heading`, `ended_at`, `duration_s`, `distance_m`, `steps`, `photos[].sync` (`pendiente` / `subida`), desde FE-2.3 `progress` (abajo) y, desde FE-2.1, las de la subida: `remote_video_id`, `subida_estado`, `photos[].upload`, `photos[].estado` y `photos[].error` (formato en §5.10, «Subida de un recorrido»). Desde FE-2.1 el mismo parser (`ManifestRecorrido`) lee `assets/videos/` y `files/recoleccion/`.
 - **`progress` (FE-2.3, solo mientras `estado = en_curso`; queda tal cual al finalizar):** objeto con `lat`, `lng`, `heading` (0…360), `steps`, `distance_m`, `duration_s` (sin pausas), `anchor_distance_m` (distancia en el último re-anclaje), `anchor_photo_index` y `anchor_track_index` (primera foto y primer punto de `track` posteriores al último re-anclaje), `track` (`[[lat, lng], …]`, la trayectoria completa: un punto cada 3 pasos más los de re-anclaje), `mode` (`{"type": "distance", "value": 5.0}` o `{"type": "time", "value": 3}`) y `saved_at` (ISO-8601, con segundos). Ejemplo: `"progress": {"lat": 6.20012, "lng": -75.57795, "heading": 92.5, "steps": 30, "distance_m": 21.6, "duration_s": 95, "anchor_distance_m": 0.0, "anchor_photo_index": 0, "anchor_track_index": 0, "track": [[6.2, -75.578], [6.20002, -75.57799]], "mode": {"type": "time", "value": 3}, "saved_at": "2026-10-25T15:04:10-05:00"}`. Lo escribe `guardarProgreso` y lo lee `leerEnCurso`; si falta `lat`/`lng` o algo no se puede leer, `progreso = null` (se retoma sin él, `AppLog.w` «progress ilegible»); un `mode` desconocido da el intervalo por defecto.
 - **Fechas** en ISO-8601 (`yyyy-MM-dd'T'HH:mm:ssXXX`): ordena como texto (decisión pendiente de la nota de `Video.creadoEn` en 7.14).
-- **`registrarFoto`** recibe el JPG que dejó `tomarFoto` (`tmp_<n>.jpg`), lo renombra a `NNNN.jpg` y actualiza el manifest en cada foto (se guarda de forma continua). `desplazarFotos` mueve de forma uniforme las fotos desde un índice (re-anclaje). `finalizar` marca el video como `finalizado` y devuelve el `ResumenRecoleccion`; `descartar` borra la carpeta. `contarPendientes` (desde FE-2.1 cuenta como dice §5.10: `sync = pendiente` en los `finalizado`; antes contaba todo lo que no fuera `subida`, también los `en_curso`) y `marcarSubida` siguen **sin uso** (la cola usa `AlmacenRecorridos`; FE-2.2 puede usar `contarPendientes()` o `AlmacenRecorridos.contarFotosPendientes()`, que dan lo mismo). `espacioLibreBytes` alimenta el aviso de almacenamiento.
+- **`registrarFoto`** recibe el JPG que dejó `tomarFoto` (`tmp_<n>.jpg`), lo renombra a `NNNN.jpg` y actualiza el manifest en cada foto (se guarda de forma continua). `desplazarFotos` mueve de forma uniforme las fotos desde un índice (re-anclaje). `finalizar` marca el video como `finalizado` y devuelve el `ResumenRecoleccion`; `descartar` borra la carpeta. `contarPendientes` (desde FE-2.1 cuenta como dice §5.10: `sync = pendiente` en los `finalizado`; antes contaba todo lo que no fuera `subida`, también los `en_curso`) y `marcarSubida` siguen **sin uso** (la cola usa `AlmacenRecorridos`; el Panel, desde FE-2.2, `AlmacenRecorridos.contarFotosPendientes()`; `contarPendientes()` da lo mismo). `espacioLibreBytes` alimenta el aviso de almacenamiento.
 - **Cerrojo (FE-2.1):** todas las operaciones usan `CerrojoRecoleccion.mutex` (`data/local/AlmacenRecorridos.kt`), **uno por proceso** y compartido con `AlmacenRecorridos` (7.5 y la cola). Antes había un `Mutex` por instancia, así que la instancia de 7.3 y la de 7.4 no se excluían entre sí. `Mutex` no es reentrante: ninguna operación llama a otra con el cerrojo tomado.
 - **Retomar (FE-2.3):** `buscarEnCurso()` recorre las carpetas de `files/recoleccion/` de mayor a menor nombre y devuelve la primera con `estado = en_curso` (las de manifest ilegible se saltan); la usan 7.4 (`alAbrir` sin inicio) y 7.3 (`FilaRetomar`). `leerEnCurso(id)` → `VideoEnCurso(videoId, nombre = name (o el id si está vacío), inicioLat/inicioLng = start_lat/start_lng (obligatorios: si faltan, `IOException` «Manifest incompleto»), inicioRumbo = start_heading (0 si falta), fotos (como `fotos()`), progreso)`. `guardarProgreso(id, p)` relee el manifest y escribe `progress` **solo si sigue `en_curso`** (un guardado que llega tras `finalizar` no lo reabre; tras `descartar` lanza `IOException` porque ya no hay manifest). Todo con el mismo `Mutex` y la misma escritura atómica que el resto, así `registrarFoto` y `guardarProgreso` no se pisan.
 - Usa `org.json` (disponible en Android; en pruebas unitarias JVM hace falta la dependencia).
@@ -2025,14 +2072,14 @@ unificarlos en un solo modelo. Comparación (código y secciones 7.6 y 7.7):
 | `totalFotos` | `Int` | |
 | `totalLugares` | `Int` | |
 | `alertasActivas` | `Int` | |
-| `ultimoVideoNumero` | `Int?` | Número del último video recolectado (`video12` → 12); `null` si aún no hay videos |
-| `ultimoVideoFecha` | `Long?` | Fecha y hora de ese video, en milisegundos epoch |
-| `fotosPendientes` | `Int` | Fotos guardadas en el teléfono que aún no se han subido (cola local) |
+| `ultimoVideoNumero` | `Int?` | `ultimo_video.numero` del backend (número que asigna el servidor; FE-2.2); `null` si `ultimo_video` es `null`. Qué video es «el último» y cuándo es `null`: backend §5.5, «`GET /v1/admin/stats` (BE-2.3)» (desde backend 0.13.0) |
+| `ultimoVideoFecha` | `Long?` | `ultimo_video.creado_en` (UTC con `Z`) en milisegundos epoch con `MapeoDatosApi.isoAMilis`; `null` sin video o si la fecha llega en otro formato |
+| `fotosPendientes` | `Int` | Fotos guardadas en el teléfono que aún no se han subido: `AlmacenRecorridos.contarFotosPendientes()` (cola local, §5.10), no del backend |
 
 - Son **6 campos pero 5 datos** en el panel: el último video usa número y fecha. Por eso 7.2 («Resumen rápido, con 5 datos») y 5.5 hablan de 5.
-- ⚠ **Orígenes mezclados.** Según el KDoc de `AdminRepository`, totales, lugares y alertas activas salen del backend (`GET /v1/admin/stats`) y las fotos pendientes, de la cola local (`data/local`), no del backend. El KDoc **no dice** de dónde sale el último video (¿backend o `VideoRepository`?). La implementación real tendrá que combinar dos orígenes en una sola llamada. Además, `ultimoVideoFecha` es `Long` en milisegundos, pero `Video.creadoEn` es texto del manifest (ver arriba): alguien tiene que convertirlo.
+- **Orígenes (resuelto en FE-2.2, ADR-FE-28; antes era un ⚠):** totales, lugares, alertas activas **y el último video** salen del backend (`GET /v1/admin/stats`; qué cuenta cada total y qué video es el último, en backend §5.5, «`GET /v1/admin/stats` (BE-2.3)», desde backend 0.13.0); las fotos pendientes, de la cola local (`data/local`). `RemoteAdminRepository` junta los dos orígenes en una sola llamada (primero el backend, después la cola) y el Panel mantiene al día la parte local (5.5). La fecha la convierte `MapeoDatosApi.isoAMilis` (el último video **no** sale de `VideoRepository` ni de `Video.creadoEn`, que sigue siendo texto).
 
-`AdminRepository`: `suspend fun obtenerResumen(): ResumenAdmin`; la `IOException` («si no hay conexión») solo está en el KDoc. `AdminRepositoryStub` espera 600 ms y devuelve 2842 fotos, 48 lugares, 3 alertas, video 12, `ultimoVideoFecha = System.currentTimeMillis()` y 27 fotos pendientes. Cuidados del stub: nunca lanza excepción, así que el estado de error del panel no se puede ver; la fecha es siempre «ahora», por lo que el panel muestra siempre «Hoy, HH:mm»; el último video nunca es nulo, así que no se ve el «—»; y dice 48 lugares mientras `LUGARES_DE_PRUEBA` tiene 6.
+`AdminRepository`: `suspend fun obtenerResumen(): ResumenAdmin`; las excepciones solo están en el KDoc (las de `RemoteAdminRepository`, §5.10, «Panel»). `AdminRepositoryStub` (sin uso desde FE-2.2) espera 600 ms y devuelve 2842 fotos, 48 lugares, 3 alertas, video 12, `ultimoVideoFecha = System.currentTimeMillis()` y 27 fotos pendientes. Cuidados del stub: nunca lanza excepción, así que el estado de error del panel no se puede ver; la fecha es siempre «ahora», por lo que el panel muestra siempre «Hoy, HH:mm»; el último video nunca es nulo, así que no se ve el «—»; y dice 48 lugares mientras `LUGARES_DE_PRUEBA` tiene 6.
 
 `Usuario.kt`: `enum class Rol { USER, ADMIN }`, `Usuario(id: String, nombre: String, correo: String, rol: Rol)` y `Sesion(token: String, usuario: Usuario, expiraEnMs: Long)` (FE-1.2: `expiraEnMs` = `expira_en` del login en milisegundos Unix; `fun vencida(ahoraMs: Long) = ahoraMs >= expiraEnMs`). Las tres son sin valores por defecto, y las dos últimas son `data class`. El KDoc de `Sesion` dice que el token nunca se registra en logs. Coincide con 5.3: `SessionManager.obtener()` devuelve `""` si faltan id, nombre o correo.
 - ⚠ **El `toString()` autogenerado de `Sesion` incluye el token y el de `Usuario`, el correo.** Interpolar una `Sesion` o un `Usuario` en un `AppLog` los escribiría en Logcat y en el archivo de logs, contra lo que dice el KDoc. Solución simple: sobrescribir `toString()` en ambas. No se buscó si algún código lo hace hoy.
@@ -2111,7 +2158,7 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 | `resultado` | `ResultadoUbicacionScreen` (6.3, FE-3.2) | Ubicación y destino por `SesionDeNavegacion` (no por la ruta) | `onVolverAUbicarme` → `navigate("ubicarme") { popUpTo("resultado") { inclusive = true } }`; `onIrALugar` → `navigate("destino") { popUpTo("resultado") { inclusive = true } }` (Destino carga con la posición vigente); `onInicio` → `popBackStack("inicio", inclusive = false)`. Atrás del sistema: el del `NavHost` (vuelve a lo que haya debajo, normalmente Inicio) |
 | `destino` | `SeleccionDestinoScreen` | — | FE-3.2: `onDestinoConfirmado(lugar)` → `SesionDeNavegacion.elegirDestino(lugar)` y `navigate(siguiente) { popUpTo("destino") { inclusive = true } }` con `siguiente` = `resultado` si hay ubicación vigente (`ubicacionVigente() != null`), si no `ubicarme`; `onAjustes` → `ajustes`, `onVolver` → `popBackStack()` |
 | `login` | `LoginScreen` | — | `onLoginExitoso` → `admin/panel` (quita `login` de la pila), `onVolver` |
-| `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila); `onAbrirSubida(videoId)` (FE-2.1, tarjeta de subidas) → `navigate("admin/recoleccion/resumen?video=<id>")` |
+| `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila); `onAbrirSubida(videoId)` (FE-2.1, tarjeta de subidas) → `navigate("admin/recoleccion/resumen?video=<id>")`. Al volver a esta entrada (p. ej. `popBackStack("admin/panel")` desde 7.4 o 7.5) se reutiliza su ViewModel: desde FE-2.2 relee los recorridos locales en `ON_RESUME` (5.5) |
 | `admin/ubicacion-manual` | `UbicacionManualScreen` (7.3) | — | `onVolver` (flecha y «Cancelar») → `popBackStack()`, `onAjustes` → `ajustes`, `onCalibrar` → `navigate("admin/calibracion")`, `onConfirmar(InicioRecoleccion)` → `SesionDeRecoleccion.iniciar(inicio)` y `navigate("admin/recoleccion")` (7.3 queda en la pila: su ViewModel reactiva «Confirmar» con `alReanudar()`), `onRetomar` (FE-2.3) → `SesionDeRecoleccion.limpiar()` y `navigate("admin/recoleccion")` (sin inicio: 7.4 retoma). Pide `Permisos.INICIALES` antes de mostrar la pantalla y descarta el resultado |
 | `admin/calibracion` | `CalibracionScreen` (7.3b) | — | Pide `Permisos.ACTIVIDAD` antes de mostrar la pantalla y **descarta el resultado** (negarlo no cambia nada: los pasos salen siempre del acelerómetro; quitar este permiso es parte de FE-4.3). `onVolver` → `popBackStack()`. Se llega desde la fila «Calibrar mi paso» de 7.3. No devuelve datos: el resultado se guarda en `CalibracionPasoRepository` (5.6) y lo recoge cada `PdrTracker` al crearse |
 | `admin/recoleccion` | `RecoleccionScreen` (7.4) | `InicioRecoleccion` por `SesionDeRecoleccion` (no por la ruta) | Pide **solo la cámara** antes de mostrar la pantalla (como `ubicarme`; si se niega, `popBackStack()`). `onFinalizado(resumen)` → `SesionDeRecoleccion.finalizar(resumen)` y `navigate("admin/recoleccion/resumen?video=${resumen.videoId}") { popUpTo("admin/ubicacion-manual") { inclusive = true } }` (saca 7.3 y 7.4 de la pila; FE-2.1 pasa el id); `onDescartado` (video sin fotos) → `popBackStack("admin/panel", inclusive = false)`; `onVolver` (solo con error: `SIN_INICIO` —sin inicio ni video `en_curso` que retomar— o `NO_SE_PUDO_CREAR`) → `popBackStack()`; `onAjustes` → `ajustes`. Sin `InicioRecoleccion` (pila restaurada tras matar el proceso, o `onRetomar` de 7.3) retoma el video `en_curso` más reciente (FE-2.3, 5.2) |
@@ -2318,8 +2365,9 @@ Formato de los datos:
 > `RemoteBackendHealth`; desde FE-1.2, el login (`RemoteAuthRepository`) y la sesión de las rutas protegidas
 > (`SesionInterceptor`); desde FE-2.1, la recolección (`/v1/collect/…`) y `GET /v1/admin/videos/{id}` desde la cola de
 > subida (`data/local/`, abajo); desde FE-3.1, los lugares públicos (`GET /v1/places`, `RemoteLugaresRepository`);
-> desde FE-3.2, «Ubicarse» (`POST /v1/localize`, `RemoteLocalizacionRepository`). Los demás repositorios siguen siendo
-> *stubs* o datos locales (§5.6) hasta su lote.
+> desde FE-3.2, «Ubicarse» (`POST /v1/localize`, `RemoteLocalizacionRepository`); desde FE-2.2, el «Resumen rápido» del
+> Panel (`GET /v1/admin/stats`, `RemoteAdminRepository`). Los demás repositorios siguen siendo *stubs* o datos locales
+> (§5.6) hasta su lote.
 
 **Configuración y cliente**
 - `ApiConfig.kt` (`object ApiConfig`, paquete raíz): `API_BASE_URL` = output `api_base_url` de Terraform
@@ -2345,7 +2393,7 @@ Formato de los datos:
 
 | Pieza | Archivo | Firma y uso |
 |---|---|---|
-| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). FE-3.2: `@Multipart @POST("localize") localizar(@Part fotos: List<MultipartBody.Part>, @Part("metadatos") metadatos: RequestBody): Response<LocalizacionRespuestaDto>` (las partes van en el orden de la lista y después `metadatos`). Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
+| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-2.2: `@GET("admin/stats") estadisticas(): Response<EstadisticasAdminDto>` (protegida). FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). FE-3.2: `@Multipart @POST("localize") localizar(@Part fotos: List<MultipartBody.Part>, @Part("metadatos") metadatos: RequestBody): Response<LocalizacionRespuestaDto>` (las partes van en el orden de la lista y después `metadatos`). Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
 | `ClienteApi` | `ClienteApi.kt` (`object`) | `ClienteApi.api: CampusApi` (instancia única, `lazy`, contra `ApiConfig.BASE_URL`, registra con `AppLog.i("Api", …)`; usa el `vigilante` que haya **al crearse**). `ClienteApi.vigilante: VigilanteSesion?` (`@Volatile var`, `null` por defecto; FE-1.2: `MyApp.onCreate` lo asigna antes de que nadie use `api`; sustituye al `proveedorToken` de FE-1.1, que ya no existe). `ClienteApi.crear(urlBase = ApiConfig.BASE_URL, token = { null }, registrar: (String) -> Unit, vigilante: VigilanteSesion? = null): CampusApi` (añade la barra final que exige Retrofit) y `ClienteApi.okHttp(token = { null }, registrar, vigilante = null): OkHttpClient` para pruebas (MockWebServer) o clientes propios. Con `vigilante`, las rutas protegidas pasan por `SesionInterceptor` y `token` no se usa; sin él, por `AutenticacionInterceptor(token)` |
 | `RequestIdInterceptor(registrar)` | `ClienteApi.kt` | Pone `X-Request-Id` y registra **una línea por petición**: `GET /v1/health -> 200 (85 ms) rid=<uuid>` o `GET /v1/health -> falla UnknownHostException (3 ms) rid=<uuid>`. Solo método, ruta sin parámetros, código y duración: nunca encabezados ni cuerpos. `rid` es el de la respuesta si la trae, si no el enviado. `validate11.py` C1a busca esta línea en `files/logs/app.log`: cambiar el formato exige cambiar `PATRON_SALUD` del validador. Una petición que `SesionInterceptor` no deja salir **no** deja línea `Api` (deja la `Sesion` del vigilante) |
 | `AutenticacionInterceptor(token)` | `ClienteApi.kt` | Regex `RUTA_PROTEGIDA` = `.*/v1/(admin\|collect)(/.*)?` sobre la ruta; `/v1/administrar` no la cumple. Solo cuando `ClienteApi` no tiene vigilante |
@@ -2353,6 +2401,7 @@ Formato de los datos:
 | `SinSesionException(ruta)` | `ClienteApi.kt` (FE-1.2) | `IOException` (desde un interceptor OkHttp solo admite esas: otra excepción cerraría la app en su hilo). `llamar` la convierte en `ApiException(FalloApi.SesionVencida(MapeoErroresApi.SIN_SESION_LOCAL), http = 401, requestId = null)`, **nunca** en «sin conexión» (el `401` es por equivalencia: no hubo HTTP) |
 | `RemoteAuthRepository(api = ClienteApi.api)` | `RemoteAuthRepository.kt` (FE-1.2) | `AuthRepository` real: `llamar { api.login(LoginPeticionDto(identificador, password)) }` → `MapeoDatosApi.sesion(dto)`. Errores en §5.6 («`AuthRepository` en detalle») |
 | `RemoteLugaresRepository(api = ClienteApi.api, posicion: () -> Pair<Double, Double>? = { null }, registrar = { AppLog.w("Lugares", it) })` | `RemoteLugaresRepository.kt` (FE-3.1) | `LugaresRepository` real (abajo, «Lugares») · `TAG = "Lugares"` |
+| `RemoteAdminRepository(api = ClienteApi.api, fotosPendientes: suspend () -> Int)` | `RemoteAdminRepository.kt` (FE-2.2) | `AdminRepository` real (abajo, «Panel»). `fotosPendientes` no tiene valor por defecto: en la app, `{ Subidas.almacen.contarFotosPendientes() }`. No registra nada propio (solo la línea `Api`) |
 | `RemoteLocalizacionRepository(api = ClienteApi.api, preparador: PreparadorFoto = Recodificador(MotorImagenAndroid(), LimitesRecodificacion.LOCALIZACION), appVersion: String? = null, gson = Gson())` | `RemoteLocalizacionRepository.kt` (FE-3.2) | `LocalizacionRepository` real (abajo, «Ubicarse») · `companion`: `MAX_FOTOS = 5`, `PARTE_FOTOS = "fotos"`, `ORIGEN = "escaneo"`, `PREFIJO_ENVIO = "envio_"`, `APP_VERSION_MAX = 40`. No registra nada propio (solo la línea `Api`) |
 | `llamar(peticion): T` | `ErroresApi.kt` (función `suspend` de nivel superior) | `llamar { api.salud() }` devuelve el cuerpo de un 2xx o lanza: `SinConexionException` (red, *timeout*, 5xx de API Gateway), `CredencialesInvalidasException` (la de `data/repository/AuthRepository.kt`), `ApiException` (el resto, también la sesión perdida de `SesionInterceptor`) o `RespuestaInesperadaException` (2xx sin cuerpo o JSON roto). La cancelación de la corrutina se propaga |
 | `llamarSinCuerpo(peticion)` | `ErroresApi.kt` | Igual, para rutas `204` declaradas `Response<Unit>` (en un 204 Retrofit da `body() == null` y `llamar` lo trataría como respuesta inesperada) |
@@ -2362,7 +2411,7 @@ Formato de los datos:
 | `RespuestaInesperadaException(mensaje, causa)` | `ErroresApi.kt` | 2xx que no cumple el contrato (falta un campo obligatorio, rol desconocido, JSON roto). Para la UI es «Algo salió mal» |
 | `MapeoErroresApi` | `ErroresApi.kt` (`object`) | `clasificar(http: Int, cuerpo: String?): FalloApi` (lógica pura) · `excepcion(fallo, http, requestId): Exception` · `deExcepcion(t: Throwable): FalloApi` (para un `catch` genérico en un ViewModel; desde FE-1.2 reconoce `SinSesionException` como `SesionVencida(SIN_SESION_LOCAL)`) · `CODIGOS_SESION` (`TOKEN_EXPIRADO`, `TOKEN_INVALIDO`, `NO_AUTENTICADO`) · FE-1.2: `codigoError(cuerpo: String?): String?` (`error.codigo` de un cuerpo de §5.1, o `null`) y `SIN_SESION_LOCAL = "SIN_SESION_LOCAL"` (código de `SesionVencida` cuando la petición no salió del teléfono; el backend nunca lo envía) |
 | DTOs | `DtosApi.kt` | `SaludDto`, `LoginPeticionDto` (FE-1.2, el único que envía la app), `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto` (y, desde FE-3.1, `ListaLugaresDto`), `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional y, desde FE-2.1, `conteo`), desde FE-2.1 los de la recolección y desde FE-3.2 los de la localización (`MetadatosLocalizacionDto`, `LocalizacionRespuestaDto`, `PosicionDto`, `LugarCercanoDto`, `ReferenciaLugarDto`; abajo). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos de respuesta anulables y con valor por defecto** (trampa abajo) |
-| `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `sesion(LoginRespuestaDto): Sesion` (FE-1.2: `token` no vacío + `usuario` + `expiraEnMs`; si falta algo, `RespuestaInesperadaException`) · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` · FE-3.2: `resultadoUbicacion(LocalizacionRespuestaDto): ResultadoUbicacion` (reglas en «Ubicarse», abajo) |
+| `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `sesion(LoginRespuestaDto): Sesion` (FE-1.2: `token` no vacío + `usuario` + `expiraEnMs`; si falta algo, `RespuestaInesperadaException`) · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` (desde FE-2.2, `ultimo_video` presente sin `numero` → `RespuestaInesperadaException`) · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` · FE-3.2: `resultadoUbicacion(LocalizacionRespuestaDto): ResultadoUbicacion` (reglas en «Ubicarse», abajo) |
 | `RemoteBackendHealth(api, limiteMs = 5_000)` | `RemoteBackendHealth.kt` | `BackendHealth` real: `true` solo con `200` y `"estado": "ok"`; cualquier otra cosa (sin red, *timeout*, 5xx, otro `estado`) es `false`; nunca lanza salvo cancelación. `LIMITE_MS = 5_000` |
 
 **Cómo se añade una ruta**: 1) DTO en `DtosApi.kt` (campos anulables); 2) método en `CampusApi`
@@ -2398,6 +2447,30 @@ lista vacía, sin `items`, lugar sin nombre, `503 BASE_NO_DISPONIBLE` y sin red.
 Destino lo crea con `posicion = { SesionDeNavegacion.posicionVigente() }` (5.6): con una ubicación vigente de «Ubicarse»
 (alta o media y ≤ 2 min) la lista llega con distancias y por cercanía; sin ella, como en FE-3.1. **Sin comprobar en
 `dev`** (necesita una ubicación real, es decir, BE-3.2 con dataset).
+
+**Panel (FE-2.2, hecho): `RemoteAdminRepository.obtenerResumen()`** (contrato: backend §5.5, subsección «`GET
+/v1/admin/stats` (BE-2.3)», desde backend 0.13.0: qué cuenta cada total, qué video es el último y cuándo es `null`,
+formato de `creado_en` y errores; ADR-FE-28). La app muestra lo que llega, sin recalcular nada.
+1. `llamar { api.estadisticas() }`. Ruta protegida: con `ClienteApi.api` la lleva `SesionInterceptor` (`Authorization:
+   Bearer <token de la sesión>`; sin sesión o vencida no sale y `AppNav` va a Login). Deja la línea `Api` de siempre
+   (`GET /v1/admin/stats -> 200 (… ms) rid=…`).
+2. `MapeoDatosApi.resumenAdmin(dto, fotosPendientes = 0)`: `total_fotos`, `total_lugares` y `alertas_activas`
+   obligatorios; `ultimo_video` `null` → número y fecha `null`; si viene, `numero` obligatorio y `creado_en` →
+   milisegundos con `isoAMilis` (UTC con `Z`, la forma que fija el backend; una fracción se descartaría; otro formato
+   → fecha `null`, el Panel muestra el número sin fecha). Falta algo obligatorio → `RespuestaInesperadaException`.
+3. Solo entonces `fotosPendientes()` y `copy(fotosPendientes = …)`: en la app, `AlmacenRecorridos.contarFotosPendientes()`
+   (abajo, «Subida de un recorrido»). Una excepción de la cola se propaga tal cual.
+4. Errores (los de `llamar`; la cola no se cuenta): sin red, *timeout* o `5xx` de API Gateway → `SinConexionException`;
+   `401 TOKEN_*` o sin sesión → `ApiException(FalloApi.SesionVencida(…))` (el Panel no muestra su error, 5.5); otro
+   código (`403 SIN_PERMISOS` → `SinPermisos`; `503 BASE_NO_DISPONIBLE`, `500 ERROR_INTERNO` o un `404` si BE-2.3 no
+   está desplegado → `Desconocido`; errores del endpoint en backend §5.5) → `ApiException`. El Panel muestra «No se pudo
+   cargar el resumen» con «Reintentar» para todo salvo la sesión.
+Lo cubre `RemoteAdminRepositoryTest` (11; MockWebServer y un `VigilanteSesion` real con un almacén en memoria): `200`
+con la petición exacta (`GET /v1/admin/stats`, `Bearer`) y los seis campos, `ultimo_video = null`, fecha con fracción y
+en otro formato, `ultimo_video` sin `numero`, un total que falta (sin contar la cola), sin sesión (no llega al
+servidor), `401 TOKEN_EXPIRADO` (sesión cerrada y evento), sin red, `503` de API Gateway, `500 ERROR_INTERNO` con su
+`X-Request-Id` y las pendientes de una cola real en una carpeta temporal. **Sin comprobar contra el backend real**
+(BE-2.3 se construye en paralelo; en `dev`, con BE-2.3 «Hecho», `validate22.py` C1b).
 
 **Detalles internos del cliente (para no abrir `data/remote/`)**
 - Campos de los DTOs (propiedad Kotlin ← clave JSON; todos `T? = null` salvo el de la petición):
@@ -2517,7 +2590,7 @@ fila.
 | Enumerados en minúsculas (`"biblioteca"`, `"admin"`, `"alta"`) | `enum.valueOf(valor.uppercase())` (`CategoriaLugar`, `Rol`); `tipo` y `prioridad` de alertas se quedan como texto en `Alerta` |
 | `LugarPublico` | `LugarDestino` (`distancia_m` → `distanciaMetros: Int?` redondeado; `imagen_url` → `imagenUrl`; `descripcion` y `referencias` no se usan). Lista de `GET /v1/places` (`{items, total}`) → `ListaLugaresDto` (FE-3.1; `total` no se usa) |
 | `Alerta.radio_m` | `Alerta.radio` |
-| `GET /v1/admin/stats` | `ResumenAdmin`: `ultimo_video.numero` → `ultimoVideoNumero`; `ultimo_video.creado_en` (ISO-8601) → `ultimoVideoFecha` en milisegundos; `fotosPendientes` sale de la cola local de subida, no del backend |
+| `GET /v1/admin/stats` | `ResumenAdmin`: `total_fotos`, `total_lugares`, `alertas_activas` tal cual; `ultimo_video.numero` → `ultimoVideoNumero`; `ultimo_video.creado_en` (ISO-8601 UTC con `Z`) → `ultimoVideoFecha` en milisegundos; `ultimo_video = null` → los dos `null`; `fotosPendientes` sale de la cola local de subida, no del backend (desde FE-2.2, `RemoteAdminRepository`; «Panel», arriba) |
 | `usuario` del login | `Usuario`; `expira_en` → `Sesion.expiraEnMs` (milisegundos) y se guarda con la sesión (`expira_en_ms`, §5.3) |
 | `VideoResumen` / `ImagenAdmin` | `Video` / `Foto`. El `id` del video pasa a ser UUID (hoy es el nombre de la carpeta); `uid` de `Foto` sigue siendo `videoId/id`. `pendiente_subida` → `EstadoFoto.PENDIENTE` (desde FE-2.1) |
 | Fechas ISO-8601 | `creadoEn` / `capturadaEn` siguen siendo texto en los modelos actuales; convertir solo donde se ordene o filtre |
@@ -2530,7 +2603,8 @@ con `roundToInt`) · `alerta` (`tipo` por defecto `otro`, `prioridad` `normal`, 
 usuario, expiraEnMs)`) · `video` (fotos ordenadas por `orden`; `Foto.id` = UUID de la imagen, así `uid` =
 `<uuid video>/<uuid imagen>`; `lugar` = nombre del lugar) y `foto` · `isoAMilis`. Obligatorios (si faltan,
 `RespuestaInesperadaException`): `id`, `correo` del usuario; `id`, `nombre`, `lat`, `lng` del lugar; `id`, `lat`, `lng`,
-`mensaje` de la alerta; los tres totales de `stats`; `id`, `video_id`, `lat`, `lng` de la imagen; `id` del video. Lo
+`mensaje` de la alerta; los tres totales de `stats` y, desde FE-2.2, `ultimo_video.numero` si viene `ultimo_video`;
+`id`, `video_id`, `lat`, `lng` de la imagen; `id` del video. Lo
 cubre `MapeoDatosApiTest` con los ejemplos JSON del contrato del backend.
 
 **Rumbo (backend ADR-BE-12)**: todo rumbo que se envía va en grados [0, 360), **norte verdadero**, sentido horario.
@@ -2589,10 +2663,12 @@ La **cola** es el propio `manifest.json` de cada recorrido (§5.6, «Recolecció
 `subida` cuando su `PUT` responde 2xx (o el backend ya la tenía), y se añaden dos claves de video, `remote_video_id`
 (UUID que devuelve `POST /v1/collect/videos`) y `subida_estado` (`sin_subir`, `subiendo`, `completada`; ausente =
 `sin_subir`). Al abrir el Panel o la vista 7.5 con sesión se retoman los recorridos `finalizado` con
-`subida_estado = subiendo`. «Fotos pendientes» del Panel (7.2) = número de `photos[].sync = pendiente` en los
-manifests con `estado = finalizado` (`AlmacenRecorridos.contarFotosPendientes()`; el Panel aún muestra el valor del
-*stub*: conectarlo es FE-2.2). Los recorridos `en_curso` (con la clave `progress` de FE-2.3, §5.6) no se suben: se
-retoman en 7.4.
+`subida_estado = subiendo`. «Fotos pendientes» del Panel (7.2) = número de fotos **sin** `photos[].sync = subida` en
+los manifests legibles con `estado = finalizado` (`AlmacenRecorridos.contarFotosPendientes()` =
+`fotosPendientesDe(listar())`; una foto sin `sync` también cuenta; en los manifests que escribe la app es lo mismo que
+`sync = pendiente`, como decía este párrafo hasta 0.9.2). Desde FE-2.2 el Panel lo usa al cargar y lo recalcula al volver
+a él y con cada cambio de la cola (5.5). Los recorridos `en_curso` (con la clave `progress` de FE-2.3, §5.6) no se
+suben ni cuentan: se retoman en 7.4.
 
 Claves nuevas del manifest (FE-2.1; los lectores anteriores las ignoran):
 
@@ -2618,7 +2694,8 @@ Piezas (`com.example.myapplication.data.local`; todas sin Android salvo `MotorIm
 | `FotoLocal` | `id`, `archivo` (relativa: `photos/0001.jpg`), `lat`, `lng`, `rumbo: Double?`, `capturadaEn`, `subida: Boolean` (`sync = subida`), `estado: EstadoFoto` (regla de `estadoFoto`), `error`, `preparada: FotoPreparada?`; `orden` = el número del id si está en 1…`ORDEN_MAX` (200), si no `null` | El `orden` que se envía es el número del id: tras descartar fotos en 7.5 quedan huecos (1, 2, 4…), que el backend admite |
 | `FotoPreparada(bytes: Long, ancho: Int, alto: Int)` · `EstadoSubida(clave)` (`SIN_SUBIR`, `SUBIENDO`, `COMPLETADA`; `deClave(texto)` → `SIN_SUBIR` si no se reconoce) | | |
 | `CerrojoRecoleccion` (`object`) | `mutex: Mutex` | Cerrojo único de los manifests, compartido con `RecoleccionRepositoryLocal` (5.6). No reentrante |
-| `AlmacenRecorridos(raiz: File)` | `listar()` (todos los legibles, por id; los ilegibles se saltan) · `leer(id)` (`ManifestException` si no existe o está dañado) · `idsEnSubida()` (`finalizado` + `subiendo`) · `contarFotosPendientes()` · `renombrar(id, nombre): String` (recorta, ≤ `MAX_NOMBRE` = 40; vacío → `IllegalArgumentException`; no editable → `IllegalStateException`) · `descartarFoto(id, fotoId)` (quita la entrada y borra `photos/` y `subida/` de esa foto; no editable → `IllegalStateException`) · `descartar(id)` (borra la carpeta) · `cambiarEstadoSubida(id, EstadoSubida)` · `guardarVideoRemoto(id, uuid)` · `guardarPreparada(id, fotoId, FotoPreparada)` · `marcarSubidas(id, fotoIds)` · `guardarEstadosRemotos(id, Map<fotoId, Pair<EstadoFoto, motivo?>>)` · `borrarPreparadas(id)` · `carpeta(id)`, `archivoFoto(id, foto)`, `archivoPreparado(id, fotoId)` | Todo `suspend`, en `Dispatchers.IO` con `CerrojoRecoleccion`. Cada cambio relee y reescribe el manifest completo de forma atómica (`manifest.json.tmp` + renombrar, como `RecoleccionRepositoryLocal`). En la app, `raiz` = `files/recoleccion` |
+| `AlmacenRecorridos(raiz: File)` | `listar()` (todos los legibles, por id; los ilegibles se saltan) · `leer(id)` (`ManifestException` si no existe o está dañado) · `idsEnSubida()` (`finalizado` + `subiendo`) · `contarFotosPendientes()` · `renombrar(id, nombre): String` (recorta, ≤ `MAX_NOMBRE` = 40; vacío → `IllegalArgumentException`; no editable → `IllegalStateException`) · `descartarFoto(id, fotoId)` (quita la entrada y borra `photos/` y `subida/` de esa foto; no editable → `IllegalStateException`) · `descartar(id)` (borra la carpeta) · `cambiarEstadoSubida(id, EstadoSubida)` · `guardarVideoRemoto(id, uuid)` · `guardarPreparada(id, fotoId, FotoPreparada)` · `marcarSubidas(id, fotoIds)` · `guardarEstadosRemotos(id, Map<fotoId, Pair<EstadoFoto, motivo?>>)` · `borrarPreparadas(id)` · `carpeta(id)`, `archivoFoto(id, foto)`, `archivoPreparado(id, fotoId)` | Todo `suspend`, en `Dispatchers.IO` con `CerrojoRecoleccion`. Cada cambio relee y reescribe el manifest completo de forma atómica (`manifest.json.tmp` + renombrar, como `RecoleccionRepositoryLocal`). En la app, `raiz` = `files/recoleccion`. `listar()` toma cada carpeta de `raiz` con un `manifest.json` (no solo las `rec_NNNN`) y salta las que no puede leer (JSON roto o una foto sin `id`, `file`, `lat` o `lng`) |
+| `fotosPendientesDe(recorridos: List<RecorridoLocal>): Int` (función de nivel superior de `AlmacenRecorridos.kt`, FE-2.2) | — | Regla única de «Fotos pendientes»: `recorridos.filter { it.finalizado }.sumOf { it.fotosPendientes }` (`RecorridoLocal.fotosPendientes` = fotos con `subida = false`, es decir, sin `sync = subida`). Lógica pura; la usan `contarFotosPendientes()` y el Panel (`resumenConPendientes`, 5.5) |
 | `LimitesSubida` (`object`) | `LADO_MAX_PX = 1600` · `BYTES_MAX = 4_194_304` · `CALIDADES = [90, 85, 80, 75, 70, 60, 50]` · `LADO_MIN_REINTENTO_PX = 640` | Criterio C3 y `REC_MAX_BYTES_FOTO` del backend |
 | `LimitesRecodificacion(ladoMaxPx, bytesMax, calidades, ladoMinReintentoPx)` (FE-3.2) | `SUBIDA` (= `LimitesSubida`) · `LOCALIZACION` (1024 px, 1 572 864 bytes, `[85, 80, 75, 70, 60, 50]`, 480 px) | Los límites del `Recodificador`; `LOCALIZACION` es la re-codificación de `POST /v1/localize` («Ubicarse», arriba) |
 | `Dimensiones(ancho, alto)` (`ladoMayor`) · `PlanRecodificacion` (`object`) | `orientada(d, orientacionExif)` (5–8 intercambian ancho y alto) · `destino(d, ladoMax)` (lado mayor a `ladoMax`, el otro redondeado y ≥ 1 px; nunca amplía: 4000×3000 → 1600×1200) · `muestreo(d, ladoMax)` (mayor potencia de 2 que deja el lado mayor decodificado ≥ `ladoMax`: 4000 → 2) | Lógica pura |
@@ -2872,7 +2949,8 @@ el job `validadores` de `frontend.yml`. `uv run --frozen pytest` desde `project/
 FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_validate23.py`, 20; 128 con FE-2.1:
 `test_validate21.py`, 20, y `test_comun_fe21.py`, 15; 129 con el arreglo de 0.7.2; 159 con FE-3.1:
 `test_validate31.py`, 30, que incluye las pruebas de `http_delete` y `esperar_enter`; 190 con FE-3.2:
-`test_validate32.py`, 31, que incluye las de `cuerpo_multipart` y `http_post_multipart`).
+`test_validate32.py`, 31, que incluye las de `cuerpo_multipart` y `http_post_multipart`; 222 con FE-2.2:
+`test_validate22.py`, 32).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -3056,6 +3134,51 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   sin AWS, hora límite, BE-3.2 o FE-3.1 sin «Hecho», sonda con `422` o `404`, dataset vacío, credenciales malas, menos de
   10 puntos, fotos que quedan, C4 con `200` o con cierre, `--solo C3` sin escaneos, EOF en el paso guiado, JVM que falla)
   y comprueban que ni la contraseña ni el token salen por stdout, stderr o el informe.
+- `validate22.py` (FE-2.2; ejemplo de un validador que **lee el Panel con uiautomator** y compara con la API, y que
+  **borra del teléfono** lo que creó la persona en un paso guiado): IDs `C1a, C1b, C2a, C2b` con grupos `C1 → [C1a,
+  C1b]` y `C2 → [C2a, C2b]`; sin manuales; entornos `local` y `dev`; sin ayudas nuevas en `comun.py`. Constantes:
+  `CLASES_C1A` (`RemoteAdminRepositoryTest`, `TextosResumenTest`), `CLASES_C2A` (`PendientesPanelTest`), `MINIMO_CASOS`
+  (8, 4 y 4; hoy 11, 6 y 5), `LUGAR_PRUEBA` (`validacion-2-2-lugar`), `CATEGORIA_PRUEBA` (`bloque`), `POSICION_CAMPUS`,
+  `DESPLAZAMIENTO_GRADOS` (0,0005), `VIDEO_PRUEBA` (`validacion-2-2`), `DIR_RECOLECCION`, `PATRON_CARPETA`
+  (`^[A-Za-z0-9_-]+$`: lo único que se borra con `rm -rf`), `PERMISOS_INICIO` + `PERMISO_ACTIVIDAD`, `LIMITE_LOGIN_S`
+  (15), `LIMITE_RESUMEN_S` (30), `MAX_DESPLAZAMIENTOS` (4), `LIMITE_PANEL_S` (10), `LIMITE_C2_S` (30), `ERRORES_LOGIN`,
+  `ERROR_RESUMEN` («No se pudo cargar el resumen.»), `SIN_DATO` («—»), `ETIQUETAS` (las cinco etiquetas en minúsculas de
+  `TileDato`, 5.5), `PATRON_CREADO_EN` (UTC con `Z`, fracción opcional) e `INSTRUCCION_C2B`. Piezas puras:
+  `saludo_esperado` (como `validate12`), `leer_estadisticas(cuerpo)` → `Estadisticas(total_fotos, total_lugares,
+  alertas_activas, ultimo_numero, ultimo_creado_en)` (`ValueError` si no cumple backend §5.5: enteros ≥ 0, `ultimo_video`
+  presente, `null` o `{numero, creado_en}` con `creado_en` UTC con `Z`), `leer_dato(desc)` → `(clave, Dato(valor,
+  detalle))` del `content-desc` de un `TileDato`, `datos_resumen(nodos)`, `valor_numerico` («2.842», «2,842» o «2 842» →
+  2842; «—» → `None`), `hora_telefono` (salida de `date +%Y-%m-%dT%H:%M:%S%z`), `fecha_esperada(creado_en, ahora)` →
+  `(regex, descripción)` («Hoy, HH:mm», «Ayer, HH:mm» o `<día> \S+, HH:mm`: el mes no se compara), `diferencias(datos,
+  estadisticas, ahora)`, `leer_recorrido(carpeta, texto)` → `Recorrido(id, nombre, finalizado, fotos, pendientes, remoto,
+  subida_estado)` (con la regla de la app: `None` si `listar()` lo saltaría; pendientes = fotos sin `sync = subida`),
+  `pendientes_de(recorridos)` (`fotosPendientesDe`) y `describir`. Precondiciones, en orden y sin seguir si una falla: P1
+  Gradle (3); en `dev` y solo si C1b o C2b están incluidas (si no, P2–P6 «no evaluada»): P2 dispositivo físico (3), P3
+  FE-2.1 «Hecho» (2), P4 URL vigente + `ApiConfig.BASE_URL` igual + `GET /health` 200 `ok` (2, o 3 sin URL), P5 login del
+  admin por la API (401 o rol → 3; otro → 2; guarda token y nombre) y P6 BE-2.3 «Hecho» en `PLAN_BACKEND` y
+  `GET /admin/stats` con el token → 200 que cumple el contrato (si no → 2). Comprobaciones: C1a y C2a con una sola
+  ejecución de Gradle; si una falla, C1b y C2b quedan `omitida` («no se hace: falló …»). C1b: borra los lugares de
+  nombre exactamente `validacion-2-2-lugar` (`GET /admin/places?q=validacion-2-2`, sin mayúsculas), crea el de prueba
+  (`POST /admin/places`, junto al primer lugar de `GET /places` o en `POSICION_CAMPUS`; su `DELETE` va a la limpieza),
+  lee `GET /admin/stats` (antes), `abrir_panel()` (una vez: `preparar_telefono()` —registra `am force-stop`,
+  `installDebug`, `pm grant`—, `comun.abrir_login()`, `enviar_credenciales`, espera «Hola, <nombre>»; un banner de error
+  de Login → falla), `leer_resumen()` (vuelca; si faltan datos, `desplazar_hacia_abajo` hasta 4 veces; espera a que
+  «fotos en el dataset» y «fotos pendientes de subir» no sean «—»; «No se pudo cargar el resumen.» → falla), la hora del
+  teléfono (`adb shell date +%Y-%m-%dT%H:%M:%S%z`) y `GET /admin/stats` (después); pasa si antes = después, hay ≥ 1
+  lugar y `diferencias` está vacía. C2b: `preparar_telefono()`; lista `files/recoleccion` (`listar_archivos_app` +
+  `leer_archivo_app` de cada `manifest.json`); borra los restos `validacion-2-2` locales (sin `remote_video_id` y
+  `subida_estado = sin_subir`: `am force-stop` + `run-as … rm -rf files/recoleccion/<carpeta>`, y vuelve a entrar);
+  `abrir_panel()`; paso guiado (`INSTRUCCION_C2B`); los recorridos nuevos de nombre `validacion-2-2` borrables van a la
+  limpieza (los que ya conoce el backend no se borran: aviso); exige uno `finalizado` con ≥ 1 foto sin subir; espera
+  hasta 10 s a ver el Panel («Resumen rápido», el saludo o un dato) y, hasta 30 s, que el dato «fotos pendientes de
+  subir» sea igual al conteo de los manifests leído antes y después de leer el Panel. Nunca usa `pm clear` ni toca
+  recorridos que no sean de la prueba. Las pruebas (`tests/ops/test_validate22.py`, 32) simulan el teléfono (Inicio,
+  Login y Panel con el «Resumen rápido» más abajo y los `content-desc` de `TileDato`, `files/recoleccion` con `run-as
+  ls/cat/rm`, `date`), la API (salud, login, `admin/stats` con estado, lugares) y Gradle; recorren `main()` en `local` y
+  `dev` (feliz con un resto de lugar, sin video, video de ayer en la zona del teléfono, Panel distinto, stats que cambia,
+  error del resumen, Panel que no relee al volver, otro nombre, sin finalizar, sin volver al Panel, restos locales y
+  subidos, BE-2.3 sin «Hecho», stats `404` o fuera de contrato, credenciales malas, `--solo C1a,C2a`, JVM que falla, EOF
+  en el paso guiado) y comprueban que ni la contraseña ni el token salen por stdout, stderr o el informe.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -3146,6 +3269,18 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   lo rechaza antes de procesar): cuenta como llamada a ese recurso compartido (maestro §7). **Sin comprobar en `dev`**
   (BE-3.2 «En curso»: hoy P6 da código 2): el formato real de `lastUpdateTime` en el Xiaomi, `pidof` en MIUI y que
   `uiautomator` vuelque Inicio tras `abrir_app` (sí lo hizo en FE-1.2 y FE-3.1).
+- **FE-2.2, `validate22.py`:** el paso guiado de C2b lee la entrada estándar (terminal interactiva, como `validate31`).
+  C1b crea un lugar `validacion-2-2-lugar` en `dev` y lee totales globales: no correrlo a la vez que otro validador que
+  cree o borre lugares, videos o fotos (p. ej. el de BE-2.3, que además borra al empezar todos los lugares cuyo nombre
+  empieza por `validacion-`): C1b fallaría con «cambió mientras se leía el Panel» o perdería su lugar. Si la persona
+  pulsa «Subir y procesar» en vez de «Guardar y subir después», el recorrido `validacion-2-2` llega al backend (y al
+  dataset): el validador no lo borra del teléfono ni del backend (lo avisa); borrarlo del backend lo coordina el
+  maestro, como en FE-2.1 (`limpiar-validacion` no sirve: su `ref_cliente` es `rec_NNNN`). Con `--sin-limpieza` el
+  recorrido de prueba queda en el teléfono (se descarta en 7.5 con «Descartar video»; la siguiente ejecución lo borra
+  como resto). La limpieza termina con `am force-stop`: el teléfono queda sin sesión (5.3). **Sin comprobar en `dev`**
+  (BE-2.3 en paralelo, sin desplegar): que uiautomator vuelque los `content-desc` de los cinco `TileDato` (Compose los
+  fusiona con `mergeDescendants`), la abreviatura del mes de «d MMM» en el Xiaomi (el validador no la compara), la salida
+  de `adb shell date +%z` en MIUI y que `run-as … rm -rf` funcione allí.
 
 ---
 
@@ -3159,6 +3294,12 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 ![alt text](<../assets/inicio.png>)
 
 **Propósito:** punto de entrada. Permite elegir entre ubicarse o ir a un lugar.
+
+> **Decisión del usuario del 2026-10-26 (decisión abierta 18, ADR-FE-29): «Orbe único».** Inicio se queda como en el
+> código: un orbe que lleva a Ubicarme; «Ir a un lugar» y «mapa» por voz o por las acciones de TalkBack del orbe. Los
+> dos botones grandes, el micrófono y Ajustes de la lista de abajo son la especificación original y **ya no son el
+> objetivo**; lo aplica FE-3.5 (después del día de campo), que además debe resolver cómo llega TalkBack a «Ir a un
+> lugar» y «Ver mapa» (§4.5).
 
 **Elementos:**
 - Título de la app y mensaje de bienvenida (se lee por voz al abrir): *"Di uno para saber
@@ -3507,8 +3648,10 @@ contraseña"); botones y campos de 64 dp o más.
 - **Volver a modo público:** regresa a Inicio **sin** cerrar la sesión.
 - **Resumen:** mientras carga muestra "—". Si falla, muestra "No se pudo cargar el resumen"
   con botón **Reintentar**.
-  - Totales, lugares, alertas y último video vienen del backend (`GET /v1/admin/stats`).
-  - Las **fotos pendientes** vienen de la **cola local de subida** (`data/local`), no del backend.
+  - Totales, lugares, alertas y último video vienen del backend (`GET /v1/admin/stats`; real desde FE-2.2). Se cargan
+    al abrir el Panel y con «Reintentar».
+  - Las **fotos pendientes** vienen de la **cola local de subida** (`data/local`), no del backend. Desde FE-2.2 se
+    recalculan al volver al Panel (p. ej. tras «Guardar y subir después» en 7.5) y mientras la cola sube (ADR-FE-28).
 - Los números se formatean según el idioma del teléfono (puede verse "2.842" o "2,842").
 - Cada tarjeta navega a su vista:
 
@@ -3532,8 +3675,10 @@ de fuente del sistema; las tarjetas crecen en alto si el texto se agranda.
 | Archivo | Responsabilidad |
 |---|---|
 | `ui/admin/panel/PanelAdminScreen.kt` | Pantalla (`PanelAdminScreen`), contenido sin estado (`PanelAdminContent`), `PanelAcciones` y previews |
-| `ui/admin/panel/PanelAdminViewModel.kt` | Estado (`PanelUiState`), eventos (`SesionCerrada`, `SinSesion`), carga del resumen y cierre de sesión |
-| `data/repository/AdminRepository.kt` | Contrato del resumen (`AdminRepository`) y stub temporal (**TODO:** reemplazar por la implementación real) |
+| `ui/admin/panel/PanelAdminViewModel.kt` | Estado (`PanelUiState`), eventos (`SesionCerrada`, `SinSesion`), carga del resumen, «Fotos pendientes» al día (`alReanudar`, FE-2.2) y cierre de sesión |
+| `ui/admin/panel/TextosResumen.kt` | Textos de los datos (número con separador de miles, «Hoy / Ayer / d MMM, HH:mm»; FE-2.2) |
+| `data/repository/AdminRepository.kt` | Contrato del resumen (`AdminRepository`) y `AdminRepositoryStub` (sin uso desde FE-2.2) |
+| `data/remote/RemoteAdminRepository.kt` | Implementación real (FE-2.2): `GET /v1/admin/stats` + la cola local (§5.10, «Panel») |
 | `domain/model/ResumenAdmin.kt` | Modelo del resumen: 6 campos que dan los 5 datos del panel (el último video usa número y fecha) |
 | `ui/theme/CampusColors.kt` | Colores compartidos de las vistas admin |
 | `session/SessionManager.kt` | Lectura de la sesión (nombre, rol) y `cerrarSesion()` |
@@ -4197,7 +4342,8 @@ perdiéndose (FE-3.3).
 
 **ADR-FE-18 — Ruta de prueba al arrancar en el APK de depuración (aceptada, 2026-10-25, FE-2.3).**
 El mapa público (`MapaPublicoScreen`) no tenía ruta y FE-2.3 debe probarlo en el teléfono (C3 y C5); su entrada desde
-Inicio depende de decisiones de FE-3.1 y FE-3.5 (interacción de Inicio, decisión abierta 18). Opciones: un botón en el
+Inicio depende de decisiones de FE-3.1 y FE-3.5 (interacción de Inicio, decisión abierta 18, resuelta el 2026-10-26 con
+el orbe único: ADR-FE-29). Opciones: un botón en el
 Panel, un *deep link* de Navigation o un extra del `Intent` leído por `MainActivity`. Se eligió el extra `ruta`
 (lista blanca `RUTAS_DE_PRUEBA`, solo con `FLAG_DEBUGGABLE` y en arranque nuevo) con la ruta `mapa` ya registrada: no
 cambia ninguna pantalla ni el Manifest y se usa con un `adb shell am start`. *Consecuencias:* FE-3.1 solo añade la
@@ -4312,6 +4458,35 @@ recta al destino y que la navegación guiada llegará más adelante; para la 6.3
 botones legibles por TalkBack; los comandos de voz en 6.3 son de FE-3.5 y el mapa queda pendiente. *Consecuencias:* la
 6.3 no tiene `WebView` ni `SpeechRecognizer`; el destino queda en `SesionDeNavegacion` para FE-5.1.
 
+**ADR-FE-28 — El «Resumen rápido» junta backend y cola local en `RemoteAdminRepository`, y el Panel relee la cola al
+volver (aceptada, 2026-10-26, FE-2.2).**
+Resuelve los ⚠ de `ResumenAdmin` (§5.6): de dónde sale el último video, cómo se convierte su fecha y quién junta los dos
+orígenes. Opciones para el último video: el del backend (`ultimo_video` de `GET /v1/admin/stats`, numerado por el
+servidor) o el último recorrido local (`rec_NNNN`, que puede no estar subido y no tiene `numero`). Se eligió el del
+backend, como ya decían 7.2 y la tabla de mapeo de §5.10 («totales, lugares, alertas y último video vienen del
+backend»): «Último video recolectado» es el último que el sistema tiene (cuál es exactamente lo define el backend:
+backend §5.5, «`GET /v1/admin/stats` (BE-2.3)», desde backend 0.13.0; la app no lo recalcula); lo que falta subir ya
+lo dice «Fotos pendientes» y la tarjeta de subidas. Fecha: `creado_en` es UTC con `Z` y sin fracciones (backend §5.1 y
+la misma subsección) y pasa a milisegundos con `MapeoDatosApi.isoAMilis`, que acepta exactamente esa forma; el texto «Hoy / Ayer / d MMM, HH:mm» se calcula en la zona del teléfono
+(`TextosResumen.fecha`). Para juntar los dos orígenes: un repositorio que llama al backend y después cuenta la cola
+(`RemoteAdminRepository(fotosPendientes = …)`, sin cambiar la interfaz `AdminRepository` ni `ResumenAdmin`), frente a
+separar «Fotos pendientes» del modelo (cambio de contrato, y con el backend caído se vería la cola sola). Además, el
+Panel vuelve de 7.5 a **la misma** entrada de la pila (`popBackStack("admin/panel")`), con el mismo ViewModel, que
+cargaba una sola vez: tras «Guardar y subir después» las fotos pendientes quedaban viejas. Se eligió releer la cola en
+`ON_RESUME` y con cada cambio de la cola (`resumenConPendientes`), sin volver a llamar al backend. *Consecuencias:*
+offline el resumen entero sale «—» con «No se pudo cargar el resumen», también las pendientes (la tarjeta de subidas
+sí se ve); totales, lugares, alertas y último video solo se recargan al abrir el Panel y con «Reintentar».
+
+**ADR-FE-29 — Inicio con un orbe único (aceptada, 2026-10-26, decisión del usuario; aplica en FE-3.5).**
+Resuelve la decisión abierta 18. Pregunta del maestro: «Decisión abierta 18 (Inicio) para FE-3.5: ¿cómo debe ser la
+pantalla de Inicio?», con las opciones «Dos botones (Recomendado)», «Orbe único» y «Decidir después». Respuesta literal
+del usuario: «Orbe único». Queda como hoy: un orbe que lleva a Ubicarme; «Ir a un lugar» y «mapa» por voz («dos»,
+«mapa») o por las acciones de TalkBack del orbe («Ir a un lugar», «Ver mapa»). El usuario decidió también que FE-3.5 se
+hace después del día de campo (desde el 2026-10-28). *Consecuencias:* la especificación de 6.1 (dos botones grandes,
+micrófono, Ajustes) deja de ser el objetivo; FE-3.5 tiene que resolver cómo llega una persona con TalkBack a «Ir a un
+lugar» y «Ver mapa» (con TalkBack 17 el doble toque ejecuta la acción principal y no se encontró cómo abrir las
+acciones, §4.5), y ajustar los textos que hoy no corresponden al orbe (5.5, «Inicio»). Sin cambios de código en FE-2.2.
+
 ### 8.2 Decisiones abiertas
 
 La numeración se conserva: otras secciones y documentos citan «decisión abierta N».
@@ -4361,8 +4536,11 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
     estimada de 7.4 (heurística provisional del 4 %, que habrá que reemplazar cuando exista corrección visual) y si conviene
     promediar varias pasadas (ver 7.3b).
 17. **Nombre del producto** *(nueva)*: «Campus Locator» en la documentación y «Campus Navi» en `LoginScreen`.
-18. **Interacción de Inicio** *(nueva)*: el código tiene un solo orbe que navega a Ubicarse; la especificación 6.1 pide
-    dos botones grandes, micrófono y Ajustes (detalle en 5.5, «Inicio»).
+18. **Interacción de Inicio: resuelta el 2026-10-26** (ADR-FE-29). Pregunta del maestro: «Decisión abierta 18 (Inicio)
+    para FE-3.5: ¿cómo debe ser la pantalla de Inicio?» (opciones «Dos botones (Recomendado)», «Orbe único», «Decidir
+    después»); respuesta literal del usuario: «Orbe único». Se queda el orbe que lleva a Ubicarme; «Ir a un lugar» y
+    «mapa», por voz o por las acciones de TalkBack. Lo aplica FE-3.5, después del día de campo (desde el 2026-10-28), y
+    debe resolver cómo llega TalkBack a esas dos acciones (§4.5, «Hallazgos con TalkBack 17»; 5.5, «Inicio»).
 19. **Nombre por defecto de los videos** *(nueva)*: la app propone `video_N`; el backend acepta cualquier nombre y, si
     llega vacío, asigna `video_<numero>`. Decidir si la app deja de proponerlo y usa el del servidor.
 
