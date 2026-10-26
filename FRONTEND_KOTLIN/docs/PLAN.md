@@ -221,6 +221,10 @@ públicas pasó a FE-3.6 (como en el backend, donde BE-3.1 queda con lugares y l
 #### FE-3.4 — Lugares de administración (7.6, 7.7)
 - **Entregables:** vistas 7.6 y 7.7 contra el backend; unificar `Lugar` y `LugarDestino` (§5.6); habilitar «Marcar
   punto de interés» en 7.4 (hoy deshabilitado, «Próximamente»).
+  - «Lugares registrados» del Panel al día al volver de 7.6/7.7 (decisión del maestro del 2026-10-26, al cerrar
+    FE-2.2): hoy el Panel solo pide `GET /v1/admin/stats` al abrirse y con «Reintentar», y al volver a él solo relee la
+    cola local (ARCHITECTURE ADR-FE-28 y §5.5, «Qué se recarga y cuándo»), así que tras crear un lugar el número queda
+    viejo. Que `alReanudar()` llame también a `cargarResumen()`, o que 7.6/7.7 pidan la recarga al volver.
 - **Criterios de cierre:**
   - C1. Un lugar creado en la app aparece en `GET /v1/places` y en Selección de destino.
   - C2. La posición elegida en el mapa de 7.7 es la que guarda el backend: `GET /v1/places?lat=<pos>&lng=<pos>` lo

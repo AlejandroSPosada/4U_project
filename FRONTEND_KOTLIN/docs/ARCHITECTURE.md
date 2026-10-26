@@ -556,7 +556,23 @@ viven en su paquete (5.5).
   `InterruptorSensores`); lo de FE-2.1 usa Gson (no `org.json`) y archivos en una `TemporaryFolder`, y el motor de
   imágenes es un doble (`MotorImagen`). `RecoleccionRepositoryLocal` (usa `org.json`, que en la JVM son *stubs* de
   `android.jar`), `MotorImagenAndroid` (`android.graphics`), los ViewModels y `PdrTracker` (sensores) no tienen
-  pruebas en la JVM.
+  pruebas en la JVM (desde FE-2.2 sí las funciones puras del archivo del Panel: `resumenConPendientes`,
+  `errorVisibleDelResumen`).
+- **Ayuda de pruebas `ManifestPrueba`** (FE-2.1; `app/src/test/java/com/example/myapplication/data/local/ManifestPrueba.kt`,
+  `object` público: se usa desde cualquier paquete de pruebas; FE-2.2 la usa en `data/remote/` y `ui/admin/panel/`):
+  `ManifestPrueba.crear(raiz: File, id: String = "rec_0001", fotos: Int = 3, estado: String = "finalizado", subidas:
+  Set<Int> = emptySet(), preparadas: Set<Int> = emptySet(), extra: Map<String, String> = emptyMap(), nombre: String =
+  "Entrada norte"): File` crea `raiz/<id>/` con el formato de `files/recoleccion/` (§5.6) y devuelve esa carpeta:
+  - `photos/NNNN.jpg` (1…`fotos`, 4 dígitos) con bytes cualesquiera (`100 + n` bytes; no son JPEG válidos);
+  - `manifest.json` con `video_id`, `name` = `nombre`, `created_at`, `estado`, `start_lat` 6.2, `start_lng` −75.578,
+    `start_heading` 359.99, `ended_at`, `duration_s` 512, `distance_m` 340.5, `steps` 470, un `progress` mínimo y
+    `photos[]` (`id`, `file`, `lat` = 6.2 + n·0.0001, `lng` −75.578, `captured_at`, `heading`, `sync` = `subida` para los
+    números de `subidas` y `pendiente` para los demás);
+  - para los números de `preparadas`, la copia `subida/NNNN.jpg` (`50 + n` bytes) y `upload` = `{"bytes": 50 + n,
+    "width": 1600, "height": 1200}` en su foto;
+  - las claves de `extra` se añaden al JSON **tal cual**: el valor debe ser JSON ya escrito (p. ej.
+    `extra = mapOf("remote_video_id" to "\"v1\"", "subida_estado" to "\"subiendo\"")`). Sin `extra` no hay
+    `remote_video_id` ni `subida_estado` (= `sin_subir`).
 
 **`frontend.yml`** (raíz del monorepo, `.github/workflows/`):
 
@@ -841,7 +857,7 @@ contrato y se probó con MockWebServer. Decisiones: ADR-FE-28 (origen del últim
 
 | Pieza | Archivo | Qué hace |
 |---|---|---|
-| `RemoteAdminRepository(api = ClienteApi.api, fotosPendientes: suspend () -> Int)` | `data/remote/RemoteAdminRepository.kt` | `AdminRepository` real: `llamar { api.estadisticas() }` → `MapeoDatosApi.resumenAdmin` y, **después** de validar la respuesta, `fotosPendientes()` (§5.10, «Panel») |
+| `RemoteAdminRepository(api = ClienteApi.api, fotosPendientes: suspend () -> Int)` | `data/remote/RemoteAdminRepository.kt` | `AdminRepository` real: `llamar { api.estadisticas() }` → `MapeoDatosApi.resumenAdmin` y, **después** de validar la respuesta, `fotosPendientes()` (§5.10, «Panel»). `fotosPendientes` va detrás de un parámetro con valor por defecto: se pasa **por nombre** (`RemoteAdminRepository(fotosPendientes = { … })`) |
 | `CampusApi.estadisticas()` | `data/remote/CampusApi.kt` | `@GET("admin/stats")` → `Response<EstadisticasAdminDto>` (el DTO ya existía desde FE-1.1). Ruta protegida: `SesionInterceptor` |
 | `MapeoDatosApi.resumenAdmin` | `data/remote/MapeoDatosApi.kt` | Desde FE-2.2, con `ultimo_video` presente su `numero` es obligatorio (`RespuestaInesperadaException`); la fecha sigue con `isoAMilis` (otro formato → `null`) |
 | `fotosPendientesDe(recorridos)` | `data/local/AlmacenRecorridos.kt` (función de nivel superior) | Regla única de «Fotos pendientes»: fotos sin `sync = subida` de los recorridos `finalizado`. `AlmacenRecorridos.contarFotosPendientes()` = `fotosPendientesDe(listar())` |
@@ -1405,7 +1421,7 @@ Cuidados:
 
 Cuidados:
 - **La guarda de rol corre solo en `init`:** sin sesión, con la sesión vencida (`expira_en` pasado, FE-1.2: `obtener()` da `null`) o con rol distinto de `ADMIN` emite `SinSesion` y no carga nada; mientras el ViewModel viva no se vuelve a comprobar. Las peticiones protegidas que haga después (desde FE-2.2, `GET /v1/admin/stats` en `cargarResumen()`) quedan cubiertas por `SesionInterceptor` + `EventosSesion` (5.3): `AppNav` vuelve a Login aunque el panel no lo pida, y el Panel no muestra su error propio.
-- **Qué se recarga y cuándo (FE-2.2, ADR-FE-28):** lo del backend (totales, lugares, alertas, último video) solo en `init` y con «Reintentar»; lo local (tarjeta de subidas y «Fotos pendientes») con cada cambio de la cola y en cada `ON_RESUME` (volver al Panel desde 7.5, 7.13, Ajustes… o desde otra app). Un `ON_RESUME` que llega antes de que cargue el resumen solo actualiza la tarjeta; el valor que trae `cargarResumen()` ya es reciente (`RemoteAdminRepository` cuenta la cola después de la respuesta).
+- **Qué se recarga y cuándo (FE-2.2, ADR-FE-28):** lo del backend (totales, lugares, alertas, último video) solo en `init` y con «Reintentar»; lo local (tarjeta de subidas y «Fotos pendientes») con cada cambio de la cola y en cada `ON_RESUME` (volver al Panel desde 7.5, 7.13, Ajustes… o desde otra app). Un `ON_RESUME` que llega antes de que cargue el resumen solo actualiza la tarjeta; el valor que trae `cargarResumen()` ya es reciente (`RemoteAdminRepository` cuenta la cola después de la respuesta). **Consecuencia para FE-3.4** (entregable suyo por decisión del maestro, PLAN §2.2): al volver al Panel desde 7.6/7.7 tras crear, editar o borrar un lugar, «Lugares registrados» sigue con el número de cuando se abrió el Panel. Para tenerlo al día, `alReanudar()` debe llamar también a `cargarResumen()` (o 7.6/7.7 deben pedir la recarga al volver); `validate22.py` no se rompe con eso (C1b lee `GET /v1/admin/stats` antes y después de mirar el Panel).
 - `session.obtener()` se llama en el hilo principal y sin `try/catch`. ⚠ Deducido de unir esto con 5.3 (el primer acceso al almacén cifrado puede tardar y lanzar excepción si falla el Keystore): ese fallo cerraría la app al abrir el panel.
 - Si `cargarResumen()` falla después de haber cargado antes, `resumen` **conserva el dato anterior** junto con `errorResumen = true`: `PanelAdminScreen` muestra entonces el aviso de error **y** los datos viejos, con el chip "En tiempo real" (ver abajo).
 - Llamarla dos veces seguidas lanza dos cargas sin cancelar la primera; gana la que termine última.
@@ -2401,7 +2417,7 @@ Formato de los datos:
 | `SinSesionException(ruta)` | `ClienteApi.kt` (FE-1.2) | `IOException` (desde un interceptor OkHttp solo admite esas: otra excepción cerraría la app en su hilo). `llamar` la convierte en `ApiException(FalloApi.SesionVencida(MapeoErroresApi.SIN_SESION_LOCAL), http = 401, requestId = null)`, **nunca** en «sin conexión» (el `401` es por equivalencia: no hubo HTTP) |
 | `RemoteAuthRepository(api = ClienteApi.api)` | `RemoteAuthRepository.kt` (FE-1.2) | `AuthRepository` real: `llamar { api.login(LoginPeticionDto(identificador, password)) }` → `MapeoDatosApi.sesion(dto)`. Errores en §5.6 («`AuthRepository` en detalle») |
 | `RemoteLugaresRepository(api = ClienteApi.api, posicion: () -> Pair<Double, Double>? = { null }, registrar = { AppLog.w("Lugares", it) })` | `RemoteLugaresRepository.kt` (FE-3.1) | `LugaresRepository` real (abajo, «Lugares») · `TAG = "Lugares"` |
-| `RemoteAdminRepository(api = ClienteApi.api, fotosPendientes: suspend () -> Int)` | `RemoteAdminRepository.kt` (FE-2.2) | `AdminRepository` real (abajo, «Panel»). `fotosPendientes` no tiene valor por defecto: en la app, `{ Subidas.almacen.contarFotosPendientes() }`. No registra nada propio (solo la línea `Api`) |
+| `RemoteAdminRepository(api = ClienteApi.api, fotosPendientes: suspend () -> Int)` | `RemoteAdminRepository.kt` (FE-2.2) | `AdminRepository` real (abajo, «Panel»). `fotosPendientes` no tiene valor por defecto y va detrás de `api`, que sí lo tiene: se pasa **por nombre** (en la app, `RemoteAdminRepository(fotosPendientes = { Subidas.almacen.contarFotosPendientes() })`; en las pruebas, también `api = ClienteApi.crear(…)`). No registra nada propio (solo la línea `Api`) |
 | `RemoteLocalizacionRepository(api = ClienteApi.api, preparador: PreparadorFoto = Recodificador(MotorImagenAndroid(), LimitesRecodificacion.LOCALIZACION), appVersion: String? = null, gson = Gson())` | `RemoteLocalizacionRepository.kt` (FE-3.2) | `LocalizacionRepository` real (abajo, «Ubicarse») · `companion`: `MAX_FOTOS = 5`, `PARTE_FOTOS = "fotos"`, `ORIGEN = "escaneo"`, `PREFIJO_ENVIO = "envio_"`, `APP_VERSION_MAX = 40`. No registra nada propio (solo la línea `Api`) |
 | `llamar(peticion): T` | `ErroresApi.kt` (función `suspend` de nivel superior) | `llamar { api.salud() }` devuelve el cuerpo de un 2xx o lanza: `SinConexionException` (red, *timeout*, 5xx de API Gateway), `CredencialesInvalidasException` (la de `data/repository/AuthRepository.kt`), `ApiException` (el resto, también la sesión perdida de `SesionInterceptor`) o `RespuestaInesperadaException` (2xx sin cuerpo o JSON roto). La cancelación de la corrutina se propaga |
 | `llamarSinCuerpo(peticion)` | `ErroresApi.kt` | Igual, para rutas `204` declaradas `Response<Unit>` (en un 204 Retrofit da `body() == null` y `llamar` lo trataría como respuesta inesperada) |

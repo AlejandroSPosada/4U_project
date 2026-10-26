@@ -53,8 +53,9 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
     /v1/admin/stats` antes y después, con el lugar de prueba `validacion-2-2-lugar`— y C2b —paso guiado: grabar
     `validacion-2-2` y «Guardar y subir después»; «Fotos pendientes» = manifests del teléfono; borra del teléfono el
     recorrido de prueba al terminar—); `tests/ops/test_validate22.py` (32). Total 222. Sin ayudas nuevas en `comun.py`.
-  - Documento: §4.7 nuevo; encabezado; §3.2 (pruebas); §4.1 (243 casos); §5.5 (`PanelAdminViewModel`: `Factory`,
-    `alReanudar`, `resumenConPendientes`, `cargarResumen`, qué se recarga y cuándo; `PanelAdminScreen`: `ON_RESUME`,
+  - Documento: §4.7 nuevo; encabezado; §3.2 (pruebas); §4.1 (243 casos y la firma de la ayuda de pruebas
+    `ManifestPrueba`, que solo se nombraba desde FE-2.1); §5.5 (`PanelAdminViewModel`: `Factory`, `alReanudar`,
+    `resumenConPendientes`, `cargarResumen`, qué se recarga y cuándo, con su consecuencia para FE-3.4; `PanelAdminScreen`: `ON_RESUME`,
     `TextosResumen`, `content-desc` de `TileDato`; «Inicio»: decisión 18); §5.6 (`AdminRepository` real, `ResumenAdmin`
     sin el ⚠ de orígenes); §5.8 (`admin/panel` relee al volver); §5.10 (encabezado, `CampusApi`, `RemoteAdminRepository`,
     «Panel» nuevo, mapeo y obligatorios de `stats`, regla de «Fotos pendientes», `fotosPendientesDe`, qué salta
@@ -63,7 +64,9 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
   - `validation-2-2` reescrita: entornos `local` y `dev`; precondiciones en el orden del contrato común (P1 Gradle, P2
     dispositivo, P3 FE-2.1, P4 API, P5 login, P6 BE-2.3); C1 → C1a (JVM) y C1b (teléfono); C2 → C2a (JVM) y C2b (paso
     guiado); §4 sin alertas; §5 con variables, preparación y salida esperada.
-  - `PLAN.md`: FE-2.2 pasa a «En curso» (§3); FE-3.5 con la decisión 18 resuelta (§2.2 y §3).
+  - `PLAN.md`: FE-2.2 pasa a «En curso» (§3); FE-3.5 con la decisión 18 resuelta (§2.2 y §3); FE-3.4 (§2.2) con un
+    entregable nuevo por decisión del maestro: «Lugares registrados» del Panel al día al volver de 7.6/7.7 (hoy el Panel
+    no recarga el backend al volver, ADR-FE-28).
 - **Contradicciones corregidas:**
   - `validation-2-2` §4 creaba una alerta con `PUT /v1/admin/alerts/{id}`: esa ruta es de BE-3.3, sin implementar
     (responde `404`, backend §5.5). Ahora solo crea el lugar de prueba; `alertas_activas` se compara tal cual (0 mientras
