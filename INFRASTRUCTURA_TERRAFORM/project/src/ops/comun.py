@@ -304,14 +304,31 @@ def codigo_error_aws(exc: BaseException) -> str:
     return str(respuesta.get("Error", {}).get("Code", "") or "")
 
 
+# Lo que no debe salir en un mensaje aunque AWS lo incluyera: IDs de llaves de acceso y firmas o credenciales de una URL
+# prefirmada (el repositorio es público).
+_SENSIBLE_EN_MENSAJE = re.compile(
+    r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|X-Amz-(?:Signature|Credential|Security-Token)=[^&\s\"']+", re.IGNORECASE
+)
+
+
+def _mensaje_error_aws(exc: BaseException, limite: int = 300) -> str:
+    """`Error.Message` de un error de boto3, en una línea, recortado y sin llaves de acceso ni firmas («…»)."""
+    respuesta = getattr(exc, "response", None) or {}
+    mensaje = str(respuesta.get("Error", {}).get("Message", "") or "")
+    return resumir(_SENSIBLE_EN_MENSAJE.sub("…", mensaje), limite) if mensaje else ""
+
+
 def error_aws(exc: BaseException, accion: str) -> Exception:
-    """Traduce un error de boto3: permisos o credenciales → ErrorConfiguracion; lo demás → Falla."""
+    """Traduce un error de boto3: permisos o credenciales → ErrorConfiguracion; lo demás → Falla. El texto lleva el
+    código y, si AWS lo da y no repite el código, `Error.Message` (limpio: `_mensaje_error_aws`)."""
     codigo = codigo_error_aws(exc)
+    mensaje = _mensaje_error_aws(exc)
+    detalle = f"{codigo}: {mensaje}" if mensaje and mensaje != codigo else codigo
     if codigo in ERRORES_DE_CREDENCIALES:
-        return ErrorConfiguracion(f"{accion}: las credenciales no tienen permiso ({codigo})")
+        return ErrorConfiguracion(f"{accion}: las credenciales no tienen permiso ({detalle})")
     if not codigo:
-        return ErrorConfiguracion(f"{accion}: {resumir(str(exc))}")
-    return Falla(f"{accion}: {codigo}")
+        return ErrorConfiguracion(f"{accion}: {resumir(_SENSIBLE_EN_MENSAJE.sub('…', str(exc)))}")
+    return Falla(f"{accion}: {detalle}")
 
 
 @contextlib.contextmanager

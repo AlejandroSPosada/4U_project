@@ -71,6 +71,49 @@ def test_lector_traduce_errores_de_permiso(mundo):
         lec.leer(20)
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# error_aws: código y Error.Message (desde 0.14.1)
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+def test_error_aws_lleva_el_mensaje():
+    exc = falsos.error("InvalidParameterException", "RunTask", "Invalid namespace for group.")
+    traducido = comun.error_aws(exc, "lanzar la tarea (ecs:RunTask)")
+    assert isinstance(traducido, comun.Falla)
+    assert str(traducido) == "lanzar la tarea (ecs:RunTask): InvalidParameterException: Invalid namespace for group."
+
+
+def test_error_aws_sin_mensaje_o_igual_al_codigo():
+    assert str(comun.error_aws(falsos.error("Throttling"), "x")) == "x: Throttling"
+    sin_mensaje = falsos.error("Throttling")
+    sin_mensaje.response["Error"].pop("Message")
+    assert str(comun.error_aws(sin_mensaje, "x")) == "x: Throttling"
+
+
+def test_error_aws_de_permisos_es_configuracion_con_mensaje():
+    exc = falsos.error("AccessDeniedException", "PutRule", "User: arn:aws:iam::1:user/a is not authorized")
+    traducido = comun.error_aws(exc, "crear (events:PutRule)")
+    assert isinstance(traducido, comun.ErrorConfiguracion)
+    assert "(AccessDeniedException: User: arn:aws:iam::1:user/a is not authorized)" in str(traducido)
+
+
+def test_error_aws_no_muestra_llaves_ni_firmas():
+    exc = falsos.error(
+        "SignatureDoesNotMatch",
+        "GetObject",
+        "llave AKIAABCDEFGHIJKLMNOP en https://b.s3.amazonaws.com/k?X-Amz-Credential=AKIAX%2F1&X-Amz-Signature=abc123 x",
+    )
+    texto = str(comun.error_aws(exc, "leer"))
+    assert "AKIAABCDEFGHIJKLMNOP" not in texto and "abc123" not in texto and "X-Amz-Credential=AKIAX" not in texto
+    assert "SignatureDoesNotMatch" in texto
+
+
+def test_errores_aws_traduce_dentro_del_with():
+    with pytest.raises(comun.Falla, match="InvalidParameterException: Invalid namespace for group."):
+        with comun.errores_aws("lanzar"):
+            raise falsos.error("InvalidParameterException", "RunTask", "Invalid namespace for group.")
+
+
 def test_validate21_usa_el_lector_comun(mundo):
     sqs = falsos.Sqs(mundo)
     sqs.send_message(QueueUrl=URL, MessageBody=mensaje_21(SELLO))

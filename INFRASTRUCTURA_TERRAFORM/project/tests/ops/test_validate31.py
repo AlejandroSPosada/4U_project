@@ -67,12 +67,15 @@ def test_todo_bien(mundo, monkeypatch, capsys):
     assert mundo.borrados == [mundo.enviados[0][1]]
     assert all(not mensajes for mensajes in mundo.colas.values())
     assert "campus-locator-dev-ingesta-dlq → ALARM" in detalle(informe, "C2a")
-    # C3: tarea de la definición de validación con group service:worker que sale con error; no toca los servicios
+    # C3: tarea de la definición de validación, sin group (ECS no admite service:…) y con startedBy validacion-3-1, que
+    # sale con error; no toca los servicios
     (args,) = mundo.run_task_args
     assert args["taskDefinition"] == "campus-locator-dev-validacion"
-    assert args["group"] == "service:worker" and args["startedBy"] == "validacion-3-1"
+    assert "group" not in args and args["startedBy"] == "validacion-3-1"
     assert args["overrides"]["containerOverrides"][0]["command"][-1].endswith("exit 3")
+    assert "group family:campus-locator-dev-validacion" in detalle(informe, "C3a")
     assert "EssentialContainerExited" in detalle(informe, "C3a")
+    assert "TestEventPattern: 9 casos como se espera" in detalle(informe, "C1b")
     # El correo no se imprime entero
     assert falsos.CORREO not in salida.out + salida.err + json.dumps(informe)
     assert "pe…@example.com" in salida.out
@@ -164,10 +167,17 @@ def test_c1a_no_confunde_las_alarmas_de_escalado(mundo, monkeypatch):
     [
         (lambda m: m.regla.update(State="DISABLED"), "la regla está DISABLED"),
         (
+            lambda m: m.regla.update(EventPattern=json.dumps(falsos.patron_0_14())),
+            "con «tarea de prueba de validate31» la regla no avisaría",
+        ),
+        (
+            # Sin la condición de grupo ni de startedBy: avisaría de cualquier tarea del clúster
             lambda m: m.regla.update(
-                EventPattern=json.dumps({**falsos.patron_bien(), "detail": {**falsos.patron_bien()["detail"], "group": ["service:api"]}})
+                EventPattern=json.dumps(
+                    {**falsos.patron_bien(), "detail": {k: v for k, v in falsos.patron_bien()["detail"].items() if k != "$or"}}
+                )
             ),
-            "patrón",
+            "con «migrate que termina (aunque salga con 0)» la regla avisaría",
         ),
         (lambda m: setattr(m, "destinos", []), "destinos []"),
         (lambda m: m.politica["Statement"].pop(2), "no deja publicar a events.amazonaws.com"),
@@ -302,20 +312,28 @@ def test_c3_parada_que_no_es_error(mundo, monkeypatch):
     assert "no registró ningún evento coincidente" in detalle(informe, "C3b")
 
 
-def test_c3_ecs_no_respeta_el_group(mundo, monkeypatch):
-    mundo.ecs_respeta_group = False
+def test_c3_con_el_patron_viejo_no_casa(mundo, monkeypatch):
+    # La regla de 0.14.0 (solo group = service:…) no casa con la tarea de prueba: C3b lo detecta
+    mundo.regla["EventPattern"] = json.dumps(falsos.patron_0_14())
     codigo, informe = correr(mundo, monkeypatch, "--solo", "C3")
     assert codigo == 1
-    assert "la regla no la contaría" in detalle(informe, "C3a")
+    assert estados(informe)["C3a"] == "pasa"
+    assert "no registró ningún evento coincidente" in detalle(informe, "C3b")
 
 
-def test_c3_ecs_rechaza_el_group(mundo, monkeypatch):
-    mundo.ecs_acepta_group = False
+def test_c3_run_task_que_falla(mundo, monkeypatch):
+    mundo.run_task_falla = "ClusterNotFoundException"
     codigo, informe = correr(mundo, monkeypatch, "--solo", "C3")
     assert codigo == 1
-    assert "InvalidParameterException" in detalle(informe, "C3a")
+    assert "(ecs:RunTask): ClusterNotFoundException" in detalle(informe, "C3a")
     assert "no se pudo usar" in detalle(informe, "C3b")
     assert len(mundo.run_task_args) == 1  # C3b no lo reintenta
+
+
+def test_el_falso_rechaza_group_de_servicio_como_ecs(mundo):
+    # Lo que respondió ECS en dev el 2026-10-26 (CloudTrail): una tarea suelta no puede llevar group = service:…
+    with pytest.raises(Exception, match="Invalid namespace for group."):
+        falsos.Ecs(mundo).run_task(taskDefinition="x", group="service:worker")
 
 
 def test_c3_sin_permiso_de_eventbridge_en_el_topic(mundo, monkeypatch):
@@ -349,6 +367,16 @@ def test_clasificar():
     assert validate31.clasificar('{"Records": []}', sello) == "ajeno"
     assert validate31.clasificar("no es json", sello) == "ajeno"
     assert validate31.clasificar('{"validacion": "validacion-2-1-20261028-130000"}', sello) == "ajeno"
+
+
+def test_casos_del_patron_y_patron_esperado_concuerdan():
+    # Los casos de C1b dan lo esperado con patron_esperado() y con el patrón del módulo (patron_bien)
+    for patron in (validate31.patron_esperado(), falsos.patron_bien()):
+        for descripcion, evento, debe in validate31.CASOS_PATRON:
+            assert falsos.coincide(patron, evento) is debe, descripcion
+    assert validate31.normalizar_patron(validate31.patron_esperado()) == validate31.normalizar_patron(
+        falsos.patron_bien()
+    )
 
 
 def test_enmascarar():

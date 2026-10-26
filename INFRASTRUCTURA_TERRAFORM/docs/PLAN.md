@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.14.0**.
+Alineado con `ARCHITECTURE.md` **v0.15.0**.
 
 ---
 
@@ -227,7 +227,7 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 | INF-1.3 | 1 | Hecho | [1-3](./validation/validation-1-3.md) | `a0f2dc5` 2026-10-24 | 0.10.0 | `apply` por `infra.yml` (30 recursos) y `plan` vacío después; imagen `bootstrap` publicada a mano en los dos repositorios. La primera ejecución destapó un error del validador (C5 esperaba `t`; `boolean \|\| text` da `true`), corregido en `a0f2dc5`. `embedding` en Fargate con 2 vCPU (ADR-INF-14) |
 | INF-1.4 | 1 | Hecho | [1-4](./validation/validation-1-4.md) | `13d80fe` 2026-10-24 | 0.11.1 | `apply` por `infra.yml` (7 recursos) y `plan` vacío después. La primera ejecución falló en C2b (1 de 100 con 429 a 5 req/s, con la etapa bien configurada): el *throttling* de API Gateway es aproximado; C2b pasó a 20 req/s con ≥ 10 % de 429 (0.11.1) |
 | INF-2.1 | 2 | Hecho | [2-1](./validation/validation-2-1.md) | `684f233` 2026-10-25 | 0.13.1 | `apply` por `infra.yml` sobre `6b6b8e7` (12 recursos) y `plan` vacío después; rol vinculado de Application Auto Scaling creado a mano. Cerrado con C1, C2a y C3a (`--solo C1,C2a,C3a`; C1a sano en 5,7 min): el apagado automático y el escalado están configurados, pero observarlos en `dev` (C2b, C3b y C4) es opcional desde 0.13.1 |
-| INF-3.1 | 3 | En curso | [3-1](./validation/validation-3-1.md) | — | — | Código, `plan` (`11 to add, 0 to change, 0 to destroy`: solo el módulo nuevo y `sns_alertas_arn`) y 37 pruebas locales del validador contra un AWS falso, sobre `e037904` (rama `fuera/inf-3-1`). Falta: el `apply` por `infra.yml` (no el 2026-10-27, día de campo), confirmar la suscripción por correo y `validate31.py` en `dev` con las capturas de C2b y C3c |
+| INF-3.1 | 3 | En curso | [3-1](./validation/validation-3-1.md) | — | — | Aplicado el 2026-10-26 por `infra.yml` (11 recursos) y suscripción confirmada. `validate31.py` en `dev` sobre `8c98f90`: código 1; pasan C1 y C2a (el correo de la DLQ llegó a SNS), fallan C3a y C3b porque ECS rechaza `group = service:worker` en `RunTask` («Invalid namespace for group.»). 0.15.0: la regla gana una rama `startedBy = validacion-3-1` y la tarea de prueba va sin `group` (`plan`: `0 to add, 1 to change, 0 to destroy`, solo el `event_pattern`; 45 pruebas locales). Falta: su `apply` por `infra.yml`, repetir `validate31.py` y las capturas de C2b y C3c |
 | INF-6.1 | 6 | Diferido | — | — | — | |
 
 ---

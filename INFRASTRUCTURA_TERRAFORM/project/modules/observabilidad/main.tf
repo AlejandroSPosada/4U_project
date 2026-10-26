@@ -13,6 +13,10 @@ locals {
   topic = "${var.prefijo}-alertas"
   regla = "${var.prefijo}-tarea-detenida"
 
+  # startedBy de la tarea de prueba de validate31.py (C3). ECS no admite group = service:<nombre> en una tarea suelta
+  # («Invalid namespace for group.», ARCHITECTURE §3.8), así que la regla tiene una rama solo para ella.
+  marca_prueba = "validacion-3-1"
+
   # Alarmas de §5.1 con los umbrales de §5.10 (nombre = prefijo + clave). Todas tratan la falta de datos como «no
   # incumple»: una DLQ vacía e inactiva, una API sin peticiones o embedding apagado no publican la métrica.
   alarmas = {
@@ -160,10 +164,13 @@ data "aws_iam_policy_document" "alertas" {
       identifiers = ["events.amazonaws.com"]
     }
 
+    # El ARN de la regla se escribe a mano (bus default) y no con aws_cloudwatch_event_rule.tarea_detenida.arn: con la
+    # referencia, cualquier cambio en sitio de la regla aplazaba la lectura de este data al apply y el plan mostraba
+    # también la política como cambiada, aunque quedara igual.
     condition {
       test     = "ArnEquals"
       variable = "aws:SourceArn"
-      values   = [aws_cloudwatch_event_rule.tarea_detenida.arn]
+      values   = ["arn:aws:events:${var.region}:${var.cuenta_id}:rule/${local.regla}"]
     }
   }
 }
@@ -208,9 +215,11 @@ resource "aws_cloudwatch_metric_alarm" "alarmas" {
 # Tarea de un servicio detenida por error (§3.8)
 # ---------------------------------------------------------------------------------------------------------------------
 
-# Solo tareas de los servicios (group = service:<nombre>) de este clúster (la cuenta tiene otros proyectos) que se
-# detienen porque su contenedor esencial terminó o no llegó a arrancar. Las tareas sueltas (migrate, validacion) tienen
-# group = family:<familia>; las paradas de ECS al escalar, desplegar o apagar dan stopCode = ServiceSchedulerInitiated.
+# Solo tareas de este clúster (la cuenta tiene otros proyectos) que se detienen porque su contenedor esencial terminó o
+# no llegó a arrancar, y que son de un servicio (group = service:<nombre>) o la tarea de prueba de validate31.py
+# (startedBy = local.marca_prueba; ninguna otra tarea lleva ese startedBy). Las tareas sueltas (migrate, validacion)
+# tienen group = family:<familia> y no avisan; las paradas de ECS al escalar, desplegar o apagar dan
+# stopCode = ServiceSchedulerInitiated.
 resource "aws_cloudwatch_event_rule" "tarea_detenida" {
   name        = local.regla
   description = "Avisa a ${local.topic} cuando una tarea de api, worker o embedding se detiene por error (ARCHITECTURE 3.8)"
@@ -223,7 +232,10 @@ resource "aws_cloudwatch_event_rule" "tarea_detenida" {
       clusterArn = [var.cluster_arn]
       lastStatus = ["STOPPED"]
       stopCode   = ["EssentialContainerExited", "TaskFailedToStart"]
-      group      = [for clave in ["api", "embedding", "worker"] : "service:${var.servicios[clave]}"]
+      "$or" = [
+        { group = [for clave in ["api", "embedding", "worker"] : "service:${var.servicios[clave]}"] },
+        { startedBy = [local.marca_prueba] },
+      ]
     }
   })
 }

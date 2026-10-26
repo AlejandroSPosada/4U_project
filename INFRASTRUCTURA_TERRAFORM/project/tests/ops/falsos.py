@@ -4,7 +4,7 @@
 reloj y simula lo que haría AWS en ese tiempo (alarmas de las DLQ que pasan a ALARM y avisan al topic, tareas que se
 detienen y disparan la regla, métricas que aparecen con retraso). `Sesion(mundo).client(nombre)` devuelve un cliente
 falso con las operaciones de boto3 que usan los validadores. Los interruptores del mundo (`retraso_alarma`,
-`accion_ok`, `pendiente`, `stop_code`, `ecs_respeta_group`…) fuerzan los casos de falla.
+`accion_ok`, `pendiente`, `stop_code`, `run_task_falla`…) fuerzan los casos de falla.
 """
 
 from __future__ import annotations
@@ -28,8 +28,9 @@ URL_COLA = f"https://sqs.{REGION}.amazonaws.com/{CUENTA}/"
 CORREO = "persona@example.com"
 
 
-def error(codigo: str, operacion: str = "Operacion") -> ClientError:
-    return ClientError({"Error": {"Code": codigo, "Message": codigo}}, operacion)
+def error(codigo: str, operacion: str = "Operacion", mensaje: str | None = None) -> ClientError:
+    """ClientError de boto3 con `Error.Code` y `Error.Message` (por defecto, el mismo código)."""
+    return ClientError({"Error": {"Code": codigo, "Message": mensaje or codigo}}, operacion)
 
 
 def alarmas_bien(api_id: str = API_ID) -> dict[str, dict]:
@@ -108,10 +109,14 @@ def politica_bien() -> dict:
 
 
 def patron_bien() -> dict:
+    """El patrón que genera el módulo desde 0.15.0 (jsonencode ordena las claves: `$or` va primero)."""
     return {
         "detail": {
+            "$or": [
+                {"group": ["service:api", "service:embedding", "service:worker"]},
+                {"startedBy": ["validacion-3-1"]},
+            ],
             "clusterArn": [CLUSTER_ARN],
-            "group": ["service:api", "service:embedding", "service:worker"],
             "lastStatus": ["STOPPED"],
             "stopCode": ["EssentialContainerExited", "TaskFailedToStart"],
         },
@@ -120,10 +125,21 @@ def patron_bien() -> dict:
     }
 
 
+def patron_0_14() -> dict:
+    """El patrón de 0.14.0, solo con la rama de los servicios (para las pruebas de un patrón viejo)."""
+    patron = patron_bien()
+    patron["detail"].pop("$or")
+    patron["detail"]["group"] = ["service:api", "service:embedding", "service:worker"]
+    return patron
+
+
 def coincide(patron, evento) -> bool:
-    """Coincidencia exacta de EventBridge (solo listas de valores y objetos anidados, lo que usa la regla)."""
+    """Coincidencia exacta de EventBridge (listas de valores, objetos anidados y `$or`: lo que usa la regla)."""
     for clave, esperado in patron.items():
-        if isinstance(esperado, dict):
+        if clave == "$or":
+            if not any(coincide(rama, evento) for rama in esperado):
+                return False
+        elif isinstance(esperado, dict):
             if not isinstance(evento.get(clave), dict) or not coincide(esperado, evento[clave]):
                 return False
         elif evento.get(clave) not in esperado:
@@ -159,8 +175,7 @@ class Mundo:
         self.retraso_metricas = 120  # s hasta que CloudWatch devuelve un dato
         self.stop_code = "EssentialContainerExited"
         self.dura_tarea = 45
-        self.ecs_acepta_group = True
-        self.ecs_respeta_group = True
+        self.run_task_falla: str | None = None  # código de error que devuelve run_task
         self.cuenta = CUENTA
         self.desde_mensajes: dict[str, dt.datetime] = {}
 
@@ -243,7 +258,7 @@ class Mundo:
             "source": "aws.ecs",
             "detail-type": "ECS Task State Change",
             "detail": {"clusterArn": CLUSTER_ARN, "lastStatus": "STOPPED", "stopCode": stop_code,
-                       "group": tarea["group"]},
+                       "group": tarea["group"], "startedBy": tarea["startedBy"]},
         }
         if self.regla["State"] == "ENABLED" and coincide(json.loads(self.regla["EventPattern"]), evento):
             dims = {"RuleName": REGLA}
@@ -315,6 +330,13 @@ class Events(Cliente):
 
     def list_targets_by_rule(self, Rule):  # noqa: N803
         return {"Targets": list(self.m.destinos)}
+
+    def test_event_pattern(self, EventPattern, Event):  # noqa: N803
+        evento = json.loads(Event)
+        for campo in ("id", "account", "source", "time", "region", "resources", "detail-type"):
+            if campo not in evento:  # obligatorios en AWS
+                raise error("InvalidEventPatternException", "TestEventPattern", f"falta {campo}")
+        return {"Result": coincide(json.loads(EventPattern), evento)}
 
 
 class Sns(Cliente):
@@ -400,11 +422,14 @@ class Esperador:
 class Ecs(Cliente):
     def run_task(self, **kw):
         self.m.run_task_args.append(kw)
-        if not self.m.ecs_acepta_group:
-            raise error("InvalidParameterException", "RunTask")
+        if str(kw.get("group", "")).startswith("service:"):
+            # Lo que respondió ECS en dev el 2026-10-26 a group = service:worker (CloudTrail, RunTask)
+            raise error("InvalidParameterException", "RunTask", "Invalid namespace for group.")
+        if self.m.run_task_falla:
+            raise error(self.m.run_task_falla, "RunTask")
         n = next(self.m.ids)
         arn = f"arn:aws:ecs:{REGION}:{CUENTA}:task/{P}/tarea{n:04d}"
-        grupo = kw.get("group") if self.m.ecs_respeta_group else f"family:{kw['taskDefinition']}"
+        grupo = kw.get("group") or f"family:{kw['taskDefinition']}"
         self.m.tareas[arn] = {
             "taskArn": arn, "group": grupo, "startedBy": kw.get("startedBy"), "lastStatus": "PROVISIONING",
             "desiredStatus": "RUNNING", "createdAt": self.m.t, "containers": [{"name": "app"}],

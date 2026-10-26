@@ -6,8 +6,9 @@ Uso (desde INFRASTRUCTURA_TERRAFORM/project/; dura 10-30 min, hasta ~1 h si las 
     uv run --group ops python src/ops/validate31.py --entorno dev [--informe RUTA] [--solo C1,C3] [--sin-limpieza]
 
 No toca los servicios api, worker ni embedding: C3 lanza una tarea suelta de la definición de validación que sale con
-error (con group = service:worker para que la regla la cuente como de un servicio) y C2 deja un mensaje marcado en una
-DLQ, que borra al terminar.
+error, con startedBy = validacion-3-1 (la rama de prueba de la regla; ECS no admite group = service:… en una tarea
+suelta), y C2 deja un mensaje marcado en una DLQ, que borra al terminar. C1b prueba la rama de los servicios con
+events:TestEventPattern.
 """
 
 from __future__ import annotations
@@ -34,8 +35,7 @@ INSTANCIA = f"{PREFIJO}-db"
 ACCION_NOCHE = f"{PREFIJO}-embedding-apagar-noche"
 DLQ = {"ingesta": f"{PREFIJO}-ingesta-dlq", "purga": f"{PREFIJO}-purga-dlq"}  # cola y alarma se llaman igual (§5.1)
 SALIDA_DLQ = {"ingesta": "sqs_ingesta_dlq_url", "purga": "sqs_purga_dlq_url"}
-MARCA = "validacion-3-1"
-GRUPO_PRUEBA = "service:worker"  # la regla solo avisa por tareas de servicio (§3.8); worker suele estar en 0
+MARCA = "validacion-3-1"  # también el startedBy de la tarea de prueba, que la regla acepta (§5.10)
 CODIGO_PRUEBA = 3  # código de salida del contenedor de la tarea de prueba
 STOP_CODES = ("EssentialContainerExited", "TaskFailedToStart")
 GRUPOS_REGLA = ("service:api", "service:embedding", "service:worker")
@@ -166,7 +166,7 @@ def alarmas_esperadas(api_id: str) -> dict[str, dict]:
 
 
 def patron_esperado() -> dict:
-    """Patrón de la regla de §3.8 (las listas se comparan sin orden)."""
+    """Patrón de la regla de §5.10 (las listas se comparan sin orden)."""
     return {
         "source": ["aws.ecs"],
         "detail-type": ["ECS Task State Change"],
@@ -174,9 +174,51 @@ def patron_esperado() -> dict:
             "clusterArn": [CLUSTER_ARN],
             "lastStatus": ["STOPPED"],
             "stopCode": list(STOP_CODES),
-            "group": list(GRUPOS_REGLA),
+            "$or": [{"group": list(GRUPOS_REGLA)}, {"startedBy": [MARCA]}],
         },
     }
+
+
+def evento_ecs(group: str, stop_code: str, *, started_by: str = "ecs-svc/1234567890123456789",
+               cluster: str = CLUSTER_ARN, last_status: str = "STOPPED") -> dict:
+    """Evento `ECS Task State Change` sintético con los campos obligatorios de events:TestEventPattern."""
+    return {
+        "version": "0",
+        "id": "00000000-0000-0000-0000-000000000000",
+        "detail-type": "ECS Task State Change",
+        "source": "aws.ecs",
+        "account": comun.CUENTA,
+        "time": "2026-10-26T00:00:00Z",
+        "region": comun.REGION,
+        "resources": [f"arn:aws:ecs:{comun.REGION}:{comun.CUENTA}:task/{CLUSTER}/{MARCA}"],
+        "detail": {
+            "clusterArn": cluster,
+            "group": group,
+            "startedBy": started_by,
+            "lastStatus": last_status,
+            "desiredStatus": "STOPPED",
+            "stopCode": stop_code,
+        },
+    }
+
+
+# (descripción, evento, ¿debe avisar?) para C1b: la rama de los servicios, la de la tarea de prueba y lo que no avisa.
+CASOS_PATRON = [
+    ("worker que termina", evento_ecs("service:worker", "EssentialContainerExited"), True),
+    ("api que no arranca", evento_ecs("service:api", "TaskFailedToStart"), True),
+    ("embedding que termina", evento_ecs("service:embedding", "EssentialContainerExited"), True),
+    ("tarea de prueba de validate31", evento_ecs(f"family:{PREFIJO}-validacion", "EssentialContainerExited",
+                                                 started_by=MARCA), True),
+    ("migrate que termina (aunque salga con 0)", evento_ecs(f"family:{PREFIJO}-migrate", "EssentialContainerExited",
+                                                             started_by="ecs-cli"), False),
+    ("tarea de validación de otro validador", evento_ecs(f"family:{PREFIJO}-validacion", "EssentialContainerExited",
+                                                         started_by="validacion-1-3"), False),
+    ("worker apagado o escalado", evento_ecs("service:worker", "ServiceSchedulerInitiated"), False),
+    ("worker de otro clúster", evento_ecs("service:worker", "EssentialContainerExited",
+                                          cluster=f"arn:aws:ecs:{comun.REGION}:{comun.CUENTA}:cluster/otro"), False),
+    ("worker que se está deteniendo", evento_ecs("service:worker", "EssentialContainerExited",
+                                                 last_status="DEPROVISIONING"), False),
+]
 
 
 def normalizar_patron(valor):
@@ -384,6 +426,15 @@ def c1b_regla(ctx: Contexto) -> str:
         patron = {}
     if normalizar_patron(patron) != normalizar_patron(patron_esperado()):
         problemas.append(f"patrón {json.dumps(patron, sort_keys=True)}; se espera {json.dumps(patron_esperado())}")
+    # La rama de los servicios no la ejercita C3 (una tarea suelta no puede llevar group = service:…): se prueba el
+    # patrón guardado en AWS contra eventos sintéticos (sin efectos).
+    for descripcion, evento, debe in CASOS_PATRON:
+        resultado = llamar(
+            f"probar el patrón de {REGLA} (events:TestEventPattern)",
+            lambda e=evento: events.test_event_pattern(EventPattern=regla.get("EventPattern") or "{}", Event=json.dumps(e)),
+        ).get("Result")
+        if resultado is not debe:
+            problemas.append(f"con «{descripcion}» la regla {'no avisaría' if debe else 'avisaría'}")
     destinos = llamar(
         f"leer los destinos de {REGLA} (events:ListTargetsByRule)", lambda: events.list_targets_by_rule(Rule=REGLA)
     ).get("Targets", [])
@@ -420,7 +471,8 @@ def c1b_regla(ctx: Contexto) -> str:
         problemas.append(f"la política de {TOPIC} no deja publicar a las alarmas (cloudwatch.amazonaws.com ni la cuenta)")
     return comprobar(
         problemas,
-        f"{REGLA} ENABLED con el patrón de §3.8 ({', '.join(GRUPOS_REGLA)}; {', '.join(STOP_CODES)}) → {TOPIC}; "
+        f"{REGLA} ENABLED con el patrón de §5.10 ({', '.join(GRUPOS_REGLA)} o startedBy {MARCA}; "
+        f"{', '.join(STOP_CODES)}) → {TOPIC}; TestEventPattern: {len(CASOS_PATRON)} casos como se espera; "
         "la política del topic deja publicar a la regla y a CloudWatch",
     )
 
@@ -750,8 +802,7 @@ def lanzar_tarea(ctx: Contexto) -> dict:
                 cluster=CLUSTER,
                 taskDefinition=ctx.salidas["familias_tarea"]["validacion"],
                 launchType="FARGATE",
-                startedBy=MARCA,
-                group=GRUPO_PRUEBA,
+                startedBy=MARCA,  # la rama de prueba de la regla; sin group (queda family:…): service:… da error
                 count=1,
                 networkConfiguration=ctx.red_tareas(),
                 overrides={
@@ -768,7 +819,7 @@ def lanzar_tarea(ctx: Contexto) -> dict:
             raise comun.Falla(f"run-task falló: {respuesta.get('failures')}")
         arn = respuesta["tasks"][0]["taskArn"]
         ctx.tareas_lanzadas.append(arn)
-        comun.avisar(f"tarea de prueba {id_tarea(arn)} lanzada (group {GRUPO_PRUEBA}); esperando a que se detenga…")
+        comun.avisar(f"tarea de prueba {id_tarea(arn)} lanzada (startedBy {MARCA}); esperando a que se detenga…")
         with comun.errores_aws("esperar la tarea de prueba (ecs:DescribeTasks)"):
             try:
                 ecs.get_waiter("tasks_stopped").wait(
@@ -789,8 +840,8 @@ def c3a_tarea(ctx: Contexto) -> str:
     tarea = lanzar_tarea(ctx)
     app = next((c for c in tarea.get("containers", []) if c.get("name") == "app"), {})
     problemas = []
-    if tarea.get("group") != GRUPO_PRUEBA:
-        problemas.append(f"la tarea tiene group {tarea.get('group')!r}, no {GRUPO_PRUEBA}: la regla no la contaría")
+    if tarea.get("startedBy") != MARCA:
+        problemas.append(f"la tarea tiene startedBy {tarea.get('startedBy')!r}, no {MARCA}: la regla no la contaría")
     if tarea.get("stopCode") not in STOP_CODES:
         problemas.append(
             f"stopCode {tarea.get('stopCode')!r} ({comun.resumir(tarea.get('stoppedReason') or '', 120)}), no "
@@ -799,7 +850,7 @@ def c3a_tarea(ctx: Contexto) -> str:
     segundos = (tarea.get("stoppedAt", comun.ahora_utc()) - ctx.t_tarea).total_seconds()
     return comprobar(
         problemas,
-        f"tarea {id_tarea(tarea['taskArn'])} (group {GRUPO_PRUEBA}, startedBy {MARCA}) detenida con stopCode "
+        f"tarea {id_tarea(tarea['taskArn'])} (group {tarea.get('group')}, startedBy {MARCA}) detenida con stopCode "
         f"{tarea.get('stopCode')} (app salió con {app.get('exitCode')}) a los {minutos(segundos)} ({bogota(ctx.t_tarea)})",
     )
 

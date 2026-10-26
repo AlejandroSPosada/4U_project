@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.14.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.15.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
-| Estado | Diseño propuesto. **INF-0.1 a INF-2.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS; encendido de `embedding` y escalado del `worker`). **INF-3.1** (observabilidad) con código, `plan` y pruebas locales, **sin aplicar**. INF-6.1, diferido |
+| Estado | Diseño propuesto. **INF-0.1 a INF-2.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS; encendido de `embedding` y escalado del `worker`). **INF-3.1** (observabilidad) **aplicado** el 2026-10-26, con la suscripción confirmada; su primera validación en `dev` pasó C1 y C2 y falló en C3 (§3.8: ECS no admite el `group` de la tarea de prueba). 0.15.0 añade a la regla una rama para la tarea de prueba (§5.10): **sin aplicar**. INF-6.1, diferido |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -262,9 +262,12 @@ Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas, todo e
 - Una regla de **EventBridge** sobre los eventos `ECS Task State Change` avisa al mismo topic cuando una tarea de los
   **servicios** `api`, `worker` o `embedding` se detiene por error: `lastStatus = STOPPED`, `stopCode` =
   `EssentialContainerExited` o `TaskFailedToStart`, y `group` = `service:api`, `service:worker` o
-  `service:embedding`, solo del clúster `campus-locator-dev` (la cuenta tiene otros proyectos). Las tareas sueltas
-  (`migrate`, `validacion` y las que lanzan los validadores con la definición de `embedding`) tienen otro `group`
-  (`family:<familia>`) y no avisan; su resultado lo lee quien las lanzó. Apagar un servicio (a mano, por inactividad o
+  `service:embedding`, solo del clúster `campus-locator-dev` (la cuenta tiene otros proyectos). Desde 0.15.0 avisa
+  también, por una segunda rama (`$or`), de la tarea de prueba de `validate31.py` (`startedBy = validacion-3-1`; ninguna
+  otra tarea lleva ese `startedBy`), porque una tarea suelta no puede llevar `group = service:…` (trampa abajo). Las
+  demás tareas sueltas (`migrate`, `validacion` y las que lanzan los validadores con la definición de `embedding`) tienen
+  otro `group` (`family:<familia>`) y otro `startedBy` y no avisan, aunque salgan con 0 (`EssentialContainerExited`);
+  su resultado lo lee quien las lanzó. Apagar un servicio (a mano, por inactividad o
   a las 22:00) da `stopCode = ServiceSchedulerInitiated` y tampoco avisa (las tareas viejas que detiene un despliegue,
   igual; sin comprobar). El correo
   («AWS Notification Message») lleva el **evento completo en JSON**, sin transformar: `group`, `startedBy`,
@@ -274,9 +277,15 @@ Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas, todo e
   `cloudwatch.amazonaws.com` (alarmas de la cuenta) y `events.amazonaws.com` (solo la regla de arriba) como
   publicadores. **No se cifra**: con la clave gestionada `aws/sns`, CloudWatch y EventBridge no pueden publicar, y una
   clave propia de KMS cuesta 1 USD/mes (ADR-INF-16).
-- Estado de lo de INF-3.1: comprobado con el `plan` contra `dev` (11 altas, nada más) y con las pruebas de
-  `validate31.py` contra un AWS falso (§5.11); el comportamiento en AWS (avisos, correos, permisos del topic) queda
-  **sin comprobar** hasta el `apply` y `validate31.py` en `dev`.
+- Estado de lo de INF-3.1: aplicado el 2026-10-26 por `infra.yml` (ejecución 40377985054, `Apply complete!
+  Resources: 11 added, 0 changed, 0 destroyed.`) y suscripción confirmada desde el correo. `validate31.py --entorno
+  dev` sobre `8c98f90` (código 1): **comprobado** que las 6 alarmas, la regla, su destino, la política del topic y la
+  suscripción quedaron como en §5.6 y §5.10 (C1a–C1c) y que una DLQ con un mensaje pasa su alarma a `ALARM` y SNS
+  entrega el aviso (C2a: `ingesta-dlq` a los 2,7 min, 1 entregada, 0 fallidas; la historia de la alarma trae la
+  entrada `Action` del aviso al topic, así que CloudWatch puede publicar con la política). **Falló C3**: ECS rechazó
+  la tarea de prueba con `group = service:worker` (abajo). 0.15.0 cambia la regla (rama `startedBy`, §5.10) y la
+  tarea de prueba (sin `group`); comprobado con `plan` (1 cambio en sitio, solo el `event_pattern`) y pruebas locales;
+  la regla y su entrega al topic siguen **sin comprobar** en `dev` hasta su `apply` y `validate31.py`.
 - Trampas conocidas:
   - La alarma de 5xx cuenta también los 500 que da API Gateway con `api` en 0 réplicas (§5.13; p. ej., durante un
     validador de INF-1.x) y los `503 EMBEDDING_NO_DISPONIBLE` de `/v1/localize` con `embedding` apagado: más de 5 en
@@ -290,12 +299,16 @@ Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas, todo e
     llegara con `ServiceSchedulerInitiated`, no avisaría); que EventBridge entregue un evento más de una vez (sería un
     correo repetido); y que SQS deje de publicar la métrica de una DLQ con mensajes pero sin actividad tras 6 h (la
     alarma volvería a `OK` sin avisar; el aviso ya se mandó al pasar a `ALARM`).
-  - Sin comprobar hasta `validate31.py` en `dev`: que ECS acepte `run-task --group service:worker` para una tarea
-    suelta (si lo rechaza o lo ignora, C3a falla con ese detalle) y que esa tarea no cuente como del servicio `worker`
-    en `ListTasks --service-name worker` ni en sus métricas; que EventBridge publique con la condición `ArnEquals
-    aws:SourceArn` de la política del topic (si no, C3b da `FailedInvocations`); y el texto exacto de las entradas
-    `Action` de la historia de una alarma (`accion_publicada` busca «fail» o el nombre del topic; sin ninguna entrada,
-    C2a decide con las métricas de SNS y lo dice en el detalle).
+  - **Una tarea suelta no puede llevar `group = service:<nombre>`.** `run-task --group service:worker` da
+    `InvalidParameterException` «Invalid namespace for group.» (comprobado el 2026-10-26 a las 22:17:05 UTC en
+    CloudTrail, `RunTask` de `validate31.py`): el espacio `service:` es de los servicios (la documentación de ECS solo
+    dice que el grupo de una tarea de servicio es su nombre y no se puede cambiar). Así, una tarea suelta nunca casa
+    con la rama `group` de la regla: por eso existe la rama `startedBy = validacion-3-1` (0.15.0), y la rama de los
+    servicios se prueba con `events:TestEventPattern` contra eventos sintéticos (`validate31.py` C1b).
+  - Sin comprobar hasta que C3 pase en `dev`: que EventBridge publique con la condición `ArnEquals aws:SourceArn` de la
+    política del topic (si no, C3b da `FailedInvocations`). Comprobado en C2a: CloudWatch publica y la historia de la
+    alarma trae la entrada `Action` (`accion_publicada` busca «fail» o el nombre del topic; sin ninguna entrada, C2a
+    decide con las métricas de SNS y lo dice en el detalle). El texto exacto de una acción fallida sigue sin verse.
 - **AWS Budgets** `campus-locator-mensual`: 100 USD/mes con avisos al 50 % y 80 % del gasto real y al 100 % del
   pronosticado, al mismo correo. Budgets escribe directamente a ese correo (suscriptor `EMAIL`), sin confirmación.
   *Cost Anomaly Detection* activado (sin costo).
@@ -412,7 +425,7 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
 | **INF-1.3 Cómputo** | Módulo `computo` (30 recursos; entradas, salidas y nombres internos en §5.12): repositorios ECR (etiquetas inmutables, escaneo al subir, conservar 5), clúster sin *Container Insights*, espacio de nombres privado `campus-locator.local` con los servicios de Cloud Map `api` (A + SRV) y `embedding` (A), TTL 10 s, los cinco *log groups* de los procesos, el rol de ejecución y los cuatro roles de tarea de §5.8 (todos con el *boundary*, que `envs/dev` lee de los outputs de `bootstrap` con `terraform_remote_state`), las cinco definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza; la de validación usa `postgres:17-alpine`) y los servicios `api`, `worker` y `embedding` con `desired_count = 0` hasta el primer despliegue. La imagen de prueba se publica a mano tras el `apply` (`pruebas/imagen-prueba/README.md`): los servicios en 0 no la necesitan para crearse. `validate13.py` sube `api` y `embedding` a 1 solo mientras valida |
 | **INF-1.4 Borde** | Módulo `borde` (7 recursos; entradas, salidas y nombres internos en §5.12): HTTP API `campus-locator-dev-api` con `prevent_destroy` (R8), VPC Link en `publica-a` y `publica-b` con el grupo `-vpclink`, una integración `HTTP_PROXY` privada hacia el servicio de Cloud Map `api` (su ARN sale del nuevo output `cloud_map_api_arn` de `computo`), las rutas `ANY /{proxy+}` y `POST /v1/auth/login` hacia esa integración, etapa `$default` con despliegue automático y el *throttling* de §5.10 (general en `DefaultRouteSettings`, login en `RouteSettings`) y *access logs* en JSON en `/campus-locator/dev/apigw`, que crea el propio módulo. Expone `api_base_url` (el `ApiEndpoint`, sin barra final). `validate14.py` sube `api` a 1 solo mientras valida |
 | **INF-2.1 Encendido de `embedding` y escalado** | `src/ops/embedding.py` (`encender`, `apagar`, `estado`, con el contrato de §5.10; su clase `Operador` la reutilizan los validadores). En `borde`, el filtro de métricas `campus-locator-dev-localize` sobre los *access logs* (métrica `LocalizePeticiones`). En `computo`, `escalado.tf` (11 recursos): los objetivos de Application Auto Scaling de `embedding` y `worker` (rango 0-0 al crearse; después Terraform ignora el rango, que cambian `embedding.py` y las acciones programadas), tres políticas por pasos de capacidad exacta (`embedding-apagar` → 0, `worker-cola` → 1, `worker-colas-vacias` → 0), las cuatro alarmas de expresión que las disparan (inactividad de 45 de 45 min; subida de `worker` con mensajes y CPU de `embedding` en el mismo minuto; bajada tras 15 de 15 min sin mensajes) y las dos acciones de las 22:00 (`America/Bogota`, rango 0-0). `envs/dev` define la métrica (`local.metrica_localize`) y se la pasa a los dos módulos, que así no se referencian entre sí, y la variable `apagado_embedding`. Decisiones en ADR-INF-15; nombres internos en §5.12 |
-| **INF-3.1 Observabilidad** | Módulo `observabilidad` (11 recursos; entradas, salidas y nombres internos en §5.12): topic SNS `campus-locator-dev-alertas` sin cifrar, con política propia (la cuenta; CloudWatch; EventBridge solo desde la regla) y suscripción por correo a `correo_alertas` (hay que confirmarla desde el correo que envía SNS), las 6 alarmas de §5.10 con acción solo en `ALARM` hacia el topic, y la regla `campus-locator-dev-tarea-detenida` de §3.8 con el topic como destino (el evento va tal cual). Para no adivinar nombres, `borde`, `computo` y `datos` exponen `api_id`, `cluster_arn` y `rds_identificador`, que `envs/dev` le pasa junto con `servicios` y `colas`; `envs/dev` declara `correo_alertas` y expone `sns_alertas_arn`. Ningún recurso existente cambia (`plan`: 11 altas). `LectorCola` pasa de `validate21.py` a `comun.py` (§5.11), porque `validate31.py` también borra mensajes de prueba de una cola. `validate31.py` no toca los servicios: C2 deja un mensaje marcado en una DLQ vacía y lo borra; C3 lanza la tarea de validación con `group = service:worker` y un comando que sale con 3. Decisiones en ADR-INF-16 |
+| **INF-3.1 Observabilidad** | Módulo `observabilidad` (11 recursos; entradas, salidas y nombres internos en §5.12): topic SNS `campus-locator-dev-alertas` sin cifrar, con política propia (la cuenta; CloudWatch; EventBridge solo desde la regla) y suscripción por correo a `correo_alertas` (hay que confirmarla desde el correo que envía SNS), las 6 alarmas de §5.10 con acción solo en `ALARM` hacia el topic, y la regla `campus-locator-dev-tarea-detenida` de §3.8 con el topic como destino (el evento va tal cual). Para no adivinar nombres, `borde`, `computo` y `datos` exponen `api_id`, `cluster_arn` y `rds_identificador`, que `envs/dev` le pasa junto con `servicios` y `colas`; `envs/dev` declara `correo_alertas` y expone `sns_alertas_arn`. Ningún recurso existente cambia (`plan`: 11 altas). `LectorCola` pasa de `validate21.py` a `comun.py` (§5.11), porque `validate31.py` también borra mensajes de prueba de una cola. `validate31.py` no toca los servicios: C2 deja un mensaje marcado en una DLQ vacía y lo borra; C3 lanza la tarea de validación con `startedBy = validacion-3-1` y un comando que sale con 3, y C1b prueba la rama de los servicios de la regla con `events:TestEventPattern`. 0.15.0 cambió el patrón de la regla (una rama `$or` para esa tarea: ECS no admite `group = service:…` en una tarea suelta) y la política del topic pasó a nombrar la regla por su ARN escrito, sin referencia al recurso (`plan`: 1 cambio en sitio). Decisiones en ADR-INF-16 |
 | **INF-6.1 Producción** (diferido) | Ver PLAN, Fase 6 |
 
 ---
@@ -761,7 +774,8 @@ expresión), `DatapointsToAlarm = EvaluationPeriods`, `TreatMissingData = notBre
 Valores medidos el 2026-10-26 antes del `apply` (para saber que ninguna avisará al crearse): DLQ con 0 mensajes; RDS con
 288 créditos (el máximo de `db.t4g.micro`) y ~18,4 GB libres; 1 respuesta 5xx en las últimas 24 h.
 
-**Regla `campus-locator-dev-tarea-detenida`** (bus `default`, `ENABLED`). Patrón exacto (las listas son «cualquiera de»):
+**Regla `campus-locator-dev-tarea-detenida`** (bus `default`, `ENABLED`). Patrón exacto desde 0.15.0 (las listas son
+«cualquiera de»; `$or`, «alguna de las ramas»):
 ```json
 {
   "source": ["aws.ecs"],
@@ -770,13 +784,19 @@ Valores medidos el 2026-10-26 antes del `apply` (para saber que ninguna avisará
     "clusterArn": ["arn:aws:ecs:us-east-1:648617469176:cluster/campus-locator-dev"],
     "lastStatus": ["STOPPED"],
     "stopCode": ["EssentialContainerExited", "TaskFailedToStart"],
-    "group": ["service:api", "service:embedding", "service:worker"]
+    "$or": [
+      { "group": ["service:api", "service:embedding", "service:worker"] },
+      { "startedBy": ["validacion-3-1"] }
+    ]
   }
 }
 ```
-Un destino, id `sns-alertas`, el topic, sin transformador de entrada ni rol (EventBridge publica con la política del
-topic). Cambiar el patrón es editar este bloque, `modules/observabilidad/main.tf`, `patron_esperado` de
-`validate31.py` y `patron_bien()` de `tests/ops/falsos.py` en el mismo cambio. Cambiar la política del topic es editar
+La segunda rama es solo para la tarea de prueba de `validate31.py` C3 (`local.marca_prueba` del módulo): una tarea
+suelta no puede llevar `group = service:…` (§3.8). Hasta 0.14.x, `detail` llevaba `group` directamente, sin `$or`.
+Qué avisa y qué no lo comprueba `validate31.py` C1b con `events:TestEventPattern` (`CASOS_PATRON`, §5.12). Un
+destino, id `sns-alertas`, el topic, sin transformador de entrada ni rol (EventBridge publica con la política del
+topic). Cambiar el patrón es editar este bloque, `modules/observabilidad/main.tf`, `patron_esperado` y `CASOS_PATRON`
+de `validate31.py` y `patron_bien()` de `tests/ops/falsos.py` en el mismo cambio. Cambiar la política del topic es editar
 la tabla de §5.6, `data "aws_iam_policy_document" "alertas"` de `modules/observabilidad/main.tf`, `c1b_regla` de
 `validate31.py` (exige `events.amazonaws.com` con una condición que nombre la regla, y `cloudwatch.amazonaws.com` o la
 declaración de la cuenta) y `politica_bien()` de `tests/ops/falsos.py`, también en el mismo cambio.
@@ -894,12 +914,14 @@ falla porque faltan credenciales, herramientas o variables da **3**, no 2: el 2 
 - Credenciales: el perfil de AWS de la persona (`AWS_PROFILE`), con lectura sobre la cuenta y escritura sobre los
   recursos de prueba (objetos `dataset/validacion-…`, mensajes en `ingesta` y, desde INF-3.1, en las DLQ, ejecución
   de la tarea de validación). El script se niega a correr si la cuenta no es `648617469176`.
-- La tarea de validación también sirve para provocar una parada inocua: `validate31.py` la lanza con
-  `group = service:worker` (`run-task --group`), `startedBy = validacion-3-1` y el comando de `app` sobrescrito a
-  `["sh", "-c", "echo 'validacion-3-1: sale con error a proposito'; exit 3"]`, para que la regla de §3.8 la cuente como
-  tarea de un servicio sin detener ninguno (ADR-INF-16). Escribe esa línea en `/campus-locator/dev/validacion`
-  (stream `validacion/app/<id-de-la-tarea>`) y se detiene sola con `stopCode = EssentialContainerExited` y código 3
-  (lo esperado; sin comprobar en `dev` hasta `validate31.py`).
+- La tarea de validación también sirve para provocar una parada inocua (desde 0.15.0): `validate31.py` la lanza **sin
+  `--group`** (queda `family:campus-locator-dev-validacion`), con `startedBy = validacion-3-1` (la rama de prueba de la
+  regla, §5.10) y el comando de `app` sobrescrito a
+  `["sh", "-c", "echo 'validacion-3-1: sale con error a proposito'; exit 3"]`, sin detener ningún servicio
+  (ADR-INF-16). Escribe esa línea en `/campus-locator/dev/validacion` (stream `validacion/app/<id-de-la-tarea>`) y se
+  detiene sola con `stopCode = EssentialContainerExited` y código 3 (lo esperado; sin comprobar en `dev`). En 0.14.0
+  la lanzaba con `--group service:worker`, que ECS rechaza («Invalid namespace for group.», §3.8). Ningún otro
+  validador debe usar `startedBy = validacion-3-1`: su parada mandaría un correo.
 - Lee los outputs con `terraform -chdir=bootstrap output -json` (lotes INF-0.x) y
   `terraform -chdir=envs/dev output -json` (el resto).
 - Las comprobaciones sobre GitHub (INF-0.1 y INF-0.2) usan la CLI `gh` autenticada.
@@ -926,7 +948,7 @@ tabla basta para escribir uno nuevo sin leer el código. Si cambian, la tabla se
 | `gh(*args)` → `str`; `gh_api(ruta, metodo=, cuerpo=, paginar=, jq=)` | CLI `gh`; `gh_api` devuelve el JSON (o el texto de `jq`) y lanza `ErrorGh` si falla |
 | `terraform_outputs(directorio)` → `dict`; `terraform_state_pull(directorio)` → `dict` | `terraform -chdir=…`; sin `init` o sin credenciales → `ErrorConfiguracion`. El estado nunca se imprime |
 | `sesion_aws()`; `comprobar_cuenta(sesion)` → ARN | boto3 en `us-east-1` con `AWS_PROFILE`; `comprobar_cuenta` devuelve el ARN de quien llama y se niega a seguir si la cuenta no es `648617469176` |
-| `errores_aws(accion)` (bloque `with`), `error_aws(exc, accion)`, `codigo_error_aws(exc)` | Traducen errores de boto3: permisos o credenciales → `ErrorConfiguracion`; el resto → `Falla` |
+| `errores_aws(accion)` (bloque `with`), `error_aws(exc, accion)`, `codigo_error_aws(exc)` | Traducen errores de boto3: permisos o credenciales → `ErrorConfiguracion` (`"<accion>: las credenciales no tienen permiso (<código>: <mensaje>)"`); el resto → `Falla` (`"<accion>: <código>: <mensaje>"`). Desde 0.15.0 el texto lleva `Error.Message` de AWS además del código (sin él, o si repite el código, solo el código), en una línea, recortado a 300 caracteres y con «…» en lugar de los IDs de llaves de acceso (`AKIA…`/`ASIA…`) y de los parámetros `X-Amz-Signature`, `X-Amz-Credential` y `X-Amz-Security-Token` de una URL prefirmada (función interna `_mensaje_error_aws`). Un error sin código (red, credenciales locales) → `ErrorConfiguracion` con el texto de la excepción, con la misma limpieza |
 | `LectorCola(sqs, url, nombre, clasificar, ocultar_s=120)` (desde INF-3.1; antes estaba en `validate21.py`) | Borra de una cola los mensajes de prueba sin estropear los ajenos. `clasificar(cuerpo)` → `"propio"`, `"resto"` (de otra ejecución ya abandonada) o `"ajeno"`. `leer(segundos, objetivo=None)` recibe de 10 en 10 (espera larga de 2 s, visibilidad `ocultar_s`) hasta que pasen `segundos`, haya borrado `objetivo` o una lectura venga vacía; borra propios y restos (`DeleteMessageBatch`) y deja ocultos los ajenos; `devolver()` los hace visibles con visibilidad 0 (no lanza excepciones: sirve al limpiar). Así cada ajeno se recibe como mucho una vez por lectura (cuenta para el `maxReceiveCount` de su cola). Atributos `borrados` y `ajenos`. Errores como `errores_aws` |
 | `avisar(mensaje)`, `resumir(texto, limite)`, `commit_actual()` | Progreso a stderr (stdout queda para `[PASA] …`); recorte de mensajes; commit con `-dirty` |
 | `CUENTA`, `REGION`, `PROYECTO`, `DIR_INFORMES` | Constantes (`PROYECTO` y `DIR_INFORMES` son rutas: `project/` y `project/.validacion/`) |
@@ -960,12 +982,12 @@ No tocan AWS: `tests/ops/falsos.py` es un AWS falso con reloj falso que otro val
 | Elemento de `falsos.py` | Qué hace |
 |---|---|
 | `Mundo()` | Estado (alarmas, historia de alarmas, regla, destinos, política del topic, suscripciones, colas, tareas, métricas) y reloj. `dormir(s)` avanza de 5 en 5 s y simula: una DLQ con mensajes visibles pasa su alarma a `ALARM` tras `retraso_alarma` s (y vuelve a `OK` vacía); el paso a `ALARM` escribe las entradas `StateUpdate` y `Action` y publica en el topic; una tarea se detiene a los `dura_tarea` s con `stop_code` y, si casa con el patrón de la regla, cuenta `MatchedEvents` e `Invocations` (o `FailedInvocations` sin permiso en la política) y publica; SNS entrega si la suscripción no está `pendiente`. Las métricas aparecen a los `retraso_metricas` s |
-| Interruptores del `Mundo` | `retraso_alarma`, `alarma_dispara`, `accion_ok`, `retraso_metricas`, `pendiente`, `stop_code`, `dura_tarea`, `ecs_acepta_group`, `ecs_respeta_group`, `cuenta`, y los datos `apis`, `acciones_noche`, `alarmas`, `regla`, `destinos`, `politica`, `suscripciones`, `colas` (URL → mensajes) |
+| Interruptores del `Mundo` | `retraso_alarma`, `alarma_dispara`, `accion_ok`, `retraso_metricas`, `pendiente`, `stop_code`, `dura_tarea`, `run_task_falla` (código de error de `run_task`), `cuenta`, y los datos `apis`, `acciones_noche`, `alarmas`, `regla`, `destinos`, `politica`, `suscripciones`, `colas` (URL → mensajes). Como ECS en `dev`, `run_task` rechaza siempre un `group` que empiece por `service:` (`InvalidParameterException` «Invalid namespace for group.»); sin `group`, la tarea queda en `family:<definición>` |
 | `Sesion(mundo)` / `Reloj(mundo)` | Sustitutos de la sesión de boto3 (clientes falsos de `sts`, `apigatewayv2`, `application-autoscaling`, `cloudwatch`, `events`, `sns`, `sqs` y `ecs`, solo con las operaciones que usan los validadores) y del módulo `time` (`monotonic`, `sleep`) |
-| `alarmas_bien()`, `politica_bien()`, `patron_bien()`, `salidas(**cambios)` | Lo que deja el `apply` de INF-3.1 y los outputs de `envs/dev` (con `None`, un output falta). Duplican §5.10 y §5.6: se cambian con ellos (§5.10) |
+| `alarmas_bien()`, `politica_bien()`, `patron_bien()`, `patron_0_14()`, `salidas(**cambios)` | Lo que deja el `apply` de INF-3.1 (`patron_bien`, el patrón de 0.15.0 con `$or`; `patron_0_14`, el de 0.14.0, para probar un patrón viejo) y los outputs de `envs/dev` (con `None`, un output falta). Duplican §5.10 y §5.6: se cambian con ellos (§5.10) |
 | Registro | `enviados` (`(url, cuerpo)`), `borrados` (cuerpos), `run_task_args` (argumentos de cada `run_task`), `tareas` (ARN → tarea) |
-| Constantes y ayudas | `CUENTA`, `REGION`, `P` (`campus-locator-dev`), `TOPIC_ARN`, `REGLA`, `REGLA_ARN`, `CLUSTER_ARN`, `API_ID` (`fuzq99kddb`), `URL_COLA` (prefijo de las URL de SQS), `CORREO` (`persona@example.com`); `error(codigo, operacion)` crea un `ClientError` de boto3; `coincide(patron, evento)` evalúa un patrón de EventBridge de listas y objetos anidados. El reloj del `Mundo` empieza el 2026-10-28 a las 15:00 UTC (`t`) con `mono = 1000` |
-| Límites (lo que no simula) | Sin paginación (`NextToken` se ignora); `get_metric_statistics` solo casa las dimensiones exactas y agrega por minuto con `Sum`, `Maximum`, `Minimum` o `SampleCount`; SQS ignora `WaitTimeSeconds` y recibir no avanza el reloj; el único esperador de ECS es `tasks_stopped`; `stop_task` deja `stopCode = UserInitiated`; las alarmas solo cambian las de las DLQ (por mensajes visibles) |
+| Constantes y ayudas | `CUENTA`, `REGION`, `P` (`campus-locator-dev`), `TOPIC_ARN`, `REGLA`, `REGLA_ARN`, `CLUSTER_ARN`, `API_ID` (`fuzq99kddb`), `URL_COLA` (prefijo de las URL de SQS), `CORREO` (`persona@example.com`); `error(codigo, operacion, mensaje=None)` crea un `ClientError` de boto3 (con `Error.Message` = `mensaje` o, sin él, el código); `coincide(patron, evento)` evalúa un patrón de EventBridge de listas, objetos anidados y `$or` (lo usan la regla falsa al detener una tarea y `events.test_event_pattern`, que además exige los campos obligatorios del evento: `id`, `account`, `source`, `time`, `region`, `resources`, `detail-type`). El reloj del `Mundo` empieza el 2026-10-28 a las 15:00 UTC (`t`) con `mono = 1000` |
+| Límites (lo que no simula) | Sin paginación (`NextToken` se ignora); `get_metric_statistics` solo casa las dimensiones exactas y agrega por minuto con `Sum`, `Maximum`, `Minimum` o `SampleCount`; SQS ignora `WaitTimeSeconds` y recibir no avanza el reloj; el único esperador de ECS es `tasks_stopped`; `stop_task` deja `stopCode = UserInitiated`; las alarmas solo cambian las de las DLQ (por mensajes visibles); el `group` de `run_task` solo se valida por el prefijo `service:` |
 
 Las pruebas parchean con `monkeypatch` `comun.time`, `validate31.time`, `comun.ahora_utc`, `comun.sesion_aws`,
 `comun.commit_actual`, `comun.terraform_outputs` y `validate31.leer_correo`, y corren `validate31.main()` con
@@ -1254,15 +1276,22 @@ son el nombre sin el prefijo), `aws_cloudwatch_event_rule.tarea_detenida` y `aws
 - Antes de un `apply` que cree el módulo (o lo recree tras un `destroy`), comprobar que los nombres de §5.1 del topic,
   las alarmas y la regla están libres (`validation-3-1` §5, paso 1): `CreateTopic`, `PutMetricAlarm` y `PutRule` no
   fallan con un nombre que ya existe, lo sobrescriben, y Terraform se quedaría con un recurso ajeno sin avisar.
-- El `plan` de INF-3.1 son 11 altas, ninguna modificación ni baja, y el output nuevo (`+ sns_alertas_arn`). Los outputs
-  nuevos de `borde`, `computo` y `datos` no cambian ningún recurso. El `data` de la política se lee en el `apply`
-  (depende del ARN del topic y de la regla).
-- El patrón se escribe con `jsonencode` (ordena las claves) y la lista de `group` sale de `servicios` en orden fijo
-  (`api`, `embedding`, `worker`). Su texto exacto está en §5.10.
+- El `plan` de INF-3.1 (0.14.0) fueron 11 altas, ninguna modificación ni baja, y el output nuevo (`+ sns_alertas_arn`).
+  Los outputs nuevos de `borde`, `computo` y `datos` no cambian ningún recurso. El de 0.15.0 es `Plan: 0 to add, 1 to
+  change, 0 to destroy.`: solo el `event_pattern` de `aws_cloudwatch_event_rule.tarea_detenida` (en `detail`, `group`
+  pasa a ser la primera rama de `"$or"`, con la rama `startedBy` al lado).
+- La política nombra la regla con su ARN escrito (`arn:aws:events:<region>:<cuenta>:rule/<prefijo>-tarea-detenida`, bus
+  `default`), no con `aws_cloudwatch_event_rule.tarea_detenida.arn`: con la referencia, cualquier cambio en sitio de la
+  regla aplaza la lectura del `data` al `apply` y el `plan` muestra también `aws_sns_topic_policy.alertas` como
+  cambiada (`policy` *known after apply*), aunque quede igual (pasó en el primer `plan` de 0.15.0). El `data` se lee
+  en el `plan` porque solo depende del ARN del topic, que no cambia.
+- El patrón se escribe con `jsonencode` (ordena las claves: `"$or"` va antes que `clusterArn`); la lista de `group`
+  sale de `servicios` en orden fijo (`api`, `embedding`, `worker`) y el `startedBy` de prueba, de
+  `local.marca_prueba` (`validacion-3-1`, el `MARCA` de `validate31.py`). Su texto exacto está en §5.10.
 - El destino depende de la política (`depends_on`): sin ella, la primera invocación fallaría.
 - La suscripción `email` se crea «pendiente de confirmación» (el proveedor la guarda con su ARN y
   `pending_confirmation = true`); confirmarla solo cambia atributos calculados, así que el `plan` siguiente queda vacío
-  (a comprobar tras el `apply`, `validation-3-1` §5). El enlace de confirmación vale 2 días (documentación de
+  (comprobado el 2026-10-26: tras el `apply` y la confirmación, `plan -detailed-exitcode` da `No changes` y código 0). El enlace de confirmación vale 2 días (documentación de
   `sns:Subscribe`). Si la suscripción desaparece (baja desde el enlace de un aviso), el `plan` la vuelve a crear.
 - Las descripciones de las alarmas y de la regla van sin tildes ni `§` (como las de §5.7) y dicen qué revisar: llegan
   en el correo.
@@ -1310,7 +1339,13 @@ los mensajes con forma de `s3:TestEvent`; `vaciar`, que borra los propios, esper
 `Pending`, `InProgress` o `Successful`; y el diccionario `T` con todos los tiempos de espera.
 
 **Ayudas propias de `validate31.py`** (no están en `comun.py`; las mismas reglas): `alarmas_esperadas(api_id)` y
-`patron_esperado()` (lo de §5.10, para comparar con AWS); `clasificar(cuerpo, sello)` de los mensajes de prueba de
+`patron_esperado()` (lo de §5.10, para comparar con AWS); `evento_ecs(group, stop_code, started_by=, cluster=,
+last_status=)`, un evento `ECS Task State Change` sintético con los campos que exige `events:TestEventPattern`, y
+`CASOS_PATRON`, la lista `(descripción, evento, ¿avisa?)` que C1b prueba contra el patrón guardado en AWS: avisan
+`service:worker` y `service:embedding` con `EssentialContainerExited`, `service:api` con `TaskFailedToStart` y la tarea
+de prueba (`family:campus-locator-dev-validacion` con `startedBy = validacion-3-1`); no avisan `migrate` aunque salga
+con 0, la tarea de validación de otro validador (`startedBy = validacion-1-3`), `ServiceSchedulerInitiated`, otro
+clúster ni `lastStatus = DEPROVISIONING`; `clasificar(cuerpo, sello)` de los mensajes de prueba de
 las DLQ (`{"validacion": "validacion-3-1-<sello>"}`; «resto» si son de otra ejecución con más de 1 h) y `lector(ctx,
 clave)`, su `comun.LectorCola`; `suscripcion(ctx)`, que exige una suscripción `email` a `correo_alertas` confirmada
 (`ListSubscriptionsByTopic` + `GetSubscriptionAttributes`) y devuelve su descripción con el correo enmascarado
@@ -1327,7 +1362,8 @@ hasta `T["ok"]` a que una vacía en `ALARM` vuelva a `OK` y, si las dos tienen m
 `limpiar_restos` (al empezar: en cada DLQ con entre 1 y 10 visibles y ninguno en vuelo, una lectura con `lector`),
 `borrar_propios` (borra los mensajes propios que quedan, contados en `Contexto.pendientes`; falla si no los encuentra)
 y `detener_tareas` (`StopTask` de las tareas `RUNNING` con `startedBy = validacion-3-1`); `lanzar_tarea`, que lanza una
-sola vez la tarea de prueba (C3a y C3b la comparten) y guarda el error si falla; y el diccionario `T` con los tiempos
+sola vez la tarea de prueba (sin `group`, con `startedBy = MARCA`; C3a y C3b la comparten) y guarda el error si falla;
+y el diccionario `T` con los tiempos
 (`ok` 10 min, `alarma` 20, `accion` 2, `sns` 10, `tarea` 10, `eventos` 10, `leer` 60 s, `sondeo` 30 s).
 Trampa: `leer_correo` saca `correo_alertas` de `envs/dev/terraform.tfvars` con la expresión
 `^correo_alertas\s*=\s*"([^"]+)"`: la asignación tiene que estar al principio de una línea y con comillas dobles (como
@@ -1504,6 +1540,14 @@ validación con `group = service:worker` (`worker` suele estar en 0; con `servic
 falsa podría confundirse con las reales en `ListTasks` o en las métricas de la alarma de subida de `worker`, sin
 comprobar). *Consecuencias:* 0,6 USD/mes (§3.10); hay que confirmar la suscripción tras el primer `apply` (y tras
 cualquier cambio de `correo_alertas`); cualquiera que reciba un aviso puede darse de baja desde el correo (R14).
+*Corrección en 0.15.0:* esa forma de validar la regla no funciona: ECS no admite `group = service:…` en una tarea
+suelta («Invalid namespace for group.», §3.8). Decisión del maestro del 2026-10-26 (opción A de las tres de CHANGELOG
+0.15.0): la regla gana una segunda rama, `startedBy = validacion-3-1`, que solo lleva la tarea de prueba de
+`validate31.py` (lanzada sin `group`), y la rama de los servicios se prueba con `events:TestEventPattern`. Se
+descartaron un `group` propio sin espacio de nombres (que ECS lo acepte estaba sin comprobar) y probar solo el patrón
+sin un evento real (no cumpliría «llega el correo» de PLAN C3). *Consecuencia:* la regla avisa también de cualquier
+tarea con ese `startedBy` que se detenga por error: ningún otro validador ni proceso debe usarlo. El resto de esta
+decisión sigue igual.
 
 ---
 

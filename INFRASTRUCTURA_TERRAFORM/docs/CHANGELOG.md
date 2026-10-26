@@ -20,6 +20,73 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.15.0] — 2026-10-26
+
+- **Lote que la motivó:** INF-3.1, tras su primera validación en `dev` (C3 no podía pasar).
+- **Qué cambió:**
+  - **Regla `campus-locator-dev-tarea-detenida`** (§3.8, §5.10): en `detail`, `group` pasa a ser una rama de `"$or"`
+    con una segunda rama, `startedBy = validacion-3-1` (`local.marca_prueba` del módulo), que solo lleva la tarea de
+    prueba de `validate31.py`. Motivo: ECS rechaza una tarea suelta con `group = service:worker`
+    (`InvalidParameterException` «Invalid namespace for group.»), así que ninguna tarea suelta podía casar con la regla
+    y C3 no podía pasar sin detener un servicio. Decisión del maestro (opción A de las tres que se estudiaron; ADR-INF-16,
+    corrección en 0.15.0): conserva el C3 de PLAN («llega el correo») y no avisa de más (`migrate` y las demás tareas
+    sueltas siguen sin avisar aunque salgan con 0).
+  - La política del topic nombra la regla con su ARN escrito (`arn:aws:events:<region>:<cuenta>:rule/<prefijo>-tarea-
+    detenida`) en vez de `aws_cloudwatch_event_rule.tarea_detenida.arn`: con la referencia, el primer `plan` de este
+    cambio daba `0 to add, 2 to change` (la política *known after apply*, aunque quedaba igual). Ahora: `0 to add,
+    1 to change, 0 to destroy`, solo el `event_pattern` (§5.12).
+  - `validate31.py`: la tarea de prueba se lanza sin `--group` (queda `family:campus-locator-dev-validacion`) y con
+    `startedBy = validacion-3-1`; C3a exige ese `startedBy` (antes, `group = service:worker`). C1b compara el patrón
+    con el nuevo y además lo prueba con `events:TestEventPattern` contra 9 eventos sintéticos (`CASOS_PATRON`, §5.12):
+    la rama de los servicios, que C3 no ejercita, y lo que no debe avisar (`migrate` que sale con 0, la tarea de
+    validación de otro validador, `ServiceSchedulerInitiated`, otro clúster, `lastStatus` distinto de `STOPPED`).
+    Permiso nuevo para quien lo ejecuta: `events:TestEventPattern` (`validation-3-1` §5).
+  - `comun.error_aws` (y con ella `errores_aws` y todos los validadores de esta carpeta) añade al código de error de
+    AWS su `Error.Message`, en una línea y recortado, sin IDs de llaves de acceso ni firmas o credenciales de URL
+    prefirmadas (función interna `_mensaje_error_aws`). Antes, un fallo de API solo decía el código (p. ej.
+    `lanzar la tarea de prueba (ecs:RunTask): InvalidParameterException`, sin el motivo). §5.11, tabla de `comun.py`.
+  - `tests/ops/falsos.py`: `error(codigo, operacion, mensaje=None)`; `coincide` entiende `$or`; `test_event_pattern`;
+    `run_task` rechaza, como ECS, un `group` que empiece por `service:` y sin `group` deja `family:<definición>`;
+    `patron_bien()` es el patrón nuevo y `patron_0_14()` el viejo; el interruptor `run_task_falla` reemplaza a
+    `ecs_acepta_group` y `ecs_respeta_group`. Pruebas: 5 de `error_aws` en `test_comun.py`; en `test_validate31.py`,
+    el patrón viejo (C1b y C3b fallan), uno demasiado amplio (C1b: «migrate … avisaría»), un `run-task` que falla, el
+    falso que rechaza `service:` y la concordancia de `CASOS_PATRON` con `patron_esperado()` y `patron_bien()`
+    (45 en total).
+  - Lo comprobado en `dev` (§3.8, encabezado y PLAN): el `apply` de 0.14.0 (ejecución 40377985054 de `infra.yml`,
+    11 recursos), la suscripción confirmada, el `plan` vacío después y `validate31.py` sobre `8c98f90`: pasan P1–P4,
+    C1a, C1b, C1c y C2a (`ingesta-dlq` → `ALARM` a los 2,7 min, 1 notificación entregada; la historia de la alarma trae
+    la entrada `Action`); fallan C3a y C3b por el `group`.
+  - Corrige una contradicción: §3.8, §5.11, ADR-INF-16 y `validation-3-1` daban por posible lanzar una tarea suelta
+    con `group = service:worker`; ECS lo rechaza (CloudTrail, `RunTask` del 2026-10-26 a las 22:17:05 UTC). Ahora lo
+    dicen, con la trampa en §3.8.
+- **Contratos tocados (§5):** §5.10 (patrón de la regla, ampliado de forma compatible: avisa de lo mismo y además de la
+  tarea de prueba), §5.11 (texto de `error_aws`; tarea de validación sin `group`) y §5.12 (módulo `observabilidad`).
+  Sube la menor.
+- **Cómo se verificó:**
+  - `terraform fmt -check -recursive` y `validate`; `plan -lock=false` contra `dev` sobre `8c98f90`: `Plan: 0 to add,
+    1 to change, 0 to destroy.`, solo `module.observabilidad.aws_cloudwatch_event_rule.tarea_detenida`, atributo
+    `event_pattern` (en `detail`: `+ "$or" = [{group = […]}, {startedBy = ["validacion-3-1"]}]` y `- group = […]`; lo
+    demás igual); lock sin cambios.
+  - `uv run --group ops --group pruebas pytest tests/ops -q`: 45 pasan; `uvx ruff@0.14.0 check --line-length 120
+    src/ops tests/ops` sin avisos.
+  - El mensaje de ECS, con `aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=RunTask`
+    (solo lectura; `requestParameters`: `group = service:worker`, `startedBy = validacion-3-1`, `taskDefinition =
+    campus-locator-dev-validacion`). La documentación de ECS (*Group related Amazon ECS tasks*) solo dice que el grupo
+    de una tarea de servicio es el nombre del servicio y no se puede cambiar; no menciona el rechazo. `$or` dentro de
+    `detail`: documentación de EventBridge (*Comparison operators*, «Or (multiple fields)»).
+  - Tras el `apply` de 0.14.0 y la confirmación, `plan -lock=false -detailed-exitcode` sobre `8c98f90` daba
+    `No changes` y código 0, y `list-subscriptions-by-topic` mostraba la suscripción `email` con su ARN.
+  - En `dev`: pendiente (`apply` de este cambio y `validate31.py`).
+- **Pendiente:** el `apply` por `infra.yml` (`Apply complete! Resources: 0 added, 1 changed, 0 destroyed.`), antes del
+  2026-10-27 (día de campo) o después; `validate31.py` en `dev` y las capturas de C2b y C3c. Sin comprobar hasta
+  entonces: que EventBridge publique con la condición `aws:SourceArn` de la política y que `TestEventPattern` dé lo
+  mismo que el falso con los 9 casos. Opciones descartadas para C3: un `group` propio sin espacio de nombres
+  (`validacion-3-1`; que ECS lo acepte estaba sin comprobar) y probar solo el patrón con `TestEventPattern` (no cumple
+  «llega el correo» de PLAN C3 y deja sin probar la entrega al topic); también, un servicio de ECS temporal que falle.
+  Lo de 0.12.0: §5.13 con la imagen de BE-1.1 y la propuesta de R10.
+
+---
+
 ## [0.14.0] — 2026-10-26
 
 - **Lote que la motivó:** INF-3.1 (observabilidad y alarmas).
