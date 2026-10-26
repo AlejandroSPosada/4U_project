@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.8.1**. Este archivo contiene además el **catálogo único de historias de usuario**
+Alineado con `ARCHITECTURE.md` **v0.9.0**. Este archivo contiene además el **catálogo único de historias de usuario**
 del proyecto (§5), que los planes de las otras carpetas referencian.
 
 ---
@@ -176,12 +176,14 @@ públicas pasó a FE-3.6 (como en el backend, donde BE-3.1 queda con lugares y l
 
 #### FE-3.2 — Ubicación real y Resultado (6.3)
 - **Entregables:**
-  - `EscaneoBackend` real: `POST /v1/localize` con fotos re-codificadas y rumbos en norte verdadero (§5.10); guardar el
-    acimut de cada foto; `EscaneoEvento.Completado` con el resultado.
+  - `EscaneoBackend` real (desde ARCHITECTURE 0.9.0 es `LocalizacionRepository` + `RemoteLocalizacionRepository`):
+    `POST /v1/localize` con fotos re-codificadas y rumbos en norte verdadero (§5.10); guardar el acimut de cada foto;
+    `EscaneoEvento.Completado` con el resultado.
   - Decisión abierta 15 para el flujo público (`SesionDeNavegacion` u otra), y actualizar ARCHITECTURE §5.8.
   - `ResultadoUbicacionScreen` (vista 6.3) con referencias relativas, confianza y acciones. Las alertas cercanas de
     6.3 son de FE-3.6 (desde el 2026-10-25).
-  - Destino elegido en 6.4 que llega a 6.5 tras el escaneo (hoy `AppNav` lo descarta, §5.8).
+  - Destino elegido en 6.4 que llega a 6.5 tras el escaneo (hoy `AppNav` lo descarta, §5.8). Como 6.5 es de FE-5.1,
+    por decisión del usuario (abajo) el destino queda en `SesionDeNavegacion` y la 6.3 dice su distancia y dirección.
   - Mensaje hablado para `503 EMBEDDING_NO_DISPONIBLE`.
   - `CONSERVAR_FOTOS = false` (decisión abierta 12): las fotos del escaneo se borran al recibir la respuesta,
     incluidas las que llegan fuera de la fase `ESCANEANDO` (hoy nunca se borran; §5.2).
@@ -190,6 +192,11 @@ públicas pasó a FE-3.6 (como en el backend, donde BE-3.1 queda con lugares y l
   - C2. Pasa `ConversionRumboTest` (magnético (−180, 180] → verdadero [0, 360), con declinación positiva y negativa).
   - C3. `CONSERVAR_FOTOS` vale `false` y ninguna foto de escaneo queda en el teléfono.
   - C4. Con `embedding` apagado, la app dice que el servicio de ubicación no está disponible.
+- **Decisiones del usuario del 2026-10-26** (respuestas literales a las preguntas del maestro; ARCHITECTURE §4.6):
+  decisión abierta 15 → «En memoria (Recomendado)» (`SesionDeNavegacion`, ADR-FE-24); el destino sin vista 6.5 (es de
+  FE-5.1) → «Decir distancia y dirección (Recomendado)»: la 6.3 dice la distancia y la dirección al destino, sin ruta
+  provisional; la vista 6.3 → «Sin mapa ni voz (Recomendado)»: botones legibles por TalkBack, los comandos de voz en 6.3
+  pasan a FE-3.5 (ADR-FE-27).
 - **Historias:** HU-01, HU-02, HU-23.
 
 #### FE-3.3 — Alertas de administración sincronizadas (7.8–7.10)
@@ -228,7 +235,11 @@ públicas pasó a FE-3.6 (como en el backend, donde BE-3.1 queda con lugares y l
     hasta que FE-3.2 dé una posición) y qué hace `alPresionarMicrofono` al tocar mientras escucha. (La miniatura sin
     ícono de respaldo la resolvió FE-3.1.)
   - Los dos ⚠ de `BuscarLugares` (5.7): coincidencia exacta que gana sin preguntar e hipótesis unidas de `listen`.
-  - Estado viejo de Destino al volver del escaneo (5.5, `SeleccionDestinoViewModel`).
+  - (El estado viejo de Destino al volver del escaneo lo resolvió FE-3.2 en la ruta: `destino` sale de la pila al
+    confirmar; ARCHITECTURE §5.5 y §5.8.)
+  - Desde FE-3.2 (decisión del usuario del 2026-10-26, ADR-FE-27): comandos de voz en la vista 6.3 (repetir, volver a
+    ubicarse, ir a un lugar, inicio) y comprobar si la voz del Resultado se solapa con TalkBack (ARCHITECTURE §5.5,
+    «Resultado de ubicación»).
   - Tener en cuenta lo visto con TalkBack 17 en el Xiaomi al validar FE-3.1 (ARCHITECTURE §4.5, «Hallazgos con
     TalkBack 17»): las acciones personalizadas del orbe («Ir a un lugar», «Ver mapa») no se encontraron con los gestos
     probados, así que hoy por toque con TalkBack solo se llega a Ubicarme.
@@ -374,7 +385,7 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
 | FE-2.2 | 2 | Pendiente | [2-2](./validation/validation-2-2.md) | — | — | | |
 | FE-2.3 | 2 | Hecho | [2-3](./validation/validation-2-3.md) | `02adcb9` 2026-10-25 | 0.7.1 | Local (`files/recoleccion/`, `campus_calibracion`); no usa el backend | Código y pruebas listos (ARCHITECTURE 0.6.0, §4.3): C1 con las cuatro clases en Gradle (13, 11, 10 y 6 casos; `CalibracionPasoTest` y `StepDetectorTest` no existían), C2 sin cambios de código, retomar tras matar el proceso (C4) y `PdrTracker` que sigue el ciclo de vida del proceso (C5); ruta `mapa` de prueba (`--es ruta mapa`). `validate23.py --entorno local` con código 0 (2026-10-25). **En `dev`** (2026-10-25, Xiaomi 23028RA60L, Android 14): `validate23.py --entorno dev` con código 0 sobre `02adcb9` (informe `.validacion/FE-2.3-20261026-023206.json`; calibración guardada: ninguna, la app usaba 0,72 m). **C4 pasa:** una sola carpeta nueva `rec_0013`, `finalizado`, fotos `0001`–`0021` seguidas (9 antes de `am kill`, 12 después); evidencia `c4-recoleccion.txt` y `c4-manifest.json` (el video `c4-video.mp4` no se sube: puede mostrar la cámara en casa). **C5 pasa:** en segundo plano la app no está en las conexiones activas de `dumpsys sensorservice` (calibración y mapa) y en primer plano sí (acelerómetro y vector de rotación); `app.log` con `sensores quitados (detener)`, `(segundo plano)` y `registrados (primer plano; …)`; evidencia `c5-*.txt`. Hallazgo: abrir la app desde el ícono tras la ruta de prueba `mapa` muestra Inicio, pero el `PdrTracker` del mapa sigue en la pila y vuelve a registrar sensores en primer plano (21:48:35): el PDR sigue al proceso, no a la pantalla visible (tener en cuenta en FE-3.1). **C3, en casa por decisión del usuario (2026-10-26)**, en un Redmi Note 15 Pro con el APK de `4c87f5e`: 7.3b contó bien los pasos reales (10 en un tramo de 7,1 m marcado en el mapa, sin medir en el terreno), así que la longitud guardada (0,71 m) es provisional; el PDR del mapa público y 7.3 en un recorrido conocido de ≥ 100 m no se hicieron. Evidencia: [`registro.md`](./validation/evidencia/fe-2-3/registro.md). **Antes de grabar el dataset hay que recalibrar 7.3b en un tramo recto medido, con el teléfono con el que se grabe** |
 | FE-3.1 | 3 | Hecho | [3-1](./validation/validation-3-1.md) | `b553390` 2026-10-26 | 0.8.1 | `dev` (`GET /v1/places`, 0 lugares; lugar de prueba `validacion-3-1-lugar` por `POST`/`DELETE /v1/admin/places`, borrado al terminar) | Código y pruebas (ARCHITECTURE 0.8.0, §4.5): `RemoteLugaresRepository` (`GET /v1/places`; sin posición hasta FE-3.2, ADR-FE-23), foto del lugar o ícono de respaldo, entrada al mapa desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»; Atrás vuelve) y el PDR del mapa atado al ciclo de vida de su pantalla (hallazgo de FE-2.3, ADR-FE-22); 171 casos JVM; `frontend.yml` en verde sobre `b553390`. `validate31.py --entorno dev` con código 0 sobre `b553390` (sin `-dirty`) en el Xiaomi 23028RA60L (Android 14), informe `.validacion/FE-3.1-20261026-142022.json` (14:20–14:23 UTC): P1–P5 (`GET /v1/places` → 0 lugares en `dev`); C1a 9/9; C1b «1 lugares en Selección de destino = GET /v1/places (incluye validacion-3-1-lugar; 2 desplazamientos)», con Destino abierto por el usuario con la voz «dos» y el Enter del paso guiado mandado por el maestro; C2a 5/5 y 6/6; C2b; limpieza: lugar borrado y `am force-stop`. El primer intento (14:17 UTC) dio código 3: C1b `INSTALL_FAILED_USER_RESTRICTED` (MIUI había apagado «Instalar vía USB»; se reactivó junto con «Depuración USB (Configuración de seguridad)»). C2c, solo por voz (09:24 de Bogotá): app abierta desde el lanzador, «mapa» → mapa público («StepTracker · Comenzar») → Atrás → Inicio («Te escucho…»); evidencia [`c2-1-inicio.png`, `c2-2-mapa-por-voz.png`, `c2-3-atras-a-inicio.png`](./validation/evidencia/fe-3-1/) (fotogramas de un `screenrecord` de 74 s, sin audio, que no se versiona: 14 MB); no se fijó punto ni se pulsó ▶, así que no hubo líneas `Pdr` ni `dumpsys sensorservice`. **Por decisión del usuario del 2026-10-26** (§2.2 FE-3.1, «Si, por favor. Cambialo y demos por hecho lo que llevamos.») C2 queda solo con la voz y pasan a FE-3.6 la prueba con TalkBack («Ver mapa», fijar inicio y ▶) y el punto de inicio sin tocar el mapa (desde Ubicarme). Hallazgos con TalkBack 17.0.1 en el Xiaomi: al activarlo sale primero su tutorial; el toque con tres dedos abre «Search screen», no el menú de TalkBack; el doble toque en el botón principal de Inicio ejecuta su acción principal (Ubicarme), no «Ver mapa»; cómo abrir las acciones, sin comprobar. Orden por popularidad: BE-5.2 |
-| FE-3.2 | 3 | Pendiente | [3-2](./validation/validation-3-2.md) | — | — | | Requiere decidir la decisión abierta 15 |
+| FE-3.2 | 3 | En curso | [3-2](./validation/validation-3-2.md) | — | — | `dev` (`POST /v1/localize`, `GET /v1/admin/videos` para el dataset, `embedding`); local (`files/camera/photos/`, `app.log`) | Código y pruebas listos (ARCHITECTURE 0.9.0, §4.6): `POST /v1/localize` real (`RemoteLocalizacionRepository`: fotos re-codificadas a 1024 px, rumbos en norte verdadero con `ConversionRumbo` y la declinación), `CONSERVAR_FOTOS = false` con la carpeta del escaneo borrada al recibir la respuesta (también las fotos tardías), errores hablados (503 → «El servicio de ubicación no está disponible en este momento»), vista 6.3 y `SesionDeNavegacion` (decisión abierta 15: «En memoria», decisión del usuario del 2026-10-26), destino de 6.4 que llega a 6.3 con su distancia y dirección (sin 6.5 hasta FE-5.1) y distancias reales en Destino con una ubicación vigente. 221 casos JVM (C1a 11, 11 y 5; C2 7; C3a 6; C4a 7); `validate32.py --entorno local` con código 0 (2026-10-26; P1, C1a, C2, C3a, C4a). **Falta** `validate32.py --entorno dev` (hoy da código 2: BE-3.2 «En curso», sin dataset ni calibración) con C1 en el campus (10 puntos, `embedding` encendido, paso guiado C1b y evidencia C1c), C4 de noche (`embedding` apagado, C4b y C4c) y C3b; `validation-3-2` §3 y §5 |
 | FE-3.3 | 3 | Pendiente | [3-3](./validation/validation-3-3.md) | — | — | | Para validar espera BE-3.3 (alertas del backend, fuera del núcleo) |
 | FE-3.4 | 3 | Pendiente | [3-4](./validation/validation-3-4.md) | — | — | | |
 | FE-3.5 | 3 | Pendiente | [3-5](./validation/validation-3-5.md) | — | — | | Requiere decidir la decisión abierta 18 |

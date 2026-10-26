@@ -346,6 +346,56 @@ def http_delete(url: str, *, timeout: float = 15.0, token: str | None = None) ->
         raise ErrorRed(f"{type(motivo).__name__}: {resumir(str(motivo), 150)}") from e
 
 
+@dataclass
+class ParteMultipart:
+    """Una parte de un `multipart/form-data` (FE-3.2): `nombre` del campo, `datos`, `tipo` (Content-Type) y, si es un
+    archivo, `archivo` (filename)."""
+
+    nombre: str
+    datos: bytes
+    tipo: str = "text/plain; charset=utf-8"
+    archivo: str | None = None
+
+
+def cuerpo_multipart(partes: list[ParteMultipart], limite: str) -> bytes:
+    """Cuerpo `multipart/form-data` (RFC 7578) con el separador `limite`, en el orden de `partes`. Lógica pura."""
+    salida = bytearray()
+    for p in partes:
+        disposicion = f'form-data; name="{p.nombre}"'
+        if p.archivo is not None:
+            disposicion += f'; filename="{p.archivo}"'
+        salida += f"--{limite}\r\nContent-Disposition: {disposicion}\r\nContent-Type: {p.tipo}\r\n\r\n".encode()
+        salida += p.datos + b"\r\n"
+    salida += f"--{limite}--\r\n".encode()
+    return bytes(salida)
+
+
+def http_post_multipart(
+    url: str, partes: list[ParteMultipart], *, timeout: float = 15.0, token: str | None = None
+) -> RespuestaHttp:
+    """`POST multipart/form-data` con `X-Request-Id` propio (FE-3.2: la sonda de `POST /v1/localize` de
+    `validate32.py`, que no lleva fotos). 4xx/5xx se devuelven; sin respuesta → ErrorRed. Nunca imprime el cuerpo;
+    `token` añade `Authorization: Bearer <token>`."""
+    limite = f"validacion-{uuid.uuid4().hex}"
+    peticion = urllib.request.Request(
+        url,
+        data=cuerpo_multipart(partes, limite),
+        method="POST",
+        headers=_encabezados(token, {"Content-Type": f"multipart/form-data; boundary={limite}"}),
+    )
+    inicio = time.monotonic()
+    try:
+        with urllib.request.urlopen(peticion, timeout=timeout) as r:  # noqa: S310 — URL https comprobada
+            cuerpo = r.read().decode("utf-8", errors="replace")
+            return RespuestaHttp(r.status, dict(r.headers.items()), cuerpo, _ms(inicio))
+    except urllib.error.HTTPError as e:
+        cuerpo = e.read().decode("utf-8", errors="replace")
+        return RespuestaHttp(e.code, dict(e.headers.items()), cuerpo, _ms(inicio))
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        motivo = getattr(e, "reason", e)
+        raise ErrorRed(f"{type(motivo).__name__}: {resumir(str(motivo), 150)}") from e
+
+
 def codigo_error(r: RespuestaHttp) -> str | None:
     """`error.codigo` del formato de error del backend (§5.1), o None."""
     cuerpo = r.json()

@@ -7,6 +7,7 @@ import com.example.myapplication.data.remote.RemoteLugaresRepository
 import com.example.myapplication.data.repository.LugaresRepository
 import com.example.myapplication.domain.model.CategoriaLugar
 import com.example.myapplication.domain.model.LugarDestino
+import com.example.myapplication.domain.model.SesionDeNavegacion
 import com.example.myapplication.domain.usecase.BuscarLugares
 import com.example.myapplication.domain.usecase.InterpretarRespuesta
 import com.example.myapplication.domain.usecase.Respuesta
@@ -45,8 +46,10 @@ class SeleccionDestinoViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // --- Dependencias -------------------------------------------------------
-    // FE-3.1: `GET /v1/places` real. Sin posición (la ubicación es de FE-3.2): distancias nulas, orden por nombre.
-    private val repositorio: LugaresRepository = RemoteLugaresRepository()
+    // FE-3.1: `GET /v1/places` real. FE-3.2: con la posición vigente de «Ubicarse» (SesionDeNavegacion: alta o media y
+    // ≤ 2 min) el backend da distancias y ordena por cercanía; sin ella, distancias nulas y orden por nombre (ADR-FE-23).
+    private val repositorio: LugaresRepository =
+        RemoteLugaresRepository(posicion = { SesionDeNavegacion.posicionVigente() })
     private val voz = VoiceController(app)
 
     // --- Salidas hacia la UI ------------------------------------------------

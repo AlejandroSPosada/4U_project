@@ -5,7 +5,12 @@ import com.example.myapplication.domain.model.CalidadFoto
 import com.example.myapplication.domain.model.CategoriaLugar
 import com.example.myapplication.domain.model.EstadoFoto
 import com.example.myapplication.domain.model.Foto
+import com.example.myapplication.domain.model.LugarCercano
 import com.example.myapplication.domain.model.LugarDestino
+import com.example.myapplication.domain.model.NivelConfianza
+import com.example.myapplication.domain.model.PosicionEstimada
+import com.example.myapplication.domain.model.ReferenciaLugar
+import com.example.myapplication.domain.model.ResultadoUbicacion
 import com.example.myapplication.domain.model.ResumenAdmin
 import com.example.myapplication.domain.model.Rol
 import com.example.myapplication.domain.model.Sesion
@@ -149,6 +154,51 @@ object MapeoDatosApi {
             formato.parse(sinZona)?.time
         } catch (_: ParseException) {
             null
+        }
+    }
+
+    /**
+     * Respuesta 200 de `POST /v1/localize` (backend §5.3; FE-3.2) → [ResultadoUbicacion]. `resultado = ok` exige
+     * `posicion` (`lat`, `lng`, `radio_m`), `confianza` y un `nivel` conocido; cada `lugar_cercano` y `referencias[]`, su
+     * `id`, `nombre`, `distancia_m` (y `rumbo_grados`). `sin_coincidencias` solo necesita `fotos_usadas`. Otro
+     * `resultado` o algo obligatorio que falta → [RespuestaInesperadaException]. `referencias` ausente = vacía.
+     */
+    fun resultadoUbicacion(dto: LocalizacionRespuestaDto): ResultadoUbicacion {
+        val fotosUsadas = obligatorio(dto.fotosUsadas, "fotos_usadas")
+        return when (dto.resultado?.trim()?.lowercase(Locale.ROOT)) {
+            "sin_coincidencias" -> ResultadoUbicacion.SinCoincidencias(fotosUsadas)
+            "ok" -> {
+                val p = obligatorio(dto.posicion, "posicion")
+                ResultadoUbicacion.Ubicado(
+                    posicion = PosicionEstimada(
+                        lat = obligatorio(p.lat, "posicion.lat"),
+                        lng = obligatorio(p.lng, "posicion.lng"),
+                        radioM = obligatorio(p.radioM, "posicion.radio_m"),
+                    ),
+                    confianza = obligatorio(dto.confianza, "confianza"),
+                    nivel = enumDe<NivelConfianza>(dto.nivel)
+                        ?: throw RespuestaInesperadaException("nivel desconocido: ${dto.nivel}"),
+                    correccionRumboGrados = dto.correccionRumboGrados,
+                    lugarCercano = dto.lugarCercano?.let {
+                        LugarCercano(
+                            id = obligatorio(it.id, "lugar_cercano.id"),
+                            nombre = obligatorio(it.nombre, "lugar_cercano.nombre"),
+                            distanciaM = obligatorio(it.distanciaM, "lugar_cercano.distancia_m"),
+                        )
+                    },
+                    referencias = dto.referencias.orEmpty().map {
+                        ReferenciaLugar(
+                            id = obligatorio(it.id, "referencias.id"),
+                            nombre = obligatorio(it.nombre, "referencias.nombre"),
+                            distanciaM = obligatorio(it.distanciaM, "referencias.distancia_m"),
+                            rumboGrados = obligatorio(it.rumboGrados, "referencias.rumbo_grados"),
+                        )
+                    },
+                    fotosUsadas = fotosUsadas,
+                    fotosConCoincidencia = dto.fotosConCoincidencia ?: 0,
+                )
+            }
+            else -> throw RespuestaInesperadaException("resultado desconocido: ${dto.resultado}")
         }
     }
 

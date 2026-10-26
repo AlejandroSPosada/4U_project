@@ -28,6 +28,7 @@ import androidx.navigation.navArgument
 import com.example.myapplication.ui.inicio.InicioScreen
 import com.example.myapplication.ui.destino.SeleccionDestinoScreen
 import com.example.myapplication.ui.ubicacion.EscaneoScreen
+import com.example.myapplication.ui.ubicacion.ResultadoUbicacionScreen
 import com.example.myapplication.ui.auth.LoginScreen
 import com.example.myapplication.ui.admin.panel.PanelAdminScreen
 import com.example.myapplication.ui.admin.mapa.EditorMapaScreen
@@ -39,6 +40,7 @@ import com.example.myapplication.ui.admin.recoleccion.UbicacionManualScreen
 import com.example.myapplication.ui.admin.recoleccion.RecoleccionScreen
 import com.example.myapplication.ui.admin.recoleccion.ResumenVideoScreen
 import com.example.myapplication.ui.admin.calibracion.CalibracionScreen
+import com.example.myapplication.domain.model.SesionDeNavegacion
 import com.example.myapplication.domain.model.SesionDeRecoleccion
 import com.example.myapplication.session.EventosSesion
 
@@ -137,7 +139,11 @@ fun AppNav(rutaInicial: String? = null) {
                 )
             } else {
                 InicioScreen(
-                    onUbicarme = { nav.navigate("ubicarme") },
+                    // FE-3.2: «uno» es solo ubicarse: sin destino (el Resultado no habla de un destino viejo).
+                    onUbicarme = {
+                        SesionDeNavegacion.quitarDestino()
+                        nav.navigate("ubicarme")
+                    },
                     onIrALugar = { nav.navigate("destino") },
                     onAccesoAdministrador = { nav.navigate("login") },
                     // FE-3.1: voz «mapa» o acción de TalkBack «Ver mapa». Queda encima de `inicio`: Atrás vuelve.
@@ -162,23 +168,37 @@ fun AppNav(rutaInicial: String? = null) {
             } else {
                 EscaneoScreen(
                     onCancelar = { nav.popBackStack() },
-                    onCompletado = {
-                        // TODO: navegar al resultado del escaneo
-                        // nav.navigate("resultado")
-                        nav.popBackStack()
+                    // FE-3.2: guarda el resultado (decisión abierta 15) y abre el Resultado (6.3) en lugar del
+                    // escaneo: Atrás desde 6.3 vuelve a Inicio, no a la cámara.
+                    onCompletado = { resultado, rumboAlTerminar ->
+                        SesionDeNavegacion.registrar(resultado, rumboAlTerminar)
+                        nav.navigate("resultado") { popUpTo("ubicarme") { inclusive = true } }
                     },
+                    onAjustes = { nav.navigate("ajustes") },
                 )
             }
+        }
+
+        // 6.3 Resultado de ubicación (FE-3.2). Lee la ubicación y el destino de SesionDeNavegacion.
+        composable("resultado") {
+            ResultadoUbicacionScreen(
+                onVolverAUbicarme = { nav.navigate("ubicarme") { popUpTo("resultado") { inclusive = true } } },
+                onIrALugar = { nav.navigate("destino") { popUpTo("resultado") { inclusive = true } } },
+                onInicio = { nav.popBackStack("inicio", inclusive = false) },
+            )
         }
 
         // 6.4 Selección de destino
         composable("destino") {
             SeleccionDestinoScreen(
                 onVolver = { nav.popBackStack() },
-                onDestinoConfirmado = { _ ->
-                    // TODO: guardar el destino elegido y, tras el escaneo 360° (si no hay ubicación
-                    // vigente), abrir NavegacionScreen (6.5). Por ahora solo lanza el escaneo.
-                    nav.navigate("ubicarme")
+                onDestinoConfirmado = { lugar ->
+                    // FE-3.2: el destino queda en SesionDeNavegacion. Con una ubicación vigente (alta o media y
+                    // ≤ 2 min) va directo al Resultado, que dice su distancia y dirección; si no, primero el escaneo.
+                    // Destino sale de la pila (al volver no queda su confirmación vieja). La vista 6.5 es de FE-5.1.
+                    SesionDeNavegacion.elegirDestino(lugar)
+                    val siguiente = if (SesionDeNavegacion.ubicacionVigente() != null) "resultado" else "ubicarme"
+                    nav.navigate(siguiente) { popUpTo("destino") { inclusive = true } }
                 },
                 onAjustes = { nav.navigate("ajustes") },
             )

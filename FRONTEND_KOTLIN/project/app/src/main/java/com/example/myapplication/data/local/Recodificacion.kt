@@ -20,6 +20,39 @@ object LimitesSubida {
     const val LADO_MIN_REINTENTO_PX = 640
 }
 
+/**
+ * Límites de una re-codificación (FE-3.2: el mismo [Recodificador] sirve a la subida y a la localización).
+ * [ladoMaxPx]: lado mayor máximo; [bytesMax]: tamaño máximo; [calidades]: calidades JPEG en orden; [ladoMinReintentoPx]:
+ * por debajo de este lado ya no se reintenta (×3/4).
+ */
+data class LimitesRecodificacion(
+    val ladoMaxPx: Int,
+    val bytesMax: Long,
+    val calidades: List<Int>,
+    val ladoMinReintentoPx: Int,
+) {
+    companion object {
+        /** Subida de recorridos (FE-2.1): ≤ 1600 px y ≤ 4 MB, calidad 90 bajando ([LimitesSubida]). */
+        val SUBIDA = LimitesRecodificacion(
+            LimitesSubida.LADO_MAX_PX,
+            LimitesSubida.BYTES_MAX,
+            LimitesSubida.CALIDADES,
+            LimitesSubida.LADO_MIN_REINTENTO_PX,
+        )
+
+        /**
+         * `POST /v1/localize` (FE-3.2; ARCHITECTURE §5.10 y backend §5.3): lado mayor 1024 px y calidad 85 (bajando si
+         * hace falta) para quedar en ≤ 1 572 864 bytes (`LOC_MAX_BYTES_FOTO` del backend).
+         */
+        val LOCALIZACION = LimitesRecodificacion(
+            ladoMaxPx = 1024,
+            bytesMax = 1_572_864L,
+            calidades = listOf(85, 80, 75, 70, 60, 50),
+            ladoMinReintentoPx = 480,
+        )
+    }
+}
+
 /** Ancho y alto en píxeles. */
 data class Dimensiones(val ancho: Int, val alto: Int) {
     val ladoMayor: Int get() = max(ancho, alto)
@@ -99,15 +132,21 @@ interface MotorImagen<T : Any> {
  * píxeles, porque el JPEG nuevo no lleva EXIF) y calidad 90; si pasa de 4 MB, baja la calidad
  * ([LimitesSubida.CALIDADES]) y, como último recurso, el lado (×3/4, hasta [LimitesSubida.LADO_MIN_REINTENTO_PX]).
  * Garantiza el criterio C3: lo que devuelve nunca pasa de 1600 px ni de 4 194 304 bytes.
+ *
+ * Desde FE-3.2 los límites son un parámetro ([LimitesRecodificacion]; por defecto [LimitesRecodificacion.SUBIDA], así
+ * la subida no cambia): la localización usa [LimitesRecodificacion.LOCALIZACION] (1024 px, calidad 85, ≤ 1,5 MB).
  */
-class Recodificador<T : Any>(private val motor: MotorImagen<T>) : PreparadorFoto {
+class Recodificador<T : Any>(
+    private val motor: MotorImagen<T>,
+    private val limites: LimitesRecodificacion = LimitesRecodificacion.SUBIDA,
+) : PreparadorFoto {
 
     override fun preparar(original: File, destino: File): FotoPreparada {
         val medida = motor.medir(original) ?: throw FotoIlegibleException("no se pudo leer ${original.name}")
         val orientacion = motor.orientacion(original)
         destino.parentFile?.mkdirs()
-        var lado = LimitesSubida.LADO_MAX_PX
-        while (lado >= LimitesSubida.LADO_MIN_REINTENTO_PX) {
+        var lado = limites.ladoMaxPx
+        while (lado >= limites.ladoMinReintentoPx) {
             val objetivo = PlanRecodificacion.destino(PlanRecodificacion.orientada(medida, orientacion), lado)
             val crudo = motor.cargar(original, PlanRecodificacion.muestreo(medida, lado))
                 ?: throw FotoIlegibleException("no se pudo decodificar ${original.name}")
@@ -121,10 +160,10 @@ class Recodificador<T : Any>(private val motor: MotorImagen<T>) : PreparadorFoto
             if (final !== crudo) motor.liberar(crudo)
             try {
                 val d = motor.dimensiones(final)
-                if (d.ladoMayor <= LimitesSubida.LADO_MAX_PX) {
-                    for (calidad in LimitesSubida.CALIDADES) {
+                if (d.ladoMayor <= limites.ladoMaxPx) {
+                    for (calidad in limites.calidades) {
                         val bytes = motor.comprimir(final, calidad, destino)
-                        if (bytes in 1..LimitesSubida.BYTES_MAX) return FotoPreparada(bytes, d.ancho, d.alto)
+                        if (bytes in 1..limites.bytesMax) return FotoPreparada(bytes, d.ancho, d.alto)
                     }
                 }
             } finally {
@@ -133,6 +172,6 @@ class Recodificador<T : Any>(private val motor: MotorImagen<T>) : PreparadorFoto
             lado = lado * 3 / 4
         }
         destino.delete()
-        throw FotoIlegibleException("${original.name} no cabe en ${LimitesSubida.BYTES_MAX} bytes")
+        throw FotoIlegibleException("${original.name} no cabe en ${limites.bytesMax} bytes")
     }
 }

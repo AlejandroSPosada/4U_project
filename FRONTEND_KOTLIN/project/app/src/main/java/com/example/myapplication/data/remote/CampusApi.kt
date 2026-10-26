@@ -1,9 +1,13 @@
 package com.example.myapplication.data.remote
 
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -54,4 +58,16 @@ interface CampusApi {
     /** `GET /v1/admin/videos/{id}` (backend §5.5; FE-2.1): `VideoResumen` + `fotos` para el progreso por foto. */
     @GET("admin/videos/{id}")
     suspend fun video(@Path("id") videoId: String): Response<VideoResumenDto>
+
+    /**
+     * `POST /v1/localize` (backend §5.3; FE-3.2). Ruta pública (sin `Authorization`). `multipart/form-data`: las partes
+     * [fotos] (cada una `fotos`, `image/jpeg`, en el orden de `rumbos`) y la parte [metadatos] (JSON de
+     * [MetadatosLocalizacionDto]). Las arma `RemoteLocalizacionRepository`.
+     */
+    @Multipart
+    @POST("localize")
+    suspend fun localizar(
+        @Part fotos: List<MultipartBody.Part>,
+        @Part("metadatos") metadatos: RequestBody,
+    ): Response<LocalizacionRespuestaDto>
 }

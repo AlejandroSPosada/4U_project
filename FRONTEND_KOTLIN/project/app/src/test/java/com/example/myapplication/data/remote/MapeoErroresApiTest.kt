@@ -127,6 +127,23 @@ class MapeoErroresApiTest {
         assertEquals(FalloApi.EmbeddingNoDisponible, MapeoErroresApi.clasificar(503, error("EMBEDDING_NO_DISPONIBLE")))
     }
 
+    // FE-3.2: 400 FOTOS_INVALIDAS de POST /v1/localize → FotosInvalidas(detalle.indice, detalle.motivo).
+
+    @Test
+    fun fotosInvalidas400_conIndiceYMotivo() {
+        val cuerpo = error("FOTOS_INVALIDAS", """{"indice": 2, "motivo": "embeddings la rechazó (IMAGEN_INVALIDA)"}""")
+        assertEquals(
+            FalloApi.FotosInvalidas(2, "embeddings la rechazó (IMAGEN_INVALIDA)"),
+            MapeoErroresApi.clasificar(400, cuerpo),
+        )
+        assertEquals(FalloApi.FotosInvalidas(null, null), MapeoErroresApi.clasificar(400, error("FOTOS_INVALIDAS")))
+        // Otro 400 sigue siendo Desconocido.
+        assertEquals(
+            FalloApi.Desconocido(400, "SOLICITUD_INVALIDA"),
+            MapeoErroresApi.clasificar(400, error("SOLICITUD_INVALIDA")),
+        )
+    }
+
     // Fila 7: 409 / 422 → mensaje del campo (detalle.campos).
 
     @Test

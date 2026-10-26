@@ -23,6 +23,83 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.9.0] — 2026-10-26
+
+- **Lote que la motivó:** FE-3.2 (ubicación real y Resultado 6.3; sin alertas, que son de FE-3.6).
+- **Decisiones del usuario del 2026-10-26** (respuestas literales a las preguntas del maestro): decisión abierta 15 →
+  «En memoria (Recomendado)» (ADR-FE-24); destino sin vista 6.5 → «Decir distancia y dirección (Recomendado)» y vista 6.3
+  → «Sin mapa ni voz (Recomendado)» (ADR-FE-27).
+- **Qué cambió:**
+  - Código: `LocalizacionRepository` (`data/repository/`, nuevo; con `FotoEscaneo`, stub y `RESULTADO_DE_PRUEBA`)
+    reemplaza a `ui/ubicacion/EscaneoBackend.kt` (borrado). `RemoteLocalizacionRepository` (`data/remote/`, nuevo):
+    `POST /v1/localize` `multipart/form-data` con las fotos re-codificadas a 1024 px y calidad 85 (≤ 1,5 MB) en
+    `envio_<i>.jpg` y `metadatos` (`rumbos` normalizados, `origen`, `app_version`). `CampusApi.localizar`, DTOs
+    (`MetadatosLocalizacionDto`, `LocalizacionRespuestaDto`, `PosicionDto`, `LugarCercanoDto`, `ReferenciaLugarDto`),
+    `MapeoDatosApi.resultadoUbicacion`, `FalloApi.FotosInvalidas(indice, motivo)` para `400 FOTOS_INVALIDAS`.
+    `LimitesRecodificacion` (`SUBIDA`, `LOCALIZACION`) y `Recodificador(motor, limites)` (la subida no cambia). Modelos
+    `ResultadoUbicacion`, `PosicionEstimada`, `LugarCercano`, `ReferenciaLugar`, `NivelConfianza`, `UbicacionEstimada`
+    y el holder `SesionNavegacion`/`SesionDeNavegacion` (`domain/model/`). `ConversionRumbo` y `DescribirUbicacion`
+    (`domain/usecase/`), `Declinacion` (`sensors/`), `FotosEscaneo` (`ui/ubicacion/`). Escaneo: `CONSERVAR_FOTOS =
+    false` (`internal`), `iniciar(carpeta)`, rumbo verdadero de cada foto, eventos por `Channel`,
+    `Completado(resultado, rumboAlTerminar)`, errores `SERVICIO_NO_DISPONIBLE`, `DEMASIADOS_INTENTOS`,
+    `FOTOS_INVALIDAS` y `DESCONOCIDO` con `ErrorEscaneo.deExcepcion` (lo inesperado ya no sale como «sin conexión»),
+    borrado de la carpeta al recibir la respuesta, «Ajustes» conectado. Vista 6.3 nueva (`ResultadoUbicacionScreen`,
+    `…ViewModel`, `…State`). `SeleccionDestinoViewModel` da la posición vigente a `RemoteLugaresRepository`.
+    `MainActivity`: ruta `resultado`; `ubicarme` → `resultado`; `destino` → `resultado` o `ubicarme` saliendo de la
+    pila; `inicio` «uno» quita el destino.
+  - Pruebas JVM nuevas: `RemoteLocalizacionRepositoryTest` (11), `ConversionRumboTest` (7, criterio C2),
+    `DescribirUbicacionTest` (11), `SesionDeNavegacionTest` (5), `FotosEscaneoTest` (6), `ErrorEscaneoTest` (7);
+    `MapeoErroresApiTest` +1 y `RecodificacionFotoTest` +2. Total 221.
+  - Validadores: `src/ops/validate32.py` (C1a, C1b con paso guiado y `embedding` encendido, C2, C3a, C3b, C4a, C4b con
+    paso guiado y `embedding` apagado; manuales C1c y C4c) y en `comun.py` `ParteMultipart`, `cuerpo_multipart` y
+    `http_post_multipart`; `test_validate32.py` (31). Total 190.
+  - Documento: §4.6 nuevo; encabezado; §2.1; §3.2 (paquetes, pruebas, tags `ResultadoVM` y líneas nuevas de
+    `EscaneoVM`, sin ubicación en los registros); §4 (componentes de `ui/components/`); §4.1 (221 casos); §5.1
+    (variantes); §5.2 (`VoiceController`, `AppLog`, `crearCarpetaEscaneo`, `tomarFoto`, `EscucharOrientacion`, «Flujo de
+    captura del escaneo» reescrito con `ErrorEscaneo.deExcepcion` y el formato de las líneas de `app.log`); §5.5 (vista
+    6.3, Destino); §5.6 (`LocalizacionRepository`, modelos y `SesionDeNavegacion`); §5.7 (`ConversionRumbo`,
+    `DescribirUbicacion` y sus reglas); §5.8 (rutas `inicio`, `ubicarme`, `resultado`, `destino`, holder del flujo
+    público); §5.10 («Ubicarse» completo, errores, mapeo, DTOs, `LimitesRecodificacion`, «Rumbo» y «Lugares» al día);
+    §5.11 (ayudas de FE-3.2, `validate32.py`, trampas, 190 casos); §6.2–§6.4; ADR-FE-23 (proveedor conectado),
+    ADR-FE-06, ADR-FE-24 a ADR-FE-27; decisiones abiertas 12 y 15 resueltas; R4 y R7.
+  - `validation-3-2` reescrita: entornos `local` y `dev`; precondiciones en el orden del contrato común (máquina,
+    otros lotes, credenciales, `embedding`); C1 → C1a (JVM), C1b (paso guiado) y la manual C1c; C3 → C3a y C3b; C4 →
+    C4a, C4b (paso guiado) y la manual C4c; hora límite 20:45; §5 con variables, preparación y salida esperada.
+  - `PLAN.md`: FE-3.2 pasa a «En curso» con las decisiones del usuario en §2.2; FE-3.5 ya no lleva «estado viejo de
+    Destino al volver del escaneo» (lo resolvió la ruta en FE-3.2).
+- **Contradicciones corregidas:**
+  - `validation-3-2` P2 pedía `GET /v1/admin/stats` con `total_fotos` > 0: esa ruta es de BE-2.3 (Pendiente), que no
+    está en «Para validar» de FE-3.2 (PLAN §2.1). Ahora el dataset se comprueba con `GET /v1/admin/videos` (BE-2.1,
+    Hecho), sumando `conteo.procesada` sin los videos `validacion…`.
+  - `validation-3-2` evaluaba primero los otros lotes (P1 FE-3.1, P2 BE-3.2) y después la máquina (P3), al revés que el
+    contrato común (§5.11: primero herramientas); no tenía precondición de credenciales (la de `stats` las necesitaba),
+    ni hora límite para `embedding` (infra §5.11 la exige), ni entorno `local`; su §5 no tenía variables, preparación
+    ni salida esperada; y su C1 manual exigía que el script encendiera `embedding` y lo apagara «al terminar C1» sin
+    decir que eso obliga a esperar a la persona (ahora es un paso guiado, C1b).
+  - `validation-3-2` C2 decía «una declinación negativa»; PLAN C2 pide positiva y negativa: ahora las dos.
+  - §4 listaba siete componentes en `ui/components/`; solo existe `BannerEstado.kt` (los demás eran nombres previstos).
+  - §5.1 no nombraba al Escaneo entre las vistas con `estado` como nombre del `StateFlow` (sí lo es).
+- **Contratos tocados (§5):** §5.2 (`EscaneoViewModel.iniciar(carpeta)`, `eventos` pasa a `Flow` sobre un `Channel`,
+  `EscaneoEvento.Completado` pasa de `data object` a `data class` —incompatible para un `when`—, `ErrorEscaneo` con
+  cuatro valores nuevos y `deExcepcion`, `EscaneoScreen.onCompletado` con datos, `CONSERVAR_FOTOS` `internal`);
+  §5.5 (vista 6.3 nueva); §5.6 (`LocalizacionRepository` reemplaza a `EscaneoBackend` —incompatible—, modelos y holder
+  nuevos); §5.7 (dos casos de uso nuevos); §5.8 (ruta `resultado` nueva y cambios de `inicio`, `ubicarme` y `destino`);
+  §5.10 (ruta, DTOs, `FalloApi.FotosInvalidas`, `Recodificador` con límites —compatible—); §5.11 (ayudas nuevas,
+  compatibles). Piezas, ADR y cambios incompatibles en 0.x: sube la menor.
+- **Cómo se verificó:** en Windows, `.\gradlew.bat --console=plain testDebugUnitTest assembleDebug` con JBR 21 →
+  `BUILD SUCCESSFUL`, 221 casos sin fallos. En WSL, `uv run --frozen ruff check .` («All checks passed!»),
+  `ruff format --check .` («16 files already formatted»), `pytest -q` (190 passed) y `validate32.py --entorno local` →
+  código 0 (P1; C1a 11/11, 11/11 y 5/5; C2 7/7; C3a; C4a 7/7; C1b, C4b y C3b omitidas; manuales C1c y C4c). Sin
+  teléfono y sin tocar `dev` (lo coordina el maestro; con BE-3.2 «En curso», `validate32.py --entorno dev` da hoy código
+  2).
+- **Pendiente:** `validate32.py --entorno dev` cuando BE-3.2 esté «Hecho» (dataset real y calibración): C1 en el campus
+  (10 puntos, con `embedding` encendido) y C4 de noche (`embedding` apagado), con su evidencia en
+  `validation/evidencia/fe-3-2/`; C3b después de esas vueltas. Sin comprobar en el teléfono: la re-codificación a 1024 px
+  con `MotorImagenAndroid`, que el backend real acepte el `multipart`, el valor de la declinación (≈ −7° en Medellín),
+  el borrado de las fotos, la 6.3 con TalkBack (y si su voz se solapa con TalkBack, FE-3.5) y las distancias reales en
+  Destino. El texto de C2c de `validate31.py` sigue pendiente (FE-4.3): corregirlo exige tocar `validation-3-1`, que
+  este lote no toca.
+
 ## [0.8.1] — 2026-10-26
 
 - **Lote que la motivó:** FE-3.1 (cierre: validado en `dev`) y la decisión del usuario del 2026-10-26, a la propuesta

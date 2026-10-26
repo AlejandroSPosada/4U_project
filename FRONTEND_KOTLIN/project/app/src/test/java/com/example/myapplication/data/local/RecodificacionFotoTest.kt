@@ -175,6 +175,34 @@ class RecodificacionFotoTest {
         }
     }
 
+    // ---- límites de la localización (FE-3.2) ------------------------------------------------------------------
+
+    @Test
+    fun localizacion_12MP_da1024x768ConCalidad85() {
+        val motor = MotorFalso(Dimensiones(4000, 3000))
+        val original = File.createTempFile("original", ".jpg", tmp.root)
+        val destino = File(tmp.root, "escaneo/envio_1.jpg")
+        val p = Recodificador(motor, LimitesRecodificacion.LOCALIZACION).preparar(original, destino)
+        assertEquals(FotoPreparada((1024L * 768 * 0.3).toLong(), 1024, 768), p)
+        assertEquals(listOf(85), motor.calidades)
+        assertEquals(listOf(2), motor.muestreos) // 4000 / 2 = 2000 ≥ 1024 > 1000
+        assertTrue(destino.isFile)
+    }
+
+    @Test
+    fun localizacion_barrido_nuncaPasaDe1024NiDe1_5MB() {
+        val tamanos = listOf(640 to 480, 1024 to 768, 3264 to 2448, 4000 to 3000, 8000 to 6000)
+        for ((w, h) in tamanos) for (o in listOf(1, 6)) for (bpp in listOf(0.3, 1.8, 2.5)) {
+            val motor = MotorFalso(Dimensiones(w, h), orientacionExif = o, bytesPorPixel = { q -> bpp * q / 85.0 })
+            val original = File.createTempFile("original", ".jpg", tmp.root)
+            val p = Recodificador(motor, LimitesRecodificacion.LOCALIZACION)
+                .preparar(original, File.createTempFile("envio", ".jpg", tmp.root))
+            assertTrue("$w×$h o=$o: ${p.ancho}×${p.alto}", maxOf(p.ancho, p.alto) <= 1024)
+            assertTrue("$w×$h o=$o: ${p.bytes} B", p.bytes <= 1_572_864L)
+        }
+        assertEquals(LimitesRecodificacion.SUBIDA.ladoMaxPx, LimitesSubida.LADO_MAX_PX) // la subida no cambia
+    }
+
     // ---- rumbo del contrato -----------------------------------------------------------------------------------
 
     @Test

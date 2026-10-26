@@ -208,3 +208,53 @@ data class SubidaCompletadaDto(
     @SerializedName("estado") val estado: String? = null,
     @SerializedName("conteo") val conteo: ConteoFotosDto? = null,
 )
+
+// --- FE-3.2: POST /v1/localize (backend §5.3) ---------------------------------------------------------------------
+
+/**
+ * Parte `metadatos` de `POST /v1/localize` (la envía la app; JSON con Gson, que omite los campos `null` pero escribe los
+ * `null` dentro de una lista). `rumbos[i]` es el rumbo verdadero [0, 360) de `fotos[i]` o `null`; `origen` = `escaneo`;
+ * `app_version` opcional (≤ 40 caracteres).
+ */
+data class MetadatosLocalizacionDto(
+    @SerializedName("rumbos") val rumbos: List<Double?>,
+    @SerializedName("origen") val origen: String = "escaneo",
+    @SerializedName("app_version") val appVersion: String? = null,
+)
+
+/** `posicion` de la respuesta de `POST /v1/localize`. */
+data class PosicionDto(
+    @SerializedName("lat") val lat: Double? = null,
+    @SerializedName("lng") val lng: Double? = null,
+    @SerializedName("radio_m") val radioM: Double? = null,
+)
+
+/** `lugar_cercano` (sin rumbo). */
+data class LugarCercanoDto(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("nombre") val nombre: String? = null,
+    @SerializedName("distancia_m") val distanciaM: Double? = null,
+)
+
+/** Un elemento de `referencias` (`rumbo_grados` absoluto, [0, 360)). */
+data class ReferenciaLugarDto(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("nombre") val nombre: String? = null,
+    @SerializedName("distancia_m") val distanciaM: Double? = null,
+    @SerializedName("rumbo_grados") val rumboGrados: Double? = null,
+)
+
+/** Respuesta 200 de `POST /v1/localize`. */
+data class LocalizacionRespuestaDto(
+    @SerializedName("resultado") val resultado: String? = null,
+    @SerializedName("posicion") val posicion: PosicionDto? = null,
+    @SerializedName("confianza") val confianza: Double? = null,
+    @SerializedName("nivel") val nivel: String? = null,
+    @SerializedName("correccion_rumbo_grados") val correccionRumboGrados: Double? = null,
+    @SerializedName("lugar_cercano") val lugarCercano: LugarCercanoDto? = null,
+    @SerializedName("referencias") val referencias: List<ReferenciaLugarDto>? = null,
+    @SerializedName("fotos_usadas") val fotosUsadas: Int? = null,
+    @SerializedName("fotos_con_coincidencia") val fotosConCoincidencia: Int? = null,
+    @SerializedName("version_vector") val versionVector: String? = null,
+    @SerializedName("latencia_ms") val latenciaMs: Int? = null,
+)

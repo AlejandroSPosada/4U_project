@@ -30,6 +30,13 @@ sealed interface FalloApi {
     /** `503 EMBEDDING_NO_DISPONIBLE` (`POST /v1/localize` con embeddings apagado o arrancando). */
     data object EmbeddingNoDisponible : FalloApi
 
+    /**
+     * `400 FOTOS_INVALIDAS` (`POST /v1/localize`, FE-3.2): `detalle.indice` (la foto, 0 = la primera) y `detalle.motivo`
+     * (texto corto para humanos, p. ej. «embeddings la rechazó (IMAGEN_INVALIDA)»). Solo se registra; la persona oye
+     * «No pude procesar las fotos».
+     */
+    data class FotosInvalidas(val indice: Int?, val motivo: String?) : FalloApi
+
     /** `409` o `422`: [campos] sale de `detalle.campos` (vacío en los `409`, que solo traen [codigo]). */
     data class Validacion(
         val http: Int,
@@ -92,6 +99,11 @@ object MapeoErroresApi {
             http == 401 && codigo in CODIGOS_SESION -> FalloApi.SesionVencida(codigo!!)
             http == 403 && codigo == "SIN_PERMISOS" -> FalloApi.SinPermisos
             http == 503 && codigo == "EMBEDDING_NO_DISPONIBLE" -> FalloApi.EmbeddingNoDisponible
+            http == 400 && codigo == "FOTOS_INVALIDAS" -> {
+                val detalle = error?.get("detalle")?.takeIf { it.isJsonObject }?.asJsonObject
+                val indice = detalle?.get("indice")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asInt
+                FalloApi.FotosInvalidas(indice, detalle?.texto("motivo"))
+            }
             http == 409 || http == 422 -> FalloApi.Validacion(http, codigo, error?.texto("mensaje"), campos(error))
             else -> FalloApi.Desconocido(http, codigo)
         }
