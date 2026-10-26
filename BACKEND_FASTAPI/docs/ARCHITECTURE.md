@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.13.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.14.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.4 y BE-3.1 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. Lo de los demás lotes es diseño propuesto; las alertas pasaron a BE-3.3, fuera del núcleo y sin código (§4.9) |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.4 y BE-3.1 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`); de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales; y de BE-3.3 (alertas, fuera del núcleo: `GET /v1/alerts`, `/v1/admin/alerts`, la purga de *tombstones* y `validate33.py`, §4.11), probado en local sin base (sus pruebas con base, sin ejecutar) y **sin validar en `dev`**. Lo de los demás lotes es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -98,7 +98,7 @@ BACKEND_FASTAPI/
 └── project/                     todo el código
     ├── src/
     │   ├── app/
-    │   │   ├── main.py          crear_app(): routers, middleware, manejadores de error y (BE-4.1) el reconciliador
+    │   │   ├── main.py          crear_app(): routers, middleware, manejadores de error, la purga diaria de *tombstones* de alertas (BE-3.3, §4.11) y (BE-4.1) el reconciliador
     │   │   ├── config.py        Settings (pydantic-settings): lee las variables de infra §5.4 y los parámetros de §5.10
     │   │   ├── logs.py          Logs JSON por línea (§5.10) y `request_id` de la petición en curso
     │   │   ├── middleware.py    X-Request-Id, evento `peticion` y 500 ante fallos no previstos (§4.2)
@@ -106,10 +106,10 @@ BACKEND_FASTAPI/
     │   │   ├── api/
     │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_cola_hash (BE-1.3, §4.4); obtener_almacen (BE-2.1, §4.5)
     │   │   │   ├── cuerpo.py    leer_cuerpo: el cuerpo de la petición en memoria, con tope (BE-2.4, §4.8)
-    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9), localizar (BE-3.2: `router` en /v1, público, §4.10), admin_estadisticas (BE-2.3: `router` en RUTAS_ADMIN, §4.7); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: alerts (BE-3.3), admin_*
-    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizacion (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7)
-    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); multipart.py y fotos.py (BE-2.4, §4.8); lugares.py y geo.py (BE-3.1, §4.9); localizacion.py (BE-3.2: el algoritmo, con la corrección de rumbo, §4.10)
-    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7). Después: purgar (BE-4.1), alertas (BE-3.3)
+    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9), localizar (BE-3.2: `router` en /v1, público, §4.10), admin_estadisticas (BE-2.3: `router` en RUTAS_ADMIN, §4.7), alertas (BE-3.3: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.11); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: admin_* (BE-4.1)
+    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizacion (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7); alertas (BE-3.3, §4.11)
+    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); multipart.py y fotos.py (BE-2.4, §4.8); lugares.py y geo.py (BE-3.1, §4.9); localizacion.py (BE-3.2: el algoritmo, con la corrección de rumbo, §4.10); alertas.py (BE-3.3, §4.11)
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7); alertas (BE-3.3, §4.11). Después: purgar (BE-4.1)
     │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas.py (la búsqueda de vecinos, BE-2.4, §4.8)
     │   │   ├── clientes/        embedding.py (httpx: `esta_listo` desde BE-1.1, `vectorizar` desde BE-2.2); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5; `descargar` y `escribir` desde BE-2.2); sqs.py (BE-2.2, §4.6)
     │   │   ├── seguridad/       hash.py (argon2id, §4.3), tokens.py (JWT, §5.2) y dependencias.py (requiere_admin), BE-1.3 (§4.4)
@@ -150,7 +150,7 @@ por ruido.
 Para que una tarea de `worker` no fallara al arrancar, en BE-1.1 `python -m app.worker` solo registraba un latido cada
 60 s (`evento = latido`, `modo = sin_consumo`) y terminaba limpio con SIGTERM, sin consumir las colas. Desde BE-2.2
 consume `ingesta` (§4.6); ese modo queda solo para cuando falta configuración (§4.6, «Arranque»). La purga llega con
-BE-4.1 (§4.11): hasta entonces los mensajes de `purga` siguen en la cola.
+BE-4.1 (§4.12): hasta entonces los mensajes de `purga` siguen en la cola.
 
 **Despliegue con `backend.yml`** (`.github/workflows/` de la raíz del monorepo). Sigue la secuencia de infra §5.9; el
 paso `migrate`, desde BE-1.2, está en §4.3. Lo propio del backend:
@@ -685,8 +685,8 @@ Trampas:
 `GET /v1/admin/stats` (§5.5) da los cuatro datos del resumen del panel (vista 7.2 de la app, FE-2.2): fotos
 procesadas, lugares, alertas activas y el último video, en **una** sentencia SQL. Las «fotos pendientes de subir» del
 panel salen de la cola local de la app, no del backend. `alertas_activas` cuenta las filas de `alertas` con `activa` y
-sin `eliminada_en` (la tabla existe desde BE-1.2): da 0 mientras no exista BE-3.3, y su comprobación con datos es
-BE-3.3 C5, no BE-2.3 (decisión de 0.11.0, PLAN §2.2).
+sin `eliminada_en` (la tabla existe desde BE-1.2; la escribe BE-3.3 desde 0.14.0, §4.11), y su comprobación con datos
+es BE-3.3 C5, no BE-2.3 (decisión de 0.11.0, PLAN §2.2).
 
 **Construido (0.13.0) y validado en `dev` (0.13.1).** Pruebas: `tests/base/test_estadisticas_base.py` (el endpoint
 contra la base, 11 pruebas), `tests/contrato/test_contrato_estadisticas.py` (§5.5 contra los esquemas y el OpenAPI) y
@@ -766,7 +766,9 @@ en `dev`; si un día pesara, la salida es un índice o un contador, sin cambiar 
 | `app.esquemas.estadisticas` | `ResumenPanel`, `UltimoVideo` (§5.5) |
 | Pruebas con base | `tests/base/test_estadisticas_base.py`: la fixture `ajustes_st` (`base_migrada` con `JWT_SECRET`; la reciben los ayudantes de SQL) y la fixture `api` (un `TestClient` con la sesión del admin de `base_migrada`); `video(ajustes, eliminado=False, creado_en=None)` → `(id, numero)` (inserta por SQL un video `validacion-23` del primer usuario; eliminado = `estado`, `eliminado_en` y `eliminado_por` puestos), `fotos(ajustes, video_id, *estados)` (una foto por estado, `orden` 1, 2…; en `error` con su motivo), `lugar(ajustes, nombre)` (SQL, `nombre_normalizado` = `nombre`), `alerta(ajustes, activa=True, eliminada=False, desde=None)` (SQL: `mensaje` `'validacion-23 alerta'`, en `1.0, -100.0`, `creado_por` = `actualizado_por` = el primer usuario, `vigencia_desde` = `desde` y `eliminada_en = now()` si `eliminada`), `sql(ajustes, sentencia, **parametros)`, `_resumen(api)` (`GET /v1/admin/stats`: exige `200`, las cuatro claves exactas y que valide con `ResumenPanel`; devuelve el cuerpo) y las constantes `RUTA` (`/v1/admin/stats`), `VACIO` (ceros y `ultimo_video` nulo) y `FECHA_UTC`. Son de un módulo de pruebas: para reutilizarlas, `importlib` (como `test_validate24.py`); BE-3.3 puede probar su C5 con base con `alerta(...)` y `_resumen(api)` |
 
-**Guía para BE-3.3** (alertas; su C5 es el antiguo criterio de alertas de BE-2.3):
+**Guía para BE-3.3** (alertas; su C5 es el antiguo criterio de alertas de BE-2.3). Aplicada tal cual en BE-3.3
+(0.14.0, §4.11): sin tocar `servicios/estadisticas.py`; su C5 con base está en `tests/base/test_alertas_base.py`
+(crea las alertas por la API, no con `alerta(...)`), y en `dev`, en `validate33.py` C5.
 - `alertas_activas` ya cuenta lo que pide el contrato si BE-3.3 escribe `alertas` como dice §5.7: borrar fija
   `eliminada_en` (*tombstone*) y desactivar pone `activa = false`. No hace falta tocar `servicios/estadisticas.py`; la
   purga física de los *tombstones* de más de 90 días no cambia la cifra (ya no contaban).
@@ -929,7 +931,7 @@ Trampas:
 - La herramienta de evaluación de embeddings y `validate24.py` mandan la foto como `consulta.jpg` con `image/jpeg`
   (`comun.pedir_vecinos`); el nombre de archivo no se mira.
 
-### 4.9 BE-3.1 — Lugares (las alertas pasaron a BE-3.3, sin implementar)
+### 4.9 BE-3.1 — Lugares
 `GET /v1/places` (público) da todos los lugares, con la distancia a una posición si se envía; `/v1/admin/places`
 (admin) los crea, reemplaza, borra y lista para el panel (contratos en §5.3 y §5.5). Los usan la app (Selección de
 destino 6.4 y lugares de administración 7.6–7.7: FE-3.1 y FE-3.4) y BE-3.2 (lugar cercano y referencias, §4.10 paso 9).
@@ -1046,21 +1048,8 @@ Trampas:
   habría que paginar o filtrar en SQL (cambio de §5.3).
 - Con el `TestClient` de las pruebas, `GET /v1/places?lat=nan` también es `422` (`allow_inf_nan=False` en `Query`).
 
-**Alertas (BE-3.3, sin implementar).** Decisión del usuario (2026-10-25): las alertas salen del núcleo y de BE-3.1
-a un lote propio, BE-3.3 (PLAN §2.2). Su contrato de §5.3 y §5.5 queda documentado y marcado «sin implementar
-(BE-3.3)»; hoy esas rutas no existen y responden `404 NO_ENCONTRADO` (ruta inexistente, §5.6), también
-`/v1/admin/alerts/*` sin token (no hay ruta que proteger). La tabla `alertas` existe desde `0001` (§5.7) y
-`GET /v1/admin/stats` (BE-2.3) la cuenta. Diseño para BE-3.3 (ADR-BE-10):
-- `GET /v1/alerts` alimenta la caché local de la app, que debe funcionar sin conexión: sin `desde` entrega la foto
-  completa de alertas activas (incluidas las de vigencia futura, para que lleguen antes de empezar; la app filtra por
-  vigencia al anunciar); con `desde` entrega solo lo cambiado y los identificadores borrados (*tombstones*, 90 días,
-  `ALERTAS_TOMBSTONE_DIAS`, con su limpieza diaria desde `api`). La app guarda `generado_en` y lo envía como `desde`
-  la próxima vez.
-- El editor de la app trabaja local primero y genera los UUID. `PUT /v1/admin/alerts/{id}` crea o reemplaza
-  (idempotente); `DELETE` de un id desconocido responde `204` (así, una alerta creada y borrada antes de sincronizar
-  no da error). `POST /v1/admin/alerts/sincronizar` aplica una lista de cambios independientes y devuelve el resultado
-  de cada uno: la app quita de «pendientes» solo los que salieron `ok`. Control de concurrencia opcional con
-  `If-Match: <version>` (`409 CONFLICTO_VERSION`).
+**Alertas: lote propio.** Decisión del usuario (2026-10-25): las alertas salieron del núcleo y de BE-3.1 a BE-3.3
+(PLAN §2.2), construido en 0.14.0: §4.11.
 
 ### 4.10 BE-3.2 — Localización (`POST /v1/localize`)
 `POST /v1/localize` (§5.3, público) recibe 1–5 fotos de una vuelta de 360° y sus rumbos, y devuelve la posición, la
@@ -1223,7 +1212,176 @@ Presupuesto de tiempo: embedding ≤ `EMBEDDING_TIMEOUT_S` por fase (5 s; tope t
 para 5 fotos, embeddings §5.7: EMB-3.1 midió 413 ms de p95 para un lote de 5), búsquedas < 100 ms; objetivo p95 en el
 servidor ≤ 1 s con `embedding` encendido (infra §5.10, C3). Sin medir en `dev`.
 
-### 4.11 BE-4.1 — Administración de videos e imágenes, y purga
+### 4.11 BE-3.3 — Alertas (fuera del núcleo)
+`GET /v1/alerts` (público) alimenta la caché local de alertas de la app, que funciona sin conexión (FE-3.6): la foto
+completa la primera vez y después solo las diferencias desde el `generado_en` anterior. `/v1/admin/alerts` (admin) es
+el editor «local primero» de la app (FE-3.3): lista, crea o reemplaza con el id que genera la app (`PUT`, con
+`If-Match` opcional), borra dejando un *tombstone* y aplica lotes de cambios (`sincronizar`). `api` purga cada día los
+*tombstones* de más de `ALERTAS_TOMBSTONE_DIAS`. Contratos en §5.3 y §5.5; decisiones en ADR-BE-10 y ADR-BE-19.
+`alertas_activas` de `GET /v1/admin/stats` (BE-2.3, §4.7) ya las cuenta, sin cambios en su código.
+
+**Construido (0.14.0), sin validar en `dev`.** Pruebas: `tests/unit/test_alertas.py` (reglas de `dominio.alertas`,
+esquemas, sobre de `sincronizar` y el bucle de la purga), `tests/api/test_alertas.py` (sin base: `401` antes que
+`422`, `desde` no válido → `422` antes de tocar la base, público sin base → `503`), `tests/contrato/test_contrato_alertas.py`
+(§5 contra los esquemas y el OpenAPI) y `tests/ops/test_validate33.py` (el validador contra `ApiFalsa`, §5.11), en
+verde; `tests/base/test_alertas_base.py` (28 pruebas contra PostgreSQL) y las 3 con base de `test_validate33.py`
+(el validador contra el backend real), **sin ejecutar** en la máquina donde se construyó (Docker Desktop no arrancó:
+sin PostgreSQL local); corren en el CI de `backend.yml` de un PR. Sin migración: la tabla `alertas` de `0001` ya tiene
+el id que puede generar la app, `version`, `eliminada_en` y el índice `alertas_actualizado_en_idx` (§5.7). El SQL de
+abajo es el que compila SQLAlchemy con el dialecto asyncpg (comprobado imprimiéndolo); que PostgreSQL lo ejecute lo
+dicen esas pruebas. Falta `validate33.py --entorno dev` con código 0 (PLAN §3).
+
+**Lectura pública** (`GET /v1/alerts`, router `api/v1/alertas.router_publico`, sin `requiere_admin`: ignora
+`Authorization`, también un token no válido):
+1. FastAPI valida `desde` con `FechaConZona` (§4.5): ISO-8601 **con zona**; sin zona, mal formada o fuera de los años
+   1–9999 en UTC → `422 VALIDACION` con `campo` = `desde`, antes de tocar la base. Un `+` sin codificar en la URL llega
+   como espacio (y da `422`): `generado_en` siempre va con `Z`, que no hace falta codificar.
+2. `servicios.alertas.foto`: una transacción corta. `SELECT now()` da `ahora` (= `generado_en`): el reloj de la base,
+   el mismo que pone `actualizado_en`, así que no hay desfase entre relojes de tareas.
+3. `dominio.alertas.pide_foto_completa(desde, ahora, ALERTAS_TOMBSTONE_DIAS)` → **foto completa** si no hay `desde`,
+   si `desde > ahora` (no salió de un `generado_en`: la diferencia podría saltarse cambios) o si el corte (`desde −
+   60 s`) es anterior a `ahora − 90 días` (los *tombstones* de entonces ya pueden estar purgados). Foto completa:
+   `WHERE activa IS true AND eliminada_en IS NULL`, **cualquier vigencia** (pasada, presente o futura: la evalúa la app
+   al anunciar), `eliminadas = []`, `completo = true`.
+4. Si no, **diferencias**: `WHERE actualizado_en >= desde − MARGEN_DESDE_S` (60 s) → las filas vivas van a `alertas`
+   (activas o no: la app quita las inactivas) y las que tienen `eliminada_en`, a `eliminadas` (solo el id),
+   `completo = false`. Usa `alertas_actualizado_en_idx`: borrar también fija `actualizado_en`.
+5. Las dos listas en orden `actualizado_en`, `id`. `generado_en` sale en UTC con `Z` y sin fracciones (`FechaUtc`):
+   truncar no pierde nada, porque la siguiente diferencia empieza 60 s antes.
+
+**Por qué el margen de 60 s** (ADR-BE-19). `actualizado_en` es el `now()` de la transacción que escribe, que es su hora
+de **inicio**, no la de su `COMMIT`. Si una lectura toma su foto (y su `generado_en`) mientras esa transacción sigue
+abierta, la foto no la ve, y una diferencia estricta desde ese `generado_en` tampoco la vería nunca (su `actualizado_en`
+es anterior). Con el margen, la vería si confirma en menos de 60 s desde que empezó (las transacciones de alertas
+duran milisegundos). El precio: una diferencia puede repetir cambios de hasta 60 s antes de `desde`, que la app vuelve
+a aplicar sin efecto (reemplaza por `id`; quitar un id que ya no tiene no hace nada).
+
+**Panel** (`GET /v1/admin/alerts`, `listar_admin`): las alertas sin borrar, con `tipo`, `prioridad` y `activa`
+filtrados en SQL y `q` (≤ 100 caracteres, sin NUL) en Python con `dominio.alertas.coincide`: la regla de nombres de
+lugares (`normalizar_nombre`, §4.9) sobre `mensaje`, buscando **contenido** (sin tildes, mayúsculas ni espacios de más;
+vacío o solo espacios = sin filtro). Orden: la modificada más recientemente primero (`actualizado_en DESC`, a igualdad
+`id`). Sin paginar (son decenas). `consulta_admin()` une dos veces `usuarios` para los nombres de `creado_por` y
+`actualizado_por`:
+```sql
+SELECT alertas.*, usuarios_1.nombre AS creado_por_nombre, usuarios_2.nombre AS actualizado_por_nombre
+FROM alertas JOIN usuarios AS usuarios_1 ON usuarios_1.id = alertas.creado_por
+             JOIN usuarios AS usuarios_2 ON usuarios_2.id = alertas.actualizado_por
+WHERE alertas.eliminada_en IS NULL ORDER BY alertas.actualizado_en DESC, alertas.id
+```
+
+**Escrituras** (el admin es el `UsuarioActual` de `requiere_admin`, §4.4). Cada cambio va en una transacción con su fila
+de `auditoria` (§5.7, «filas de BE-3.3») y, tras confirmar, su evento (`alerta_guardada`, `alerta_eliminada`, §5.10;
+sin el mensaje):
+- **`PUT /v1/admin/alerts/{id}`** (`guardar`). El router lee `If-Match` con `dominio.alertas.leer_if_match` (`3` o
+  `"3"`; otra cosa → `422` con `campo` = `If-Match`). En la transacción, `SELECT … FOR UPDATE` del id y:
+  - **No existe**: con `If-Match` → `ConflictoVersion` → `409 CONFLICTO_VERSION` (nada escrito). Sin él, `INSERT …
+    ON CONFLICT (id) DO NOTHING RETURNING id` con `version` 1, `creado_por` = `actualizado_por` = el admin y
+    `creado_en` = `actualizado_en` = `now()` → `201` (operación `crear`). Si el `INSERT` no devuelve fila, otra petición
+    la creó a la vez (el `INSERT` esperó a que confirmara): vuelve a bloquearla y sigue como si existiera.
+  - **Existe**: `If-Match` distinto de `version` → `409` (nada escrito). Si está borrada (*tombstone*) → **restaurar**:
+    todos los campos, `eliminada_en = NULL`, `version + 1` → `201` (para la app no existía); conserva `creado_en` y
+    `creado_por`. Si está viva, compara los 9 campos (`dominio.alertas.CAMPOS`, `campos_cambiados`): **sin cambios no
+    escribe** (ni `actualizado_en`, ni `version`, ni auditoría, ni evento) y responde `200` con la alerta como está;
+    con cambios, `UPDATE` de todos los campos con `version + 1`, `actualizado_en = now()` y `actualizado_por` → `200`
+    (operación `editar`). El `PUT` reemplaza todo: lo que no se envía vuelve a su valor por defecto.
+  - En la misma transacción, `consulta_admin()` de la fila para la respuesta (`AlertaAdmin`). `version` se calcula en
+    Python sobre la fila bloqueada.
+- **`DELETE /v1/admin/alerts/{id}`** (`borrar`): una sentencia, `UPDATE alertas SET eliminada_en = now(),
+  actualizado_en = now(), actualizado_por = :admin, version = version + 1 WHERE id = :id AND eliminada_en IS NULL
+  RETURNING version, mensaje`. Sin fila devuelta (no existe o ya estaba borrada) nada cambia ni se audita. Siempre
+  `204`. No mira `If-Match` (§5.5 solo lo admite en `PUT`) y un id desconocido **no** deja *tombstone*.
+- **`POST /v1/admin/alerts/sincronizar`**: el sobre se valida entero con `SincronizarPeticion` (1–100 `Cambio`, cada
+  uno `op` y su id; si no, `422` y nada se aplica). Después, **en orden**, cada cambio en su propia transacción con
+  `guardar` o `borrar` (`origen = "sincronizar"`); un `upsert` cuya `alerta` no cumple `AlertaEntrada` da `estado =
+  error` con `codigo = VALIDACION` y no se aplica (los demás siguen). `generado_en` = `now()` de una transacción final;
+  evento `alertas_sincronizadas`. Un fallo de la base a mitad sale como `503 BASE_NO_DISPONIBLE`: lo ya aplicado queda
+  y repetir la petición entera es seguro (un `upsert` igual no escribe; `eliminar` es idempotente). No lleva
+  `If-Match`: gana el último, y un `upsert` de una alerta borrada la restaura.
+
+**Concurrencia.** `PUT` bloquea la fila con `FOR UPDATE` (nadie tiene FK hacia `alertas`, así que no choca con otras
+tablas) y `DELETE` es un `UPDATE` que espera ese bloqueo y vuelve a evaluar `eliminada_en IS NULL`. Dos `PUT` a la vez
+del mismo id nuevo: uno crea y el otro espera en el `ON CONFLICT` y reemplaza (`test_dos_put_a_la_vez_del_mismo_id_nuevo`).
+
+**Purga de *tombstones*** (`limpieza_diaria`). El ciclo de vida de `main.py` la lanza como tarea de asyncio
+(`limpieza-diaria-alertas`) si hay motor y la cancela al parar: espera `ESPERA_LIMPIEZA_S` (60 s) y después, cada
+`INTERVALO_LIMPIEZA_S` (24 h), `purgar_tombstones(motor, ALERTAS_TOMBSTONE_DIAS)`:
+```sql
+DELETE FROM alertas WHERE alertas.eliminada_en < now() - make_interval(0, 0, 0, :dias)
+```
+Registra `alertas_purgadas` (también con 0) o `limpieza_fallida` (`WARNING` si la base no responde; `ERROR` con la
+traza si es otra cosa) y sigue. Cada réplica de `api` la hace (es idempotente) y cada arranque reinicia la cuenta (la
+primera purga, 60 s después de arrancar). No rompe las diferencias: lo purgado tiene `eliminada_en < ahora − 90 días`,
+anterior al corte de cualquier `desde` que se responde por diferencias (el resto recibe la foto completa).
+
+**Nombres internos** (para depurar o extender sin abrir el código):
+- `dominio/alertas.py`: `MENSAJE_MIN` (1), `MENSAJE_MAX` (200), `RADIO_MIN` (5), `RADIO_MAX` (100),
+  `RADIO_POR_DEFECTO` (15), `CAMBIOS_MAX` (100), `Q_MAX` (100), `VERSION_MAX` (2 147 483 647), `MARGEN_DESDE_S` (60),
+  `CAMPOS` (`lat`, `lng`, `mensaje`, `tipo`, `prioridad`, `radio_m`, `activa`, `vigencia_desde`, `vigencia_hasta`: el
+  orden de `detalle.cambios`), `MOTIVO_IF_MATCH`; `leer_if_match(texto)` → versión o `ValueError` (vacío, `*`, varias
+  versiones, `W/"3"`, 0 o más de `VERSION_MAX`), `campos_cambiados(guardado, nuevo)`, `corte_desde(desde)`,
+  `pide_foto_completa(desde, ahora, dias)` y `coincide(mensaje, q)`.
+- `esquemas/alertas.py`: `AlertaEntrada` (con `valores()` → dict de `CAMPOS`), `Alerta`, `AlertaAdmin`,
+  `AlertasRespuesta`, `ListaAlertas`; para `sincronizar`, `AlertaConId` (`id` validado; el resto, `extra = allow`, sale
+  con `entrada()`), `Cambio` (`op`, `alerta`, `id`; propiedad `alerta_id`), `SincronizarPeticion`, `ResultadoCambio` y
+  `SincronizarRespuesta`; `ESTADO_OK`, `ESTADO_ERROR`, `CODIGO_VALIDACION`.
+- `servicios/alertas.py`: `foto`, `listar_admin`, `guardar` → `Guardado(alerta, operacion)` (`operacion` ∈ `crear`,
+  `editar`, `restaurar` o `None` sin cambios; `creada` = responde `201`), `borrar` → `Borrado(existia)`,
+  `sincronizar`, `purgar_tombstones`, `limpieza_diaria(motor, dias, *, espera_inicial_s, intervalo_s, dormir, purgar)`,
+  `consulta_admin()`, `ConflictoVersion(actual)` (`actual` = `None` si no existe), `ESPERA_LIMPIEZA_S`,
+  `INTERVALO_LIMPIEZA_S`, `TAREA_LIMPIEZA` (`tombstones_alertas`, el campo `tarea` de `limpieza_fallida`); internos
+  `_bloquear` (`SELECT … FOR UPDATE`) y `_crear` (el `INSERT … ON CONFLICT`).
+- `api/v1/alertas.py`: `router_publico` y `router_admin` (los dos `APIRouter(prefix="/alerts", tags=["alertas"])`);
+  `alertas_publicas`, `listar_alertas_admin`, `sincronizar_alertas` (declarada antes que `/{alerta_id}`),
+  `guardar_alerta` (cabecera `if_match`, en el OpenAPI `if-match`; pone `response.status_code = 201` si
+  `Guardado.creada`) y `borrar_alerta`. El parámetro de ruta se llama `alerta_id`.
+- `errores.MENSAJE_POR_CODIGO["CONFLICTO_VERSION"]`: «La alerta no está en la versión de If-Match: cambió o no existe.
+  Vuelve a leerla.»
+
+**Para los lotes siguientes: qué ofrece BE-3.3 al código.**
+
+| Elemento | Qué hace |
+|---|---|
+| `app.servicios.alertas` | Los casos de uso de arriba. Las firmas: `foto(motor, *, desde=None, dias_tombstone)`, `listar_admin(motor, *, q=None, tipo=None, prioridad=None, activa=None)`, `guardar(motor, *, usuario_id, alerta_id, datos, version_esperada=None, origen="put")`, `borrar(motor, *, usuario_id, alerta_id, origen="delete")`, `sincronizar(motor, *, usuario_id, cambios)`, `purgar_tombstones(motor, dias)` → filas borradas. Un lote que mueva alertas desde otro sitio (p. ej. «Agregar alerta aquí» del recorrido, si un día se hiciera en el backend) llama a `guardar` con su `origen` |
+| `app.dominio.alertas` | Límites, `CAMPOS`, `MARGEN_DESDE_S` y las reglas puras (`leer_if_match`, `pide_foto_completa`, `coincide`…) |
+| `app.esquemas.alertas` | Los modelos de §5.3 y §5.5 (arriba). Las peticiones ignoran campos de más; las respuestas los prohíben |
+| `app.servicios.estadisticas` | (BE-2.3) `alertas_activas` = `activa AND eliminada_en IS NULL`: lo que escribe este lote, sin cambios |
+| Pruebas con base | `tests/base/test_alertas_base.py`: fixtures `ajustes_al` (`base_migrada` con `JWT_SECRET`) y `api` (admin con sesión); `entrada(mensaje=…, **cambios)` (un `AlertaEntrada` en `6.2011, -75.579`), `poner(api, id, if_match=None, **cambios)` → respuesta del `PUT`, `crear(api, **cambios)` → `AlertaAdmin` (exige `201`, id nuevo), `foto(api, desde=None)` → cuerpo de `GET /v1/alerts`, `auditoria(ajustes, accion)`, `fila(ajustes, id)` (`version`, `eliminada_en`, `actualizado_en`, `creado_por`, `actualizado_por`), `eventos(logs_json, nombre)`, `hora_base(ajustes)` (`SELECT now()`) y `sql(ajustes, sentencia, **parametros)`. Para fijar `actualizado_en` o `eliminada_en`, un `UPDATE` con el `datetime` como parámetro (`:t`), una sentencia por columna o con un parámetro por columna |
+
+**Para la app (FE-3.3 y FE-3.6)** (lo que espera el backend; el frontend lo lee desde aquí):
+- Caché pública (FE-3.6): primera vez `GET /v1/alerts`; después `GET /v1/alerts?desde=<generado_en>` **tal cual** llegó
+  (con `Z`). `completo = true` → reemplazar la caché; si no, reemplazar por `id`, quitar las que llegan con `activa =
+  false` y los ids de `eliminadas` (que pueden no estar en la caché). Una diferencia puede repetir cambios ya aplicados
+  (margen de 60 s) y una respuesta completa puede llegar aunque se pidiera con `desde` (`desde` de hace más de 90 días o
+  en el futuro). La vigencia la evalúa la app al anunciar.
+- Editor (FE-3.3): los pendientes deben guardar **una sola operación por id, la última**: crear y luego editar →
+  un `upsert`; crear y luego borrar antes de sincronizar → `eliminar` (con un id que el servidor no conoce es `ok` y
+  **no deja rastro**: ni fila ni auditoría). Si se envían el `upsert` y el `eliminar`, quedan un *tombstone* (90 días)
+  y dos filas de auditoría (FE-3.3 C2 pide «sin rastro»).
+- Un resultado `estado = error` (`VALIDACION`) no se arregla reintentando: el admin tiene que corregir la alerta. Un
+  `503` (o sin respuesta) → reintentar la lista entera es seguro. `sincronizar` no usa `If-Match`: gana el último, y el
+  `upsert` de una alerta que otro admin borró la vuelve a crear.
+- `PUT` con `If-Match` (opcional) da `409 CONFLICTO_VERSION` si la versión no coincide o la alerta no existe; un
+  reintento de un `PUT` que sí se aplicó (respuesta perdida) también da `409`: volver a leer con `GET
+  /v1/admin/alerts`.
+
+Trampas:
+- La diferencia es «al menos» lo modificado desde `desde`: comparar por `id`/`version`, no por número de elementos.
+- `DELETE` de un id equivocado da `204` y no deja *tombstone*: un error de id no se nota (comprobar con
+  `GET /v1/admin/alerts`). Un `DELETE` con `If-Match` lo ignora.
+- Las alertas de prueba de los validadores dejan su *tombstone* 90 días (no se puede quitar antes) y sus filas de
+  auditoría: salen en las diferencias de la app durante ese tiempo como `eliminadas` (sin contenido).
+- `q` de `GET /v1/admin/alerts` busca en el mensaje, no en el tipo; y con la normalización de los lugares, «ñ» = «n».
+- Las vigencias se guardan sin fracciones de segundo: `2026-11-01T10:00:00.9Z` y `…:00Z` son la misma y un `PUT` que
+  solo cambie las fracciones no escribe.
+- `test_contrato_alertas.py` lee §5.3 y §5.5 como texto: entre el encabezado de `GET /v1/alerts` y «Endpoints
+  reservados» exige exactamente dos bloques `json` (la respuesta y `Alerta`); el párrafo de `AlertaEntrada` de §5.5
+  (desde su primer campo hasta «En `sincronizar`») con sus límites y valores por defecto; exactamente cuatro filas de la
+  tabla de §5.5 que empiezan por una ruta de admin de alertas; y `CONFLICTO_VERSION` en §5.6. No copiar el comienzo
+  literal de ese párrafo ni esos encabezados antes de §5. Las subsecciones de §5.5 vecinas también se leen como
+  texto (§4.7, trampas, y `test_contrato_lugares.py`/`test_contrato_diagnostico.py`): por eso la subsección de alertas
+  de §5.5 va después de la de lugares y no lleva bloques `json`.
+
+### 4.12 BE-4.1 — Administración de videos e imágenes, y purga
 - Listado, detalle (con URLs prefirmadas GET de 1 h para foto y miniatura), renombrar, re-procesar y edición de
   imágenes (coordenada, lugar, calidad, notas). Corregir la coordenada **no** exige recalcular el vector: el vector
   solo depende de los píxeles.
@@ -1235,7 +1393,7 @@ servidor ≤ 1 s con `embedding` encendido (infra §5.10, C3). Sin medir en `dev
 - **Reconciliador** en `api`: cada 10 min re-encola las purgas de videos borrados hace más de 10 min sin `purgado_en`
   (cubre un fallo al enviar a SQS justo después del commit).
 
-### 4.12 Lotes diferidos (Fase 5)
+### 4.13 Lotes diferidos (Fase 5)
 - **BE-5.1** `POST /v1/localize/frame`: una foto + posición previa; restringe la búsqueda a un radio alrededor de esa
   posición. Hoy responde `501`.
 - **BE-5.2** `POST /v1/eventos` y `GET /v1/admin/stats/uso`: eventos anónimos de uso (rutas iniciadas y completadas,
@@ -1298,7 +1456,7 @@ servidor ≤ 1 s con `embedding` encendido (infra §5.10, C3). Sin medir en `dev
 | `POST /v1/auth/login` | Login (7.1) | BE-1.3 |
 | `POST /v1/localize` | Escaneo 360° → Resultado (6.2, 6.3) | BE-3.2 |
 | `GET /v1/places` | Selección de destino (6.4) | BE-3.1 |
-| `GET /v1/alerts` | Caché local de alertas (2.5, 6.3, 6.5) | BE-3.3 — **sin implementar** (hoy `404`, §4.9) |
+| `GET /v1/alerts` | Caché local de alertas (2.5, 6.3, 6.5) | BE-3.3 (fuera del núcleo) |
 | `POST /v1/localize/frame` | Corrección visual en navegación (6.5) | BE-5.1 (hasta entonces `501`) |
 | `GET /v1/route` | Ruta a un destino (6.5) | BE-5.3 (hasta entonces `501`) |
 | `POST /v1/eventos` | Estadísticas de uso (7.15) | BE-5.2 (hasta entonces `501`) |
@@ -1462,10 +1620,8 @@ lugar (§4.9, «Foto del lugar»). `alias` es siempre una lista (vacía si no ha
 ser `null`.
 
 #### `GET /v1/alerts`
-> **Sin implementar (BE-3.3).** Las alertas salieron del núcleo (decisión del usuario, 2026-10-25; §4.9): este
-> contrato se conserva para BE-3.3, pero hoy la ruta no existe y responde `404 NO_ENCONTRADO`.
-
-Parámetro opcional: `desde` (fecha ISO-8601 tomada de un `generado_en` anterior).
+Público: no pide token e ignora `Authorization` (también uno no válido). Parámetro opcional: `desde` (fecha ISO-8601
+tomada de un `generado_en` anterior). Desde BE-3.3 (ARCHITECTURE 0.14.0; cómo funciona, §4.11).
 
 `200`:
 ```json
@@ -1476,11 +1632,22 @@ Parámetro opcional: `desde` (fecha ISO-8601 tomada de un `generado_en` anterior
   "eliminadas": []
 }
 ```
-- Sin `desde`, o con un `desde` anterior a 90 días: `completo = true`, `alertas` = todas las activas (también las de
-  vigencia pasada o futura), `eliminadas` vacía. La app **reemplaza** su caché.
-- Con `desde`: `completo = false`, `alertas` = todas las modificadas después de `desde` (activas o no),
-  `eliminadas` = ids borrados después de `desde`. La app actualiza su caché (quita las que llegan con `activa = false`
-  y las de `eliminadas`); la vigencia la evalúa al anunciar (abajo).
+- Sin `desde`, o con un `desde` anterior a 90 días (`ALERTAS_TOMBSTONE_DIAS`) o posterior a la hora del servidor:
+  `completo = true`, `alertas` = todas las activas sin borrar (también las de vigencia pasada o futura), `eliminadas`
+  vacía. La app **reemplaza** su caché.
+- Con `desde`: `completo = false`, `alertas` = todas las modificadas desde `desde` (activas o no), `eliminadas` = ids
+  borrados desde `desde`. La app actualiza su caché (reemplaza por `id`, quita las que llegan con `activa = false` y
+  las de `eliminadas`); la vigencia la evalúa al anunciar (abajo).
+- **Margen (desde 0.14.0, ADR-BE-19):** «desde `desde`» es desde `desde` − 60 s (`MARGEN_DESDE_S`): una diferencia
+  puede repetir cambios de ese minuto anterior que la app ya aplicó (aplicarlos otra vez no cambia la caché). Así no se
+  pierde un cambio que se confirmó justo después de la respuesta anterior. Comparar por `id` y `version`, nunca por el
+  número de elementos.
+- `generado_en` es la hora de la base al leer, en UTC con `Z` y sin fracciones (§5.1); se envía tal cual como `desde`
+  (con `Z` no hace falta codificarlo en la URL; un `+hh:mm` sin codificar llega como espacio y da `422`).
+- `desde` debe llevar zona (`Z` o `±hh:mm`); sin zona, mal formado o fuera de los años 1–9999 → `422 VALIDACION`
+  (`detalle.campos` con `desde`).
+- Orden de `alertas` y `eliminadas`: por `actualizado_en` y, a igualdad, `id`.
+- Errores: `422 VALIDACION` (`desde`) y `503 BASE_NO_DISPONIBLE`.
 
 `Alerta`:
 ```json
@@ -1641,16 +1808,16 @@ si la foto no tiene lugar asignado.
 
 `LugarAdmin` = `LugarPublico` sin `distancia_m`, más `creado_en`, `actualizado_en` y `total_fotos`.
 
-`AlertaAdmin` = `Alerta` más `creado_en`, `creado_por` y `actualizado_por` (`{id, nombre}`). **Sin implementar
-(BE-3.3).**
+`AlertaAdmin` = `Alerta` (§5.3) más `creado_en`, `creado_por` y `actualizado_por` (`{id, nombre}`: quien la creó y
+quien la cambió por última vez).
 
 Lote que entrega cada grupo: `GET /v1/admin/videos` y `GET /v1/admin/videos/{id}`, BE-2.1; `GET /v1/admin/stats`,
-BE-2.3; diagnóstico, BE-2.4; lugares, BE-3.1; alertas, BE-3.3 (**sin implementar**: hoy esas rutas no existen y
-responden `404 NO_ENCONTRADO`, §4.9); el resto de videos y todas las de imágenes, BE-4.1.
+BE-2.3; diagnóstico, BE-2.4; lugares, BE-3.1; alertas, BE-3.3 (desde 0.14.0); el resto de videos y todas las de
+imágenes, BE-4.1.
 
 | Método y ruta | Petición | Respuesta |
 |---|---|---|
-| `GET /v1/admin/stats` | — | `200` `{"total_fotos": 2842, "total_lugares": 48, "alertas_activas": 3, "ultimo_video": {"numero": 12, "creado_en": "…"} \| null}`. `total_fotos` = imágenes `procesada` de videos no eliminados; `alertas_activas` = alertas `activa` sin borrar (0 mientras BE-3.3 no exista, §4.7) (detalle abajo) |
+| `GET /v1/admin/stats` | — | `200` `{"total_fotos": 2842, "total_lugares": 48, "alertas_activas": 3, "ultimo_video": {"numero": 12, "creado_en": "…"} \| null}`. `total_fotos` = imágenes `procesada` de videos no eliminados; `alertas_activas` = alertas `activa` sin borrar (las escribe BE-3.3) (detalle abajo) |
 | `GET /v1/admin/videos` | `?q=&orden=fecha\|nombre\|fotos&dir=desc\|asc&pagina&por_pagina` | Página de `VideoResumen` (detalle abajo) |
 | `GET /v1/admin/videos/{id}` | — | `VideoResumen` + `"fotos": [ImagenAdmin…]` en orden (detalle abajo) |
 | `PATCH /v1/admin/videos/{id}` | `{"nombre": "Entrada norte"}` (1–40 tras recortar) | `200` `VideoResumen` |
@@ -1665,10 +1832,10 @@ responden `404 NO_ENCONTRADO`, §4.9); el resto de videos y todas las de imágen
 | `POST /v1/admin/places` | `LugarEntrada` | `201` `LugarAdmin` |
 | `PUT /v1/admin/places/{id}` | `LugarEntrada` | `200` `LugarAdmin` |
 | `DELETE /v1/admin/places/{id}` | — | `204`; sus imágenes quedan con `lugar = null`. También `204` si no existe |
-| `GET /v1/admin/alerts` (BE-3.3, sin implementar) | `?q=&tipo=&prioridad=&activa=` | `{"items": [AlertaAdmin…], "total": n}` (sin borradas) |
-| `PUT /v1/admin/alerts/{id}` (BE-3.3, sin implementar) | `AlertaEntrada`; opcional `If-Match: <version>` | `201` si se creó, `200` si se reemplazó; cuerpo `AlertaAdmin` |
-| `DELETE /v1/admin/alerts/{id}` (BE-3.3, sin implementar) | — | `204`, también si no existe |
-| `POST /v1/admin/alerts/sincronizar` (BE-3.3, sin implementar) | `{"cambios": [{"op": "upsert", "alerta": {"id": "…", …AlertaEntrada}}, {"op": "eliminar", "id": "…"}]}` (≤ 100) | `200` `{"generado_en": "…", "resultados": [{"id": "…", "op": "upsert", "estado": "ok" \| "error", "codigo": null \| "VALIDACION"}]}` |
+| `GET /v1/admin/alerts` | `?q=&tipo=&prioridad=&activa=` | `{"items": [AlertaAdmin…], "total": n}` (sin borradas; detalle abajo) |
+| `PUT /v1/admin/alerts/{id}` | `AlertaEntrada`; opcional `If-Match: <version>` | `201` si se creó (o se restauró una borrada), `200` si se reemplazó o no cambió nada; cuerpo `AlertaAdmin`. `If-Match` que no coincide → `409 CONFLICTO_VERSION` |
+| `DELETE /v1/admin/alerts/{id}` | — | `204`, también si no existe o ya estaba borrada |
+| `POST /v1/admin/alerts/sincronizar` | `{"cambios": [{"op": "upsert", "alerta": {"id": "…", …AlertaEntrada}}, {"op": "eliminar", "id": "…"}]}` (≤ 100) | `200` `{"generado_en": "…", "resultados": [{"id": "…", "op": "upsert", "estado": "ok" \| "error", "codigo": null \| "VALIDACION"}]}` |
 | `GET /v1/admin/stats/uso` | — | BE-5.2 (hasta entonces `501`) |
 | `POST /v1/admin/diagnostico/vecinos` | `multipart/form-data` con una foto; `?k=` | Ver abajo (BE-2.4) |
 
@@ -1686,10 +1853,19 @@ BE-3.1, ARCHITECTURE 0.11.0):
   así es `422`.
 - `409 NOMBRE_DUPLICADO` lleva `detalle: null`.
 
-`AlertaEntrada` (**sin implementar, BE-3.3**): `lat`, `lng`, `mensaje` (1–200 tras recortar), `tipo` (por defecto `otro`), `prioridad` (por defecto
-`normal`), `radio_m`
-(5–100, por defecto 15), `activa` (por defecto `true`), `vigencia_desde`, `vigencia_hasta` (si ambas,
-`hasta > desde`). En `sincronizar`, cada cambio es independiente: un error no revierte los demás.
+`AlertaEntrada`: `lat`, `lng`, `mensaje` (1–200 tras recortar), `tipo` (por defecto `otro`), `prioridad` (por defecto
+`normal`), `radio_m` (5–100, por defecto 15), `activa` (por defecto `true`), `vigencia_desde`, `vigencia_hasta` (si
+ambas, `hasta > desde`). En `sincronizar`, cada cambio es independiente: un error no revierte los demás. En detalle
+(desde BE-3.3, ARCHITECTURE 0.14.0):
+- Obligatorios: `lat` y `lng` (WGS84, números sin `NaN`) y `mensaje` (texto; se guarda recortado, sin tocar los
+  espacios internos; sin el carácter NUL ni un sustituto suelto, §4.4).
+- `tipo` (valores de `Alerta`, §5.3), `prioridad`, `radio_m` (entero) y `activa`: ausentes **o `null`** = su valor por
+  defecto.
+- `vigencia_desde` y `vigencia_hasta`: ISO-8601 **con zona** (sin zona, `422`), o `null`; se guardan en UTC **sin
+  fracciones de segundo** (la resolución de §5.1) y `hasta > desde` se comprueba ya sin fracciones (`.2Z` y `.7Z` del
+  mismo segundo son `422`).
+- Los campos de más se ignoran (también `id`, `version`, `actualizado_en`…): el id es el de la ruta (o el de
+  `alerta.id` en `sincronizar`).
 
 #### `GET /v1/admin/stats` (BE-2.3)
 Sin cuerpo ni parámetros (los de la URL se ignoran). Desde BE-2.3 (ARCHITECTURE 0.13.0), `200`:
@@ -1704,7 +1880,7 @@ Sin cuerpo ni parámetros (los de la URL se ignoran). Desde BE-2.3 (ARCHITECTURE
   procesar o en `error` no cuentan.
 - `total_lugares`: todos los lugares (el `total` de `GET /v1/admin/places` sin filtros).
 - `alertas_activas`: alertas con `activa = true` y sin borrar, **sin mirar la vigencia** (cuentan también las de
-  vigencia futura o pasada; la vigencia la evalúa la app). 0 mientras BE-3.3 no exista (§4.9).
+  vigencia futura o pasada; la vigencia la evalúa la app). Las escribe BE-3.3 (§4.11).
 - `ultimo_video`: `numero` y `creado_en` del video no eliminado registrado más recientemente (a igualdad de
   `creado_en`, el de `numero` mayor): el primero de `GET /v1/admin/videos` con su orden por defecto. Cuenta cualquier
   video, también uno sin fotos. `creado_en` es la hora en que el backend registró el video (`POST
@@ -1764,6 +1940,40 @@ y responde un `LugarAdmin`:
   asigna lugares a las fotos, es 0). Errores: `422` (`q` o `categoria`), `503` y los de §5.2.
 - Cada cambio queda en `auditoria` (`lugar.crear`, `lugar.editar`, `lugar.eliminar`, §5.7).
 
+#### Alertas: `/v1/admin/alerts` (BE-3.3)
+Desde BE-3.3 (ARCHITECTURE 0.14.0; cómo funciona, §4.11). Los cuerpos son los de la tabla de arriba: `AlertaEntrada`
+(arriba) y `AlertaAdmin` (= `Alerta` de §5.3 más `creado_en`, `creado_por` y `actualizado_por`). Aquí no hay ejemplos
+`json` a propósito (§4.11, trampas): el de `Alerta` está en §5.3.
+- `GET /v1/admin/alerts`: las alertas **sin borrar** (activas o no, cualquier vigencia), de la modificada más
+  recientemente a la más antigua (`actualizado_en` descendente; a igualdad, `id`), sin paginar; `total` = número de
+  `items`. `q` (opcional, ≤ 100 caracteres, sin NUL) busca **contenido** en `mensaje` sin tildes, mayúsculas ni
+  espacios de más (la regla de `LugarEntrada`); vacío o solo espacios = sin filtro. `tipo`, `prioridad` y `activa`
+  (`true`/`false`) filtran. Errores: `422` (`q`, `tipo`, `prioridad` o `activa`), `503` y los de §5.2.
+- `PUT /v1/admin/alerts/{id}`: el `id` lo genera la app (UUID). Crea la alerta si no existe (`201`, `version` 1,
+  `creado_en` = `actualizado_en`) o reemplaza **todos** los campos de `AlertaEntrada` (lo que no se envía toma su valor
+  por defecto) con `version + 1` (`200`). Si nada cambia, no escribe: `200` con la alerta como está (misma `version` y
+  `actualizado_en`). El `PUT` de un id **borrado** la restaura: `201`, `version + 1`, conserva `creado_en` y
+  `creado_por`.
+- `If-Match` (opcional, solo en `PUT`): la `version` que se espera reemplazar, `3` o `"3"`. Si la alerta no está en esa
+  versión, o no existe, → `409 CONFLICTO_VERSION` (`detalle: null`) y nada cambia; vacío, `*`, `W/"3"`, varias
+  versiones o 0 → `422 VALIDACION` con `campo` = `If-Match`. Un reintento de un `PUT` que sí se aplicó también da
+  `409`.
+- Errores del `PUT`, en este orden: los de §5.2, `422 VALIDACION` (cuerpo, `id` que no es un UUID o `If-Match`),
+  `409 CONFLICTO_VERSION`, `503 BASE_NO_DISPONIBLE`.
+- `DELETE /v1/admin/alerts/{id}`: `204` sin cuerpo. Una alerta viva queda borrada (*tombstone*: sale en `eliminadas` de
+  `GET /v1/alerts?desde=` durante `ALERTAS_TOMBSTONE_DIAS`, sube su `version`). Un id que no existe o ya borrado también
+  da `204` y no cambia nada (no deja *tombstone*). No mira `If-Match`. `422` si el id no es un UUID.
+- `POST /v1/admin/alerts/sincronizar`: `cambios` de 1 a 100; cada uno `{"op": "upsert", "alerta": {"id": "<uuid>",
+  …AlertaEntrada}}` o `{"op": "eliminar", "id": "<uuid>"}`. Si alguno no tiene esa forma (otro `op`, sin `alerta` o sin
+  `id`, un `id` que no es UUID) → `422 VALIDACION` de la petición entera (`detalle.campos`, p. ej. `cambios.1.op`) y no
+  se aplica nada. Si no, se aplican **en orden**, cada uno por separado, como el `PUT` (sin `If-Match`) y el `DELETE` de
+  arriba (también restaurar y la idempotencia); un `upsert` cuya `alerta` no cumple `AlertaEntrada` no se aplica y su
+  resultado es `"estado": "error", "codigo": "VALIDACION"` (el único código que sale hoy). `resultados` va en el mismo
+  orden que `cambios`, con su `id` y su `op`. `generado_en` = hora del servidor al terminar (UTC, `Z`, sin fracciones).
+  Si la base falla a mitad: `503 BASE_NO_DISPONIBLE`, lo ya aplicado queda y repetir la lista entera es seguro.
+- Cada cambio queda en `auditoria` (`alerta.upsert`, `alerta.eliminar`, §5.7), con `origen` `put`, `delete` o
+  `sincronizar`.
+
 #### `POST /v1/admin/diagnostico/vecinos`
 `multipart/form-data` con una sola parte `foto` (`image/jpeg`, ≤ `LOC_MAX_BYTES_FOTO`, las mismas reglas que una foto
 de `/v1/localize`). Parámetro `k` en la URL: entero de 1 a 50, por defecto 5. Desde BE-2.4 (ARCHITECTURE 0.10.0):
@@ -1817,8 +2027,8 @@ Errores, en este orden (el primero que aplica):
 | 403 | `SIN_PERMISOS` | Token válido de un usuario activo sin rol `admin` (§5.2) |
 | 404 | `NO_ENCONTRADO` | Recurso inexistente (o video eliminado en rutas de lectura); también una ruta que no existe |
 | 405 | `SOLICITUD_INVALIDA` | Método no permitido en una ruta que existe; `detalle.metodos_permitidos` (p. ej. `["GET"]`) y encabezado `Allow` |
-| 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido al crear o editar (BE-3.1, §5.5; `detalle: null`) · registrar fotos, completar la subida o volver a crear (mismo `ref_cliente`) un video borrado (§5.4) · `If-Match` no coincide (alertas, BE-3.3: sin implementar) |
-| 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]`. En `/v1/localize` (BE-3.2), la parte `metadatos`: `campo` = `metadatos` o `metadatos.<campo>` |
+| 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido al crear o editar (BE-3.1, §5.5; `detalle: null`) · registrar fotos, completar la subida o volver a crear (mismo `ref_cliente`) un video borrado (§5.4) · `PUT /v1/admin/alerts/{id}` con `If-Match` que no coincide con la `version` de la alerta o de una alerta que no existe (BE-3.3, §5.5; `detalle: null`) |
+| 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]`. En `/v1/localize` (BE-3.2), la parte `metadatos`: `campo` = `metadatos` o `metadatos.<campo>`. Un encabezado no válido lleva su nombre: `If-Match` (alertas, BE-3.3) |
 | 500 | `ERROR_INTERNO` | Fallo no previsto (el `X-Request-Id` permite encontrarlo en los logs); también configuración que falta en `api` (`JWT_SECRET`, §5.2; `S3_BUCKET_DATASET` en las rutas de §5.4 que usan S3) |
 | 501 | `NO_IMPLEMENTADO` | Endpoints reservados |
 | 503 | `EMBEDDING_NO_DISPONIBLE` · `BASE_NO_DISPONIBLE` | Dependencia caída, apagada o lenta. `BASE_NO_DISPONIBLE`, en cualquier endpoint que use la base (desde BE-1.3, §4.4) |
@@ -1902,7 +2112,7 @@ valor por defecto), restricciones e índices con sus nombres, secuencias y la re
 | `version` | `integer` | | `1` | ≥ 1; +1 en cada cambio |
 | `creado_en`, `actualizado_en` | `timestamptz` | | `now()` | índice `alertas_actualizado_en_idx` |
 | `creado_por`, `actualizado_por` | `uuid` | | | FK `usuarios` |
-| `eliminada_en` | `timestamptz` | sí | | *tombstone*: borrar fija `eliminada_en` y `actualizado_en`, así `GET /v1/alerts?desde=` usa el mismo índice; las borradas hace más de 90 días se eliminan físicamente (BE-3.3: hasta entonces nadie escribe en `alertas`) |
+| `eliminada_en` | `timestamptz` | sí | | *tombstone*: borrar fija `eliminada_en` y `actualizado_en`, así `GET /v1/alerts?desde=` usa el mismo índice; las borradas hace más de `ALERTAS_TOMBSTONE_DIAS` (90) días las borra de verdad la purga diaria de `api` (BE-3.3, §4.11) |
 
 **`videos`**
 
@@ -2027,6 +2237,15 @@ lugar; en la misma transacción que el cambio):
 | `lugar.crear` | `POST /v1/admin/places` con `201` | `{"nombre": "<nombre guardado>", "categoria": "<categoria>"}` |
 | `lugar.editar` | `PUT /v1/admin/places/{id}` que cambió algo (sin cambios no hay fila) | `{"cambios": [<campos que cambiaron, en el orden nombre, categoria, lat, lng, alias, descripcion, referencias>]}` |
 | `lugar.eliminar` | `DELETE /v1/admin/places/{id}` de un lugar que existía (un id desconocido no deja fila) | `{"nombre": "<nombre>", "fotos_sin_lugar": <imágenes que quedaron sin lugar>}` |
+
+**`auditoria`: filas de BE-3.3** (`entidad = 'alerta'`, `actor_id` = el admin del token, `entidad_id` = el id de la
+alerta; en la misma transacción que el cambio; `origen` = `put` o `delete` desde esas rutas, `sincronizar` desde el
+lote):
+
+| `accion` | Cuándo | `detalle` |
+|---|---|---|
+| `alerta.upsert` | `PUT` o `upsert` que creó, restauró o cambió la alerta (sin cambios no hay fila) | `{"operacion": "crear" \| "editar" \| "restaurar", "version": <nueva>, "cambios": [<campos distintos, en el orden lat, lng, mensaje, tipo, prioridad, radio_m, activa, vigencia_desde, vigencia_hasta; al crear, los 9>], "origen": …}` y, al crear o restaurar, `"mensaje": "<mensaje guardado>"` |
+| `alerta.eliminar` | `DELETE` o `eliminar` de una alerta viva (un id desconocido o ya borrado no deja fila) | `{"version": <nueva>, "mensaje": "<mensaje>", "origen": …}` |
 
 ### 5.8 Mensajes de las colas
 
@@ -2178,7 +2397,7 @@ que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que 
 | `WORKER_LADO_EMBEDDING_PX` | 1024 | Copia reducida que se envía al modelo (el original y la miniatura no cambian) |
 | `WORKER_ESPERA_EMBEDDING_S` | 15 | Pausa entre comprobaciones de `/health/ready` con `embedding` no listo, tras un error de SQS y tras un lote con mensajes retenidos |
 | `RECONCILIADOR_CADA_MIN` | 10 | Purgas pendientes |
-| `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api` (sin código todavía; la de *tombstones* es de BE-3.3, §4.9; BE-3.2 escribe `eventos_localizacion` pero no la limpia) |
+| `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api`. La de *tombstones* existe desde BE-3.3 (§4.11): la primera, 60 s después de arrancar `api`, y después cada 24 h (constantes, no parámetros); también decide desde cuándo `GET /v1/alerts?desde=` responde la foto completa (§5.3). La de `eventos_localizacion` sigue sin código (BE-3.2 escribe la tabla pero no la limpia) |
 | `PAGINA_POR_DEFECTO` / `PAGINA_MAX` | 24 / 100 | 24 coincide con `FOTOS_POR_PAGINA` de la Galería. Los usa `GET /v1/admin/videos` desde BE-2.1 |
 | `DB_POOL_API` / `DB_POOL_API_DESBORDE` / `DB_POOL_WORKER` | 5 / 5 / 2 | `db.t4g.micro` admite ~100 conexiones |
 | `DB_CONNECT_TIMEOUT_S` | 5 | Tiempo máximo para abrir una conexión (asyncpg espera 60 s por defecto) y para el `SELECT 1` de `/v1/health/ready` |
@@ -2218,6 +2437,11 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `video_creado` | `api` | `video_id`, `numero`, `nuevo` (`false` si ya existía con ese `ref_cliente`) | `POST /v1/collect/videos` con `201` o `200` (BE-2.1) |
 | `lugar_guardado` | `api` | `operacion` (`crear` \| `editar`), `lugar_id`, `cambios` (campos que cambiaron; al crear, los 7 de `LugarEntrada`) | `POST /v1/admin/places` con `201`, o `PUT` que cambió algo (BE-3.1, `INFO`). Sin el nombre |
 | `lugar_eliminado` | `api` | `lugar_id`, `existia`, `fotos_sin_lugar` | `DELETE /v1/admin/places/{id}` con `204` (BE-3.1, `INFO`), también de un id que no existía (`existia = false`) |
+| `alerta_guardada` | `api` | `operacion` (`crear` \| `editar` \| `restaurar`), `alerta_id`, `version` (la nueva), `cambios` (campos que cambiaron; al crear, los 9 de `AlertaEntrada`), `origen` (`put` \| `sincronizar`) | `PUT /v1/admin/alerts/{id}` o `upsert` de `sincronizar` que escribió algo (BE-3.3, `INFO`; sin cambios no hay evento). Sin el mensaje |
+| `alerta_eliminada` | `api` | `alerta_id`, `existia` (`false` si no existía o ya estaba borrada), `version` (la nueva o `null`), `origen` (`delete` \| `sincronizar`) | `DELETE /v1/admin/alerts/{id}` o `eliminar` de `sincronizar` (BE-3.3, `INFO`) |
+| `alertas_sincronizadas` | `api` | `cambios`, `ok`, `errores` (los `VALIDACION`) | `POST /v1/admin/alerts/sincronizar` con `200` (BE-3.3, `INFO`); antes, un `alerta_guardada` o `alerta_eliminada` por cambio aplicado |
+| `alertas_purgadas` | `api` | `borradas` (filas), `dias` (`ALERTAS_TOMBSTONE_DIAS`), `duracion_ms` | Cada purga diaria de *tombstones* (BE-3.3, `INFO`), también con 0 |
+| `limpieza_fallida` | `api` | `tarea` (`tombstones_alertas`), `motivo` (y la traza en `excepcion` si no es de la base) | Una purga diaria falló (BE-3.3): `WARNING` si la base no respondió, `ERROR` si fue otra cosa; la siguiente, en 24 h |
 | `imagenes_registradas` | `api` | `video_id`, `recibidas`, `nuevas`, `actualizadas` (pendientes con metadatos nuevos y URL), `marcadas_subida` (pendientes que el `HEAD` encontró en S3), `sin_cambios` (ya `subida`, `procesada` o `error`), `urls` | `POST …/images` con `200` (BE-2.1). Nunca las URL |
 | `subida_completada` | `api` | `video_id`, `comprobadas` (pendientes con `HEAD`), `encontradas`, `fallidas`, `estado`, `conteo` | `POST …/complete` con `200` (BE-2.1) |
 | `s3_fallido` | `api`, `migrate` | `operacion` (`firmar` \| `head` \| `borrar` \| `listar` \| `crear_cliente`), `motivo` (clase y código de AWS, nunca la URL); en `head`, `video_id` y `claves` (cuántas fallaron); en `firmar`, `video_id` | `firmar`: `images` responde `500` (`ERROR`). `head`: alguna foto queda pendiente y la respuesta sigue (`WARNING`). `borrar` (primera pasada) o `listar` (`--simular`): `limpiar-validacion` termina con 1 (`ERROR`). `crear_cliente`: al arrancar `api` (`ERROR`) |
@@ -2530,8 +2754,8 @@ validador que compara cifras globales antes y después de crear sus datos. Usa `
   falso la procesa). `Sesion = t22.Sesion`. Interruptores de backend defectuoso: `desplegado` (P3 → 2),
   `cuenta_pendientes` (C1a), `lugares_fijos` (C1b), `ultimo_viejo` y `fecha_con_fracciones` (C1c), `campo_de_mas`
   (C1a). `comun.resumen_panel` se prueba aparte con `_HttpFijo(estado, cuerpo)` (un `http` que solo responde a `GET
-  …/admin/stats`) y `BUENO` (un cuerpo válido). Para el validador de BE-3.3 (C5), este mundo se extiende subiendo
-  `mundo.alertas` cuando llegue un `PUT /v1/admin/alerts/{id}` con `activa: true`.
+  …/admin/stats`) y `BUENO` (un cuerpo válido). El validador de BE-3.3 no extiende este mundo (necesita toda la API
+  de alertas con estado): usa su propia `ApiFalsa` (abajo, «`validate33.py`»), que ya responde `GET /v1/admin/stats`.
 
 Trampas de BE-2.3: las cifras son globales y el validador compara diferencias, así que supone que nadie sube fotos,
 crea o borra videos o lugares en `dev` mientras corre (si no, falla con los valores leídos para descartarlo). Por eso
@@ -2601,6 +2825,62 @@ Trampas de BE-3.2: el validador no crea datos de prueba; cada localización deja
 `ingesta` tiene mensajes (el `worker` competiría por `embedding`): esperar a que se vacíe. C4a compara MD5 con ETags,
 así que solo ve copias exactas de lo enviado (es lo que pide el criterio). `--sin-limpieza` deja `embedding` como esté.
 
+Ayudas de BE-3.3 (para los validadores que crean alertas de prueba o leen la caché pública):
+
+| Elemento | Qué hace |
+|---|---|
+| `RUTA_ALERTAS` (`/alerts`), `RUTA_ALERTAS_ADMIN` (`/admin/alerts`), `RUTA_SINCRONIZAR` (`/admin/alerts/sincronizar`) | Rutas relativas a la URL con `/v1` |
+| `CAMPOS_ALERTA`, `CAMPOS_ALERTA_ADMIN`, `CAMPOS_FOTO_ALERTAS` | Los conjuntos exactos de campos de `Alerta` (§5.3), `AlertaAdmin` (§5.5) y de la respuesta de `GET /v1/alerts` (`generado_en`, `completo`, `alertas`, `eliminadas`) |
+| `alertas_validacion(api, token, prefijo=PREFIJO_VALIDACION)` → `list[dict]` | Las `AlertaAdmin` sin borrar cuyo `mensaje` normalizado (`normalizar_nombre`) **empieza** por el prefijo, de `GET /v1/admin/alerts?q=<prefijo>` (el backend busca contenido; aquí se exige el comienzo). No 200 → `Falla` |
+| `borrar_alertas(api, token, ids)` → `int` | `DELETE /v1/admin/alerts/{id}` de cada id sin repetir (cuenta los `DELETE`); otro código que 204 → `Falla`. Un id que no existe o ya borrado también da 204 |
+| `borrar_alertas_restos(api, token)` → detalle | La `preparacion` de quien crea alertas: borra **todas** las `validacion-` vivas (de cualquier lote). Devuelve `sin alertas validacion- de ejecuciones anteriores` o `alertas validacion- borradas: n` |
+
+**`validate33.py`** (validation-3-3, BE-3.3; `dev` y `local`; **sin ejecutar todavía en `dev`**). Es el ejemplo de un
+validador que reproduce la caché de la app. Como `validate31.py`, no usa AWS más allá de las credenciales (P1, el
+output `api_base_url` y el secreto del admin): corre igual contra el compose. Usa `Validador`, `ClienteApi`,
+`credenciales_admin`, `url_api`, `lote_hecho`, `resumen_panel`, `normalizar_nombre` (vía `alertas_validacion`) y las
+ayudas de BE-3.3. Lo que tiene y no está en `comun.py`:
+- Orden: (solo `dev`) P1 credenciales → P2 URL y `/v1/health/ready` con `"db": "ok"` → P3 login de admin (`401` es 3) y
+  BE-3.3 desplegado (`GET /v1/alerts` sin token → `200`, un `404` es 2; `GET /v1/admin/alerts` → `200`) → P4 **solo si
+  C5 está incluida**: en `dev`, la fila BE-2.3 de PLAN §3 en «Hecho» (si no, 2); en los dos entornos, `GET
+  /v1/admin/stats` → `200` (un `404` es 2). Preparación: `borrar_alertas_restos`. Comprobaciones en orden: C1a, C1b,
+  C1c, C1d, C2, C3, C4, C5.
+- Constantes: `LAT`, `LNG` (0.001, 0.001: fuera del campus; las alertas no chocan con los lugares de `validate31.py`
+  en ese punto), `PLAN_BACKEND`, `RADIO_FUERA_DE_RANGO` (500, la B de C4). Prefijo de los mensajes:
+  `validacion-33-<AAAAMMDD-HHMMSS>` (`Contexto.prefijo`). Las alertas de prueba se llaman A (C1), A2, B y D (C4), F
+  (C3), G y H (C5).
+- Funciones: `aplicar(cache, respuesta)` (lo que hace la app con una respuesta de `GET /v1/alerts`: `completo` reemplaza;
+  si no, reemplaza por `id`, quita las `activa = false` y las de `eliminadas`; sin filtrar por vigencia), `versiones(…)`
+  (`{id: version}`), `fecha(datetime)` (UTC, `Z`, sin fracciones: lo que devuelve el backend) e `incluida(solo, id_)`
+  (la regla de `--solo`; decide si P4 se evalúa).
+- `Contexto`: `token()`, `pedir(…)`, `id_de(clave)` (un UUID v4 por clave, generado por el validador como la app y
+  apuntado **antes** del `PUT`, para la limpieza), `cuerpo(clave, texto, **cambios)` (un `AlertaEntrada` con mensaje
+  `<prefijo> <texto>`), `poner(clave, cuerpo, if_match=None)`, `crear(clave, cuerpo)` (exige `201`), `foto(desde=None)`
+  (`GET /v1/alerts` sin token; exige `200`, `CAMPOS_FOTO_ALERTAS`, `generado_en` con el formato de §5.1 y
+  `CAMPOS_ALERTA` en cada alerta), `asegurar_cache()` (la foto completa inicial, una vez), `diferencia()` (`GET
+  ?desde=<último generado_en>`, exige `completo = false` y la aplica), `admin_lista(q)` y `limpiar()`. Estado: `cache`,
+  `generado_en`, `n_inicial`, `hechas` e `intentadas` (pasos de C1), `ids`. Las pruebas sustituyen `http`, `dormir`,
+  `ahora` (C3) y `sello`, y `plan` (la ruta del PLAN que lee P4).
+- C1 por pasos: C1b necesita C1a, C1c necesita C1a y C1b, C1d los tres (`_requiere`, `PASOS_C1`): con `--solo C1c` se
+  hacen antes los que falten. Un paso que ya se intentó y falló no se repite (dejaría la alerta en otro estado): la
+  comprobación que depende de él falla con «depende de C1b, que falló».
+- Pruebas: `tests/ops/test_validate33.py`. Sin base, contra `ApiFalsa`: una API de alertas en memoria con el contrato de
+  §5.3/§5.5 (reloj falso que avanza 0,25 s por petición, margen de 60 s en las diferencias, `If-Match`, restaurar,
+  `sincronizar` cambio por cambio, `GET /v1/admin/stats` y el login), con los interruptores de backend defectuoso
+  `desplegado` (P3 → 2), `stats_desplegado` (P4 → 2), `sin_eliminadas` (C1c), `sin_conflicto` (C1b), `todo_o_nada`
+  (C4), `cuenta_inactivas` (C5), `foto_sin_futuras` (C3) y `deja_tombstone` (C2); prueba `local` y `dev` (AWS y
+  `outputs_terraform` sustituidos; un PLAN en `tmp_path`), `--solo`, el barrido de restos, `--sin-limpieza` y los
+  códigos 2 y 3. Con base (marca `base`), contra el backend real servido con `TestClient` (como `test_validate31.py`):
+  el camino feliz en `local`, dos ejecuciones en `dev` con `--sin-limpieza` (la segunda barre los restos de la primera)
+  y un backend sin `eliminadas` (`monkeypatch` de `servicios.alertas.foto`) que falla C1c.
+
+Trampas de BE-3.3: C5 compara diferencias de una cifra global y C1d compara la caché con la foto completa: suponen que
+nadie más crea, cambia o borra alertas en `dev` mientras corre (si no, fallan con los valores leídos para
+descartarlo). Las alertas de prueba borradas dejan su *tombstone* 90 días y sus filas de `auditoria`: salen como
+`eliminadas` en las diferencias de cualquier app durante ese tiempo (sin contenido). C3 manda una vigencia de 2 a 3 días
+desde la hora del reloj local; el backend no la evalúa, así que el desfase del reloj no importa. `--sin-limpieza` deja
+las alertas vivas (la siguiente ejecución las barre).
+
 **Trampa del arranque de `embedding`: Cloud Map sin configuración de salud (0.9.1 y 0.9.2).** El servicio de Cloud
 Map de `embedding` (`srv-josm7lql7ddxgzm6`, `embedding.campus-locator.local`, registro A con TTL 10 s) **no tiene
 `HealthCheckConfig` ni `HealthCheckCustomConfig`** (comprobado en `dev` con `servicediscovery get-service`,
@@ -2662,7 +2942,7 @@ para las pruebas de permisos.
 | Qué | Cómo se borra |
 |---|---|
 | Lugares | `DELETE /v1/admin/places/{id}` (BE-3.1; `comun.borrar_lugares`); al empezar, `comun.borrar_lugares_restos` |
-| Alertas | `DELETE /v1/admin/alerts/{id}` (BE-3.3, sin implementar) |
+| Alertas | `DELETE /v1/admin/alerts/{id}` (BE-3.3; `comun.borrar_alertas`); al empezar, `comun.borrar_alertas_restos`. Queda su *tombstone* `ALERTAS_TOMBSTONE_DIAS` (sin contenido; no se puede quitar antes) y su auditoría |
 | Videos de prueba, antes de BE-4.1 | `limpiar-validacion --video <id> …` en una tarea suelta con la definición `campus-locator-dev-worker` (§5.9) |
 | Videos de prueba, con BE-4.1 hecho | `DELETE /v1/admin/videos/{id}`; su purga limpia S3 |
 | Usuario `validacion+user@campus.edu.co` | Lo crea o reactiva `crear-usuario --rol user` (contraseña aleatoria en `CREAR_USUARIO_PASSWORD`, nunca impresa) y lo desactiva `desactivar-usuario` al terminar, ambos en una tarea suelta de `migrate` (en `local`, con `docker compose run`): `crear_usuario_validacion` y `desactivar_usuario_validacion` de `comun.py`. La fila queda inactiva entre ejecuciones; reactivarla devuelve la validez a sus tokens sin vencer (§5.2), que solo tuvo el validador |
@@ -2727,7 +3007,8 @@ Permite indexar con un modelo o preprocesamiento nuevo en paralelo y cambiar de 
 
 **ADR-BE-10 — Alertas con id del cliente, `PUT` idempotente, *tombstones* y sincronización por diferencias
 (aceptada).** Encaja con el editor «local primero» de la app (7.8) y con la caché sin conexión del flujo público (2.5).
-Desde 0.11.0 se implementa en BE-3.3, fuera del núcleo (decisión del usuario, 2026-10-25; §4.9).
+Desde 0.11.0 se implementa en BE-3.3, fuera del núcleo (decisión del usuario, 2026-10-25); construido en 0.14.0
+(§4.11), con los detalles que esta decisión no fijaba en ADR-BE-19.
 
 **ADR-BE-11 — Cálculo de rutas diferido a Fase 5 (aceptada).** Decisión abierta 2 del frontend: el grafo de caminos
 no existe todavía. `GET /v1/route` queda reservado.
@@ -2866,6 +3147,40 @@ ADR-BE-08 y el §4.10 anterior no decían:
 - *Consecuencias:* los umbrales siguen siendo iniciales hasta la calibración (C6); la simulación de EMB-3.2 y este
   código deben cambiar juntos.
 
+**ADR-BE-19 — Alertas construidas: diferencias con margen, `PUT` que restaura, `If-Match` estricto, `sincronizar`
+cambio por cambio y purga en `api` (aceptada, BE-3.3; aprobadas por el maestro el 2026-10-26).** Fija lo que ADR-BE-10 y
+§5.3/§5.5 no decían:
+- **Diferencias desde `desde − 60 s`** (`MARGEN_DESDE_S`). `actualizado_en` es el `now()` (hora de inicio) de la
+  transacción que escribe; una que confirma después de que una lectura tomó su foto quedaría fuera para siempre de una
+  diferencia estricta. Con el margen, la app puede recibir de nuevo cambios ya aplicados, sin efecto (reemplaza por
+  `id`). `generado_en` sigue siendo la hora real de la base. Es una precisión compatible de §5.3 (la caché converge
+  igual). *Alternativas descartadas:* `generado_en` adelantado al pasado (mentiría sobre la hora y el margen quedaría
+  escondido); un bloqueo consultivo compartido por los escritores y exclusivo para las lecturas (pondría en fila todas
+  las lecturas públicas); una secuencia global de cambios (una columna y una migración nuevas).
+- **`desde` en el futuro → foto completa** (no salió de un `generado_en`; una diferencia podría saltarse cambios hasta
+  que el reloj lo alcanzara). El límite de 90 días se mide con el corte (`desde − 60 s`): así lo purgado nunca falta en
+  una diferencia.
+- **`PUT` de un id borrado lo restaura** (`201`, `version + 1`, conserva `creado_en` y `creado_por`): con el id del
+  cliente, «crear» y «volver a crear» son la misma petición; `version` no vuelve a 1 para que un `If-Match` viejo no
+  coincida por casualidad.
+- **`If-Match` estricto y solo en `PUT`**: versión distinta o alerta inexistente → `409` aunque el contenido coincida
+  (un reintento de un `PUT` aplicado también da `409`: la app relee). `DELETE` no lo mira (§5.5 solo lo pone en `PUT`)
+  para seguir siendo idempotente. `sincronizar` no lo lleva: gana el último.
+- **`sincronizar`: sobre estricto y cambios independientes**. Un sobre mal formado (`op`, ids) es un error de la app:
+  `422` entero y nada aplicado. El contenido de cada alerta se valida por separado (`VALIDACION` solo en ese cambio).
+  Cada cambio en su propia transacción y en orden: un fallo de la base a mitad deja lo aplicado (`503`) y repetir es
+  seguro. *Alternativa descartada:* una transacción con *savepoints* (todo o nada ante un fallo de la base, pero una
+  transacción larga con bloqueos y una sola auditoría que se pierde entera).
+- **`PUT` sin cambios no escribe** (como los lugares, ADR-BE-17), y `null` en `tipo`, `prioridad`, `radio_m` o `activa`
+  vale lo mismo que ausente; las vigencias se guardan sin fracciones de segundo (la resolución de §5.1).
+- **Purga en `api`**, como pedía §5.10: una tarea de asyncio por réplica, 60 s después de arrancar y cada 24 h,
+  idempotente. *Alternativas descartadas:* una tarea programada de ECS (un recurso de infra nuevo) o el `worker` (escala
+  a 0 sin `embedding`).
+- **`q` del panel sin tildes ni mayúsculas, en Python** (la regla de los lugares): las alertas son decenas.
+- *Consecuencias:* una diferencia no es «exactamente» lo cambiado (comparar por `id`/`version`); un id equivocado en
+  `DELETE` no da error; los *tombstones* de las pruebas viven 90 días; la purga no corre si `api` se reinicia más a
+  menudo que cada 60 s (no pasa).
+
 ---
 
 ## 7. Riesgos
@@ -2888,3 +3203,4 @@ ADR-BE-08 y el §4.10 anterior no decían:
 | R15 | Un fallo transitorio repetido (embeddings saturado, `version_vector` distinta, S3 o base caídos) manda a la DLQ eventos de fotos válidas | Baja | Medio | El `worker` no recibe sin `embedding` listo (§4.6); un mensaje retenido vuelve cada 180 s y va a la DLQ a la sexta recepción (~15 min de fallos seguidos); la alarma de DLQ avisa (infra §5.10). Se re-encola con *redrive* de la DLQ o, con BE-4.1, `POST /v1/admin/images/{id}/reprocesar`. La foto queda en `subida` (no en `error`) |
 | R14 | boto3 en `api` (0,25 vCPU, 0,5 GB): memoria y tiempo de arranque | Media | Bajo | El cliente se crea una vez, en un hilo, al arrancar (§4.5); argon2id ya usa hasta 128 MiB (R12). Sin medir en `dev`: anotar la memoria de la tarea tras desplegar BE-2.1 |
 | R16 | La búsqueda HNSW es aproximada: con muchos vectores, algún vecino exacto puede faltar en `vecinos` y en `/v1/localize`; con pocos, PostgreSQL puede no usar el índice (§4.8) | Media | Bajo | `ef_search` = 64 ≥ `k` (§4.8); la herramienta de evaluación de embeddings compara con fuerza bruta (`SERVICE_EMBEDDING/docs/ARCHITECTURE.md` §4.5); si el *recall* no alcanza, subir `LOC_EF_SEARCH` (variable de §5.10). `EXPLAIN` en `dev` con un dataset real: a verificar |
+| R17 | Sincronización de alertas por marca de tiempo: un cambio cuya transacción confirma más de 60 s después de empezar no sale en ninguna diferencia, y la app no lo ve hasta pedir otra foto completa | Baja | Medio | Margen de 60 s en `desde` (ADR-BE-19, §4.11); las transacciones de alertas duran milisegundos. Si un día pasara, la app lo arregla con una foto completa (sin `desde`) |

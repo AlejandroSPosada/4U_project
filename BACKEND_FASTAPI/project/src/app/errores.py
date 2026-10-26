@@ -47,6 +47,7 @@ MENSAJE_POR_CODIGO: dict[str, str] = {
     "NO_ENCONTRADO": "El recurso no existe.",
     "VIDEO_ELIMINADO": "El video fue eliminado.",
     "NOMBRE_DUPLICADO": "Ya existe un lugar con ese nombre (sin distinguir mayúsculas ni tildes).",
+    "CONFLICTO_VERSION": "La alerta no está en la versión de If-Match: cambió o no existe. Vuelve a leerla.",
     "VALIDACION": "Hay campos con valores no válidos.",
     "ERROR_INTERNO": "Error interno del servidor. Indica el X-Request-Id al reportarlo.",
     "NO_IMPLEMENTADO": "Esta operación aún no está disponible.",
