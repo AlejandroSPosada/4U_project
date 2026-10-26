@@ -20,6 +20,57 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.10.0] — 2026-10-25
+
+- **Lote que la motivó:** BE-2.4 (Diagnóstico de búsqueda).
+- **Qué cambió:**
+  - `POST /v1/admin/diagnostico/vecinos` construido (router `api/v1/admin_diagnostico.py` en `RUTAS_ADMIN`): cuerpo
+    leído en memoria con tope (`api/cuerpo.py`), multipart partido a mano (`dominio/multipart.py`), reglas de la foto
+    (`dominio/fotos.py`), vectorización con prioridad `baja` y tope total de 20 s, comparación de `version_vector` con
+    cada respuesta, búsqueda en una transacción corta (`servicios/diagnostico.py`).
+  - La consulta de vecinos del proyecto, escrita una vez para BE-2.4 y BE-3.2: `db/consultas.py`
+    (`buscar_vecinos(conexion, vectores, *, k, version_vector, ef_search)` → una lista de `Vecino` por vector; versión
+    como literal, `ef_search = max(LOC_EF_SEARCH, k)` con `set_config(…, true)`, unión con `imagenes` fuera de la
+    subconsulta ordenada).
+  - §4.8 reescrita con lo construido: orden de las respuestas, la consulta, el plan de PostgreSQL (trampa: con pocas
+    filas puede no usar el índice HNSW), por qué no `request.form()`, la tabla «qué ofrece BE-2.4 al código» para
+    BE-3.2 y BE-4.1, y trampas. §4.1 con los módulos nuevos. §4.6: `ImagenRechazada` ya tiene respuesta en `api` y el
+    doble de embeddings «la misma foto, el mismo vector» existe (`vector_de`).
+  - ADR-BE-16 (foto en memoria, una sola consulta de vecinos, errores de embeddings). R16 nuevo (HNSW aproximado y plan
+    sin el índice con pocas filas).
+  - §5.11: ayudas de `comun.py` para BE-2.4 (`lote_hecho`, que sube desde `validate22.py`, `pedir_vecinos`,
+    `jpeg_patron`, `jpeg_ruido`, `png_sintetico`, `jpeg_relleno`, `mensajes_log`, `RUTA_VECINOS`, `LOG_API`,
+    `LOG_EMBEDDING`), `validate24.py` como ejemplo (`RecorridoPatrones`, `incluida`, `SQL_CONTEOS`, `Contexto`) y su
+    mundo falso. `validate22.py` importa `lote_hecho` de `comun.py` (sin cambio de comportamiento).
+  - `validation/validation-2-4.md` reescrito: precondiciones reordenadas (el encendido de `embedding`, P5, va la
+    última), C1 hasta 20 min, N de C2 por SQL, §4 con el encendido y la limpieza y §5 completo.
+  - PLAN: alineado con 0.10.0; fila BE-2.4 «En curso».
+  - Contradicciones corregidas: `validation-2-4.md` C1 esperaba `version_vector = dinov2-vitb14/pp-v1`, pero la
+    versión activa es `dinov2-vits14/pp-v1` (§5.10, embeddings §5.3); C2a leía N de `GET /v1/admin/stats`, que es de
+    BE-2.3 (Pendiente, y no es dependencia de BE-2.4 en PLAN §2.1): ahora lo cuenta con SQL; esperaba `procesada` en
+    10 min y empezaba hasta las 21:30, pero la subida de `worker` puede tardar hasta 15 min (lo vio BE-2.2): 20 min y
+    21:00; P2 encendía `embedding` antes de comprobar el login y los recursos (ahora P5) y P4 no comprobaba INF-2.1,
+    que el encendido necesita. El encabezado de este documento decía «BE-2.2 sin validar en `dev`» y §4.6 «sin
+    comprobar en `dev`», pero BE-2.2 está «Hecho» (`3b01b68`).
+- **Contratos tocados (§5):** §5.5 `POST /v1/admin/diagnostico/vecinos` detallado sin cambiar nada de lo que ya decía:
+  reglas de la parte `foto` (tipo, vacía, tamaño, firma `FF D8 FF`; otras partes ignoradas), orden de los errores,
+  `detalle.motivo` nuevo en `400 FOTOS_INVALIDAS` (campo adicional), `indice = 1` con dos partes `foto` (caso que no
+  estaba definido), `400 SOLICITUD_INVALIDA` con multipart mal formado, `400 FOTOS_INVALIDAS` si embeddings no puede
+  decodificar la foto, `503` si devuelve otra `version_vector`, `similitud` con 6 decimales y qué mide `latencia_ms`.
+  §5.6 (`FOTOS_INVALIDAS` con `detalle.motivo`). §5.10: eventos nuevos `vecinos_consultados` y
+  `embedding_no_disponible` (`api`), `version_vector_distinta` también en `api`; notas de `EMBEDDING_VERSION_VECTOR`,
+  `LOC_MAX_BYTES_FOTO` y `LOC_EF_SEARCH`. Sin cambio de esquema.
+- **Cómo se verificó:** en local (WSL), `ruff check`, `ruff format --check` y `pytest` con `PRUEBAS_DB_URL` y
+  `PRUEBAS_DB_OBLIGATORIA=1` (todas pasan). Nuevas: `tests/base/test_diagnostico_base.py` (PostgreSQL 17.11 con
+  pgvector 0.8.7 y embeddings simulado: la misma foto primera con similitud 1, `k` y orden, índice vacío, solo la
+  versión activa, 422, 400 por cada parte que no vale, 401/403, errores de embeddings, nada escrito ni la foto en los
+  logs, el plan con el índice parcial y `ef_search` solo en la transacción), `tests/unit/test_multipart.py`,
+  `tests/contrato/test_contrato_diagnostico.py`, `tests/ops/test_comun_diagnostico.py` y `tests/ops/test_validate24.py`
+  (mundo falso con interruptores de backend defectuoso).
+- **Pendiente:** `validate24.py --entorno dev` sobre un commit de `main` desplegado (lo corre el maestro;
+  `validation-2-4.md` §5). Sin comprobar en `dev`: el plan de la consulta con un dataset real (R16), la latencia del
+  endpoint y la similitud real de una foto consigo misma tras la copia reducida del `worker` (se espera ≥ 0,95).
+
 ## [0.9.2] — 2026-10-25
 
 - **Lote que la motivó:** BE-2.2 (segunda ejecución de `validate22.py` en `dev`, sobre `54fdf18`).

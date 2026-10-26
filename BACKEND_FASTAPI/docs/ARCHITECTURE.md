@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.9.2** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.10.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.2 (`project/`; BE-2.2 sin validar en `dev`); lo de lotes posteriores es diseño propuesto |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.2 (validados en `dev`) y de BE-2.4 (`project/`; sin validar en `dev`); lo de los demás lotes es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -105,11 +105,12 @@ BACKEND_FASTAPI/
     │   │   ├── errores.py       ErrorApi; excepciones → formato de §5.1 con los códigos de §5.6; BaseNoDisponible → 503 (BE-1.3)
     │   │   ├── api/
     │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_cola_hash (BE-1.3, §4.4); obtener_almacen (BE-2.1, §4.5)
-    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: localize, places, alerts, admin_*
-    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5)
-    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); localizacion.py, geo.py, rumbo.py
-    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); localizar, purgar, alertas, lugares, estadisticas
-    │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas (incluida la búsqueda vectorial)
+    │   │   │   ├── cuerpo.py    leer_cuerpo: el cuerpo de la petición en memoria, con tope (BE-2.4, §4.8)
+    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: localize, places, alerts, admin_*
+    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8)
+    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); multipart.py y fotos.py (BE-2.4, §4.8); localizacion.py, geo.py, rumbo.py
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); localizar, purgar, alertas, lugares, estadisticas
+    │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas.py (la búsqueda de vecinos, BE-2.4, §4.8)
     │   │   ├── clientes/        embedding.py (httpx: `esta_listo` desde BE-1.1, `vectorizar` desde BE-2.2); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5; `descargar` y `escribir` desde BE-2.2); sqs.py (BE-2.2, §4.6)
     │   │   ├── seguridad/       hash.py (argon2id, §4.3), tokens.py (JWT, §5.2) y dependencias.py (requiere_admin), BE-1.3 (§4.4)
     │   │   ├── worker.py        Bucle de consumo de `ingesta` (python -m app.worker, BE-2.2, §4.6); `purga` llega con BE-4.1
@@ -514,8 +515,8 @@ Trampas: un `rumbo` de 359,9999999 pasa `< 360` como `float` pero se guarda como
 ### 4.6 BE-2.2 — Worker de ingesta
 `python -m app.worker` (`app/worker.py`) consume la cola `ingesta` (`SQS_URL_INGESTA`) y cada lote lo procesa
 `servicios.ingesta.procesar_lote` (ADR-BE-15). Probado en local con PostgreSQL real, S3 (`almacen_falso`), SQS y
-embeddings simulados (`tests/base/test_ingesta_base.py`, `tests/unit/test_worker.py`); **sin comprobar en `dev`**
-hasta que pase `validate22.py`.
+embeddings simulados (`tests/base/test_ingesta_base.py`, `tests/unit/test_worker.py`), y en `dev` con `validate22.py`
+sobre `3b01b68` (2026-10-25; PLAN §3).
 
 **Arranque.** Lee `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` y `DB_*` (infra §5.4; `worker_iniciado` con
 `modo = ingesta`). Si falta alguna (o `DB_SSLMODE` no vale), registra `configuracion_incompleta` (`ERROR`, `faltan`) y
@@ -647,16 +648,16 @@ purga de BE-4.1 también.
 
 | Elemento | Qué hace |
 |---|---|
-| `app.clientes.embedding.vectorizar(ajustes, imagenes, *, prioridad="baja", transporte=None, request_id=None)` → `Vectores` | `POST {EMBEDDING_URL}/v1/embed` con cada `bytes` como parte `imagenes` (`image/jpeg`) y `X-Prioridad`; `Vectores(version_vector, dim, vectores, tiempos_ms)` en el orden de las imágenes (comprueba que haya uno por imagen y `dim` componentes). Plazo `EMBEDDING_TIMEOUT_S` (conexión `EMBEDDING_CONNECT_TIMEOUT_S`); un reintento solo si la conexión fue **rechazada** (`ConnectionRefusedError` en la cadena). Excepciones: `EmbeddingNoDisponible` (sin URL, sin conexión, sin respuesta, `5xx`: en `api` corresponde a `503 EMBEDDING_NO_DISPONIBLE`, §5.3), `ImagenRechazada(indice, codigo)` (`400`/`413`/`415` con `detalle.indice`; cómo lo responde `api` lo decide BE-2.4 en §5.5 —propuesta: `400 FOTOS_INVALIDAS` con ese índice—) y `RespuestaNoValida` (otro `4xx` o un `200` mal formado). **BE-2.4** la llama con `prioridad="baja"` (§4.8) y **BE-3.2** con `"alta"` (§4.10); los dos comparan `version_vector` con `EMBEDDING_VERSION_VECTOR` (la regla de §5.10 para `api`, «primera llamada y cada 10 min» con `GET /v1/info`, sigue sin código). `transporte` (un `httpx.MockTransport`) es para las pruebas: ejemplos en `tests/unit/test_cliente_embedding.py`. Detalles: cada parte va como `("imagenes", ("<i>.jpg", bytes, "image/jpeg"))`; `request_id` añade `X-Request-Id` (embeddings lo respeta, §5.1 de su documento: `api` debería pasar el de la petición para correlacionar); `ValueError` si `prioridad` no es `alta`/`baja` o la lista está vacía; **no** comprueba el máximo de 8 imágenes ni los 4 MB/16 MB de embeddings (§5.2 de su documento): lo hace quien llama (si no, `413` → `ImagenRechazada` o `RespuestaNoValida`). Abre un `httpx.AsyncClient` por llamada con `trust_env=False` (sin proxies del entorno). `httpx.Timeout(EMBEDDING_TIMEOUT_S, connect=EMBEDDING_CONNECT_TIMEOUT_S)` limita **cada fase** (escritura, lectura, espera del pool), no el total: una respuesta que llega a trozos puede tardar más; para un tope total de la petición (p. ej. los 30 s de API Gateway en BE-3.2), quien llama la envuelve en `anyio.fail_after` |
+| `app.clientes.embedding.vectorizar(ajustes, imagenes, *, prioridad="baja", transporte=None, request_id=None)` → `Vectores` | `POST {EMBEDDING_URL}/v1/embed` con cada `bytes` como parte `imagenes` (`image/jpeg`) y `X-Prioridad`; `Vectores(version_vector, dim, vectores, tiempos_ms)` en el orden de las imágenes (comprueba que haya uno por imagen y `dim` componentes). Plazo `EMBEDDING_TIMEOUT_S` (conexión `EMBEDDING_CONNECT_TIMEOUT_S`); un reintento solo si la conexión fue **rechazada** (`ConnectionRefusedError` en la cadena). Excepciones: `EmbeddingNoDisponible` (sin URL, sin conexión, sin respuesta, `5xx`: en `api` corresponde a `503 EMBEDDING_NO_DISPONIBLE`, §5.3), `ImagenRechazada(indice, codigo)` (`400`/`413`/`415` con `detalle.indice`; `api` la responde `400 FOTOS_INVALIDAS` con ese índice desde BE-2.4, §5.5) y `RespuestaNoValida` (otro `4xx` o un `200` mal formado). **BE-2.4** la llama con `prioridad="baja"` (§4.8) y **BE-3.2** con `"alta"` (§4.10); los dos comparan `version_vector` con `EMBEDDING_VERSION_VECTOR` en cada respuesta (BE-2.4 ya lo hace, §4.8; la regla de §5.10 para `api`, «primera llamada y cada 10 min» con `GET /v1/info`, sigue sin código). `transporte` (un `httpx.MockTransport`) es para las pruebas: ejemplos en `tests/unit/test_cliente_embedding.py`. Detalles: cada parte va como `("imagenes", ("<i>.jpg", bytes, "image/jpeg"))`; `request_id` añade `X-Request-Id` (embeddings lo respeta, §5.1 de su documento: `api` debería pasar el de la petición para correlacionar); `ValueError` si `prioridad` no es `alta`/`baja` o la lista está vacía; **no** comprueba el máximo de 8 imágenes ni los 4 MB/16 MB de embeddings (§5.2 de su documento): lo hace quien llama (si no, `413` → `ImagenRechazada` o `RespuestaNoValida`). Abre un `httpx.AsyncClient` por llamada con `trust_env=False` (sin proxies del entorno). `httpx.Timeout(EMBEDDING_TIMEOUT_S, connect=EMBEDDING_CONNECT_TIMEOUT_S)` limita **cada fase** (escritura, lectura, espera del pool), no el total: una respuesta que llega a trozos puede tardar más; para un tope total de la petición (p. ej. los 30 s de API Gateway en BE-3.2), quien llama la envuelve en `anyio.fail_after` |
 | `app.clientes.embedding.esta_listo(ajustes, transporte=None)` → `bool` | (BE-1.1) `GET /health/ready` en `EMBEDDING_CONNECT_TIMEOUT_S` |
 | `app.clientes.s3.AlmacenS3.descargar(clave, max_bytes)` → `ObjetoDescargado(datos, etag) \| None` | `GetObject`; `None` si 404; `ObjetoDemasiadoGrande(bytes)` si `ContentLength` > `max_bytes` (no lo lee); otro error, también 403 → `FalloS3` |
 | `app.clientes.s3.AlmacenS3.escribir(clave, datos, content_type="image/jpeg")` | `PutObject` con `ContentType`. BE-3.1 puede usarlo para `lugares/{id}.jpg` (el rol `tarea-api` tiene `s3:PutObject` en `lugares/*`, infra §5.8) |
 | `app.clientes.sqs.ColaSqs(url, region="us-east-1", cliente=None)` | Síncrona (boto3; llamarla con `anyio.to_thread`): `recibir(maximo, espera_s)` → `list[MensajeSqs(id, recibo, cuerpo, recepciones)]` (topes 10 y 20 s; `MessageSystemAttributeNames=["ApproximateReceiveCount"]`), `borrar(recibo)`, `devolver(recibo)` (visibilidad 0). Todo error → `FalloSqs`. `crear_cliente(region)` usa `read_timeout` 30 s (más que la espera larga). Para enviar (`api`: `reprocesar_imagen` de BE-4.1, `purgar_*`) falta `enviar(cuerpo)`; el rol `tarea-api` tiene `sqs:SendMessage` en `ingesta` y `purga` |
-| `app.dominio.imagenes.preparar(datos, *, max_bytes, lado_min, lado_miniatura, calidad_miniatura, lado_embedding)` → `ImagenPreparada(ancho, alto, miniatura, reducida)` | Lo de arriba; `ImagenNoValida(motivo)` con los motivos de la tabla. `motivo_demasiado_grande(n, max)`. BE-2.4/BE-3.2 validan las fotos de consulta con otras reglas (§5.3: tipo y ≤ `LOC_MAX_BYTES_FOTO`) y no necesitan miniatura |
+| `app.dominio.imagenes.preparar(datos, *, max_bytes, lado_min, lado_miniatura, calidad_miniatura, lado_embedding)` → `ImagenPreparada(ancho, alto, miniatura, reducida)` | Lo de arriba; `ImagenNoValida(motivo)` con los motivos de la tabla. `motivo_demasiado_grande(n, max)`. BE-2.4/BE-3.2 validan las fotos de consulta con otras reglas (`dominio.fotos`, §4.8: tipo, tamaño ≤ `LOC_MAX_BYTES_FOTO` y firma JPEG, sin decodificar) y no necesitan miniatura |
 | `app.dominio.mensajes.interpretar(cuerpo)` → `EventosS3(objetos, ignorados) \| Reprocesar(imagen_id) \| PruebaS3() \| NoReconocido(motivo)` | Los mensajes de `ingesta` de §5.8; `ObjetoSubido(clave, etag, bytes)`. `VERSIONES_REPROCESAR = {1}`. BE-4.1 añade aquí los de `purga` (`purgar_video`, `purgar_imagen`) |
 | `app.servicios.ingesta.procesar_lote(Dependencias(motor, almacen, ajustes, vectorizar=None), mensajes)` → `list[Decision(mensaje, borrar, unidades)]` | El lote de arriba. `vectorizar` sustituye a `embedding.vectorizar` (las pruebas pasan un doble). `Unidad.resultado` ∈ `Resultado` (`procesada`, `error`, `descartado`, `transitorio`) |
 | `app.worker.consumir(detener, ajustes, *, cola, deps, esta_listo=…, espera_cola_s=20)` y `faltan_para_ingesta(ajustes)` | El bucle; las pruebas pasan cola, `esta_listo` y `procesar_lote` falsos (`tests/unit/test_worker.py`). BE-4.1 añade el consumo de `purga` |
-| Pruebas con base | `tests/base/test_ingesta_base.py`: la clase `Mundo(ajustes, almacen)` con `video(n_fotos, completa=True)` → `(video_id, [imagen_id…])` (inserta por SQL un video `validacion-22` del primer usuario y sus fotos `pendiente_subida` en `1.0, -100.0`), `subir(video_id, imagen_id, datos=None)` → `MensajeSqs` (el `PUT` en `almacen_falso` y su evento de S3; sin `datos`, un JPEG de 1024×768 hecho con Pillow), `evento(clave, etag, size)`, `mensaje(cuerpo)`, `reprocesar(imagen_id)`, `procesar(mensajes, ajustes=None)` → decisiones (motor con pool 2), `fotos(video_id)`, `vectores(imagen_id)`, `estado_video(video_id)` y `sql(sentencia, **parametros)`. `Embeddings` es el doble de `vectorizar`: `version` (por defecto `dinov2-vits14/pp-v1`), `lotes` (tamaño de cada llamada), `fallos` (excepciones que lanza en las siguientes llamadas) y vectores de 384 con un único 1,0 en la posición `(llamada × 10 + i) mod 384` (no dependen de la imagen: para BE-2.4, que necesita «la misma foto da el mismo vector», hace falta otro doble, p. ej. un vector derivado del hash de los bytes). BE-2.4 puede partir de ahí para tener vectores en el índice sin `embedding` |
+| Pruebas con base | `tests/base/test_ingesta_base.py`: la clase `Mundo(ajustes, almacen)` con `video(n_fotos, completa=True)` → `(video_id, [imagen_id…])` (inserta por SQL un video `validacion-22` del primer usuario y sus fotos `pendiente_subida` en `1.0, -100.0`), `subir(video_id, imagen_id, datos=None)` → `MensajeSqs` (el `PUT` en `almacen_falso` y su evento de S3; sin `datos`, un JPEG de 1024×768 hecho con Pillow), `evento(clave, etag, size)`, `mensaje(cuerpo)`, `reprocesar(imagen_id)`, `procesar(mensajes, ajustes=None)` → decisiones (motor con pool 2), `fotos(video_id)`, `vectores(imagen_id)`, `estado_video(video_id)` y `sql(sentencia, **parametros)`. `Embeddings` es el doble de `vectorizar`: `version` (por defecto `dinov2-vits14/pp-v1`), `lotes` (tamaño de cada llamada), `fallos` (excepciones que lanza en las siguientes llamadas) y vectores de 384 con un único 1,0 en la posición `(llamada × 10 + i) mod 384` (no dependen de la imagen: para «la misma foto da el mismo vector», BE-2.4 usa otro doble, `vector_de(bytes)` de `tests/base/test_diagnostico_base.py`, §4.8) |
 | Validador falso | `tests/ops/test_validate22.py`: un `Mundo` con la API (`/health/ready` incluido), S3, SQS, ECS (`embedding` y `worker` que arrancan con 60 y 30 s de retraso), Application Auto Scaling, CloudWatch (métrica y alarma), Cloud Map, CloudWatch Logs del `worker` y las tareas `psql` y `limpiar-validacion`, con reloj falso (`dormir` avanza de 5 en 5 s y simula un `worker` que consume `ingesta` cuando `embedding` está en marcha). BE-3.2 puede copiarlo para su validador, que también enciende `embedding` |
 
 **JPEG multi-imagen (MPO).** Algunas cámaras guardan un JPEG con varias imágenes (extensión MPF: la foto más una
@@ -695,6 +696,90 @@ investigar una localización mala. No lo usa la app.
 La consulta de vecinos (literal de la versión en el `WHERE` para que se use el índice parcial, §5.7) se escribe aquí
 una sola vez y BE-3.2 la reutiliza en el paso 3 de §4.10. Como en la localización, la foto no se guarda en ningún
 sitio (ADR-BE-06) y no se registra nada en `eventos_localizacion`.
+
+**Construido (ADR-BE-16).** Probado en local con PostgreSQL 17.11 y pgvector 0.8.7 (`db` del compose) y embeddings
+simulado (`tests/base/test_diagnostico_base.py`); **sin comprobar en `dev`** hasta que pase `validate24.py`. Una
+petición, en este orden (cada paso responde su error de §5.5 y no sigue):
+1. `requiere_admin` (router `/v1/admin`, §4.4): `401`/`403`/`503 BASE_NO_DISPONIBLE`.
+2. FastAPI valida `k` (`Query(5, ge=1, le=50)`): `422 VALIDACION` con `detalle.campos = [{"campo": "k", …}]` (también
+   `k=abc` o `k=5.5`).
+3. `foto_de_la_peticion` (router): `api.cuerpo.leer_cuerpo` lee el cuerpo **en memoria** con tope
+   `LOC_MAX_BYTES_FOTO + MARGEN_MULTIPART` (1 572 864 + 65 536 = 1 638 400 bytes; si el `Content-Length` declarado o lo
+   leído pasa, `400 FOTOS_INVALIDAS` sin leer más); `dominio.multipart.partes_multipart` lo parte (un `Content-Type`
+   que no es `multipart/form-data` → `400 FOTOS_INVALIDAS` «falta la parte foto»; multipart mal formado → `400
+   SOLICITUD_INVALIDA`); de las partes solo cuenta la que se llama `foto` (las demás se ignoran, como hace embeddings
+   con las suyas): ninguna → `indice` 0, dos o más → `indice` 1; `dominio.fotos.motivo_foto_no_valida` exige
+   `Content-Type: image/jpeg` (sin mirar parámetros como `; charset=…`), no vacía, ≤ `LOC_MAX_BYTES_FOTO` y que empiece
+   por `FF D8 FF`. No decodifica: lo hace embeddings.
+4. `servicios.diagnostico.vecinos_de_foto`: `embedding.vectorizar([foto], prioridad="baja", request_id=<X-Request-Id
+   de la petición>)` dentro de `anyio.fail_after(TOPE_EMBEDDING_S)` (20 s: los plazos de httpx son por fase). Errores:
+   `EmbeddingNoDisponible` (apagado, saturado, `5xx`, sin respuesta) y `RespuestaNoValida` → `503
+   EMBEDDING_NO_DISPONIBLE` con el evento `embedding_no_disponible` (`WARNING` y `ERROR`); `ImagenRechazada` → `400
+   FOTOS_INVALIDAS` «embeddings la rechazó (<código>)»; `version_vector` de la respuesta distinta de
+   `EMBEDDING_VERSION_VECTOR` → `503 EMBEDDING_NO_DISPONIBLE` con `version_vector_distinta` (no se busca con un vector
+   incomparable). Sin `GET /v1/info`: la versión viene en cada respuesta de `/v1/embed`.
+5. En **una** transacción corta (`sesion.transaccion`), `db.consultas.buscar_vecinos` con `k`, `LOC_EF_SEARCH` y
+   `EMBEDDING_VERSION_VECTOR`. Un fallo de la base → `503 BASE_NO_DISPONIBLE` (§4.4). Nada se escribe.
+6. Respuesta: `similitud` redondeada a 6 decimales (el orden lo da la distancia sin redondear), `rumbo` con
+   `real_legible` (§4.5), `latencia_ms` = desde que empieza el endpoint (ya pasados los pasos 1 y 2) hasta antes de
+   serializar. Evento `vecinos_consultados` (§5.10), sin ids ni bytes de la foto.
+
+**La consulta** (`db.consultas.sql_vecinos`, la única del proyecto para vecinos):
+```sql
+SELECT i.id, i.video_id, i.lat, i.lng, i.rumbo, i.lugar_id, c.distancia
+FROM (SELECT e.imagen_id, e.vector <=> CAST(:vector AS vector) AS distancia
+      FROM embeddings e WHERE e.version_vector = '<EMBEDDING_VERSION_VECTOR>'
+      ORDER BY e.vector <=> CAST(:vector AS vector) LIMIT :k) AS c
+JOIN imagenes i ON i.id = c.imagen_id
+ORDER BY c.distancia, i.id
+```
+precedida, en la misma transacción, de `SELECT set_config('hnsw.ef_search', '<max(LOC_EF_SEARCH, k)>', true)` (=
+`SET LOCAL`: no sale de la transacción; comprobado). La subconsulta ordena por la expresión del índice con `LIMIT`
+(lo que pgvector necesita para usar HNSW) y la unión con `imagenes` va fuera. `ef_search` es el de `/v1/localize`
+(64) salvo si `k` lo supera (HNSW devolvería como mucho `ef_search` filas); con `k` ≤ 50, siempre 64. Similitud =
+`1 − distancia coseno`, acotada a [−1, 1]. Solo entran imágenes con vector de la versión activa; una imagen de otra
+versión no sale (probado). No mira `imagenes.estado` ni el video: los vectores solo existen para fotos `procesada`
+(el `worker` los borra en `error`, §4.6) y BE-4.1 los borra al borrar un video (ADR-BE-07).
+
+**Plan de PostgreSQL (trampa).** Con el índice parcial disponible, el planificador decide por costo: en local, con 10
+vectores y `enable_seqscan = off`, el plan usa `embeddings_hnsw_dinov2_vits14_pp_v1` (prueba
+`test_la_consulta_usa_el_indice_parcial_y_ef_search_solo_en_la_transaccion`); con la tabla vacía y sin estadísticas
+prefiere `embeddings_pkey` (`version_vector` es la segunda columna de la PK) más un `Sort` exacto. Los dos dan los
+mismos vecinos (el exacto, incluso mejores); con miles de vectores el `Sort` de todos cuesta más que HNSW. **A
+verificar** con `EXPLAIN` en `dev` cuando haya un dataset real (FE-2.1): si no usara el índice, BE-3.2 lo notaría en
+la latencia (C3).
+
+**Por qué el multipart se parte a mano** (ADR-BE-16): `request.form()` de Starlette exige `python-multipart` (no está
+en la imagen) y pasa a un archivo temporal **en disco** toda parte de más de 1 MB: una foto de consulta tocaría el disco
+(ADR-BE-06; BE-3.2 C4 lo comprueba con ECS Exec). `dominio.multipart` sigue RFC 7578/2046 (preámbulo y epílogo,
+`boundary` de 1 a 70 caracteres, `name*=` de RFC 2231) y está probado con lo que manda httpx (el cliente de la
+herramienta de evaluación de embeddings y de los validadores), con bytes binarios que contienen `\r\n--` en medio.
+
+**Para los lotes siguientes: qué ofrece BE-2.4 al código** (BE-3.2 reutiliza todo menos el router; BE-4.1 C1 usa el
+endpoint).
+
+| Elemento | Qué hace |
+|---|---|
+| `app.db.consultas.buscar_vecinos(conexion, vectores, *, k, version_vector, ef_search)` → `list[list[Vecino]]` | Dentro de una transacción abierta: `fijar_ef_search(conexion, max(ef_search, k))` y una sentencia `sql_vecinos` por vector; una lista por vector, en el mismo orden, de mayor a menor similitud (a igualdad, `imagen_id`). `ValueError` si `k` < 1, la versión no tiene formato de versión o un vector está vacío o no es finito. **BE-3.2**: `async with sesion.transaccion(motor) as c: vecinos = await buscar_vecinos(c, vectores.vectores, k=LOC_TOP_K, version_vector=EMBEDDING_VERSION_VECTOR, ef_search=LOC_EF_SEARCH)` (una transacción para las 1–5 fotos) y después descarta `similitud < LOC_SIM_MIN` (aquí no se filtra) |
+| `app.db.consultas.Vecino` | *Dataclass* congelado: `imagen_id`, `video_id` (`uuid.UUID`), `lat`, `lng` (`float`), `rumbo` (`float \| None`, el `real` crudo: pasarlo por `real_legible` para la API), `lugar_id` (`uuid.UUID \| None`), `distancia` y `similitud` (`float`, sin redondear) |
+| `app.db.consultas.sql_vecinos(version)`, `literal_version(version)`, `texto_vector(vector)`, `fijar_ef_search(conexion, n)` | La sentencia (parámetros `:vector` y `:k`); la versión citada como literal (`'…'`; exige `[A-Za-z0-9._/-]{1,100}`, si no `ValueError`); el vector como texto de pgvector (`[x1,x2,…]` con `repr` de cada `float`); `set_config('hnsw.ef_search', n, true)` |
+| `app.servicios.diagnostico.vecinos_de_foto(motor, ajustes, foto, *, k, request_id=None, vectorizar=None)` → `ResultadoVecinos(version_vector, k, vecinos, embedding_ms, busqueda_ms)` | Pasos 4 y 5 de arriba. `vectorizar(imagenes)` sustituye la llamada a embeddings; sin él usa `embedding.vectorizar(ajustes, imagenes, prioridad="baja", request_id=…)` (buscado en el módulo al llamar: las pruebas lo cambian con `monkeypatch.setattr(embedding, "vectorizar", doble)`). Excepciones: las de `clientes.embedding`, `VersionVectorDistinta(esperada, recibida)` y `BaseNoDisponible`. Constante `TOPE_EMBEDDING_S` (20). BE-3.2 escribe su propio servicio (prioridad `alta`, varias fotos) con las mismas piezas |
+| `app.dominio.multipart.partes_multipart(content_type, cuerpo)` → `list[Parte(nombre, archivo, tipo, datos)]` | Partes en orden de llegada; `tipo` en minúsculas sin parámetros (`text/plain` si la parte no trae); `NoEsMultipart` (otro `Content-Type` o ninguno) y `MultipartInvalido(motivo)` (sin `boundary`, sin delimitador final, cabeceras sin `:` o sin fin, parte sin `Content-Disposition: form-data; name=…`). `boundary_de(content_type)`, `BOUNDARY_MAX` (70). Sin dependencias (stdlib `email.message` para los parámetros de las cabeceras) |
+| `app.dominio.fotos.motivo_foto_no_valida(tipo, datos, max_bytes)` → `str \| None` | Reglas de §5.5 para una foto (en este orden: tipo `image/jpeg`, no vacía, tamaño, firma `FF D8 FF`); los motivos (`tipo image/png: se espera image/jpeg`, `la foto está vacía`, `la foto pesa N bytes (máximo M)`, `no es un JPEG (no empieza por FF D8 FF)`) van en `detalle.motivo`. `TIPO_JPEG`, `FIRMA_JPEG`. **BE-3.2** la aplica a cada foto con su índice |
+| `app.api.cuerpo.leer_cuerpo(request, max_bytes)` → `bytes`; `CuerpoDemasiadoGrande(max_bytes)` | Lectura acotada del cuerpo (`Content-Length` y lo leído). BE-3.2 usa como tope `LOC_MAX_FOTOS × LOC_MAX_BYTES_FOTO` + margen |
+| `app.api.v1.admin_diagnostico.foto_de_la_peticion(request, max_bytes)` → `bytes`; `PARTE_FOTO` (`foto`), `MARGEN_MULTIPART` (65 536) | El paso 3 con sus `ErrorApi`. El router `admin_diagnostico.router` (`/diagnostico`) va en `RUTAS_ADMIN` |
+| `app.esquemas.diagnostico` | `VecinoDiagnostico`, `VecinosRespuesta` (§5.5; prohíben campos de más), `K_MIN` (1), `K_MAX` (50), `K_POR_DEFECTO` (5), `DECIMALES_SIMILITUD` (6). La petición no tiene modelo: el OpenAPI la declara con `openapi_extra` (`multipart/form-data`, `foto` binaria) |
+| Pruebas con base | `tests/base/test_diagnostico_base.py`: `vector_de(bytes)` (vector unitario de 384 sacado del SHA-256 de los bytes: la misma foto da el mismo vector; dos distintas, similitud ~0), `Embeddings` (doble de `embedding.vectorizar` con `version`, `llamadas` —`n`, `prioridad`, `request_id`— y `fallo`), `indexar(ajustes, fotos, version=…, rumbo=340.3)` → `{"video_id", "imagenes"}` (un video `validacion-24` con una imagen `procesada` y su vector por foto, en `1.0 + orden·0,0001, −100.0`), `jpeg(semilla)`, `consultar(api, foto, k, tipo=, parte=)` y la fixture `api` (admin con sesión). BE-3.2 puede partir de ahí |
+| Ejemplo de doble de embeddings en la API | `monkeypatch.setattr(app.clientes.embedding, "vectorizar", doble)` con la firma `(ajustes, imagenes, *, prioridad, transporte=None, request_id=None)` |
+
+Trampas:
+- `request.form()` y los parámetros `File`/`UploadFile` de FastAPI **no** se usan en estas rutas (disco y
+  `python-multipart`, arriba). Una ruta nueva que reciba fotos usa `leer_cuerpo` + `partes_multipart`.
+- `leer_cuerpo` consume `request.stream()`: después, `await request.body()` ya no devuelve el cuerpo.
+- El `Content-Type` de la parte manda: un JPEG enviado como `image/png` es `400` aunque los bytes sean JPEG (y un PNG
+  enviado como `image/jpeg`, `400` por la firma). `image/jpeg; charset=binary` vale.
+- HNSW es aproximado (R16): con muchos vectores, algún vecino exacto puede faltar; la herramienta de evaluación de
+  embeddings lo compara con fuerza bruta (`SERVICE_EMBEDDING/docs/ARCHITECTURE.md` §4.5).
 
 ### 4.9 BE-3.1 — Lugares y alertas (lectura pública y administración)
 **Lectura pública.** `GET /v1/places` devuelve todos los lugares (decenas, sin paginación) con la distancia a la
@@ -1164,7 +1249,12 @@ Parámetros, todos opcionales:
 
 #### `POST /v1/admin/diagnostico/vecinos`
 `multipart/form-data` con una sola parte `foto` (`image/jpeg`, ≤ `LOC_MAX_BYTES_FOTO`, las mismas reglas que una foto
-de `/v1/localize`). Parámetro `k` en la URL: entero de 1 a 50, por defecto 5.
+de `/v1/localize`). Parámetro `k` en la URL: entero de 1 a 50, por defecto 5. Desde BE-2.4 (ARCHITECTURE 0.10.0):
+- La parte `foto` debe declarar `Content-Type: image/jpeg` (se ignoran parámetros como `; charset=…`), no estar vacía,
+  pesar como mucho `LOC_MAX_BYTES_FOTO` (1 572 864 bytes) y empezar por `FF D8 FF`. El nombre de archivo da igual. Las
+  partes con otro nombre se ignoran.
+- La foto se vectoriza con prioridad `baja` (no compite con `/v1/localize`) y no se guarda en ningún sitio: ni S3, ni
+  disco, ni logs, ni `eventos_localizacion` (ADR-BE-06, ADR-BE-16).
 
 `200`:
 ```json
@@ -1182,16 +1272,29 @@ de `/v1/localize`). Parámetro `k` en la URL: entero de 1 a 50, por defecto 5.
   menos vectores (vacío si no hay dataset). Solo incluye imágenes con vector de la versión activa; `lugar_id` puede ser
   `null`.
 - No aplica `LOC_SIM_MIN` ni agrupa: es la salida cruda del paso 3 de §4.10 para una foto.
+- `version_vector` es `EMBEDDING_VERSION_VECTOR` (§5.10), la misma que devolvió embeddings para la foto; `k`, el
+  pedido. `similitud` va con 6 decimales como mucho (a igualdad, el orden lo da `imagen_id`); `rumbo` es el del
+  dataset (norte verdadero) o `null`. `latencia_ms`: lo que tardó el servidor desde que empezó el endpoint
+  (autenticación y `k` ya validados), embeddings y búsqueda incluidos.
 
-Errores: `400 FOTOS_INVALIDAS` (falta la foto, tipo o tamaño; `detalle.indice = 0`), `422 VALIDACION` (`k`),
-`503 EMBEDDING_NO_DISPONIBLE`, `503 BASE_NO_DISPONIBLE`, y los de §5.2 y `403 SIN_PERMISOS`.
+Errores, en este orden (el primero que aplica):
+1. Los de §5.2 (`401`, `403 SIN_PERMISOS`) y `503 BASE_NO_DISPONIBLE`.
+2. `422 VALIDACION` si `k` no es un entero de 1 a 50 (`detalle.campos` nombra `k`).
+3. `400 FOTOS_INVALIDAS` con `detalle = {"indice": 0, "motivo": "…"}`: falta la parte `foto` (o el cuerpo no es
+   `multipart/form-data`), tipo, foto vacía, tamaño (también si el cuerpo pasa de `LOC_MAX_BYTES_FOTO` + 64 KiB) o no
+   empieza por `FF D8 FF`. Con dos o más partes `foto`, `indice = 1`. `motivo` es un texto corto para humanos (no un
+   código). `400 SOLICITUD_INVALIDA` si el multipart está mal formado.
+4. `503 EMBEDDING_NO_DISPONIBLE` (apagado, caído, saturado, sin respuesta en `EMBEDDING_TIMEOUT_S` o con otra
+   `version_vector`), o `400 FOTOS_INVALIDAS` (`indice` 0, `motivo` «embeddings la rechazó (IMAGEN_INVALIDA)») si
+   embeddings no pudo decodificar la foto.
+5. `503 BASE_NO_DISPONIBLE` durante la búsqueda.
 
 ### 5.6 Códigos de error
 
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 400 | `SOLICITUD_INVALIDA` | Cuerpo mal formado (JSON inválido, multipart roto) |
-| 400 | `FOTOS_INVALIDAS` | `/v1/localize` y `/v1/admin/diagnostico/vecinos`: cantidad, tipo o tamaño de fotos, o `rumbos` incoherente |
+| 400 | `FOTOS_INVALIDAS` | `/v1/localize` y `/v1/admin/diagnostico/vecinos`: cantidad, tipo o tamaño de fotos, o `rumbos` incoherente; `detalle.indice` señala la foto y, en `vecinos` (BE-2.4), `detalle.motivo` dice por qué |
 | 401 | `NO_AUTENTICADO` · `TOKEN_INVALIDO` · `TOKEN_EXPIRADO` | §5.2 (con `WWW-Authenticate: Bearer`) |
 | 401 | `CREDENCIALES_INVALIDAS` | Login fallido (cuerpo fijo, §5.3) |
 | 403 | `SIN_PERMISOS` | Token válido de un usuario activo sin rol `admin` (§5.2) |
@@ -1520,10 +1623,10 @@ que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que 
 | `LOGIN_HASH_CONCURRENTES` | 2 | Verificaciones argon2id a la vez en `api` (cada una usa 64 MiB; la tarea tiene 0,5 GB). Las demás esperan su turno sin conexión a la base (§4.4) |
 | `LOGIN_HASH_COLA_MAX` | 8 | Logins que pueden esperar turno además de los que verifican; el siguiente recibe `503 SERVICIO_OCUPADO` sin tocar la base |
 | `LOGIN_HASH_ESPERA_MAX_S` | 10 | Espera máxima por el turno; después, `503 SERVICIO_OCUPADO`. Muy por debajo de los 30 s de API Gateway |
-| `EMBEDDING_VERSION_VECTOR` | `dinov2-vits14/pp-v1` | Debe coincidir con `GET /v1/info` de embeddings. Se comprueba en la primera llamada tras cada arranque del servicio y cada 10 min (no al arrancar `api`, porque embeddings puede estar apagado); si no coincide, no se usa el servicio y `/v1/health/ready` lo informa |
+| `EMBEDDING_VERSION_VECTOR` | `dinov2-vits14/pp-v1` | Debe coincidir con `GET /v1/info` de embeddings. Se comprueba en la primera llamada tras cada arranque del servicio y cada 10 min (no al arrancar `api`, porque embeddings puede estar apagado); si no coincide, no se usa el servicio y `/v1/health/ready` lo informa (esa regla aún no tiene código). Hoy se compara con la `version_vector` de cada respuesta de `/v1/embed`: el `worker` (BE-2.2) no guarda el vector y `vecinos` (BE-2.4) responde `503 EMBEDDING_NO_DISPONIBLE` sin buscar. Es también el literal del `WHERE` de la búsqueda (§4.8, §5.7) |
 | `EMBEDDING_TIMEOUT_S` / `EMBEDDING_CONNECT_TIMEOUT_S` | 5 / 3 | Un reintento solo si la conexión fue rechazada. 5 s deja margen sobre los ≤ 800 ms esperados para 5 fotos en `dev` (embeddings §5.7); si hace falta, se sube con la variable del mismo nombre |
-| `LOC_MAX_FOTOS` / `LOC_MAX_BYTES_FOTO` | 5 / 1 572 864 (1,5 MB) | |
-| `LOC_TOP_K` / `LOC_EF_SEARCH` | 10 / 64 | Por foto |
+| `LOC_MAX_FOTOS` / `LOC_MAX_BYTES_FOTO` | 5 / 1 572 864 (1,5 MB) | `LOC_MAX_BYTES_FOTO` lo usa `vecinos` desde BE-2.4 (tope de la foto; el del cuerpo es ese más 64 KiB, §4.8) |
+| `LOC_TOP_K` / `LOC_EF_SEARCH` | 10 / 64 | Por foto. `vecinos` (BE-2.4) usa `hnsw.ef_search = max(LOC_EF_SEARCH, k)` (§4.8); `LOC_TOP_K` es el `k` con que la herramienta de evaluación de embeddings llama a `vecinos` |
 | `LOC_SIM_MIN` / `LOC_SIM_ALTA` | 0,55 / 0,80 | **Iniciales: se calibran en BE-3.2 con el conjunto de evaluación de EMB-3.2** |
 | `LOC_RADIO_GRUPO_M` / `LOC_PESO_EXPONENTE` / `LOC_RADIO_MIN_M` | 20 / 4 / 5 | |
 | `LOC_NIVEL_ALTA_MIN` / `LOC_NIVEL_MEDIA_MIN` (cortes de nivel) | 0,70 / 0,45 | `alta` ≥ 0,70 · `media` ≥ 0,45 · `baja` < 0,45. Iniciales |
@@ -1567,8 +1670,10 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `mensaje_descartado` | `worker` | `motivo` (`prueba_s3`, `clave_no_reconocida`, `video_no_existe`, `video_eliminado`, `imagen_no_existe`, `duplicado`, `objeto_no_existe`), `origen`, `imagen_id`, `video_id` (o `mensaje_id` en los dos primeros) | Nada que procesar; el mensaje se borra (`INFO`) |
 | `mensaje_no_reconocido` | `worker` | `motivo`, `mensaje_id` | Cuerpo que no es ninguno de §5.8; se borra (`WARNING`) |
 | `ingesta_transitoria` | `worker` | `motivo` (`s3: …`, `base: …`, `embedding: …`, `version_vector distinta…`, `imprevisto: …`), `origen`, `imagen_id`, `video_id` (y la traza en `excepcion` si es imprevista) | Fallo transitorio: el mensaje se queda (`WARNING`; `ERROR` si es imprevisto o una respuesta no válida de embeddings) |
-| `version_vector_distinta` | `worker` | `esperada`, `recibida` | `/v1/embed` devolvió otra `version_vector` que `EMBEDDING_VERSION_VECTOR`: no se guarda nada (`ERROR`) |
+| `version_vector_distinta` | `worker`, `api` | `esperada`, `recibida` | `/v1/embed` devolvió otra `version_vector` que `EMBEDDING_VERSION_VECTOR`: el `worker` no guarda nada; en `api` (BE-2.4, `vecinos`), `503 EMBEDDING_NO_DISPONIBLE` sin buscar (`ERROR`) |
 | `cola_fallida` | `worker` | `operacion` (`recibir` \| `borrar`), `motivo` | Error de SQS; el bucle sigue (`WARNING`) |
+| `vecinos_consultados` | `api` | `k`, `devueltos`, `similitud_max` (`null` sin vecinos), `bytes` (de la foto), `embedding_ms`, `busqueda_ms`, `latencia_ms` | `POST /v1/admin/diagnostico/vecinos` con `200` (BE-2.4, `INFO`). Nunca ids, bytes ni nada de la foto salvo su tamaño |
+| `embedding_no_disponible` | `api` | `motivo` (p. ej. `sin EMBEDDING_URL`, `sin respuesta en 5 s`, `503 SATURADO`, `respuesta no válida: …`) | Una llamada de `api` a `/v1/embed` falló: `vecinos` (BE-2.4) responde `503 EMBEDDING_NO_DISPONIBLE` (`WARNING`; `ERROR` si la respuesta no cumple el contrato). Va seguido de `error_api` |
 | `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` y, desde BE-1.3, en cualquier endpoint que la use (`WARNING`; responde `503`); en `migrate` (toda la CLI, también `limpiar-validacion`), la CLI termina con 2 (`ERROR`) |
 | `configuracion_incompleta` | `migrate`, `api`, `worker` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, falta o no vale la contraseña de `crear-usuario`, o falta `S3_BUCKET_DATASET` en `limpiar-validacion` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida; desde BE-2.1, falta `S3_BUCKET_DATASET` (o no se pudo crear el cliente de S3) en `images` o `complete` (`ERROR`; responde `500`). En `worker` (BE-2.2), al arrancar sin `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` o `DB_*` (`faltan`; `motivo = la ingesta no puede empezar`), y sigue con latidos sin consumir (`ERROR`) |
 | `video_creado` | `api` | `video_id`, `numero`, `nuevo` (`false` si ya existía con ese `ref_cliente`) | `POST /v1/collect/videos` con `201` o `200` (BE-2.1) |
@@ -1727,10 +1832,7 @@ antes de borrar sus videos. Para saber que el `worker` consumió un mensaje inye
 (`eventos_worker`), y lee `embeddings` con `extract(epoch FROM creado_en)` para comparar instantes como números.
 
 Lo que tiene `validate22.py` y no está en `comun.py` (un lote siguiente que lo necesite lo copia o lo sube a `comun.py`
-con su fila en la tabla de arriba):
-- `lote_hecho(texto, lote)` → `bool`: ¿la fila `| <lote> | … | Hecho |` de la tabla de estado (§3) de un PLAN dice
-  «Hecho» en la tercera columna? (P3 la usa con `SERVICE_EMBEDDING/docs/PLAN.md`; una fila de §2.1 con el mismo id no
-  cuenta).
+con su fila en la tabla de arriba; `lote_hecho` subió a `comun.py` con BE-2.4 y `validate22.py` la importa de ahí):
 - Constantes: `VERSION_VECTOR` (`dinov2-vits14/pp-v1`), `MINIATURA_LADO_PX` (320), `LIMITE_PROCESADO_S` (20 min),
   `LIMITE_CONSUMO_S` (5 min, espera de un evento del `worker`), `LIMITE_APAGADO_S` (5 min), `GUARDA_APAGADO_S` (45 s),
   `MUESTREO_C3_S` (6 min), `PAUSA_MUESTREO_S` (30 s), `PAUSA_SONDEO_S` (15 s), `HORA_LIMITE` (21, Bogotá) y
@@ -1748,6 +1850,52 @@ Trampas de BE-2.2: `--sin-limpieza` también se salta dejar `embedding` como est
 validador: se apaga con `embedding.py apagar` de infra, `validation-2-2` §5 paso 7). `EmbeddingDev.servicio` lanza
 `PrecondicionNoCumplida` (INF-1.3) si el servicio no existe. La DLQ se compara con `ApproximateNumberOfMessages` +
 `…NotVisible`, aproximados: un mensaje ajeno que llegue a la DLQ durante la ejecución haría fallar C2 o C3b.
+
+Ayudas de BE-2.4 (para los validadores que consultan el índice o miran los logs de `api`; BE-3.2 y BE-4.1 las
+reutilizan):
+
+| Elemento | Qué hace |
+|---|---|
+| `lote_hecho(texto, lote)` → `bool` | ¿La fila `\| <lote> \| … \| Hecho \|` de la tabla de estado (§3) de un PLAN dice «Hecho» en la tercera columna? Una fila de §2.1 con el mismo id no cuenta. La usan `validate22.py` (EMB-2.1 en `SERVICE_EMBEDDING/docs/PLAN.md`) y `validate24.py` (BE-2.2 en el PLAN de esta carpeta) |
+| `pedir_vecinos(api, token, foto, *, k=None, tipo="image/jpeg", parte="foto")` → respuesta | `POST /v1/admin/diagnostico/vecinos[?k=…]` con `foto` como única parte `parte` (`consulta.jpg`, `tipo`), como la manda la herramienta de evaluación de embeddings. `token=None` = sin `Authorization`; `k` puede ser cualquier valor (para probar el `422`). BE-4.1 C1 la usa para ver que un video borrado ya no sale |
+| `jpeg_patron(semilla, ancho=1024, alto=768, *, calidad=90)` → `bytes` | JPEG en color (Pillow) con un patrón según `semilla % 4` (franjas, tablero, círculos, figuras), colores con esa semilla y 12 líneas encima; la misma semilla, los mismos bytes. Semillas con distinto `semilla % 4` dan fotos muy distintas para el modelo (`jpeg_sintetico`, en gris y de bloques uniformes, no lo garantiza). 1024×768 pesa ~30–200 KB |
+| `jpeg_ruido(semilla, ancho=512, alto=384)` → `bytes` | Ruido RGB (Pillow, calidad 85): una foto sin relación con ningún dataset, < 1,5 MB |
+| `png_sintetico(ancho=320, alto=240)` → `bytes`; `jpeg_relleno(n_bytes)` → `bytes` | Un PNG; un `jpeg_sintetico` de 64×48 seguido de ceros hasta `n_bytes` (sigue siendo un JPEG válido: el relleno va tras el EOI) |
+| `mensajes_log(logs, grupo, desde)` → `list[str]` | Todos los mensajes de un log group desde `desde` (`filter-log-events` sin patrón, todas las páginas). Sin permiso → `ErrorConfiguracion`; otro error → `Falla` |
+| Constantes | `RUTA_VECINOS` (`/admin/diagnostico/vecinos`), `LOG_API` (`/campus-locator/dev/api`), `LOG_EMBEDDING` (`/campus-locator/dev/embedding`) |
+
+`validate24.py` (validation-2-4) es el ejemplo de un validador que consulta el índice. Lo que tiene y no está en
+`comun.py`:
+- `RecorridoPatrones(comun.RecorridoPrueba)`: igual, pero `foto(orden)` = `jpeg_patron(semilla · 1000 + orden)` (las
+  fotos 1, 2 y 3 salen con patrones tablero, círculos y figuras, porque `semilla · 1000` es múltiplo de 4).
+- `incluida(solo, id_)`: la regla de `--solo` de `comun.Validador` (`C4` incluye `C4a` y `C4b`), para decidir en la
+  `preparacion` si hacen falta las lecturas iniciales de C4a.
+- `SQL_CONTEOS`: `SELECT (SELECT count(*) FROM eventos_localizacion), (SELECT count(*) FROM embeddings WHERE
+  version_vector = 'dinov2-vits14/pp-v1')` → una línea `eventos|vectores` de `psql -tAc`.
+- Constantes: `ORDENES` (1, 2, 3), `VERSION_VECTOR`, `SIMILITUD_PROPIA_MIN` (0,95), `LOC_SIM_MIN` (0,55, solo como
+  evidencia), `K_C1` (5), `K_MAX` (50), `TAM_GRANDE` (1 677 722 = 1,6 MiB), `EVENTO_MAX_BYTES` (16 384),
+  `LIMITE_PROCESADO_S` (20 min), `HORA_LIMITE` (21), `MARGEN_LOGS_S` (60), `PLAN_BACKEND`, `GRUPOS_LOG`.
+- `Contexto`: lo de `validate22.py` (`preparar`, `token`, `asegurar_video`, `fotos`, `asegurar_embedding`,
+  `_restaurar_embedding`, `limpiar`) más `vecinos(foto, k=None, token=…, tipo=…, parte=…)` (con el token del admin si
+  no se pasa otro; `token=None` sin `Authorization`), `asegurar_procesadas()` (sube las 3 fotos y sondea cada 15 s hasta
+  `procesada`; `procesadas` guarda las que llegaron), `conteos()` → `(eventos, vectores)`, `claves()` (todas las claves
+  del bucket), `lecturas_iniciales()`, `n_indice()` (N = vectores iniciales + fotos de C1 procesadas, sin otra tarea; sin
+  lecturas iniciales —`--solo` sin C4— lo cuenta con SQL una vez) y `preparacion()` (`borrar_restos` y, si C4a está
+  incluida, las lecturas iniciales). La limpieza deja `embedding` como estaba, borra el video y desactiva el usuario de
+  prueba si `usuario_pudo_quedar_activo` (se marca antes de lanzar `crear-usuario`); un fallo en una parte no impide
+  las otras.
+- Pruebas: `tests/ops/test_validate24.py` carga el mundo falso de `test_validate22.py` con `importlib` (no es un
+  paquete) y lo extiende: el endpoint de vecinos (la misma foto → 0,9931; las del índice previo, 0,81, 0,62, 0,41,
+  0,30…; las demás, < 0,5), el usuario y su login, `crear-usuario`/`desactivar-usuario` como tareas, los conteos de
+  `psql`, el paginador de `list-objects-v2` (páginas de 3) y los logs de `api` y `embedding` (páginas de 2).
+  Interruptores de backend defectuoso: `desplegado`, `filtra_umbral`, `guarda_consulta`, `registra_evento`,
+  `registra_foto`, `user_entra`, `otro_primero`.
+
+Trampas de BE-2.4: C4a supone que nadie sube fotos ni localiza en `dev` mientras corre (si no, falla con los dos
+valores para descartarlo). C2a no usa `GET /v1/admin/stats` (BE-2.3 no es dependencia de BE-2.4): N sale de
+`SQL_CONTEOS`. Tras la espera de C1, C2a publica un `latido()` (aleja el apagado por inactividad, infra §5.11).
+`--sin-limpieza` deja también `embedding` como esté y el usuario de prueba activo (con una contraseña aleatoria que
+nadie conoce; la siguiente ejecución lo reactiva y lo desactiva).
 
 **Trampa del arranque de `embedding`: Cloud Map sin configuración de salud (0.9.1 y 0.9.2).** El servicio de Cloud
 Map de `embedding` (`srv-josm7lql7ddxgzm6`, `embedding.campus-locator.local`, registro A con TTL 10 s) **no tiene
@@ -1941,6 +2089,27 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
   Pillow en la imagen; un error de configuración (versión distinta) llena la DLQ en ~15 min y la alarma lo hace
   visible.
 
+**ADR-BE-16 — Diagnóstico de vecinos: foto en memoria, una sola consulta de vecinos y errores de embeddings
+(aceptada, BE-2.4).**
+- **Multipart partido en memoria** (`dominio.multipart`, cuerpo leído con tope por `api.cuerpo.leer_cuerpo`). La foto
+  de consulta no debe tocar el disco (ADR-BE-06; BE-3.2 C4 lo mira con ECS Exec) y `request.form()` de Starlette pasa
+  a un archivo temporal toda parte de más de 1 MB, además de exigir `python-multipart`. *Alternativas descartadas:*
+  `python-multipart` con `UploadFile` (disco y una dependencia más en la imagen); subir el umbral de volcado de
+  Starlette (`MultiPartParser.spool_max_size`, atributo de clase: global y frágil entre versiones).
+- **Una sola consulta de vecinos** (`db.consultas.buscar_vecinos`) para el diagnóstico y para `/v1/localize`: lo que
+  mide EMB-3.2 con `vecinos` es lo que usará la localización. Versión como literal (índice parcial, §5.7),
+  `ef_search = max(LOC_EF_SEARCH, k)` con `SET LOCAL`, unión con `imagenes` fuera de la subconsulta ordenada. Sin
+  `LOC_SIM_MIN`: el umbral es de la localización.
+- **Errores de embeddings**: imagen que embeddings no puede decodificar → `400 FOTOS_INVALIDAS` (es la foto, no el
+  servicio; la propuesta de §4.6); servicio apagado, lento, saturado, con una respuesta fuera de contrato o con otra
+  `version_vector` → `503 EMBEDDING_NO_DISPONIBLE` (no se busca con un vector incomparable). La versión se compara con
+  cada respuesta de `/v1/embed`, sin `GET /v1/info` (viene en todas; la regla de «cada 10 min» de §5.10 sigue sin
+  código).
+- **Prioridad `baja`**: el diagnóstico no debe retrasar a quien se está ubicando.
+- *Consecuencias:* la API no decodifica la foto (una que no es JPEG pero empieza por `FF D8 FF` llega a embeddings y
+  vuelve como `400`); el evento `vecinos_consultados` da latencias y similitud máxima sin datos de la foto; la búsqueda
+  es aproximada (HNSW, R16).
+
 ---
 
 ## 7. Riesgos
@@ -1962,3 +2131,4 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 | R13 | Eventos de S3 de los validadores (y de subidas reales con `embedding` apagado) esperan en `ingesta` sin consumidor | Media | Bajo | Antes de BE-2.2 el `worker` no consumía (§4.2) y `validate21.py` dejaba 6 mensajes por ejecución que caducan a los 4 días (infra §5.6). Mientras estén visibles, `embedding` no se apaga por inactividad (sí a las 22:00). Con BE-2.2 el `worker` los consume en cuanto `embedding` está encendido y descarta los de fotos borradas (§4.6); con `embedding` apagado siguen esperando (es lo que mide C3 de BE-2.2). No se purgan desde el validador (§5.11) |
 | R15 | Un fallo transitorio repetido (embeddings saturado, `version_vector` distinta, S3 o base caídos) manda a la DLQ eventos de fotos válidas | Baja | Medio | El `worker` no recibe sin `embedding` listo (§4.6); un mensaje retenido vuelve cada 180 s y va a la DLQ a la sexta recepción (~15 min de fallos seguidos); la alarma de DLQ avisa (infra §5.10). Se re-encola con *redrive* de la DLQ o, con BE-4.1, `POST /v1/admin/images/{id}/reprocesar`. La foto queda en `subida` (no en `error`) |
 | R14 | boto3 en `api` (0,25 vCPU, 0,5 GB): memoria y tiempo de arranque | Media | Bajo | El cliente se crea una vez, en un hilo, al arrancar (§4.5); argon2id ya usa hasta 128 MiB (R12). Sin medir en `dev`: anotar la memoria de la tarea tras desplegar BE-2.1 |
+| R16 | La búsqueda HNSW es aproximada: con muchos vectores, algún vecino exacto puede faltar en `vecinos` y en `/v1/localize`; con pocos, PostgreSQL puede no usar el índice (§4.8) | Media | Bajo | `ef_search` = 64 ≥ `k` (§4.8); la herramienta de evaluación de embeddings compara con fuerza bruta (`SERVICE_EMBEDDING/docs/ARCHITECTURE.md` §4.5); si el *recall* no alcanza, subir `LOC_EF_SEARCH` (variable de §5.10). `EXPLAIN` en `dev` con un dataset real: a verificar |

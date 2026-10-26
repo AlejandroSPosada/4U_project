@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.9.2**.
+Alineado con `ARCHITECTURE.md` **v0.10.0**.
 
 ---
 
@@ -207,7 +207,7 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 | BE-2.1 | 2 | Hecho | [2-1](./validation/validation-2-1.md) | `9f6ed19` 2026-10-25 | 0.8.0 | Desplegado por `backend.yml` (`api` y `worker:5` con la misma imagen). `validate21.py --entorno dev` con código 0 (informe `.validacion/BE-2.1-20261025-222036.json`): P1–P5 y C1a–C6b pasan; C3a confirmó el vencimiento de la URL prefirmada (403 «Request has expired», desfase 0 s); C6b sin videos reales para probar la negativa |
 | BE-2.2 | 2 | Hecho | [2-2](./validation/validation-2-2.md) | `3b01b68` 2026-10-25 | 0.9.2 | `validate22.py --entorno dev` con código 0 (informe `.validacion/BE-2.2-20261026-005058.json`): P1–P6, C1a (fotos 1–3 en `procesada` en 5,4 min con el `worker` arrancando desde 0), C1b, C1c, C2, C4, C5, C3a y C3b; `embedding` encendido en 172 s y 202 s y apagado al final. Antes, P6 falló dos veces por el validador, no por la infra: `c5917bd` código 3 y `54fdf18` código 2 (`get-instances-health-status` siempre da `InstanceNotFound` porque el servicio de Cloud Map no tiene configuración de salud; 0.9.2 usa `list-instances` con la IP de la tarea) |
 | BE-2.3 | 2 | Pendiente | [2-3](./validation/validation-2-3.md) | — | — | |
-| BE-2.4 | 2 | Pendiente | [2-4](./validation/validation-2-4.md) | — | — | Lo necesita EMB-3.2 |
+| BE-2.4 | 2 | En curso | [2-4](./validation/validation-2-4.md) | — | — | Lo necesita EMB-3.2. Código, pruebas locales y `validate24.py` hechos (ARCHITECTURE 0.10.0); falta `validate24.py --entorno dev` sobre `main` |
 | BE-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | |
 | BE-3.2 | 3 | Pendiente | [3-2](./validation/validation-3-2.md) | — | — | Umbrales de §5.10 provisionales hasta calibrar |
 | BE-4.1 | 4 | Pendiente | [4-1](./validation/validation-4-1.md) | — | — | |

@@ -20,7 +20,6 @@ from __future__ import annotations
 import io
 import json
 import os
-import re
 import sys
 import time
 import uuid
@@ -29,7 +28,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import comun
-from comun import ErrorConfiguracion, Falla, PrecondicionNoCumplida, exigir
+from comun import ErrorConfiguracion, Falla, PrecondicionNoCumplida, exigir, lote_hecho
 
 LOTE = "BE-2.2"
 INICIADA_POR = "validate22"
@@ -57,12 +56,6 @@ def avisar(mensaje: str) -> None:
 def _esperar(respuesta: Any, estado: int, que: str) -> Any:
     exigir(respuesta.status_code == estado, f"{que}: {comun.describir_respuesta(respuesta)}, se esperaba {estado}")
     return respuesta.json()
-
-
-def lote_hecho(texto: str, lote: str) -> bool:
-    """¿La fila de `lote` en la tabla de estado (§3) de un PLAN dice «Hecho»?"""
-    patron = re.compile(rf"^\|\s*{re.escape(lote)}\s*\|[^|]*\|\s*Hecho\s*\|", re.MULTILINE)
-    return bool(patron.search(texto))
 
 
 # --- Contexto ------------------------------------------------------------------------------------------------------

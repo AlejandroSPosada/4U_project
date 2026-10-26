@@ -38,6 +38,7 @@ CODIGO_POR_ESTADO: dict[int, str] = {
 
 MENSAJE_POR_CODIGO: dict[str, str] = {
     "SOLICITUD_INVALIDA": "La solicitud está mal formada.",
+    "FOTOS_INVALIDAS": "Las fotos enviadas no son válidas.",
     "NO_AUTENTICADO": "Hace falta iniciar sesión.",
     "TOKEN_INVALIDO": "La sesión no es válida. Inicia sesión de nuevo.",
     "TOKEN_EXPIRADO": "La sesión expiró. Inicia sesión de nuevo.",

@@ -8,7 +8,7 @@ esos prefijos responde 401 sin token.
 
 from fastapi import APIRouter, Depends
 
-from app.api.v1 import admin_videos, auth, collect, reservados, salud
+from app.api.v1 import admin_diagnostico, admin_videos, auth, collect, reservados, salud
 from app.esquemas.errores import ErrorRespuesta
 from app.seguridad.dependencias import requiere_admin
 
@@ -20,7 +20,7 @@ RESPUESTAS_PROTEGIDAS = {
 }
 
 #: Routers de `/v1/admin/*` (BE-2.1: videos; BE-2.3: stats; BE-2.4: diagnóstico; BE-3.1: lugares y alertas…).
-RUTAS_ADMIN: list[APIRouter] = [reservados.router_admin, admin_videos.router]
+RUTAS_ADMIN: list[APIRouter] = [reservados.router_admin, admin_videos.router, admin_diagnostico.router]
 #: Routers de `/v1/collect/*` (BE-2.1).
 RUTAS_COLLECT: list[APIRouter] = [collect.router]
 

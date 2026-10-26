@@ -1700,3 +1700,129 @@ def eventos_worker(logs: Any, imagen_id: str, desde: datetime) -> list[dict[str,
             argumentos["nextToken"] = siguiente
     except Exception as exc:
         raise _errores_aws(exc, f"logs filter-log-events {LOG_WORKER}") from None
+
+
+# --- Estado de otros lotes y diagnóstico de búsqueda (BE-2.4; ARCHITECTURE §5.5 y §5.11) ------------------------------
+RUTA_VECINOS = "/admin/diagnostico/vecinos"
+LOG_API = "/campus-locator/dev/api"
+LOG_EMBEDDING = "/campus-locator/dev/embedding"
+
+
+def lote_hecho(texto: str, lote: str) -> bool:
+    """¿La fila de `lote` en la tabla de estado (§3) de un PLAN dice «Hecho» en su tercera columna? (Una fila de §2.1
+    con el mismo id no cuenta.) Lo usan `validate22.py` (EMB-2.1) y `validate24.py` (BE-2.2)."""
+    patron = re.compile(rf"^\|\s*{re.escape(lote)}\s*\|[^|]*\|\s*Hecho\s*\|", re.MULTILINE)
+    return bool(patron.search(texto))
+
+
+def jpeg_patron(semilla: int, ancho: int = 1024, alto: int = 768, *, calidad: int = 90) -> bytes:
+    """JPEG en color hecho con Pillow, con un patrón que depende de `semilla % 4` (0 franjas, 1 tablero, 2 círculos
+    concéntricos, 3 figuras sueltas), colores al azar con esa semilla y 12 líneas encima. La misma semilla da los
+    mismos bytes. Semillas con distinto `semilla % 4` dan imágenes muy distintas para el modelo (BE-2.4 C1: cada foto
+    debe ser su propio primer vecino). 1024×768 ocupa unos 30–200 KB."""
+    import io
+    import random
+
+    from PIL import Image, ImageDraw
+
+    azar = random.Random(semilla)  # noqa: S311 (no es criptografía)
+
+    def color() -> tuple[int, int, int]:
+        return (azar.randrange(256), azar.randrange(256), azar.randrange(256))
+
+    imagen = Image.new("RGB", (ancho, alto), color())
+    dibujo = ImageDraw.Draw(imagen)
+    patron = semilla % 4
+    if patron == 0:
+        paso = azar.randrange(24, 120)
+        for x in range(0, ancho, paso * 2):
+            dibujo.rectangle([x, 0, x + paso - 1, alto], fill=color())
+    elif patron == 1:
+        lado = azar.randrange(40, 160)
+        for y in range(0, alto, lado):
+            for x in range(0, ancho, lado):
+                if (x // lado + y // lado) % 2 == 0:
+                    dibujo.rectangle([x, y, x + lado - 1, y + lado - 1], fill=color())
+    elif patron == 2:
+        cx, cy, paso = azar.randrange(ancho), azar.randrange(alto), azar.randrange(30, 90)
+        for radio in range(max(ancho, alto), 0, -paso):
+            dibujo.ellipse([cx - radio, cy - radio, cx + radio, cy + radio], fill=color())
+    else:
+        for _ in range(40):
+            x0, y0 = azar.randrange(ancho), azar.randrange(alto)
+            caja = [x0, y0, x0 + azar.randrange(20, 300), y0 + azar.randrange(20, 300)]
+            (dibujo.ellipse if azar.random() < 0.5 else dibujo.rectangle)(caja, fill=color())
+    for _ in range(12):
+        puntos = [(azar.randrange(ancho), azar.randrange(alto)), (azar.randrange(ancho), azar.randrange(alto))]
+        dibujo.line(puntos, fill=color(), width=azar.randrange(2, 12))
+    salida = io.BytesIO()
+    imagen.save(salida, format="JPEG", quality=calidad)
+    return salida.getvalue()
+
+
+def jpeg_ruido(semilla: int, ancho: int = 512, alto: int = 384) -> bytes:
+    """JPEG de ruido RGB aleatorio con esa semilla (Pillow, calidad 85; 512×384 ocupa ~150–250 KB): una foto sin
+    relación con ningún dataset (BE-2.4 C2)."""
+    import io
+    import random
+
+    from PIL import Image
+
+    azar = random.Random(semilla)  # noqa: S311
+    imagen = Image.frombytes("RGB", (ancho, alto), azar.randbytes(ancho * alto * 3))
+    salida = io.BytesIO()
+    imagen.save(salida, format="JPEG", quality=85)
+    return salida.getvalue()
+
+
+def png_sintetico(ancho: int = 320, alto: int = 240) -> bytes:
+    """Un PNG pequeño (Pillow): una parte que no es JPEG (BE-2.4 C3b)."""
+    import io
+
+    from PIL import Image
+
+    salida = io.BytesIO()
+    Image.new("RGB", (ancho, alto), (30, 120, 200)).save(salida, format="PNG")
+    return salida.getvalue()
+
+
+def jpeg_relleno(n_bytes: int) -> bytes:
+    """Un JPEG válido (`jpeg_sintetico` de 64×48) seguido de ceros hasta `n_bytes` (relleno tras el EOI): una foto que
+    pasa de `LOC_MAX_BYTES_FOTO` sin generar una imagen enorme (BE-2.4 C3b)."""
+    base = jpeg_sintetico(64, 48, semilla=1)
+    exigir(n_bytes >= len(base), f"jpeg_relleno: {n_bytes} bytes no caben ni el JPEG base ({len(base)})")
+    return base + b"\0" * (n_bytes - len(base))
+
+
+def pedir_vecinos(
+    api: ClienteApi,
+    token: str | None,
+    foto: bytes,
+    *,
+    k: Any = None,
+    tipo: str = "image/jpeg",
+    parte: str = "foto",
+) -> Any:
+    """`POST /v1/admin/diagnostico/vecinos[?k=…]` con `foto` como única parte `parte` (`consulta.jpg`, `tipo`), como la
+    envía la herramienta de evaluación de embeddings. `token=None` = sin `Authorization`. Devuelve la respuesta."""
+    parametros = {} if k is None else {"k": k}
+    return api.pedir(
+        "POST", RUTA_VECINOS, token=token, params=parametros, files=[(parte, ("consulta.jpg", foto, tipo))]
+    )
+
+
+def mensajes_log(logs: Any, grupo: str, desde: datetime) -> list[str]:
+    """Todos los mensajes de un log group desde `desde` (`filter-log-events` sin patrón, todas las páginas). Sin
+    permiso → `ErrorConfiguracion`; otro error → `Falla`."""
+    mensajes: list[str] = []
+    argumentos: dict[str, Any] = {"logGroupName": grupo, "startTime": int(desde.timestamp() * 1000)}
+    try:
+        while True:
+            pagina = logs.filter_log_events(**argumentos)
+            mensajes += [e.get("message", "") for e in pagina.get("events", [])]
+            siguiente = pagina.get("nextToken")
+            if not siguiente:
+                return mensajes
+            argumentos["nextToken"] = siguiente
+    except Exception as exc:
+        raise _errores_aws(exc, f"logs filter-log-events {grupo}") from None
