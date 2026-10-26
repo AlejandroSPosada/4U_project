@@ -91,7 +91,7 @@ validar» de §2 de cada `docs/PLAN.md`**: si cambian, esta tabla se actualiza e
 | 0 | INF-0.1 → INF-0.2 | | | | Estado remoto, CI y presupuesto |
 | 1 | INF-1.1 → INF-1.2 → INF-1.3 → INF-1.4 | EMB-1.1 (espera INF-1.3) | BE-1.1 (espera INF-1.3 e INF-1.4) → BE-1.2 (espera INF-1.2) → BE-1.3 | FE-1.1 (espera BE-1.1) → FE-1.2 (espera BE-1.3) | Login real por HTTPS |
 | 2 | INF-2.1 (encendido de `embedding`) | EMB-2.1 | BE-2.1 → BE-2.2 (espera EMB-2.1 e INF-2.1) → BE-2.4 | FE-2.3 → FE-2.1 (espera BE-2.2 y FE-2.3) | Primer recorrido real indexado |
-| 3 | INF-3.1 | EMB-3.1; EMB-3.2 (espera BE-2.4 y el dataset real de FE-2.1) | BE-3.1 → BE-2.3 (espera BE-2.2 y BE-3.1); BE-4.1 (espera BE-2.4); BE-3.2 (espera BE-2.4, BE-3.1, EMB-3.1 y EMB-3.2) | FE-3.1, FE-3.3, FE-3.4 (esperan BE-3.1); FE-2.2 (espera BE-2.3); FE-3.2 (espera BE-3.2); FE-3.5 (espera FE-3.2) | Ubicarse en el campus |
+| 3 | INF-3.1 | EMB-3.1; EMB-3.2 (espera BE-2.4 y el dataset real de FE-2.1) | BE-3.1 (solo lugares) → BE-2.3 (espera BE-2.2 y BE-3.1); BE-4.1 (espera BE-2.4); BE-3.2 (espera BE-2.4, BE-3.1, EMB-3.1 y EMB-3.2); BE-3.3 alertas, fuera del núcleo (espera BE-1.3; su C5, BE-2.3) | FE-3.1, FE-3.4 (esperan BE-3.1); FE-3.3 (espera BE-3.3); FE-2.2 (espera BE-2.3); FE-3.2 (espera BE-3.2); FE-3.5 (espera FE-3.2); FE-3.6 alertas públicas, fuera del núcleo (espera FE-3.2 y BE-3.3) | Ubicarse en el campus |
 | 4 | | | (BE-4.1 ya puede estar hecho desde la ola 3) | FE-4.1 (espera BE-4.1) | Administración completa |
 | 5–6 | INF-6.1 | EMB-5.1 | BE-5.1 a BE-6.1 | FE-5.1 a FE-6.1 | Diferido |
 

@@ -1,0 +1,50 @@
+# Recorte de `adb shell dumpsys sensorservice` (c5-calibracion-fondo.txt); original completo fuera del repositorio.
+# Se conservan la sección de conexiones activas (las de otras apps, anonimizadas) y los registros previos
+# de com.example.myapplication.
+
+7 active connections
+Connection Number: 0 
+	Operating Mode: NORMAL
+	 <otra app o servicio del sistema>
+	 virtual sar Sar algo Wakeup 0x00000480 | status: active | pending flush events 0 
+Connection Number: 1 
+	Operating Mode: NORMAL
+	 <otra app o servicio del sistema>
+	 tmd2755 Ambient Light Sensor Non-wakeup 0x00000033 | status: active | pending flush events 0 
+Connection Number: 2 
+	Operating Mode: NORMAL
+	 <otra app o servicio del sistema>
+	 sns_smd  Wakeup 0x000000ac | status: active | pending flush events 0 
+Connection Number: 3 
+	Operating Mode: NORMAL
+	 <otra app o servicio del sistema>
+	 Device Orientation  Wakeup 0x00000110 | status: active | pending flush events 0 
+Connection Number: 4 
+	Operating Mode: NORMAL
+	 <otra app o servicio del sistema>
+	 sns_smd  Wakeup 0x000000ac | status: active | pending flush events 0 
+Connection Number: 5 
+	Operating Mode: NORMAL
+	 <otra app o servicio del sistema>
+	 step_detect  Wakeup 0x000000b6 | status: active | pending flush events 0 
+Connection Number: 6 
+	Operating Mode: NORMAL
+	 <otra app o servicio del sistema>
+	 sns_smd  Wakeup 0x000000ac | status: active | pending flush events 0 
+0 direct connections
+controlled apps : 
+	 10021,	 10040,	 10041,	 10067,	 10094,	 10123,	 10139,	 10249,	 10266,	 10268,	 10270,	 10271,	 10272,	 10275,	 10276,	 10277,	 10278,	 10279,	 10280,	 10281,	 10282,	 10283,	 10285,	 10286,	 10287,	 10289,	 10290,	 10292,	 10293,	 10294,	 10295,	 10296,	 10297,	 10298,	 10299,	 10300,	 10301,	 10302,	 10304,	 10305,	 10306,	 10307,	 10308,	 10309,	 10311,	 10312,	 10313,	 10314,	 10315,	 10317,	 10318,	 10319,	 10320,	 10321,	 10322,	 10323,	 10324,	 10326,	 10328,	 10329,	 10331,	 10332,	 10333,	 10336,	 10337,	 10342,	 10351,	 10352,	 10374,	 10377,	 10382,	 10392,
+
+Previous Registrations (solo com.example.myapplication):
+21:44:55 - 0x0000000b pid=29515 uid=10393 package=com.example.myapplication.sensors.PdrTracker
+21:44:55 - 0x0000006f pid=29515 uid=10393 package=com.example.myapplication.sensors.PdrTracker
+21:44:40 + 0x0000000b pid=29515 uid=10393 package=com.example.myapplication.sensors.PdrTracker samplingPeriod=20000us batchingPeriod=0us
+21:44:40 + 0x0000006f pid=29515 uid=10393 package=com.example.myapplication.sensors.PdrTracker samplingPeriod=20000us batchingPeriod=0us
+21:42:45 - 0x0000000b pid=29515 uid=10393 package=com.example.myapplication.sensors.PdrTracker
+21:42:45 - 0x0000006f pid=29515 uid=10393 package=com.example.myapplication.sensors.PdrTracker
+21:41:49 + 0x0000000b pid=29515 uid=10393 package=com.example.myapplication.sensors.PdrTracker samplingPeriod=20000us batchingPeriod=0us
+21:41:49 + 0x0000006f pid=29515 uid=10393 package=com.example.myapplication.sensors.PdrTracker samplingPeriod=20000us batchingPeriod=0us
+21:39:38 - 0x0000000b pid=24692 uid=10393 package=com.example.myapplication.sensors.PdrTracker
+21:39:38 - 0x0000006f pid=24692 uid=10393 package=com.example.myapplication.sensors.PdrTracker
+21:38:25 + 0x0000000b pid=24692 uid=10393 package=com.example.myapplication.sensors.PdrTracker samplingPeriod=20000us batchingPeriod=0us
+21:38:25 + 0x0000006f pid=24692 uid=10393 package=com.example.myapplication.sensors.PdrTracker samplingPeriod=20000us batchingPeriod=0us
