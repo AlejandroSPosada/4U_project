@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.14.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.14.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.4 y BE-3.1 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`); de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales; y de BE-3.3 (alertas, fuera del núcleo: `GET /v1/alerts`, `/v1/admin/alerts`, la purga de *tombstones* y `validate33.py`, §4.11), probado en local sin base (sus pruebas con base, sin ejecutar) y **sin validar en `dev`**. Lo de los demás lotes es diseño propuesto |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.4, BE-3.1 y BE-3.3 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`; BE-3.3, alertas, fuera del núcleo, con `validate33.py` sobre `4885ad6`, §4.11), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. Lo de los demás lotes es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -1220,16 +1220,35 @@ el editor «local primero» de la app (FE-3.3): lista, crea o reemplaza con el i
 *tombstones* de más de `ALERTAS_TOMBSTONE_DIAS`. Contratos en §5.3 y §5.5; decisiones en ADR-BE-10 y ADR-BE-19.
 `alertas_activas` de `GET /v1/admin/stats` (BE-2.3, §4.7) ya las cuenta, sin cambios en su código.
 
-**Construido (0.14.0), sin validar en `dev`.** Pruebas: `tests/unit/test_alertas.py` (reglas de `dominio.alertas`,
-esquemas, sobre de `sincronizar` y el bucle de la purga), `tests/api/test_alertas.py` (sin base: `401` antes que
-`422`, `desde` no válido → `422` antes de tocar la base, público sin base → `503`), `tests/contrato/test_contrato_alertas.py`
-(§5 contra los esquemas y el OpenAPI) y `tests/ops/test_validate33.py` (el validador contra `ApiFalsa`, §5.11), en
-verde; `tests/base/test_alertas_base.py` (28 pruebas contra PostgreSQL) y las 3 con base de `test_validate33.py`
-(el validador contra el backend real), **sin ejecutar** en la máquina donde se construyó (Docker Desktop no arrancó:
-sin PostgreSQL local); corren en el CI de `backend.yml` de un PR. Sin migración: la tabla `alertas` de `0001` ya tiene
-el id que puede generar la app, `version`, `eliminada_en` y el índice `alertas_actualizado_en_idx` (§5.7). El SQL de
-abajo es el que compila SQLAlchemy con el dialecto asyncpg (comprobado imprimiéndolo); que PostgreSQL lo ejecute lo
-dicen esas pruebas. Falta `validate33.py --entorno dev` con código 0 (PLAN §3).
+**Construido (0.14.0) y validado en `dev` (0.14.1).** Pruebas: `tests/unit/test_alertas.py` (reglas de
+`dominio.alertas`, esquemas, sobre de `sincronizar` y el bucle de la purga), `tests/api/test_alertas.py` (sin base:
+`401` antes que `422`, `desde` no válido → `422` antes de tocar la base, público sin base → `503`),
+`tests/contrato/test_contrato_alertas.py` (§5 contra los esquemas y el OpenAPI), `tests/ops/test_validate33.py` (el
+validador contra `ApiFalsa` y, con base, contra el backend real, §5.11) y `tests/base/test_alertas_base.py` (28 pruebas
+contra PostgreSQL). Las pruebas con base corrieron en el CI de `backend.yml` del PR 10 (run 40383029250, sobre
+`89f6a52`: 1003 pasan, ninguna omitida, con el PostgreSQL 17 + pgvector efímero del job); en la máquina donde se
+construyó no hubo PostgreSQL local (Docker Desktop no arrancó). Sin migración: la tabla `alertas` de `0001` ya tiene el
+id que puede generar la app, `version`, `eliminada_en` y el índice `alertas_actualizado_en_idx` (§5.7). El SQL de abajo
+es el que compila SQLAlchemy con el dialecto asyncpg (impreso) y PostgreSQL 17 lo ejecuta (esas pruebas y `dev`).
+
+En `dev`, `validate33.py` con código 0 sobre `4885ad6` (2026-10-26, 19:15:35–19:16:02 UTC, informe
+`BE-3.3-20261026-191602.json`; desplegado por `backend.yml` run 40383733721; `api` arrancó con ese commit a las
+19:12:30): `dev` no tenía alertas activas (P3 y C1a: foto completa con 0); C1a–C1d, la caché por diferencias igual a la
+foto completa; C1b comprobó que **`If-Match` pasa por API Gateway** (el segundo `PUT` con `If-Match: 1` dio `409
+CONFLICTO_VERSION`, cosa que solo ocurre si el encabezado llega a `api`) y que el `?desde=` con `Z` sin codificar
+también llega; C2, C3 (vigencia `2026-10-28T19:15:59Z` – `2026-10-29T19:15:59Z` en la foto completa), C4 y C5
+(`alertas_activas` 2 → 3: s0 = 2 porque en ese momento seguían vivas y activas F, la de C3, y A2, la del `upsert` válido
+de C4; A ya estaba borrada por C1c y D por el `eliminar` de C4, y B nunca se creó). La limpieza borró 4 alertas (A2,
+F, G y H): con A y D, la ejecución dejó 6 *tombstones* que la purga quitará en la primera pasada después del
+2027-01-24 (90 días). En el log de `api` (`/campus-locator/dev/api`, leído
+después): 7 eventos `alerta_guardada` de esa ejecución (crear y editar A, F, D, A2, G y H; el `PUT` rechazado con `409`
+no deja evento) y la primera purga diaria, `alertas_purgadas` con `borradas = 0`, `dias = 90` y 45 ms, a las
+19:13:30.740, 60 s después de `api_iniciada`; ningún `limpieza_fallida`.
+
+**Sin comprobar en `dev`** (lo cubren las pruebas con base): que la purga borre un *tombstone* real de más de 90 días
+(el primero será en enero de 2027), dos escrituras a la vez sobre la misma alerta, el margen de 60 s con una
+transacción lenta de verdad (R17) y la foto completa con un `desde` de hace más de 90 días o futuro. Ninguna app
+consume todavía las alertas (FE-3.3 y FE-3.6 sin construir).
 
 **Lectura pública** (`GET /v1/alerts`, router `api/v1/alertas.router_publico`, sin `requiere_admin`: ignora
 `Authorization`, también un token no válido):
@@ -1363,6 +1382,25 @@ anterior al corte de cualquier `desde` que se responde por diferencias (el resto
 - `PUT` con `If-Match` (opcional) da `409 CONFLICTO_VERSION` si la versión no coincide o la alerta no existe; un
   reintento de un `PUT` que sí se aplicó (respuesta perdida) también da `409`: volver a leer con `GET
   /v1/admin/alerts`.
+- Las alertas no dependen de los videos: no hay FK entre `alertas` y `videos`/`imagenes`, así que una alerta creada
+  durante un recorrido («Agregar alerta aquí», 7.4) es una alerta más (`upsert` con su UUID) y borrar el video (BE-4.1)
+  no la toca, como pide FRONTEND §2.4.
+- Lo que el backend comprobó en `dev` (arriba, «Construido…»): `If-Match` y `?desde=…Z` sin codificar pasan por API Gateway;
+  el resto del flujo de la app (caché en Room, anuncio por voz, pendientes por operación) es del frontend y está sin
+  probar contra este backend.
+
+**Guía para BE-4.1** (el reconciliador de purgas también corre en `api`, §4.12): copiar el patrón de la purga de
+*tombstones*. En `servicios/`, una función `async def bucle(motor, …, *, espera_inicial_s, intervalo_s, dormir=asyncio.sleep,
+<accion>=None)` que espera, ejecuta la acción en un `try` (`sesion.BaseNoDisponible` → evento `WARNING`; cualquier otra
+excepción → `ERROR` con `exc_info=True`; nunca `BaseException`, para que la cancelación salga) y vuelve a esperar; en el
+ciclo de vida de `main.py`, crearla con `asyncio.create_task(…, name=…)` solo si `aplicacion.state.motor` no es `None`, y
+en el `finally`, **antes** de `motor.dispose()`, `tarea.cancel()` y `await` dentro de `contextlib.suppress(
+asyncio.CancelledError)`. El intervalo sale de `RECONCILIADOR_CADA_MIN` (§5.10). Pruebas sin base como
+`test_limpieza_diaria_espera_purga_cada_intervalo_y_sigue_tras_un_fallo` (un `dormir` falso que cuenta las esperas y
+corta el bucle con una excepción propia; una `accion` falsa que devuelve o lanza) y
+`test_la_limpieza_se_cancela_sin_ruido` (`tests/unit/test_alertas.py`). Las pruebas con `TestClient` no se enteran
+de la tarea mientras la espera inicial sea mayor que lo que dura la prueba (60 s aquí). Si un día hay que limpiar
+también `eventos_localizacion` (`EVENTOS_RETENCION_DIAS`, sin dueño en el PLAN), cabe en el mismo bucle diario.
 
 Trampas:
 - La diferencia es «al menos» lo modificado desde `desde`: comparar por `id`/`version`, no por número de elementos.
@@ -2835,7 +2873,8 @@ Ayudas de BE-3.3 (para los validadores que crean alertas de prueba o leen la cac
 | `borrar_alertas(api, token, ids)` → `int` | `DELETE /v1/admin/alerts/{id}` de cada id sin repetir (cuenta los `DELETE`); otro código que 204 → `Falla`. Un id que no existe o ya borrado también da 204 |
 | `borrar_alertas_restos(api, token)` → detalle | La `preparacion` de quien crea alertas: borra **todas** las `validacion-` vivas (de cualquier lote). Devuelve `sin alertas validacion- de ejecuciones anteriores` o `alertas validacion- borradas: n` |
 
-**`validate33.py`** (validation-3-3, BE-3.3; `dev` y `local`; **sin ejecutar todavía en `dev`**). Es el ejemplo de un
+**`validate33.py`** (validation-3-3, BE-3.3; `dev` y `local`; código 0 en `dev` sobre `4885ad6`, 2026-10-26, §4.11; en
+`local` contra el compose, sin ejecutar: solo contra `ApiFalsa`). Es el ejemplo de un
 validador que reproduce la caché de la app. Como `validate31.py`, no usa AWS más allá de las credenciales (P1, el
 output `api_base_url` y el secreto del admin): corre igual contra el compose. Usa `Validador`, `ClienteApi`,
 `credenciales_admin`, `url_api`, `lote_hecho`, `resumen_panel`, `normalizar_nombre` (vía `alertas_validacion`) y las
@@ -2879,7 +2918,9 @@ nadie más crea, cambia o borra alertas en `dev` mientras corre (si no, fallan c
 descartarlo). Las alertas de prueba borradas dejan su *tombstone* 90 días y sus filas de `auditoria`: salen como
 `eliminadas` en las diferencias de cualquier app durante ese tiempo (sin contenido). C3 manda una vigencia de 2 a 3 días
 desde la hora del reloj local; el backend no la evalúa, así que el desfase del reloj no importa. `--sin-limpieza` deja
-las alertas vivas (la siguiente ejecución las barre).
+las alertas vivas (la siguiente ejecución las barre). El s0 de C5 no es la cifra «real» de `dev`: incluye F (C3) y A2
+(C4), que siguen vivas y activas hasta la limpieza (en `dev`, 2026-10-26: 2 → 3 con 0 alertas reales); con `--solo C5`
+parte de las reales. Cada ejecución completa deja 6 *tombstones* (A, D y las 4 de la limpieza).
 
 **Trampa del arranque de `embedding`: Cloud Map sin configuración de salud (0.9.1 y 0.9.2).** El servicio de Cloud
 Map de `embedding` (`srv-josm7lql7ddxgzm6`, `embedding.campus-locator.local`, registro A con TTL 10 s) **no tiene

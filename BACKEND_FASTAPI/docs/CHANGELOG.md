@@ -20,6 +20,34 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.14.1] — 2026-10-26
+
+- **Lote que la motivó:** BE-3.3 (cierre: `validate33.py --entorno dev` con código 0 sobre `4885ad6`, PLAN §3).
+- **Qué cambió:**
+  - Encabezado y §4.11: BE-3.3 validado en `dev`, con lo visto. `dev` no tenía alertas reales (foto completa con 0);
+    C1b comprobó que **`If-Match` pasa por API Gateway** (el segundo `PUT` con `If-Match: 1` dio `409
+    CONFLICTO_VERSION`) y que `?desde=…Z` sin codificar también llega; C5 dio `alertas_activas` 2 → 3, y s0 = 2 porque en
+    ese momento seguían vivas y activas F (C3) y A2 (el `upsert` válido de C4): A ya estaba borrada por C1c, D por el
+    `eliminar` de C4 y B nunca se creó (comprobado leyendo `validate33.py`). En el log de `api`, leído después: 7
+    `alerta_guardada` de la ejecución y la primera purga diaria (`alertas_purgadas`, 0 borradas, 45 ms) 60 s después de
+    `api_iniciada`, sin `limpieza_fallida`. Las pruebas con base, que 0.14.0 dejaba sin ejecutar, corrieron en el CI
+    (PR 10). Lo que sigue sin comprobar en `dev` queda listado en §4.11.
+  - §4.11, lo que faltaba para hacer los lotes siguientes leyendo solo docs: «Para la app» dice que las alertas no
+    dependen de los videos (sin FK: borrar un video en BE-4.1 no las toca, como pide FRONTEND §2.4) y qué comprobó el
+    backend en `dev`; «Guía para BE-4.1» explica cómo copiar el patrón de la purga (tarea de asyncio en el ciclo de vida
+    de `main.py`, cancelada antes de cerrar el motor, y sus pruebas) para el reconciliador de purgas.
+  - §5.11: `validate33.py` ejecutado en `dev`; trampa nueva (el s0 de C5 incluye F y A2; cada ejecución deja 6
+    *tombstones*). `validation-3-3.md` §5: el CI del PR 10 y la primera ejecución en `dev`. PLAN: fila BE-3.3 «Hecho» y
+    «Alineado con v0.14.1».
+- **Contratos tocados (§5):** ninguno (versión de parche; §5.11 solo describe el validador).
+- **Cómo se verificó:** `validate33.py --entorno dev` con código 0 sobre `4885ad6` sin `-dirty` (2026-10-26,
+  19:15:35–19:16:02 UTC, informe `.validacion/BE-3.3-20261026-191602.json`; ejecutado por el maestro tras el despliegue
+  de `backend.yml` run 40383733721): P1–P4, C1a–C1d, C2, C3, C4 y C5 en verde; limpieza: 4 alertas borradas. CI del PR
+  10 (run 40383029250, sobre `89f6a52`): `ruff` limpio y 1003 pruebas con base, ninguna omitida. Log de `api` en `dev`
+  leído con `aws logs filter-log-events` (solo lectura). En local, `ruff` y `pytest` sin base en verde. El resto, solo
+  documentación.
+- **Pendiente:** nada de BE-3.3. Lo consumen FE-3.3 y FE-3.6 (ARCHITECTURE §4.11, «Para la app»).
+
 ## [0.14.0] — 2026-10-26
 
 - **Lote que la motivó:** BE-3.3 (Alertas, fuera del núcleo), construcción; la ejecución en `dev` la hace el maestro

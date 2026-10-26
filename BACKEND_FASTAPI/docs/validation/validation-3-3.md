@@ -124,8 +124,9 @@ PRUEBAS_DB_URL=postgresql://campus_app:local-solo-desarrollo@localhost:5432/camp
 Esperado: `All checks passed!`, `… files already formatted` y `… passed` sin fallos ni omitidas. Si Docker no arranca
 en la máquina (como al construir BE-3.3), las pruebas con base se corren en el CI: un PR con la rama dispara
 `backend.yml`, que en un PR ejecuta `ruff` y `pytest` con un PostgreSQL 17 + pgvector efímero y
-`PRUEBAS_DB_OBLIGATORIA=1` **sin desplegar** (`validation-2-3.md` §5, paso 1). Sin base, en la máquina donde se
-construyó: 741 pasan y 262 se omiten (las `base`).
+`PRUEBAS_DB_OBLIGATORIA=1` **sin desplegar** (`validation-2-3.md` §5, paso 1). Así se comprobó BE-3.3: PR 10, run
+40383029250 sobre `89f6a52`, 1003 pasan, ninguna omitida. Sin base, en la máquina donde se construyó: 741 pasan y 262
+se omiten (las `base`).
 
 2. Llevar el commit a `main`. `backend.yml` pasa las pruebas, publica `…/campus-locator/backend:<SHA>`, ejecuta
 `migrate` (sin migraciones nuevas: `aplicada = false`) y actualiza `api` y `worker`. Esperado: el workflow en verde.
@@ -164,7 +165,9 @@ tombstone`; C3 `vigencia AAAA-MM-DDTHH:MM:SSZ – AAAA-MM-DDTHH:MM:SSZ → en la
 `upsert válido → ok · upsert con radio_m 500 → error VALIDACION · eliminar → ok · panel: A sí, B y D no`; C5
 `alertas_activas <a> → <a+1> (+1) con una activa y una inactiva nuevas`; y al final `[LIMPIEZA] alertas de prueba
 borradas: 4` y `== Resultado: pasa (código 0)`. Con eso, el maestro pasa la fila BE-3.3 de PLAN §3 a «Hecho» con el
-commit, la fecha y la versión de ARCHITECTURE.
+commit, la fecha y la versión de ARCHITECTURE. Así quedó la primera ejecución (2026-10-26, sobre `4885ad6`, informe
+`BE-3.3-20261026-191602.json`, 27 s): `dev` sin alertas reales (`<n>` = 0 en P3, C1a y C1d) y C5 `2 → 3`, porque s0 ya
+cuenta F (C3) y A2 (C4), vivas y activas hasta la limpieza.
 
 Si en la copia local BE-2.3 no está «Hecho», P4 termina con 2: `--solo C1,C2,C3,C4` valida el resto (sin P4), y C5 se
 repite cuando lo esté.
