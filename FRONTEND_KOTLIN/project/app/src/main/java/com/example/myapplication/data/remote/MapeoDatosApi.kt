@@ -10,6 +10,7 @@ import com.example.myapplication.domain.model.LugarAdmin
 import com.example.myapplication.domain.model.LugarCercano
 import com.example.myapplication.domain.model.LugarDestino
 import com.example.myapplication.domain.model.NivelConfianza
+import com.example.myapplication.domain.model.OperacionAlerta
 import com.example.myapplication.domain.model.PosicionEstimada
 import com.example.myapplication.domain.model.ReferenciaLugar
 import com.example.myapplication.domain.model.ResultadoUbicacion
@@ -114,6 +115,10 @@ object MapeoDatosApi {
     )
 
     /** `Alerta` del backend → `Alerta` (`radio_m` → `radio`; `tipo` y `prioridad` quedan como texto). */
+    /**
+     * `Alerta` (y `AlertaAdmin`) → [Alerta]. FE-3.3: también la vigencia, `version` y `actualizado_en` (fechas UTC con
+     * `Z` → milisegundos con [isoAMilis]; otra forma queda `null`).
+     */
     fun alerta(dto: AlertaDto): Alerta = Alerta(
         id = obligatorio(dto.id, "alerta.id"),
         lat = obligatorio(dto.lat, "alerta.lat"),
@@ -123,7 +128,36 @@ object MapeoDatosApi {
         prioridad = dto.prioridad ?: "normal",
         radio = dto.radioM ?: 15,
         activa = dto.activa ?: true,
+        vigenciaDesdeMs = isoAMilis(dto.vigenciaDesde),
+        vigenciaHastaMs = isoAMilis(dto.vigenciaHasta),
+        version = dto.version,
+        actualizadoEnMs = isoAMilis(dto.actualizadoEn),
     )
+
+    /** [Alerta] → `AlertaEntrada` con su `id` (FE-3.3). La vigencia, en UTC con `Z` y sin fracciones ([milisAIso]). */
+    fun entradaAlerta(a: Alerta): AlertaEntradaDto = AlertaEntradaDto(
+        id = a.id,
+        lat = a.lat,
+        lng = a.lng,
+        mensaje = a.mensaje,
+        tipo = a.tipo,
+        prioridad = a.prioridad,
+        radioM = a.radio,
+        activa = a.activa,
+        vigenciaDesde = a.vigenciaDesdeMs?.let(::milisAIso),
+        vigenciaHasta = a.vigenciaHastaMs?.let(::milisAIso),
+    )
+
+    /** Un pendiente → un cambio de `sincronizar` (FE-3.3). */
+    fun cambioAlerta(op: OperacionAlerta): CambioAlertaDto = when (op) {
+        is OperacionAlerta.Upsert -> CambioAlertaDto(op = "upsert", alerta = entradaAlerta(op.alerta))
+        is OperacionAlerta.Eliminar -> CambioAlertaDto(op = "eliminar", id = op.id)
+    }
+
+    /** Milisegundos → `yyyy-MM-dd'T'HH:mm:ss'Z'` en UTC (descarta los milisegundos: la resolución del backend, §5.1). */
+    fun milisAIso(ms: Long): String =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }
+            .format(java.util.Date(ms))
 
     /**
      * `GET /v1/admin/stats` → `ResumenAdmin`. [fotosPendientes] sale de la cola local de subida, no del backend.

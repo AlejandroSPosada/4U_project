@@ -214,6 +214,7 @@ fun RecoleccionScreen(
             alerta = alerta, esNueva = true, error = ui.errorAlerta,
             onCambio = vm::alActualizarAlerta, onGuardar = vm::alGuardarAlerta,
             onCancelar = vm::alCancelarAlerta, onEliminar = vm::alCancelarAlerta,
+            errorVigencia = ui.errorVigenciaAlerta,   // FE-3.3; sin «Ajustar en el mapa»: es la posición del PDR
         )
     }
 

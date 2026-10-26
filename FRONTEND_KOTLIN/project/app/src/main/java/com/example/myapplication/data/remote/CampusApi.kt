@@ -92,6 +92,21 @@ interface CampusApi {
     suspend fun borrarLugar(@Path("id") id: String): Response<Unit>
 
     /**
+     * `GET /v1/alerts` (backend §5.3, BE-3.3; FE-3.3): las alertas activas sin borrar. Ruta **pública** (no pasa por
+     * `SesionInterceptor`): la usa 7.4, que no debe arriesgar un `401`. `desde` (diferencias) es para FE-3.6.
+     */
+    @GET("alerts")
+    suspend fun alertasPublicas(@Query("desde") desde: String? = null): Response<AlertasPublicasDto>
+
+    /** `GET /v1/admin/alerts` (backend §5.5, BE-3.3; FE-3.3): las alertas sin borrar, activas o no. Protegida. */
+    @GET("admin/alerts")
+    suspend fun alertasAdmin(@Query("q") q: String? = null): Response<ListaAlertasAdminDto>
+
+    /** `POST /v1/admin/alerts/sincronizar` (FE-3.3): 1 a 100 cambios, cada uno con su resultado. Protegida. */
+    @POST("admin/alerts/sincronizar")
+    suspend fun sincronizarAlertas(@Body cuerpo: SincronizarAlertasDto): Response<SincronizarAlertasRespuestaDto>
+
+    /**
      * `POST /v1/localize` (backend §5.3; FE-3.2). Ruta pública (sin `Authorization`). `multipart/form-data`: las partes
      * [fotos] (cada una `fotos`, `image/jpeg`, en el orden de `rumbos`) y la parte [metadatos] (JSON de
      * [MetadatosLocalizacionDto]). Las arma `RemoteLocalizacionRepository`.

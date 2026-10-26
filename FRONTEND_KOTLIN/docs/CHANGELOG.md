@@ -23,6 +23,112 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.13.0] — 2026-10-27
+
+- **Lote que la motivó:** FE-3.3 (Alertas de administración sincronizadas, 7.8–7.10, y las alertas de 7.4). Se
+  construyó el 2026-10-26 sobre una rama vieja de FE-3.4 (`c9c1d24`, con la hoja de 7.4 que FE-3.4 quitó antes de
+  integrarse) con el número 0.12.0 provisional, y el 2026-10-27 se rebasó sobre `main` (`3b3b30c`: FE-3.4 «Hecho»,
+  0.12.1); por eso es la 0.13.0.
+- **Contratos que consume:** backend §4.11, «Para la app (FE-3.3 y FE-3.6)» (una sola operación por id, la última; un
+  `eliminar` de un id desconocido no deja rastro; `estado = error` no se arregla reintentando), §5.3 `GET /v1/alerts` y
+  §5.5, «Alertas: `/v1/admin/alerts` (BE-3.3)» (backend 0.14.1, BE-3.3 «Hecho»). Los docs de la app los enlazan (§4.9,
+  §5.10, `validation-3-3`).
+- **Decisiones (aceptadas por el maestro el 2026-10-26):** ADR-FE-33 — el almacén local de las alertas del editor es un
+  archivo JSON con escritura atómica (`files/alertas/editor.json`) detrás de `AlmacenAlertas`, **sin Room** (mismo
+  patrón que los manifests, probado en la JVM, sin dependencias nuevas; Room queda como alternativa reversible).
+  ADR-FE-34 — pendientes con una operación por id (crear y borrar → un `eliminar`, que siempre se envía; un `ok` solo
+  saca el pendiente si no cambió durante el envío), un repositorio único por proceso para 7.4, 7.8 y 7.10, 7.4 guarda en
+  local y solo lee la ruta pública `GET /v1/alerts` (sin riesgo de `401` que saque 7.4 de la pila: guía de §4.8), y
+  `CambiosAlertas` para que el Panel recargue «Alertas activas».
+- **Qué cambió:**
+  - Código (`project/`): `domain/model/Alerta.kt` (vigencia, `version`, `actualizadoEnMs`; `OperacionAlerta`);
+    `domain/model/PosicionAdmin.kt`; `data/repository/AlertasRepository.kt` (`AlertasRepository`, `EstadoAlertas`,
+    `ResultadoSincronizacion`, `ReglasAlertas`, `CambiosAlertas`); `data/local/AlmacenAlertas.kt`;
+    `data/remote/RemoteAlertasRepository.kt` (y `object Alertas`); `CampusApi` (`alertasPublicas`, `alertasAdmin`,
+    `sincronizarAlertas`), `DtosApi` (6 DTOs), `MapeoDatosApi` (`alerta` ampliado, `entradaAlerta`, `cambioAlerta`,
+    `milisAIso`); `ui/admin/mapa/` (`EditorMapaViewModel` y `EditorMapaScreen` reescritos sobre el repositorio, sin datos
+    de ejemplo, con lugares reales, «Mi posición», «Ver lista», `Toast` de la sincronización y ajuste en el mapa;
+    `AlertaFormSheet` con dictado, «Escuchar cómo sonará», vigencia y «Ajustar en el mapa»; nuevos `FormularioAlerta.kt`,
+    `PiezasMapaAlertas.kt`, `AlertasViewModel.kt` y `AlertasScreen.kt` —vista 7.10—); `assets/editor_mapa.js` (modo
+    `ajustar`, `ajustarBorrador`, `verAlerta`, `nuevaAlerta`, puente `ajusteTerminado`); `MainActivity` (`posicionAdmin`
+    real, `onVerLista`, ruta `admin/mapa/alertas`); `RecoleccionViewModel`, `RecoleccionState` y `RecoleccionScreen` (7.4:
+    alertas en el repositorio, las existentes por `GET /v1/alerts`, `PosicionAdmin`, `errorVigenciaAlerta`; sin
+    `validarMensajeAlerta`); `PanelAdminViewModel` (`cambiosAlertas`); `VoiceController.listen(…, soloMejor = false)`.
+    Sin dependencias nuevas de Gradle.
+  - Pruebas JVM nuevas: `ReglasAlertasTest` (8), `RemoteAlertasRepositoryTest` (11), `AlmacenAlertasTest` (3),
+    `FormularioAlertaTest` (9). Total 303; las 272 de `main` no cambiaron (305 sobre la rama vieja de FE-3.4).
+  - Validadores: `src/ops/validate33.py` (C1a, C2a y C3a en la JVM; en `dev`, C1b —alerta creada en 7.4 que llega al
+    backend a ≤ 30 m de la primera foto—, C2b —crear y borrar sin rastro: ni en la lista, ni en las diferencias de
+    `GET /v1/alerts?desde=`, y `app.log` sin errores— y C3b —7.10 lista la alerta creada por la API y abre su edición—,
+    con tres pasos guiados; manual C3c); `tests/ops/test_validate33.py` (12). Total 253. Sin ayudas nuevas en `comun.py`.
+  - Documento: encabezado; §3.2 (paquetes, `data/local`, tag `Alertas` y líneas de `RecoleccionVM`); §4.1 (303 casos);
+    §4.8 (guía para FE-3.3 marcada como hecha); **§4.9 nuevo** (con la trampa «7.4 y la sesión» y «Para los lotes
+    siguientes»: FE-3.6 y FE-4.3); §5.1 (variantes); §5.2 (`VoiceController`, recolección: alertas, retomar); §5.5 (filas
+    de `AlertaFormSheet`, `AlertasScreen` y `EditorMapaScreen`; `AlertaFormSheet` en detalle; `FormularioAlerta`,
+    `FiltrosAlertas`, `TextosAlertas`; piezas de los mapas; `EditorMapaViewModel`; `EditorMapaScreen` y `EditorBridge`;
+    «Lista de alertas (7.10)»; Panel; `RecoleccionScreen`); §5.6 (`AlertasRepository`, modelos, `Alerta` en detalle,
+    `OperacionAlerta`/`EstadoAlertas`/`ReglasAlertas`, `AlmacenAlertas`, `PosicionAdmin`); §5.8 (`admin/mapa`,
+    `admin/mapa/alertas`, restauración); §5.9 (`EditorBridge`); §5.10 (encabezado, `CampusApi`, piezas, DTOs, mapeo, nueva
+    «Alertas de administración», «Alertas sin conexión», «Editor de alertas»); §5.11 (`validate33.py`, 253 casos,
+    trampas, también las de MIUI de FE-3.4); §7.4, §7.8, §7.9 y §7.10 (implementación actual); ADR-FE-17 y ADR-FE-32
+    (notas); ADR-FE-33 y ADR-FE-34 nuevas; R9.
+  - `validation-3-3` reescrita como `validation-3-4`: entornos `local` y `dev`; precondiciones en el orden del contrato
+    común (P1 Gradle, P2 dispositivo, P3 API, P4 login, P5 FE-1.2, P6 BE-3.3 con una sonda sin rastro); C1 → C1a, C1b; C2
+    → C2a, C2b; C3 → C3a, C3b (automática) y C3c manual (capturas); §4 con el borrado por mensaje exacto y del recorrido;
+    §5 con variables, preparación, ejecución (también por `adb` con una FIFO, como `validation-2-2` §5), salida esperada
+    y casos previstos.
+  - `PLAN.md`: «Alineado con» v0.13.0; FE-3.3 «En curso» (§3: falta `dev`; el paso guiado por `adb` con una FIFO);
+    §2.2 FE-3.3 («Hecho en el código», sin Room) y FE-3.6 (la caché pública decide su almacenamiento; piezas ya
+    disponibles).
+  - **Rebase sobre `main` (2026-10-27):** el código se aplicó sin conflictos (FE-3.3 no usa nada de la hoja de 7.4 que
+    FE-3.4 retiró; `RecoleccionScreen` solo gana `errorVigencia`); los conflictos fueron solo de documentos (encabezado,
+    §3.2, §4.1, §4.8, §5.1, §5.6, §5.11, §7.4, esta entrada y PLAN §3). Donde chocaban, el texto de `main` sobre FE-3.4
+    manda y encima van las adiciones de FE-3.3; se reescribieron las frases de FE-3.3 que suponían que la hoja existía:
+    la trampa «7.4 y la sesión» (de §4.8 pasa a §4.9 y dice lo que hace 7.4 desde FE-3.3: alertas en disco y solo la
+    ruta pública `GET /v1/alerts`), las listas de §5.1 (`estado`, `Factory`, recolección del estado, `…Acciones`), las
+    tablas de §5.6, §7.4 («Implementación actual» y «Pendiente»), la nota que FE-3.3 había puesto en ADR-FE-31 (quitada:
+    la ADR está retirada) y la referencia de ADR-FE-34 a ella. La firma de `RecoleccionScreen` de §5.5 queda la de
+    `main`. Versión: 0.12.0 → 0.13.0.
+- **Contradicciones corregidas:**
+  - `validation-3-3` P2 pedía `POST /v1/admin/alerts/sincronizar` con `{"cambios": []}` → 200, pero el backend exige de 1
+    a 100 cambios (vacío → `422`, backend §5.5): ahora la sonda es un `eliminar` de un UUID desconocido (`ok`, sin rastro).
+  - `validation-3-3` §4 creaba c3 con `PUT /v1/admin/alerts/{uuid}` (no hay ayuda para `PUT` en `comun.py`): ahora con
+    `sincronizar` (`upsert`). Además solo preveía `dev` y C1/C2 sin dividir.
+  - PLAN §2.2 y ARCHITECTURE §3.2/§5.10 daban Room por hecho para FE-3.3 (y §5.10 una base `campus_locator.db`):
+    ADR-FE-33 lo cambia; la caché pública queda para FE-3.6.
+  - §7.8 decía que `Alerta.kt` tiene «Modelos `Alerta` y `Lugar`»: `Lugar` desapareció en FE-3.4.
+  - ADR-FE-17 y §5.2 («Retomar») decían que las alertas de 7.4 se pierden al matar el proceso, y R9 las contaba entre lo
+    que se pierde: ya no.
+  - §5.5 daba `EditorMapaScreen(vm = viewModel())`, la posición de la hoja con `%.5f` (con el idioma del teléfono) y que
+    `sincronizando` y `error` no llegan al mapa ni se ven: ahora `Factory`, 6 decimales con punto y un `Toast`.
+  - Al rebasar (2026-10-27): PLAN «Alineado con» seguía en la versión de antes de FE-3.3 (ahora v0.13.0); la fila de
+    `AlertasRepository` de §5.6 decía que 7.4 lo recibe «por su `Factory`», pero `RecoleccionViewModel` no tiene
+    `Factory` (lo toma en su constructor con `Alertas.de(app)`, como dice §5.2); y la trampa «7.4 y la sesión» de §4.8,
+    ADR-FE-34 y la nota de ADR-FE-31 daban por hecho que 7.4 hacía llamadas protegidas por la hoja de FE-3.4, que nunca
+    llegó a `main`.
+- **Contratos tocados (§5):** §5.2 (`VoiceController.listen(…, soloMejor = false)`); §5.5 (`AlertaFormSheet` con
+  `errorVigencia` y `onAjustarEnMapa`, con valores por defecto; `EditorMapaContent` con cuatro parámetros nuevos con
+  valor por defecto; `AlertasScreen` nueva; `PanelAdminViewModel` con `cambiosAlertas`; la firma de `RecoleccionScreen`
+  no cambia); §5.6 (`AlertasRepository`, `Alerta` ampliada con valores por defecto, `OperacionAlerta`, `EstadoAlertas`,
+  `AlmacenAlertas` y el archivo nuevo `files/alertas/editor.json`, `PosicionAdmin`); §5.8 (ruta nueva
+  `admin/mapa/alertas`); §5.9 (`EditorBridge`: `ajustarBorrador`, `verAlerta`, `nuevaAlerta`, `ajusteTerminado`); §5.10
+  (rutas, DTOs y mapeo de alertas). Todo compatible con lo anterior (menor).
+- **Cómo se verificó (2026-10-26, worktree de FE-3.3 sobre `c9c1d24`, sin commit):** `testDebugUnitTest assembleDebug`
+  en Windows (también con `--rerun-tasks`) → `BUILD SUCCESSFUL`, 305 casos, 0 fallos, sin avisos nuevos del compilador;
+  en WSL `ruff check` («All checks passed!»), `ruff format --check` («22 files already formatted») y `pytest` (253) en
+  verde; `validate33.py --entorno local` → código 0 (P1; C1a 11/11 y 3/3; C2a 8/8; C3a 9/9; C1b, C2b y C3b omitidas;
+  C3c manual). `editor_mapa.js` en el modo demo de un Chromium de escritorio (servido en `127.0.0.1`): las funciones
+  nuevas existen y el ajuste, «ver» y «nueva» funcionan sin errores de consola. `git diff --stat` igual a
+  `--stat --ignore-cr-at-eol`. **Tras el rebase (2026-10-27, sobre `3b3b30c`, sin commit):** `testDebugUnitTest
+  assembleDebug` en Windows → `BUILD SUCCESSFUL`, 303 casos, 0 fallos (XML de `app/build/test-results/testDebugUnitTest`:
+  37 clases; `FormularioLugarTest` 10); en WSL `ruff check` («All checks passed!»), `ruff format --check` («22 files
+  already formatted») y `pytest` (253 passed); `validate33.py --entorno local` → código 0 (P1; C1a 11/11 y 3/3; C2a 8/8;
+  C3a 9/9; C1b, C2b y C3b omitidas; C3c manual). `git grep` de la hoja retirada en `FRONTEND_KOTLIN` deja lo mismo que
+  en `main`.
+- **Pendiente:** validar en `dev` con el teléfono (C1b, C2b, C3b y C3c; lo coordina el maestro); sin probar en el
+  teléfono el dictado, la voz y el `DatePicker` de la hoja, el modo ajustar en el `WebView`, TalkBack en 7.10 y que
+  uiautomator vuelque sus filas y la hoja.
+
 ## [0.12.1] — 2026-10-27
 - Lote que la motivó: FE-3.4 (cierre: `validate34.py --entorno dev` sobre `8317f56`).
 - Qué cambió (solo documentos): encabezado y §4.8 con lo validado en `dev` y lo que sigue sin comprobar (la recarga del

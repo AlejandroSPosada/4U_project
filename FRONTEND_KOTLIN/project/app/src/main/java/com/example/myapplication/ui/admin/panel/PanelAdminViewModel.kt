@@ -16,6 +16,7 @@ import com.example.myapplication.data.remote.FalloApi
 import com.example.myapplication.data.remote.MapeoErroresApi
 import com.example.myapplication.data.remote.RemoteAdminRepository
 import com.example.myapplication.data.repository.AdminRepository
+import com.example.myapplication.data.repository.CambiosAlertas
 import com.example.myapplication.data.repository.CambiosLugares
 import com.example.myapplication.domain.model.ResumenAdmin
 import com.example.myapplication.domain.model.Rol
@@ -110,10 +111,15 @@ class PanelAdminViewModel(
     private val cola: ColaSubida? = null,
     // FE-3.4: cambios de lugares del proceso (`CambiosLugares.version`); `null` en previews o pruebas.
     private val cambiosLugares: StateFlow<Int>? = null,
+    // FE-3.3: cambios de alertas confirmados por el backend (`CambiosAlertas.version`): «Alertas activas» al día.
+    private val cambiosAlertas: StateFlow<Int>? = null,
 ) : ViewModel() {
 
     /** Versión de `CambiosLugares` cuando empezó la última carga del resumen (FE-3.4). */
     private var versionLugaresCargada: Int? = null
+
+    /** Versión de `CambiosAlertas` cuando empezó la última carga del resumen (FE-3.3). */
+    private var versionAlertasCargada: Int? = null
 
     private val _state = MutableStateFlow(PanelUiState())
     val state: StateFlow<PanelUiState> = _state.asStateFlow()
@@ -171,7 +177,10 @@ class PanelAdminViewModel(
      */
     fun alReanudar() {
         if (!conSesionAdmin) return
-        if (debeRecargarResumen(versionLugaresCargada, cambiosLugares?.value, _state.value.cargandoResumen)) {
+        val cargando = _state.value.cargandoResumen
+        if (debeRecargarResumen(versionLugaresCargada, cambiosLugares?.value, cargando) ||
+            debeRecargarResumen(versionAlertasCargada, cambiosAlertas?.value, cargando)
+        ) {
             cargarResumen()
         }
         val c = cola ?: return
@@ -198,6 +207,7 @@ class PanelAdminViewModel(
 
     fun cargarResumen() {
         versionLugaresCargada = cambiosLugares?.value
+        versionAlertasCargada = cambiosAlertas?.value
         _state.update { it.copy(cargandoResumen = true, errorResumen = false) }
         viewModelScope.launch {
             try {
@@ -226,6 +236,7 @@ class PanelAdminViewModel(
                 Subidas.almacen,
                 Subidas.cola,
                 CambiosLugares.version,
+                CambiosAlertas.version,
             ) as T
     }
 }

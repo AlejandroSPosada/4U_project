@@ -31,7 +31,11 @@ import com.example.myapplication.ui.ubicacion.EscaneoScreen
 import com.example.myapplication.ui.ubicacion.ResultadoUbicacionScreen
 import com.example.myapplication.ui.auth.LoginScreen
 import com.example.myapplication.ui.admin.panel.PanelAdminScreen
+import com.example.myapplication.ui.admin.mapa.AlertasScreen
 import com.example.myapplication.ui.admin.mapa.EditorMapaScreen
+import com.example.myapplication.ui.admin.mapa.PedidoEditor
+import com.example.myapplication.ui.admin.mapa.PedidosEditorMapa
+import com.example.myapplication.domain.model.PosicionAdmin
 import com.example.myapplication.ui.admin.imagenes.GaleriaScreen
 import com.example.myapplication.ui.admin.videos.VideoDetalleScreen
 import com.example.myapplication.ui.admin.videos.VideosScreen
@@ -241,8 +245,25 @@ fun AppNav(rutaInicial: String? = null) {
         composable("admin/mapa") {
             EditorMapaScreen(
                 onVolver = { nav.popBackStack() },
-                onVerLista = { /* vista 17 aún no existe */ },
-                posicionAdmin = { null }
+                // FE-3.3: lista de alertas (7.10), encima del editor.
+                onVerLista = { nav.navigate("admin/mapa/alertas") { launchSingleTop = true } },
+                // FE-3.3: la última posición del PDR de 7.4 o, si no hay, la de «Ubicarme» (sin GPS).
+                posicionAdmin = { PosicionAdmin.ultima() },
+            )
+        }
+
+        // 7.10 Lista de alertas (FE-3.3). Vuelve al editor (debajo en la pila) con un pedido para su mapa.
+        composable("admin/mapa/alertas") {
+            AlertasScreen(
+                onVolver = { nav.popBackStack() },
+                onVerEnMapa = { id ->
+                    PedidosEditorMapa.pedir(PedidoEditor.VerAlerta(id))
+                    nav.popBackStack()
+                },
+                onNuevaEnMapa = {
+                    PedidosEditorMapa.pedir(PedidoEditor.NuevaAlerta)
+                    nav.popBackStack()
+                },
             )
         }
 

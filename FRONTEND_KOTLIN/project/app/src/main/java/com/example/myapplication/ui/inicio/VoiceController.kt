@@ -86,7 +86,11 @@ class VoiceController(private val context: Context) {
         if (ttsListo) accion() else pendiente = accion
     }
 
-    fun listen(onResult: (String) -> Unit, onFail: () -> Unit) {
+    /**
+     * [onResult] recibe hasta 3 hipótesis unidas por espacio; con [soloMejor] (FE-3.3, dictado de 7.9), solo la primera
+     * (la más probable). El valor por defecto deja el comportamiento de siempre (Inicio, Destino, Escaneo, Resultado).
+     */
+    fun listen(onResult: (String) -> Unit, onFail: () -> Unit, soloMejor: Boolean = false) {
         stopListening()
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             onFail()
@@ -99,7 +103,7 @@ class VoiceController(private val context: Context) {
                 val frases = results
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     .orEmpty()
-                if (frases.isEmpty()) onFail() else onResult(frases.joinToString(" "))
+                if (frases.isEmpty()) onFail() else onResult(if (soloMejor) frases.first() else frases.joinToString(" "))
             }
             override fun onError(error: Int) = onFail()
             override fun onReadyForSpeech(params: Bundle?) = Unit

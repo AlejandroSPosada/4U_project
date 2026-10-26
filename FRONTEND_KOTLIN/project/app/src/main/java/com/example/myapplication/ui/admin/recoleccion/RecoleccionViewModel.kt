@@ -7,11 +7,14 @@ import android.os.BatteryManager
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myapplication.data.remote.Alertas
+import com.example.myapplication.data.repository.AlertasRepository
 import com.example.myapplication.data.repository.RecoleccionRepository
 import com.example.myapplication.data.repository.RecoleccionRepositoryLocal
 import com.example.myapplication.domain.model.Alerta
 import com.example.myapplication.domain.model.DatosFoto
 import com.example.myapplication.domain.model.FotoRecolectada
+import com.example.myapplication.domain.model.PosicionAdmin
 import com.example.myapplication.domain.model.ProgresoRecoleccion
 import com.example.myapplication.domain.model.PuntoRecorrido
 import com.example.myapplication.domain.model.SesionDeRecoleccion
@@ -24,7 +27,9 @@ import com.example.myapplication.logs.AppLog
 import com.example.myapplication.sensors.PdrEstado
 import com.example.myapplication.sensors.PdrEvento
 import com.example.myapplication.sensors.PdrTracker
-import com.example.myapplication.ui.admin.mapa.MAX_MENSAJE
+import com.example.myapplication.ui.admin.mapa.FormularioAlerta
+import com.example.myapplication.ui.admin.mapa.TextosAlertas
+import com.example.myapplication.ui.admin.mapa.alertasJson
 import com.example.myapplication.ui.ubicacion.FeedbackCaptura
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
@@ -32,7 +37,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -72,6 +79,39 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
     private val _eventos = Channel<RecoleccionEvento>(Channel.BUFFERED)
     val eventos = _eventos.receiveAsFlow()
 
+    /**
+     * FE-3.3: las alertas viven en el repositorio local del proceso (compartido con 7.8 y 7.10, en disco): las creadas
+     * aquí no se pierden al salir ni al matar el proceso, y se envían desde 7.8 («Guardar / Sincronizar»). 7.4 **no**
+     * llama a rutas protegidas: solo lee `GET /v1/alerts` (pública) para dibujar las existentes (ADR-FE-31).
+     */
+    private val alertasRepo: AlertasRepository = Alertas.de(app)
+
+    init {
+        viewModelScope.launch {
+            alertasRepo.estado.collect { e ->
+                val visibles = e.visibles
+                _ui.update { it.copy(alertasJson = alertasJson(visibles), alertasActivas = visibles.count { a -> a.activa }) }
+            }
+        }
+        viewModelScope.launch {
+            try {
+                alertasRepo.cargar()
+                alertasRepo.refrescarPublicas()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Sin red o sin backend se ven las guardadas en el teléfono; la grabación no se entera.
+                AppLog.w(TAG, "Alertas: no se pudieron leer las existentes (${e.javaClass.simpleName})")
+            }
+        }
+        // «Mi posición» del editor de mapa (7.8) usa la última posición del PDR (FE-3.3).
+        viewModelScope.launch {
+            _ui.map { it.lat to it.lng }.distinctUntilChanged().collect { (lat, lng) ->
+                if (lat != null && lng != null) PosicionAdmin.registrar(lat, lng)
+            }
+        }
+    }
+
     // ---- Estado interno (no se muestra tal cual) --------------------------------------------
 
     private var iniciado = false
@@ -79,7 +119,6 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
 
     private val fotos = mutableListOf<FotoRecolectada>()
     private val trayectoria = mutableListOf<PuntoRecorrido>()
-    private val alertas = mutableListOf<Alerta>()
 
     private var capturando = false
     private var pendiente: DatosFoto? = null
@@ -514,10 +553,7 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Abre el formulario de alerta (`AlertaFormSheet`) con la posición actual, sin interrumpir la grabación.
-     *
-     * TODO: las alertas existentes y las nuevas viven solo en este ViewModel. Falta un
-     * `AlertasRepository` (7.8 también las tiene en memoria): cargar las existentes y guardar
-     * las nuevas. Hasta entonces, **lo que se cree aquí se pierde al salir**.
+     * FE-3.3: «Guardar» la deja en el repositorio local (en disco, pendiente de sincronizar desde 7.8).
      */
     fun alAgregarAlerta() {
         val s = _ui.value
@@ -526,37 +562,43 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
         if (s.formularioAlerta != null) return
         _ui.update {
             it.copy(
-                formularioAlerta = Alerta(id = UUID.randomUUID().toString(), lat = lat, lng = lng, mensaje = ""),
-                errorAlerta = null,
+                formularioAlerta = Alerta(
+                    id = UUID.randomUUID().toString(),
+                    lat = FormularioAlerta.redondear(lat), lng = FormularioAlerta.redondear(lng), mensaje = "",
+                ),
+                errorAlerta = null, errorVigenciaAlerta = null,
             )
         }
     }
 
     fun alActualizarAlerta(alerta: Alerta) {
-        _ui.update { it.copy(formularioAlerta = alerta, errorAlerta = null) }
+        _ui.update { it.copy(formularioAlerta = alerta, errorAlerta = null, errorVigenciaAlerta = null) }
     }
 
     fun alCancelarAlerta() {
-        _ui.update { it.copy(formularioAlerta = null, errorAlerta = null) }
+        _ui.update { it.copy(formularioAlerta = null, errorAlerta = null, errorVigenciaAlerta = null) }
     }
 
     fun alGuardarAlerta() {
         val borrador = _ui.value.formularioAlerta ?: return
-        val error = validarMensajeAlerta(borrador.mensaje)
-        if (error != null) {
-            _ui.update { it.copy(errorAlerta = error) }
+        val errores = FormularioAlerta.validar(borrador)
+        if (errores.hay) {
+            _ui.update { it.copy(errorAlerta = errores.mensaje ?: errores.general, errorVigenciaAlerta = errores.vigencia) }
             return
         }
-        val guardada = borrador.copy(mensaje = borrador.mensaje.trim())
-        alertas.removeAll { it.id == guardada.id }
-        alertas.add(guardada)
-        _ui.update {
-            it.copy(
-                formularioAlerta = null, errorAlerta = null,
-                alertasJson = alertasAJson(), alertasActivas = alertas.count { a -> a.activa },
-            )
+        val guardada = FormularioAlerta.limpia(borrador)
+        _ui.update { it.copy(formularioAlerta = null, errorAlerta = null, errorVigenciaAlerta = null) }
+        viewModelScope.launch {
+            try {
+                alertasRepo.guardar(guardada)
+                AppLog.i(TAG, "Alerta guardada en el teléfono (pendiente de sincronizar)")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.e(TAG, "No se pudo guardar la alerta", e)
+                avisar(TextosAlertas.NO_SE_GUARDO)
+            }
         }
-        AppLog.i(TAG, "Alerta agregada (${alertas.size} en total)")
     }
 
     // ---- Finalizar --------------------------------------------------------------------------
@@ -675,17 +717,6 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
             trayectoria.forEach { put(JSONArray().put(it.lat).put(it.lng)) }
         }.toString()
 
-    private fun alertasAJson(): String =
-        JSONArray().apply {
-            alertas.forEach { a ->
-                put(
-                    JSONObject().put("id", a.id).put("lat", a.lat).put("lng", a.lng)
-                        .put("mensaje", a.mensaje).put("tipo", a.tipo).put("prioridad", a.prioridad)
-                        .put("radio", a.radio).put("activa", a.activa),
-                )
-            }
-        }.toString()
-
     override fun onCleared() {
         // No se borra el video: queda `en_curso` en disco por si hay que retomarlo.
         tracker.liberar()
@@ -702,15 +733,6 @@ class RecoleccionViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-/** Misma regla que `EditorMapaViewModel.guardarFormulario` (candidata a extraerse a un caso de uso, 11.5). */
-internal fun validarMensajeAlerta(mensaje: String): String? {
-    val m = mensaje.trim()
-    return when {
-        m.isEmpty() -> "Escribe el mensaje que se leerá al usuario."
-        m.length > MAX_MENSAJE -> "Máximo $MAX_MENSAJE caracteres."
-        else -> null
-    }
-}
 
 /** Diferencia mínima entre dos rumbos (359° y 1° dan 2°, no 358°). */
 private fun diferenciaCircular(a: Float, b: Float): Float {

@@ -121,6 +121,69 @@ data class AlertaDto(
     @SerializedName("version") val version: Int? = null,
 )
 
+/**
+ * `GET /v1/alerts` (backend §5.3, BE-3.3; FE-3.3 la usa en 7.4). `completo` y `eliminadas` los usará la caché de
+ * FE-3.6; hoy la app pide siempre la foto completa (sin `desde`).
+ */
+data class AlertasPublicasDto(
+    @SerializedName("generado_en") val generadoEn: String? = null,
+    @SerializedName("completo") val completo: Boolean? = null,
+    @SerializedName("alertas") val alertas: List<AlertaDto>? = null,
+    @SerializedName("eliminadas") val eliminadas: List<String>? = null,
+)
+
+/**
+ * `GET /v1/admin/alerts` (backend §5.5, BE-3.3; FE-3.3): `{items: [AlertaAdmin…], total}`. `AlertaAdmin` = `Alerta` +
+ * `creado_en`, `creado_por`, `actualizado_por`: la app solo lee los campos de [AlertaDto] (Gson ignora los demás).
+ */
+data class ListaAlertasAdminDto(
+    @SerializedName("items") val items: List<AlertaDto>? = null,
+    @SerializedName("total") val total: Int? = null,
+)
+
+/**
+ * Lo que envía la app (FE-3.3): `AlertaEntrada` (backend §5.5) con su `id` (el de `alerta.id` en `sincronizar`). Gson
+ * omite los `null`: sin vigencia, el backend la toma como `null`.
+ */
+data class AlertaEntradaDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("lat") val lat: Double,
+    @SerializedName("lng") val lng: Double,
+    @SerializedName("mensaje") val mensaje: String,
+    @SerializedName("tipo") val tipo: String,
+    @SerializedName("prioridad") val prioridad: String,
+    @SerializedName("radio_m") val radioM: Int,
+    @SerializedName("activa") val activa: Boolean,
+    @SerializedName("vigencia_desde") val vigenciaDesde: String? = null,
+    @SerializedName("vigencia_hasta") val vigenciaHasta: String? = null,
+)
+
+/** Un cambio de `sincronizar`: `{"op": "upsert", "alerta": {…}}` o `{"op": "eliminar", "id": "…"}` (Gson omite `null`). */
+data class CambioAlertaDto(
+    @SerializedName("op") val op: String,
+    @SerializedName("alerta") val alerta: AlertaEntradaDto? = null,
+    @SerializedName("id") val id: String? = null,
+)
+
+/** Cuerpo de `POST /v1/admin/alerts/sincronizar` (1 a 100 cambios). */
+data class SincronizarAlertasDto(
+    @SerializedName("cambios") val cambios: List<CambioAlertaDto>,
+)
+
+/** Respuesta `200` de `sincronizar`: un resultado por cambio, en el mismo orden. */
+data class SincronizarAlertasRespuestaDto(
+    @SerializedName("generado_en") val generadoEn: String? = null,
+    @SerializedName("resultados") val resultados: List<ResultadoCambioAlertaDto>? = null,
+)
+
+/** `{"id", "op", "estado": "ok" | "error", "codigo": null | "VALIDACION"}`. */
+data class ResultadoCambioAlertaDto(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("op") val op: String? = null,
+    @SerializedName("estado") val estado: String? = null,
+    @SerializedName("codigo") val codigo: String? = null,
+)
+
 /** `ultimo_video` de `GET /v1/admin/stats`. */
 data class UltimoVideoDto(
     @SerializedName("numero") val numero: Int? = null,
