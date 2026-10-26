@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.9.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.9.2** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
 | Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -808,10 +808,20 @@ backend 0.12.1). Sin alertas (FE-3.6).
 Verificado en local el 2026-10-26: `testDebugUnitTest assembleDebug` en Windows → `BUILD SUCCESSFUL` (221 casos, 0
 fallos); en WSL `ruff check`, `ruff format --check` y `pytest` (190 casos) en verde y `validate32.py --entorno local`
 → código 0 (P1; C1a 11/11, 11/11 y 5/5; C2 7/7; C3a con `FotosEscaneoTest` 6/6; C4a 7/7; C1b, C4b y C3b omitidas;
-manuales C1c y C4c). **Sin comprobar en el teléfono ni en `dev`** (BE-3.2 está «En curso», sin dataset ni
-calibración: en `dev` el validador da hoy código 2): la re-codificación con `MotorImagenAndroid` a 1024 px, que el
-backend real acepte el `multipart`, el valor de la declinación en el teléfono (≈ −7° en Medellín), el borrado de las
-fotos en el teléfono (C3b), el mensaje con `embedding` apagado (C4), los 10 puntos del campus (C1) y la 6.3 con TalkBack.
+manuales C1c y C4c).
+
+**Prueba de humo en el teléfono (2026-10-26, en casa, decisión del usuario; no es un criterio de
+`validation-3-2`):** Xiaomi 23028RA60L (Android 14) con el APK de `076c853` (el código de `e3f3d12`), `embedding`
+encendido y el dataset de `dev` vacío. Inicio → botón principal → vuelta de 5 fotos → `POST /v1/localize` → **200 en
+1911 ms** (2486 ms desde «Enviando…») con `sin_coincidencias`, y la 6.3 con «No reconocí este lugar» y sus cuatro
+botones. Con eso queda **comprobado en el teléfono**: que el backend real acepta el `multipart` de la app (las 5 copias
+re-codificadas por `MotorImagenAndroid` pasaron sus límites: sin `400`), la declinación (`Escaneo iniciado (declinación
+-7.9°)`, coherente con ≈ −7° en Medellín; p. ej. acimut −146,5° → rumbo verdadero 205,6°) y el borrado (`Fotos del
+escaneo borradas (carpeta …, 10 archivos)`: las 5 fotos y sus 5 `envio_*.jpg`; `files/camera/photos/` vacía
+después). Evidencia: [`evidencia/fe-3-2/`](./validation/evidencia/fe-3-2/) (`humo-casa-6-3.png` y
+`humo-casa-app-log.txt`, las líneas `[scan-8365]`; sin video: la vuelta muestra la cámara). **Sigue sin comprobar**: el
+tamaño exacto de las copias (no se registra), una respuesta `ok` con posición y referencias (necesita dataset), el
+mensaje con `embedding` apagado (C4), los 10 puntos del campus (C1), C3b con el validador y la 6.3 con TalkBack.
 
 **En `dev` el 2026-10-26** (el maestro, sobre `e3f3d12`, informe `.validacion/FE-3.2-20261026-153456.json`):
 `validate32.py --entorno dev` → P1–P5 pasan, `[FALLA] P6 BE-3.2 no está «Hecho»`, P7 «no evaluada», `Resultado:

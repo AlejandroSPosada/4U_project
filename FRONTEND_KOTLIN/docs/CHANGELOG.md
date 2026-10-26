@@ -23,6 +23,19 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.9.2] — 2026-10-26
+- Lote que la motivó: FE-3.2 (sigue «En curso»), prueba de humo en el teléfono pedida por el usuario.
+- Qué cambió: §4.6 y la fila FE-3.2 de PLAN §3 anotan la prueba de Ubicarme en casa (Xiaomi 23028RA60L, APK de
+  `076c853`, `embedding` encendido, dataset de `dev` vacío): `POST /v1/localize` → 200 en 1911 ms con
+  `sin_coincidencias`, la 6.3 «No reconocí este lugar», declinación −7,9° y las 10 copias del escaneo borradas. Pasan a
+  comprobadas en el teléfono el `multipart` contra el backend real, la declinación y el borrado; la lista de lo que
+  sigue sin comprobar queda al día. Evidencia nueva en `validation/evidencia/fe-3-2/` (captura de la 6.3 y las líneas
+  `[scan-8365]` de `app.log`; sin video, porque la vuelta muestra la cámara).
+- Contratos tocados (§5): ninguno.
+- Cómo se verificó: `app.log` del teléfono (`run-as … cat files/logs/app.log`), `ls -R files/camera/photos` vacío tras
+  la respuesta y captura de pantalla por `adb`. No es un criterio de `validation-3-2` (C1–C4 siguen pendientes).
+- Pendiente: lo de 0.9.0 (C1 en el campus, C4 de noche, C3b y `validate32.py --entorno dev` con BE-3.2 «Hecho»).
+
 ## [0.9.1] — 2026-10-26
 - Lote que la motivó: FE-3.2 (cierre de la documentación, a la pregunta del maestro «¿se podrían hacer FE-3.5, FE-3.6 y
   la validación de FE-3.2 en `dev` leyendo solo docs?»), y su primera ejecución en `dev`.
