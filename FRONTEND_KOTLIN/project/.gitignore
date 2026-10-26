@@ -20,3 +20,6 @@ local.properties
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+
+# Sesiones del daemon de Kotlin (las crea Gradle en cada compilación)
+.kotlin/
