@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.7.2** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-25 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); las pruebas en dispositivo (FE-2.3 C3) siguen pendientes. Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4); la prueba en el campus (FE-2.1 C1 y C2) sigue pendiente. El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Versión del documento | **0.8.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-26 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; falta la validación en `dev` con el teléfono). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -379,7 +379,7 @@ com.example.myapplication/
 │   └── local/                   # Desde FE-2.1: cola de subida de recorridos sobre los manifests de files/recoleccion/ (§5.10); la caché de alertas en Room será de FE-3.6
 │
 ├── sensors/                     # Sensores y PDR
-│   ├── PdrEngine, StepDetector, PdrTracker, OrientationProvider
+│   ├── PdrEngine, StepDetector, PdrTracker, OrientationProvider, InterruptorSensores (FE-2.3), ObservadorPrimerPlano (FE-3.1)
 │
 ├── camera/                      # CameraX, captura automática (una carpeta por escaneo), calidad de imagen (sin uso por ahora)
 ├── map/                         # WebView del mapa Leaflet/OSM, AndroidBridge y datos de capas (usuario, ruta, lugares, alertas). Hoy: MapaPublicoScreen, PuentePdr y MapaWebView (fábrica común de los WebView de mapa, 5.9)
@@ -392,7 +392,8 @@ Pruebas unitarias (JVM) en `app/src/test/java/com/example/myapplication/`: `data
 `domain/usecase/` (`CalibracionPasoTest`, `DisparadorCapturaTest`, `DerivaTest`, `RetomarRecoleccionTest`) y `sensors/`
 (`StepDetectorTest`, `InterruptorSensoresTest`), y desde FE-2.1 `data/local/` (`AlmacenRecorridosTest`,
 `RecodificacionFotoTest`, `SubidaRecorridoTest`, `ColaSubidaTest`, con la ayuda `ManifestPrueba`) y
-`data/repository/VideoRepositoryCompuestoTest` (lista y conteos en §4.1).
+`data/repository/VideoRepositoryCompuestoTest`, y desde FE-3.1 `data/remote/RemoteLugaresRepositoryTest`,
+`ui/inicio/ComandoParserTest` y `sensors/ObservadorPrimerPlanoTest` (lista y conteos en §4.1).
 
 > Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
 > (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`) y de la calibración (`calibracion_mapa.html/js`), y la base común `mapa_base.js` (5.9).
@@ -407,8 +408,9 @@ Pruebas unitarias (JVM) en `app/src/test/java/com/example/myapplication/`: `data
 
 - Un único `NavHost`. ⚠ **Hoy vive en `MainActivity.kt` (composable `AppNav`)**, no en
   `ui/navigation/AppNavHost.kt` como se planeó; ver 5.8.
-- Rutas públicas: Inicio, Ubicación, Destino, Navegación, Ajustes, Login y, desde FE-2.3, `mapa` (mapa público; hoy solo
-  se abre en depuración con un extra del `Intent`, 5.8).
+- Rutas públicas: Inicio, Ubicación, Destino, Navegación, Ajustes, Login y, desde FE-2.3, `mapa` (mapa público; desde
+  FE-3.1 se abre desde Inicio con la voz «mapa» o la acción de TalkBack «Ver mapa», y en depuración también con un extra
+  del `Intent`, 5.8).
 - Rutas `admin/*` protegidas: si no hay sesión con rol `ADMIN` se redirige a Login. ⚠ **Hoy `AppNav`
   no aplica esa protección al entrar en la ruta**: el panel la comprueba en su `init` (`onSinSesion`) y, desde FE-1.2,
   `AppNav` vuelve a Login cuando una petición `/v1/admin/…` o `/v1/collect/…` se queda sin sesión estando en una
@@ -458,7 +460,8 @@ almacenamiento externo.
   sesión o un `401` de sesión; sin token ni correo; §5.3), desde FE-2.3 `Pdr` (`AppLog.i` en cada registro o retirada
   de los sensores del PDR, p. ej. `sensores quitados (segundo plano)`; §5.2) y desde FE-2.1 `Subida` (`AppLog.i` de la
   cola y de la subida: `PUT S3 rec_0003/0007 -> 200 (412 ms, 512345 B)`, `rec_0003: video creado en el backend`,
-  `cola: reintento en 10 s (…)`; nunca URLs prefirmadas ni tokens; §5.10).
+  `cola: reintento en 10 s (…)`; nunca URLs prefirmadas ni tokens; §5.10) y desde FE-3.1 `Lugares` (`AppLog.w` de
+  `RemoteLugaresRepository` solo si descarta lugares de `GET /v1/places`: categoría desconocida o `id` repetido; §5.10).
 - Registrar transiciones y decisiones, **no** cada lectura de sensor (50 por segundo).
 - No registrar datos sensibles (tokens, credenciales).
 
@@ -524,7 +527,10 @@ Componentes compartidos en `ui/components/`: `BotonGrande.kt`, `MapaCampus.kt`, 
   (6), `sensors/StepDetectorTest` (11) e `InterruptorSensoresTest` (6). Total al terminar el código de FE-2.3: 102
   casos. Desde FE-2.1: `data/local/AlmacenRecorridosTest` (13), `RecodificacionFotoTest` (12), `SubidaRecorridoTest`
   (13), `ColaSubidaTest` (8) y `data/repository/VideoRepositoryCompuestoTest` (3); `MapeoDatosApiTest` sigue con 13
-  (su caso de `estadoFoto` ahora espera `PENDIENTE`). Total al terminar el código de FE-2.1: **151** casos. No usan
+  (su caso de `estadoFoto` ahora espera `PENDIENTE`). Total al terminar el código de FE-2.1: 151 casos. Desde FE-3.1:
+  `data/remote/RemoteLugaresRepositoryTest` (9), `ui/inicio/ComandoParserTest` (5) y
+  `sensors/ObservadorPrimerPlanoTest` (6; usa `LifecycleRegistry.createUnsafe`, que no comprueba el hilo principal y
+  corre en la JVM). Total al terminar el código de FE-3.1: **171** casos. No usan
   Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
   `EncryptedSharedPreferences` (la sesión se prueba con un `AlmacenSesion` en memoria, §5.3); lo de FE-2.3 es lógica
   pura (`PdrEngine`, `StepDetector`, `CalibracionPaso`, `DisparadorCaptura`, `Deriva`, `RetomarRecoleccion`,
@@ -543,10 +549,14 @@ Componentes compartidos en `ui/components/`: `BotonGrande.kt`, `MapaCampus.kt`, 
 | Permisos | `permissions: {}` arriba y `contents: read` por job. No usa AWS ni variables del repositorio | — |
 | Acciones | fijadas por SHA con la versión en un comentario (`checkout` v7.0.1 y `setup-uv` v10.3.2, los mismos de `backend.yml`; `setup-java` v6.1.0 = `b843ebf9…`) | — |
 
-No corre pruebas instrumentadas (`connectedDebugAndroidTest`, necesitan dispositivo) ni `lint` (el código de la fase 0
-no se ha pasado por `lint`: sin comprobar si pasa). Renombrar un job cambia el nombre del check que pide
-`validation-1-1` §3: se actualizan los dos en el mismo cambio. **Sin comprobar** en un runner hasta el primer PR (C3):
-la compilación en Linux con el SDK del runner no se ha ejecutado todavía.
+No corre pruebas instrumentadas (`connectedDebugAndroidTest`, necesitan dispositivo) ni `lint`. `lintDebug` **no
+pasa** (comprobado en Windows el 2026-10-26, FE-3.1): 1 error anterior a FE-3.1, `JavascriptInterface` en
+`map/MapaWebView.kt:125` (`addJavascriptInterface(puente: Any, …)`: lint no ve las anotaciones de un parámetro `Any`),
+y 62 avisos (30 de `libs.versions.toml`, 15 de `build.gradle.kts`, 7 de `colors.xml` y sueltos en vistas de admin);
+ninguno en los archivos que tocó FE-3.1. Informe en `app/build/reports/lint-results-debug.txt`.
+Renombrar un job cambia el nombre del check que pide `validation-1-1` §3: se actualizan los dos en el mismo cambio. En
+un runner: `frontend.yml` quedó en verde en el PR #8 (`104673b`, FE-1.1 C3; PLAN §3), así que la compilación en Linux
+con el SDK del runner funciona.
 
 **Trampas conocidas**
 - `Unable to delete directory '…\app\build\…'` al compilar en Windows con un `app/build` que dejó Android Studio:
@@ -611,8 +621,12 @@ Qué se construyó (detalle y firmas en §5.2, §5.5, §5.6, §5.7 y §5.8; vali
 
 Verificado el 2026-10-25: `testDebugUnitTest assembleDebug` en Windows → `BUILD SUCCESSFUL` (102 casos, 0 fallos);
 en WSL `ruff check`, `ruff format --check` y `pytest` (93 casos) en verde y `validate23.py --entorno local` → código 0.
-**A verificar en dispositivo (FE-2.3 C3, C4 y C5):** el PDR caminando, 7.3, 7.3b, 7.4, retomar tras `am kill` y que
-`dumpsys sensorservice` no muestre conexiones en segundo plano (`validation-2-3` §3 y §5).
+En `dev` (2026-10-25, Xiaomi 23028RA60L; detalle y evidencia en la fila FE-2.3 de PLAN §3): **C4 y C5 pasan**
+(retomar tras `am kill` en la misma `rec_NNNN`; en segundo plano la app no está en las conexiones activas de
+`dumpsys sensorservice`). **C3**, en casa (2026-10-26): 7.3b cuenta bien los pasos (longitud provisional 0,71 m); **sin
+probar todavía** el PDR del mapa público y 7.3 en un recorrido conocido de ≥ 100 m. Hallazgo de C5: con el ciclo de
+vida del **proceso**, un mapa que se queda en la pila sin ser visible vuelve a registrar sensores cuando la app vuelve
+al primer plano por otra pantalla; lo resuelve FE-3.1 para el mapa público (§4.5, ADR-FE-22).
 
 ### 4.4 Subida de recorridos y Resumen de video (FE-2.1)
 
@@ -633,11 +647,62 @@ Qué se construyó (detalle y firmas en §5.5, §5.6, §5.8, §5.9, §5.10 y §5
 
 Verificado en local el 2026-10-25: `testDebugUnitTest assembleDebug` en Windows → `BUILD SUCCESSFUL` (151 casos, 0
 fallos); en WSL `ruff check`, `ruff format --check` y `pytest` (128 casos) en verde y `validate21.py --entorno local` →
-código 0 (P1; C2a 13/13, 8/8, 13/13; C3a 12/12; C4; C1, C2b y C3b omitidas; la manual C2c). **A verificar en
-dispositivo y en `dev` (FE-2.1 C1 y C2):** la vista 7.5 en el teléfono, la re-codificación real con `Bitmap` (EXIF de
-CameraX en el Xiaomi), la subida de un recorrido de ≥ 50 fotos hasta `procesado` y el corte de red a mitad
-(`validation-2-1` §3 y §5). Sin comprobar en dispositivo: el aspecto de 7.5 y de la tarjeta del Panel (no se han visto
-en pantalla; tienen `@Preview`).
+código 0 (P1; C2a 13/13, 8/8, 13/13; C3a 12/12; C4; C1, C2b y C3b omitidas; la manual C2c). **En `dev`**
+(2026-10-26, en casa por decisión del usuario, Redmi Note 15 Pro; detalle en la fila FE-2.1 de PLAN §3):
+`validate21.py --entorno dev` con código 0 con un recorrido de prueba de 56 fotos (C1 `procesado`, C2b sin duplicados,
+C3b máx. 473 591 B y 1600 px, así que la re-codificación con `Bitmap` funciona en ese teléfono; que el giro por el EXIF
+de CameraX quede bien no lo mide C3b: sin comprobar) y
+el corte de red de C2c retomado hasta «Subido» (7.5 y 7.13 vistas en pantalla). **Sin probar todavía:** un recorrido
+real del campus de ≥ 50 fotos (el dataset).
+
+### 4.5 Lugares públicos y entrada al mapa (FE-3.1)
+
+Qué se construyó (detalle y firmas en §5.2, §5.5, §5.6, §5.8, §5.10 y §5.11; validación en
+[`validation-3-1`](./validation/validation-3-1.md)). Sin alertas: pasaron a FE-3.6 (decisión del usuario del
+2026-10-25).
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| `RemoteLugaresRepository` | `data/remote/RemoteLugaresRepository.kt` | `LugaresRepository` real: `GET /v1/places` → `List<LugarDestino>` con `MapeoDatosApi.lugarDestino`. La posición llega por un proveedor (`posicion: () -> Pair<Double, Double>?`; hoy `{ null }`: sin `lat`/`lng`, distancias `null` y orden por nombre del backend). Descarta lugares de categoría desconocida e `id` repetidos con una línea `Lugares` (ADR-FE-23) |
+| Ruta y DTO | `data/remote/CampusApi.kt` (`lugares(lat?, lng?, categoria?)`), `DtosApi.kt` (`ListaLugaresDto`) | Ruta pública: no lleva `Authorization` ni pasa por la sesión (§5.10) |
+| Destino con datos reales | `ui/destino/SeleccionDestinoViewModel.kt` | `RemoteLugaresRepository()` en lugar de `LugaresRepositoryStub()` (el stub queda para la vista previa). Errores como antes: `IOException` → «Sin conexión», el resto → `DESCONOCIDO` |
+| Foto del lugar | `ui/destino/componentes/ListaLugares.kt` (`FilaLugar`) | Miniatura con Coil si hay `imagenUrl`; si es `null` **o no carga** (`onError`: URL prefirmada vencida, sin red) se ve el ícono de la categoría. Hoy el backend siempre da `imagen_url = null` (backend §5.3) |
+| Comando de voz «mapa» | `ui/inicio/VoiceController.kt` (`Comando.VER_MAPA`, `ComandoParser`) | La palabra completa «mapa» o «mapas»; si coincide con otro comando, `NINGUNO`. Las palabras se separan también por signos (5.2) |
+| Entrada al mapa desde Inicio | `ui/inicio/InicioViewModel.kt` (`InicioEvento.VerMapa`, `verMapa()`, `BIENVENIDA` con «mapa»), `InicioScreen.kt` (`onVerMapa`, acción de TalkBack «Ver mapa» en el orbe), `MainActivity.kt` | La ruta `inicio` navega a `mapa` con `launchSingleTop`; Atrás vuelve a Inicio (5.8) |
+| PDR del mapa atado a la pantalla | `sensors/ObservadorPrimerPlano.kt` (nuevo, `internal`), `sensors/PdrTracker.kt`, `map/MapaPublicoScreen.kt` | El tracker del mapa observa el ciclo de vida de **su entrada de la pila** (`LocalLifecycleOwner`), no el del proceso: deja de leer sensores cuando el mapa no es lo visible y no vuelve a registrarlos si la app vuelve al primer plano por otra pantalla (hallazgo de FE-2.3; ADR-FE-22). Calibración y recolección siguen con el del proceso |
+| Pruebas | `RemoteLugaresRepositoryTest` (9), `ComandoParserTest` (5), `ObservadorPrimerPlanoTest` (6) | Apoyo de C1 (lista de `GET /v1/places`) y de C2 (voz «mapa», sensores del mapa) en la JVM (§4.1) |
+| Validador | `src/ops/validate31.py` + `comun.http_delete` y `comun.esperar_enter` | Local: C1a y C2a (JVM) y C2b (estático). Dev: además C1b (lugar de prueba por API, paso guiado y lista leída con uiautomator); C2c manual (§5.11) |
+
+**El hallazgo de FE-2.3 y por qué aplica aquí.** En FE-2.3 (C5, 2026-10-25 21:48:35) se abrió el mapa con la ruta de
+prueba (`am start … --es ruta mapa`), la app pasó a segundo plano y al abrirla desde el ícono salió Inicio, pero el
+`PdrTracker` del mapa volvió a registrar sensores: el mapa seguía compuesto en una actividad detenida y su tracker
+seguía al **proceso**, que volvió al primer plano por otra actividad (que la del `am start` quedara en otra tarea y el
+lanzador abriera una actividad nueva es lo deducido; **sin reproducir**). Con la
+entrada desde Inicio hay más formas de dejar el mapa compuesto sin verse (otra tarea, o una pantalla encima en el
+futuro). Desde FE-3.1 `MapaPublicoScreen` crea el tracker con `cicloDeVida = LocalLifecycleOwner.current.lifecycle` (la
+`NavBackStackEntry`): esa entrada solo está en `STARTED` si el mapa es lo visible en una actividad visible, así que sus
+sensores se quitan en su `ON_STOP` y no vuelven hasta su `ON_START`; al salir de la pila la composición se destruye y
+`liberar()` quita el observador. Lo prueba `ObservadorPrimerPlanoTest` con dos `LifecycleRegistry` (proceso y
+pantalla). Con Atrás desde el mapa no hacía falta nada: la entrada sale de la composición y `liberar()` ya quitaba los
+sensores.
+
+**Trampas.**
+- Sin posición en el flujo público (hasta FE-3.2), `EncabezadoLista` sigue diciendo «Lugares cercanos» y «Ordenado por
+  cercanía» aunque ninguna fila tenga distancia (⚠ de 5.5, FE-3.5): el orden real es el del backend, por nombre
+  normalizado (sin tildes ni mayúsculas).
+- Ordenar por popularidad (6.4) espera a BE-5.2 (estadísticas).
+- `BIENVENIDA` es más larga («…, dos para ir a un lugar, o mapa para ver el mapa.») y se repite al volver del mapa a
+  Inicio (`alAbrir` en cada composición, ⚠ de 5.5).
+- Con TalkBack activo, `adb shell input swipe` puede no desplazar la lista (TalkBack convierte los gestos de un dedo en
+  exploración táctil; **sin comprobar** en el Xiaomi): el paso guiado de C1b pide desactivarlo antes de pulsar Enter.
+
+Verificado en local el 2026-10-26: `testDebugUnitTest assembleDebug` en Windows → `BUILD SUCCESSFUL` (171 casos, 0
+fallos); en WSL `ruff check`, `ruff format --check` y `pytest` (159 casos) en verde y `validate31.py --entorno local` →
+código 0 (P1; C1a 9/9; C2a 5/5 y 6/6; C2b; C1b omitida; la manual C2c). **A verificar en dispositivo y en `dev`
+(FE-3.1 C1 y C2):** la lista de Destino contra `GET /v1/places` (C1b), la voz «mapa» y la acción «Ver mapa» con
+TalkBack (C2c), que el mapa abierto desde Inicio sigue al PDR y que `dumpsys sensorservice` no muestra la app tras
+volver a Inicio. Sin comprobar: la miniatura con foto (en `dev` no hay `imagen_url`) y que `uiautomator dump` vuelque
+Destino con la animación del micrófono (Inicio, con la suya, sí se volcó en FE-1.2).
 
 ---
 
@@ -689,7 +754,7 @@ en pantalla; tienen `@Preview`).
 | Pieza | Ubicación | Cómo se usa | Cuidado |
 |---|---|---|---|
 | `VoiceController` | `ui/inicio/VoiceController.kt` (paquete `ui.inicio`, aunque lo usan 3 vistas) | `VoiceController(context)` · `speak(texto: String, alTerminar: () -> Unit = {})` · `listen(onResult: (String) -> Unit, onFail: () -> Unit)` · `stopListening()` · `stopAll()` · `release()` en `onCleared`. Envuelve `TextToSpeech` y `SpeechRecognizer` en español de Colombia (`es-CO`). **Solo desde el hilo principal.** Un controlador por ViewModel. | Verificado contra el código. Comportamiento exacto:<br>• `speak` usa `QUEUE_FLUSH`: **corta** lo que se esté diciendo y el `alTerminar` anterior **no** se llama. Solo el último `speak` tiene callback.<br>• `alTerminar` se llama al terminar **o si hay un error** de TTS (no se distinguen).<br>• `stopAll()` no dispara `alTerminar` (no se sobreescribe `onStop`), pero un `alTerminar` que ya estaba encolado en el hilo principal sí llega: por eso el token (abajo) sigue siendo necesario.<br>• Si el TTS aún no está listo, `speak` queda pendiente y **solo se guarda el último**. Si el TTS falla al iniciar, `speak` nunca habla ni llama a `alTerminar`: un flujo que encadena `speak → listen` se queda parado. Poner siempre una salida por toque.<br>• Tras `release()` `speak` no hace nada (tampoco llama a `alTerminar`).<br>• `listen` cancela el reconocimiento anterior, **no** detiene el TTS (escuchar mientras habla capta la propia voz: llamar a `listen` desde el `alTerminar`) y **no** comprueba `RECORD_AUDIO` (sin permiso responde `onFail`).<br>• `onResult` recibe hasta **3 hipótesis unidas por espacio** (`"sí no sí"`); esto importa para `InterpretarRespuesta` (5.7).<br>• `onFail` cubre: reconocimiento no disponible (se llama **de forma síncrona**, antes de que `listen` retorne), error, silencio y sin resultados.<br>Candidato a mover a `voice/`. |
-| `Comando` / `ComandoParser` | **Dentro de `ui/inicio/VoiceController.kt`** (no existe `ComandoParser.kt` aparte) | `ComandoParser.parse(texto): Comando` → `UBICARME`, `IR_A_LUGAR` o `NINGUNO`. | Quita tildes y pasa a minúsculas. `UBICARME` si hay la palabra "uno"/"1" o el texto contiene "ubic", "donde estoy", "donde estamos". `IR_A_LUGAR` si hay "dos"/"2" o contiene "ir a", "llevar", "lugar", "destino", "llegar". Si coinciden **ambos** o **ninguno** → `NINGUNO`. Cuidado: "ir a", "ubic" y "lugar" se buscan como *fragmento* del texto, así que también aciona con "salir a", "venir a" o "ubicación". No quita signos de puntuación (`"uno,"` no cuenta como la palabra "uno"). Solo sirve para el menú de Inicio; para nombres de lugares y sí/no, ver 5.7. |
+| `Comando` / `ComandoParser` | **Dentro de `ui/inicio/VoiceController.kt`** (no existe `ComandoParser.kt` aparte) | `ComandoParser.parse(texto): Comando` → `UBICARME`, `IR_A_LUGAR`, `VER_MAPA` (FE-3.1) o `NINGUNO`. | Quita tildes y pasa a minúsculas. `UBICARME` si hay la palabra "uno"/"1" o el texto contiene "ubic", "donde estoy", "donde estamos". `IR_A_LUGAR` si hay "dos"/"2" o contiene "ir a", "llevar", "lugar", "destino", "llegar". `VER_MAPA` (FE-3.1) si hay la **palabra completa** "mapa" o "mapas" ("mapamundi" no cuenta). Si coinciden **dos o más** o **ninguno** → `NINGUNO` ("mapa del lugar" o "mi ubicación en el mapa" dan `NINGUNO`). Cuidado: "ir a", "ubic" y "lugar" se buscan como *fragmento* del texto, así que también aciona con "salir a", "venir a" o "ubicación". Desde FE-3.1 las palabras se separan por cualquier carácter que no sea letra ni número (`"uno,"` y `"¡dos!"` cuentan; antes, solo por espacios). Lo cubre `ComandoParserTest` (5). Solo sirve para el menú de Inicio; para nombres de lugares y sí/no, ver 5.7. Añadir un valor a `Comando` obliga a ampliar el `when` de `InicioViewModel.escuchar`. |
 | `FeedbackCaptura` | `ui/ubicacion/FeedbackCaptura.kt` | `FeedbackCaptura(ctx)` · `confirmar()` (vibra 120 ms + pitido de 120 ms) · `liberar()` | Verificado. Es `internal` (visible en todo el módulo), así que otra vista puede usarla. Liberar en `onCleared`. El pitido sale por el canal de **notificaciones** (volumen 80): con el teléfono en silencio solo vibra. Si el sistema no puede crear el generador de tonos, simplemente no suena (no falla). `liberar()` solo libera el tono; no usarla después de liberar. Necesita `VIBRATE` en el Manifest (§3.2). |
 | `AppLog` | `logs/AppLog.kt` (`object`) | `AppLog.d(TAG, msg)` · `AppLog.i(TAG, msg)` · `AppLog.w(TAG, msg, t = null)` · `AppLog.e(TAG, msg, t = null)` · `AppLog.nuevaSesion(prefijo): String` · `AppLog.sesion` (lectura/escritura) · `AppLog.init(context)` (solo `MyApp`) | Verificado. **`d` e `i` no reciben excepción**: para registrar una usar `w` o `e`. Cada línea va a Logcat (`[sesion] texto`) y a `files/logs/app.log` con hora, nivel, tag, hilo y sesión. Rota a ~1 MB (pasa a `app.log.1`, que pisa al anterior: historial máximo ≈ 2 MB). **Antes de `AppLog.init` solo escribe en Logcat.** La escritura al archivo es **síncrona en el hilo que llama**: no registrar en bucles calientes (el sensor de orientación llega a ~50 Hz). `nuevaSesion` genera `prefijo-NNNNN` con 5 dígitos del reloj: sirve para seguir una vuelta, **no garantiza unicidad**. Los errores de escritura se tragan en silencio. ⚠ El `SimpleDateFormat` interno es compartido y no es seguro entre hilos: con registros simultáneos desde varios hilos la hora de una línea puede salir corrupta. **No hay función de exportar**: el archivo se consulta como dice la §3.2. Tags en uso: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`, `Api` (FE-1.1: `RequestIdInterceptor`, §5.10, registra cada petición HTTP con `AppLog.i`, también el sondeo de Inicio cada 15 s) y `Sesion` (FE-1.2: `VigilanteSesion`, §5.3, con `AppLog.w`, p. ej. `GET /v1/admin/stats -> 401 TOKEN_EXPIRADO: sesión cerrada`). Verificado: `InicioViewModel`, `LoginViewModel` y `VideosViewModel` **no registran nada** por sí mismos. No registrar tokens ni lecturas de sensores. Se inicia en `MyApp.onCreate` (`AppLog.init(this)`, que además registra fabricante, modelo y versión de Android con el tag `App`). Las excepciones no capturadas se registran con el tag `CRASH` y luego se pasan al manejador anterior del sistema (la app se cierra igual). |
 
@@ -721,17 +786,19 @@ a través de `map/MapaPublicoScreen.kt`; la recolección (7.4, ya lo usa desde `
 | `PdrEngine.fijarRumboManual` | `(grados: Float)` | Rumbo directo, sin promedio (rueda manual). |
 | `PdrEngine.onPaso` | `(tMs: Long): Boolean` | Avanza `longitudPasoM` hacia `rumbo`; devuelve `false` si aún no hay posición inicial. Velocidad: pasos de los últimos 5 s (n − 1 intervalos). |
 | `StepDetector` | `procesar(x, y, z, tMs, detectar = true): Boolean` · `ultimaDesviacion` · `reiniciar()` | **Fuente única de pasos.** Magnitud − gravedad **con signo**, filtro pasa-bajos (`FILTRO` 0,5) y cuenta el paso en el **flanco de subida** del pico (latencia ~50–100 ms), con histéresis (rearma por debajo del 60 % del umbral) y pausa mínima `PAUSA_MS` = 250 ms. **Umbral adaptativo:** `FACTOR_UMBRAL` (0,5) × el pico típico reciente (media móvil, `PESO_PICO` 0,3, picos recortados a `PICO_MAX` 8), limitado a `UMBRAL_MIN` 1,1 … `UMBRAL_MAX` 4,0 m/s²; arranca en `UMBRAL` = 1,4. Solo cuentan picos positivos. `umbral` (lectura) da el valor vigente; `ultimaDesviacion` es `|filtrada|` para la gráfica; `detectar = false` solo la actualiza. El último paso arranca en t = 0: con un reloj que empieza en 0, un paso en los primeros 250 ms no cuenta (con `elapsedRealtime` no pasa; las pruebas empiezan en t = 100 000 ms). `StepDetectorTest` (11 casos, en Gradle desde FE-2.3; señales sintéticas a 50 Hz, eje z con gravedad): quieto, temblor de 0,5 m/s² a 8 Hz y ruido de ±0,6 → 0 pasos; caminata senoidal a 2 pasos/s de amplitud 1,8, 3 y 6 m/s² → 20 ± 1 en 10 s; umbral que llega a 4,0 con picos de 20 (recortados a 8) y baja hasta ≥ 1,1 con picos de 1,5; pausa de 250 ms; paso en la primera muestra que cruza; valles que no cuentan; magnitud de los tres ejes; `detectar = false`; `reiniciar()`. Antes se probó con una réplica en Python: ~100 % de pasos en caminata normal, ~85–95 % en caminata muy suave. ⚠ Con pasos reales: a verificar en dispositivo (FE-2.3 C3) |
-| `PdrTracker` | `PdrTracker(context, longitudPasoM: Double = CalibracionPasoRepository(context).longitudPasoM(), cicloDeVida: Lifecycle? = ProcessLifecycleOwner.get().lifecycle)` | Une los sensores de Android con `PdrEngine`. Todo en el **hilo principal** (crearlo ahí: registra un observador en `cicloDeVida`). La longitud de paso (calibrada en 7.3b, o 0,72 m) se lee **una sola vez al crearlo**: recalibrar no cambia un tracker ya vivo. **Segundo plano (FE-2.3):** en `ON_STOP` del proceso quita los sensores aunque el rastreo siga pedido, y en `ON_START` los vuelve a registrar si nadie llamó a `detener()` mientras tanto (regla en `InterruptorSensores`, abajo). `cicloDeVida = null` desactiva ese seguimiento. ⚠ `sensors` depende de `data.repository` (alternativa: que la pantalla inyecte la longitud). |
+| `PdrTracker` | `PdrTracker(context, longitudPasoM: Double = CalibracionPasoRepository(context).longitudPasoM(), cicloDeVida: Lifecycle? = ProcessLifecycleOwner.get().lifecycle)` | Une los sensores de Android con `PdrEngine`. Todo en el **hilo principal** (crearlo ahí: registra un observador en `cicloDeVida`). La longitud de paso (calibrada en 7.3b, o 0,72 m) se lee **una sola vez al crearlo**: recalibrar no cambia un tracker ya vivo. **Segundo plano (FE-2.3):** en `ON_STOP` de `cicloDeVida` quita los sensores aunque el rastreo siga pedido, y en `ON_START` los vuelve a registrar si nadie llamó a `detener()` mientras tanto (regla en `InterruptorSensores`; conexión en `ObservadorPrimerPlano`, abajo). Por defecto `cicloDeVida` es el del **proceso**; desde FE-3.1 una pantalla que crea el tracker en la composición le pasa el de **su entrada de la pila** (`LocalLifecycleOwner.current.lifecycle`, de `androidx.lifecycle.compose`): así lo hace `MapaPublicoScreen` (ADR-FE-22). `cicloDeVida = null` desactiva ese seguimiento. ⚠ `sensors` depende de `data.repository` (alternativa: que la pantalla inyecte la longitud). |
 | `PdrTracker` (control) | `fijarPosicion(lat, lng)` · `fijarRumboManual(grados)` · `reiniciar()` · `iniciar()` · `detener()` · `liberar()` | Orden típico: `fijarPosicion` → `iniciar` → `detener` / `liberar` al salir. `iniciar()` en segundo plano solo pide el rastreo (los sensores llegan al volver). `detener()` quita los sensores y ya no vuelven solos. `liberar()` (hilo principal) además quita el observador del ciclo de vida. |
 | `PdrTracker.estado` | `StateFlow<PdrEstado>` | `lat`, `lng`, `rumboGrados`, `pasos`, `distanciaMetros`, `velocidadMps`, `activo` (= rastreo **pedido**: `iniciar()` sin `detener()`; sigue en `true` en segundo plano aunque los sensores estén quitados), `fuentePasos` (`FuentePasos`: `NINGUNA`, `ACELEROMETRO` y `ACELEROMETRO_SIN_SENSOR` si no hay acelerómetro; `HARDWARE` y `ACELEROMETRO_SIN_PERMISO` ya no se asignan y quedan solo por compatibilidad). ⚠ Se añadió `ACELEROMETRO`: un `when` exhaustivo sobre `FuentePasos` en otros archivos dejaría de compilar. |
 | `PdrTracker.eventos` | `SharedFlow<PdrEvento>` | Avisos de una sola vez, en cada `iniciar()` (no al volver solo del segundo plano): `Brujula(disponible)` y `PasosPorAcelerometro("no_sensor")` (solo si no hay acelerómetro; ya no se emite `permission_denied`). |
 | `InterruptorSensores` | `internal` · `InterruptorSensores(enPrimerPlano = true)` · `iniciar()`, `detener()`, `alPrimerPlano()`, `alSegundoPlano()` → `CambioSensores` (`REGISTRAR`, `QUITAR`, `NINGUNO`) · `pedido`, `enPrimerPlano`, `registrados` | FE-2.3, lógica pura: `registrados = pedido && enPrimerPlano`; cada operación devuelve qué hacer con los sensores. `InterruptorSensoresTest` (6): iniciar/detener, segundo plano quita y primer plano vuelve, `detener()` en segundo plano (o antes) no vuelve a registrar, `iniciar()` en segundo plano espera al primer plano. |
+| `ObservadorPrimerPlano` | `internal` · `ObservadorPrimerPlano(interruptor, aplicar: (CambioSensores, motivo: String) -> Unit) : LifecycleEventObserver` · `MOTIVO_PRIMER_PLANO` (`"primer plano"`), `MOTIVO_SEGUNDO_PLANO` (`"segundo plano"`) | FE-3.1 (`sensors/ObservadorPrimerPlano.kt`; antes era una lambda dentro de `PdrTracker`): `ON_START` → `alPrimerPlano()`, `ON_STOP` → `alSegundoPlano()`, y pasa el cambio (también `NINGUNO`) a `aplicar`. Los motivos son los textos de las líneas `Pdr` que busca la evidencia de FE-2.3 C5 (`sensores quitados (segundo plano)`): con el ciclo de una pantalla, «segundo plano» también significa «tapada por otra pantalla». `ObservadorPrimerPlanoTest` (6, con `LifecycleRegistry.createUnsafe`): pantalla tapada y vuelta, el mapa en la pila sin verse mientras el **proceso** vuelve (no registra; con el ciclo del proceso sí lo haría), pantalla destruida, creado antes de `STARTED`, observar un ciclo ya iniciado sin rastreo pedido y `removeObserver`. |
 | `PdrTracker.onAceleracion` | `((Float) -> Unit)?` | Desviación de la aceleración (m/s²), ~20 Hz, solo para gráficas. |
 
-Receta (Compose):
+Receta (Compose; FE-3.1: con el ciclo de vida de la pantalla, como `MapaPublicoScreen`):
 
 ```kotlin
-val tracker = remember { PdrTracker(ctx) }
+val ciclo = LocalLifecycleOwner.current.lifecycle   // androidx.lifecycle.compose.LocalLifecycleOwner
+val tracker = remember { PdrTracker(ctx, cicloDeVida = ciclo) }
 DisposableEffect(Unit) { onDispose { tracker.liberar() } }
 tracker.fijarPosicion(lat, lng)   // antes de iniciar
 tracker.iniciar()
@@ -754,14 +821,17 @@ Cuidados:
 - `eventos` es un `SharedFlow` sin repetición: si nadie recoge en ese instante, el aviso se pierde
   (`MapaPublicoScreen` lo recoge antes de que el usuario pueda pulsar ▶).
 - `rumboGrados` vale 0 hasta la primera lectura: filtrar por `activo` antes de mostrarlo.
-- **Segundo plano (FE-2.3, ADR-FE-16):** el tracker sigue el ciclo de vida del **proceso** (`ProcessLifecycleOwner`),
-  que entrega `ON_STOP` ~700 ms después de que la última actividad pasa a segundo plano y no lo entrega al rotar. Lo
-  usan los tres: el mapa público (sin código propio: al volver, los sensores vuelven solos y la página sigue igual), la
-  calibración (su pantalla además cancela la medición en `ON_STOP` de la actividad y llama a `detener()`, así que no
-  vuelven) y la recolección (su pantalla pausa la grabación en `ON_STOP`: `detener()`, reloj y capturas parados,
-  progreso guardado; se reanuda a mano). El registro (`AppLog`, tag `Pdr`) deja `sensores registrados (iniciar|primer
-  plano; rotación …, acelerómetro …)` y `sensores quitados (detener|segundo plano)`: sirve de evidencia en C5.
-- **Longitud de paso (7.3b):** `RecoleccionViewModel` y `MapaPublicoScreen` crean `PdrTracker(app)` sin argumentos y recogen la longitud calibrada
+- **Segundo plano (FE-2.3, ADR-FE-16; FE-3.1, ADR-FE-22):** por defecto el tracker sigue el ciclo de vida del
+  **proceso** (`ProcessLifecycleOwner`), que entrega `ON_STOP` ~700 ms después de que la última actividad pasa a segundo
+  plano y no lo entrega al rotar. Lo usan la calibración (su pantalla además cancela la medición en `ON_STOP` de la
+  actividad y llama a `detener()`, así que no vuelven) y la recolección (su pantalla pausa la grabación en `ON_STOP`:
+  `detener()`, reloj y capturas parados, progreso guardado; se reanuda a mano). Desde FE-3.1 el **mapa público** sigue
+  el de **su entrada de la pila** (sin código propio de ciclo de vida: al volver a verse, los sensores vuelven solos y la
+  página sigue igual): `ON_STOP` llega en el acto al pasar a segundo plano o al quedar tapado por otra pantalla, y una
+  entrada que se queda en la pila sin verse no vuelve a registrar aunque el proceso vuelva al primer plano (el hallazgo
+  de FE-2.3, §4.5). El registro (`AppLog`, tag `Pdr`) deja `sensores registrados (iniciar|primer plano; rotación …,
+  acelerómetro …)` y `sensores quitados (detener|segundo plano)`: sirve de evidencia en FE-2.3 C5 y en FE-3.1.
+- **Longitud de paso (7.3b):** `RecoleccionViewModel` crea `PdrTracker(app)` sin argumentos y `MapaPublicoScreen` `PdrTracker(ctx, cicloDeVida = …)` (FE-3.1); los dos recogen la longitud calibrada
   sin cambios (`RecoleccionViewModel` lo crea en su constructor, al abrir la vista 7.4). `distanciaMetros` es `pasos × longitud`, así que el disparador por distancia de 7.4 dispara cada `ceil(metros / longitud)` pasos (lo prueba `DisparadorCapturaTest` con `PdrEngine`).
   La calibración usa **su propio** `PdrTracker` (`CalibracionViewModel`): si otra pantalla dejara uno sin liberar, habría dos escuchando sensores.
 - ⚠ `app.js` repite un umbral fijo de 2,2 (`accelThreshold`) solo para dibujar la línea de la gráfica; el detector ahora usa
@@ -1014,7 +1084,7 @@ pinta sus colores a mano. Un tema propio sería el sitio natural para unificar l
 | `Modifier.tarjeta(radio)` | ídem | `internal` | Fondo `Superficie` + borde de 1 dp `Borde` con esquinas redondeadas (`radio` 20 dp por defecto; `FilaLugar` usa 18 dp). Aplica recorte, fondo y borde, en ese orden. |
 | `CategoriaLugar.icono()` | ídem | `internal` | Ícono de cada categoría (el dominio no conoce Compose). Verificado: es un `when` **exhaustivo, sin `else`**, así que una categoría nueva no compila hasta que se le asigne ícono. Tabla abajo. |
 | `AlertaFormSheet` | `ui/admin/mapa/AlertaFormSheet.kt` (`public`) | `(alerta: Alerta, esNueva: Boolean, error: String?, onCambio: (Alerta) -> Unit, onGuardar, onCancelar, onEliminar)` | Hoja inferior (`ModalBottomSheet`) para crear o editar una alerta (vista 7.9). Detalle abajo. |
-| `MapaPublicoScreen` | `map/MapaPublicoScreen.kt` (`public`) | `MapaPublicoScreen(modifier: Modifier = Modifier)` | Mapa público (`index.html` + `app.js`) en un `WebView` con seguimiento por pasos. Crea su propio `PdrTracker`, registra el puente `AndroidBridge` (`PuentePdr`) y empuja la posición, el rumbo y los avisos a la página (tabla en 2.6). Aplica `systemBarsPadding()` (el mapa no maneja *insets*). Libera sensores y `WebView` al salir. En segundo plano el `PdrTracker` quita los sensores solo y los vuelve a poner al volver (FE-2.3; la pantalla no maneja `ON_STOP`). Ruta `mapa` desde FE-2.3 (5.8): hoy solo se abre con `am start … --es ruta mapa` en el APK de depuración; la entrada desde Inicio es de FE-3.1. ⚠ A verificar en dispositivo (FE-2.3 C3). |
+| `MapaPublicoScreen` | `map/MapaPublicoScreen.kt` (`public`) | `MapaPublicoScreen(modifier: Modifier = Modifier)` | Mapa público (`index.html` + `app.js`) en un `WebView` con seguimiento por pasos. Crea su propio `PdrTracker`, registra el puente `AndroidBridge` (`PuentePdr`) y empuja la posición, el rumbo y los avisos a la página (tabla en 2.6). Aplica `systemBarsPadding()` (el mapa no maneja *insets*). Libera sensores y `WebView` al salir. Desde FE-3.1 crea el tracker con el ciclo de vida de **su entrada de la pila** (`PdrTracker(ctx, cicloDeVida = LocalLifecycleOwner.current.lifecycle)`, ADR-FE-22): en segundo plano o tapado por otra pantalla quita los sensores solo y los vuelve a poner al volver a verse (la pantalla no maneja `ON_STOP`). Ruta `mapa` (5.8): desde FE-3.1 se abre desde Inicio (voz «mapa», acción de TalkBack «Ver mapa»; Atrás vuelve a Inicio) y en el APK de depuración también con `am start … --es ruta mapa`. ⚠ A verificar en dispositivo (FE-2.3 C3 caminando; FE-3.1 C2c). |
 | `CalibracionScreen` / `CalibracionContent` | `ui/admin/calibracion/CalibracionScreen.kt` (`public`) | `CalibracionScreen(onVolver, modifier, vm = viewModel())` · `CalibracionContent(ui, acciones, modifier)` | Vista 7.3b completa (detalle abajo, «CalibracionScreen y CalibracionBridge»). **No navega.** |
 | `UbicacionManualScreen` / `UbicacionManualContent` | `ui/admin/recoleccion/UbicacionManualScreen.kt` (`public`) | `UbicacionManualScreen(onVolver, onConfirmar: (InicioRecoleccion) -> Unit, onAjustes = {}, onCalibrar = {}, onRetomar = {}, viewModel = viewModel(factory = …))` · `UbicacionManualContent(estado, acciones, modifier, longitudCalibradaM: Double? = null, grabacionPendiente: GrabacionPendiente? = null)` | Vista 7.3 completa (detalle abajo, «UbicacionManual»). Sustituye a `MapaPublicoScreen` en la ruta `admin/ubicacion-manual`. `onRetomar` y `grabacionPendiente`: FE-2.3. |
 | `ResumenVideoScreen` / `ResumenVideoContent` | `ui/admin/recoleccion/ResumenVideoScreen.kt` (`public`) | `ResumenVideoScreen(videoId: String?, onIrAlPanel: () -> Unit, modifier = Modifier, vm = viewModel(key = "resumen-<videoId o actual>", factory = ResumenVideoViewModel.Factory(videoId)))` · `ResumenVideoContent(ui: ResumenVideoUiState, acciones: ResumenVideoAcciones, control: RecoleccionMapaControl?, modifier)` | Vista 7.5 completa (FE-2.1; detalle abajo, «`ResumenVideoScreen` y `ResumenVideoViewModel`»). **No navega**: `onIrAlPanel` lo decide la ruta (5.8). `control = null` dibuja un recuadro en lugar del mapa (previews). |
@@ -1041,7 +1111,7 @@ Reparto: `PanelesVoz.kt` (`BarraSuperior`, `EncabezadoPregunta`, `ZonaMicrofono`
 | `ChipCategoria` (privado) | Píldora de al menos 48 dp; activo = fondo `Primario` al 18 % y borde de 2 dp `Acento`, inactivo = borde de 1 dp `Borde`. Semántica `selected`, rol botón. | Opcionalmente lleva flecha (el chip «Más») y descripción propia. |
 | `CampoBusqueda` | `OutlinedTextField` de una línea, al menos 60 dp, placeholder «Buscar un lugar…», lupa y, si hay texto, botón «Borrar búsqueda». La tecla del teclado es Buscar y solo quita el foco: la lista se filtra al escribir. | El valor viene del estado del ViewModel (sin estado local). Cada cambio, incluido borrar, llama `alCambiarBusqueda` y **corta la voz**. ⚠ Sin `label`: comprobar con TalkBack que anuncia el placeholder. |
 | `EncabezadoLista` | Título («Lugares cercanos» si el orden es `CERCANIA`, si no «Lugares»; encabezado para TalkBack) y, a la derecha, un botón de al menos 48 dp con `orden.etiqueta` e ícono de intercambio; descripción «{etiqueta}. Toca para cambiar el orden.». | ⚠ Dice «Lugares cercanos» aunque ninguna `distanciaMetros` tenga valor (sin ubicación). |
-| `FilaLugar` | Tarjeta (radio 18 dp) clicable: miniatura de 64 dp (`AsyncImage` de Coil con recorte, o el ícono de la categoría si `imagenUrl` es `null`), nombre (18 sp), categoría (`etiqueta` + ícono), distancia («N m», solo si no es `null`) y flecha. Descripción: «{nombre}, {categoría}, a {N} metros. Toca para elegir este destino.». | Coil sin `placeholder` ni `error`: si la URL falla, se ve el cuadro vacío en vez del ícono. La distancia es siempre en metros («1200 m»), sin pasar a km. El nombre no tiene `maxLines`. |
+| `FilaLugar` | Tarjeta (radio 18 dp) clicable: miniatura de 64 dp (`AsyncImage` de Coil 2, `coil.compose`, con recorte; el ícono de la categoría si `imagenUrl` es `null` **o si la foto no carga**: `onError` pone `fotoFallo`, recordado por `imagenUrl`; FE-3.1), nombre (18 sp), categoría (`etiqueta` + ícono), distancia («N m», solo si no es `null`) y flecha. Descripción (`contentDescription` de la fila): «{nombre}, {categoría}[, a {N} metros]. Toca para elegir este destino.» (sin distancia no lleva «, a N metros»). | Mientras la foto carga se ve el fondo `SuperficieAlta` (sin `placeholder`). La distancia es siempre en metros («1200 m»), sin pasar a km. El nombre no tiene `maxLines`. `validate31.py` lee los nombres de esta descripción (§5.11): cambiar su forma exige cambiar `nombre_de_fila`. |
 | `EstadoVacio` | Mensaje opcional centrado (18 sp) y una acción de texto debajo (al menos 48 dp): «Limpiar filtros», «Reintentar». | Genérico. Firma invertida respecto a `MensajeVacio` (aquí `mensaje` es opcional y `accion` obligatoria; allí al revés): decidir al unificar. |
 | `BotonVolver` | `OutlinedButton` de ancho completo, al menos 64 dp, forma de 18 dp, borde de 2 dp, flecha + «Volver» (20 sp). | Incluye su propio padding (20 dp horizontal, 12 dp vertical). |
 
@@ -1429,22 +1499,22 @@ Cuidados de estos componentes:
 | Pieza | Detalle |
 |---|---|
 | `InicioViewModel(app: Application)` | `AndroidViewModel`, sin `Factory`. Crea su propio `VoiceController` y lo libera en `onCleared`. Expone `estado: StateFlow<InicioUiState>` y `eventos: SharedFlow<InicioEvento>` (`extraBufferCapacity = 1`, `tryEmit`, sin `replay`). |
-| `InicioUiState` / `InicioEvento` | `InicioUiState(escuchando = false, backendEnLinea = false)`. `InicioEvento`: `Ubicarme` e `IrALugar` (sin datos). |
-| Acciones | `alAbrir()` · `alPresionarOrbe()` · `ubicarme()` · `irALugar()` · `alPausar()` · `explicarPermisos(alTerminar: () -> Unit)`. `BIENVENIDA` es una constante **pública** (`InicioViewModel.BIENVENIDA`). |
+| `InicioUiState` / `InicioEvento` | `InicioUiState(escuchando = false, backendEnLinea = false)`. `InicioEvento`: `Ubicarme`, `IrALugar` y, desde FE-3.1, `VerMapa` (sin datos). Añadir un evento obliga a ampliar el `when` de `InicioScreen`. |
+| Acciones | `alAbrir()` · `alPresionarOrbe()` · `ubicarme()` · `irALugar()` · `verMapa()` (FE-3.1) · `alPausar()` · `explicarPermisos(alTerminar: () -> Unit)`. `BIENVENIDA` es una constante **pública** (`InicioViewModel.BIENVENIDA`); desde FE-3.1 dice «Di uno para saber dónde estás, dos para ir a un lugar, o mapa para ver el mapa.» (y «No te entendí. » + lo mismo tras un fallo). |
 | `BackendHealth` | Desde FE-1.1: `interface` en `data/repository/BackendHealth.kt` (`suspend estaEnLinea(): Boolean`, no lanza) e implementación real `RemoteBackendHealth(ClienteApi.api)` (`data/remote/`, §5.10), fijada en `private val backend`. `BackendHealthStub` ya no existe. |
-| `InicioScreen` | `(onUbicarme, onIrALugar, onAccesoAdministrador, viewModel = viewModel())`. Recoge `estado` con `collectAsStateWithLifecycle()`. |
-| `InicioContent` | `(escuchando, backendEnLinea, permisosFaltantes: List<String>, onOrbe, onUbicarme, onIrALugar, onAccesoAdministrador, onReintentarPermisos, onIrAAjustes)`. Público, **sin `@Preview` ni `modifier`**. |
+| `InicioScreen` | `(onUbicarme, onIrALugar, onAccesoAdministrador, onVerMapa: () -> Unit = {}, viewModel = viewModel())` (`onVerMapa` desde FE-3.1). Recoge `estado` con `collectAsStateWithLifecycle()`. |
+| `InicioContent` | `(escuchando, backendEnLinea, permisosFaltantes: List<String>, onOrbe, onUbicarme, onIrALugar, onAccesoAdministrador, onReintentarPermisos, onIrAAjustes, onVerMapa: () -> Unit = {})`. Público, **sin `@Preview` ni `modifier`**. |
 
 Flujo:
 - Al entrar en composición: con los tres permisos concedidos llama a `alAbrir()` (dice `BIENVENIDA` y al terminar escucha). Si falta alguno llama a `explicarPermisos` (dice para qué se pide cada cosa) y al terminar lanza el diálogo del sistema; el resultado, **sea cual sea**, vuelve a llamar a `alAbrir()`.
-- `escuchar()` → `ComandoParser.parse`: `UBICARME` / `IR_A_LUGAR` navegan; `NINGUNO` o fallo → `repetirOpciones()`: dice «No te entendí. …» y vuelve a escuchar. Al **3.er** fallo (`MAX_INTENTOS = 3`) dice «Presiona el botón central cuando quieras hablar.» y deja de escuchar. `intentos` solo vuelve a 0 en `alAbrir` y en `alPresionarOrbe`.
+- `escuchar()` → `ComandoParser.parse`: `UBICARME` / `IR_A_LUGAR` / `VER_MAPA` (FE-3.1, evento `VerMapa`) navegan; `NINGUNO` o fallo → `repetirOpciones()`: dice «No te entendí. …» y vuelve a escuchar. Al **3.er** fallo (`MAX_INTENTOS = 3`) dice «Presiona el botón central cuando quieras hablar.» y deja de escuchar. `intentos` solo vuelve a 0 en `alAbrir` y en `alPresionarOrbe`.
 - `navegar()` (salida común): `voz.stopAll()`, `escuchando = false` y emite el evento.
 - ON_STOP → `alPausar()` (`stopAll` + `escuchando = false`); ON_RESUME solo refresca la lista de permisos y **no** reanuda la escucha.
 - Sondeo de conexión: en el `init`, bucle infinito con `runCatching { estaEnLinea() }` (una excepción cuenta como «sin conexión») y `delay(15_000)` entre intentos. Corre mientras el ViewModel viva, también con la pantalla en segundo plano (una petición cada ~15 s, cada una con su línea `Api` en `AppLog`). Cada intento dura como mucho 5 s (`RemoteBackendHealth.LIMITE_MS`), así que el periodo real es de 15 a 20 s; en modo avión falla al instante (sin DNS). `backendEnLinea` arranca en `false`: hay un instante de «Sin conexión» antes del primer resultado. Textos de la barra: «Conectado» / «Sin conexión» (TalkBack: «Conectado. Backend en línea.» / «Sin conexión. Backend no disponible.»).
 
 Pantalla:
 - Orbe de 252 dp (rol botón) con pulso mientras `escuchando`; título de 28 sp que pasa a «Te escucho…»; indicador de señal decorativo; texto fijo «Activa el lector de pantalla»; barra inferior con el punto verde/rojo del backend y «Acceso administrador» (alto ≈ 48 dp).
-- Accesibilidad del orbe: «Botón principal. Toca dos veces para iniciar el escaneo de 360 grados y saber dónde estás.» y una acción personalizada de TalkBack «Ir a un lugar». La descripción **no cambia** al escuchar y «Te escucho…» no es *live region*.
+- Accesibilidad del orbe: «Botón principal. Toca dos veces para iniciar el escaneo de 360 grados y saber dónde estás.» y dos acciones personalizadas de TalkBack, «Ir a un lugar» y, desde FE-3.1, «Ver mapa» (`onVerMapa` → `InicioViewModel.verMapa()` → evento `VerMapa` → la ruta navega a `mapa`). La descripción **no cambia** al escuchar y «Te escucho…» no es *live region*. El texto en pantalla («Presiona para ubicarte o para llegar a un lugar.») no menciona el mapa (la interacción de Inicio la decide FE-3.5).
 - `BannerPermisos` lista los faltantes con nombre legible («Cámara», «Micrófono», «Sensores de actividad») y dos acciones: «Permitir» (relanza el diálogo) y «Ajustes» (`ACTION_APPLICATION_DETAILS_SETTINGS`). La lista se refresca tras cada solicitud y al volver de Ajustes.
 
 Cuidados:
@@ -1460,7 +1530,7 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| Construcción | `SeleccionDestinoViewModel(app: Application)`, sin `Factory`. Crea directamente `LugaresRepositoryStub()` y su propio `VoiceController(app)` (se libera en `onCleared`). |
+| Construcción | `SeleccionDestinoViewModel(app: Application)`, sin `Factory`. Crea directamente su repositorio (desde FE-3.1 `RemoteLugaresRepository()`, §5.10: `GET /v1/places` sin posición; antes `LugaresRepositoryStub()`) y su propio `VoiceController(app)` (se libera en `onCleared`). |
 | Salidas | `estado: StateFlow<DestinoUiState>` y `eventos: SharedFlow<DestinoEvento>` (`extraBufferCapacity = 1`, `tryEmit`: sin colector en ese instante el evento se pierde). Único evento: `DestinoEvento.Confirmado(lugar: LugarDestino)`. **No navega.** |
 | `DestinoUiState` (`SeleccionDestinoState.kt`) | `cargando`, `error: ErrorDestino?` (`SIN_CONEXION`, `DESCONOCIDO`), `sinMicrofono`, `escuchando`, `textoReconocido: String?`, `candidato: LugarDestino?`, `opciones: List<LugarDestino>`, `busqueda`, `categoria: CategoriaLugar?`, `orden: OrdenLugares` (`CERCANIA`, `NOMBRE`) y `lugares` (ya filtrada y ordenada). Valores por defecto (verificado): `cargando = true`, `error = null`, `sinMicrofono = false`, `escuchando = false`, `textoReconocido = null`, `candidato = null`, `opciones = emptyList()`, `busqueda = ""`, `categoria = null`, `orden = CERCANIA`, `lugares = emptyList()`. **Archivo completo verificado (bache 1):** `ErrorDestino`, `OrdenLugares` y `DestinoEvento` van en el mismo archivo. `OrdenLugares(etiqueta)` lleva el texto de cada orden: `CERCANIA` = «Ordenado por cercanía» y `NOMBRE` = «Ordenado por nombre». `DestinoEvento` es una `sealed interface` con **un solo caso**, `Confirmado(lugar: LugarDestino)`: añadir otro evento obliga a ampliar el `when` de la pantalla. Convención del archivo: la UI solo **lee** `DestinoUiState` y el ViewModel es el único que lo escribe. `DestinoUiState` es una `data class` simple, sin `Parcelable` ni guardado propio. |
 | Acciones | `alAbrir(microfonoDisponible)` · `reintentarCarga()` · `alPresionarMicrofono()` · `alElegirLugar(lugar)` · `alResponderSi()` · `alResponderNo()` · `descartarTexto()` · `alCambiarBusqueda(texto)` · `alElegirCategoria(categoria?)` · `alCambiarOrden()` · `limpiarFiltros()` · `alPausar()` · `alSalir()`. |
@@ -1472,7 +1542,7 @@ Flujo:
 - `proponer(lugar)` muestra la tarjeta (`candidato`), pregunta «¿Quieres ir a X? Di sí o no.» y, si hay voz, escucha: `SI` → `confirmar`; `NO` → `rechazar`; `NINGUNA` → repite (a los 3 fallos: «Usa los botones Sí o No cuando quieras.» y deja de escuchar).
 - `rechazar` limpia texto, candidato y opciones, y pregunta «De acuerdo. ¿A qué lugar quieres ir?». `confirmar` hace `detenerVoz()`, registra y emite `Confirmado`.
 - Sin micrófono (`conVoz = false`): no pregunta ni escucha, pero sí habla las confirmaciones al tocar un lugar; el micrófono de la pantalla solo dice «El micrófono no está disponible. Elige un lugar de la lista.»
-- Lista: `refiltrar()` = `BuscarLugares.filtrar` + categoría + orden. `CERCANIA` ordena por `distanciaMetros` con los `null` al final (con el stub todos son `null`: queda el orden original). `NOMBRE` usa el orden normal de `String`, que distingue mayúsculas y tildes («Árbol» quedaría después de «Zeta»).
+- Lista: `refiltrar()` = `BuscarLugares.filtrar` + categoría + orden. `CERCANIA` ordena por `distanciaMetros` con los `null` al final (orden estable: desde FE-3.1, sin posición, todos son `null` y queda el orden del backend, por nombre normalizado; el stub sí traía distancias). `NOMBRE` usa el orden normal de `String`, que distingue mayúsculas y tildes («Árbol» quedaría después de «Zeta»).
 
 Cuidados:
 - `intentosDestino` solo vuelve a 0 en `alPresionarMicrofono` (al empezar a escuchar) y en `rechazar`; **no** tras un reconocimiento correcto ni al elegir de la lista. `intentosConfirmacion` solo se reinicia en `proponer`: tras 3 fallos, un toque en el micrófono escucha **una sola vez** y, si falla, repite «Usa los botones…».
@@ -1565,7 +1635,7 @@ Cuidados:
 ### 5.6 Datos: repositorios y modelos
 
 Convención: `interface XRepository` + `XRepositoryStub` (o `AssetsX` si lee de `assets/`) + TODO `RemoteX`
-en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean el stub directamente (verificado: `SeleccionDestinoViewModel` con `LugaresRepositoryStub()` y, desde FE-2.1, las `Factory` de Galería, Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp(appContext)`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1) y la `Factory` de Login, `RemoteAuthRepository` (FE-1.2).
+en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean su repositorio directamente (verificado: desde FE-2.1, las `Factory` de Galería, Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp(appContext)`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1), la `Factory` de Login, `RemoteAuthRepository` (FE-1.2), y `SeleccionDestinoViewModel`, `RemoteLugaresRepository` (FE-3.1).
 
 | Repositorio | Métodos | Implementación actual | Usado por |
 |---|---|---|---|
@@ -1574,7 +1644,7 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 | `VideoRepository` | `suspend obtenerVideos(): List<Video>` (cada `Video` ya trae sus `fotos`) · `suspend renombrarVideo(videoId, nombre)` · `suspend eliminarVideo(videoId)` · `suspend eliminarFoto(videoId, fotoId)` · `cambios(): Flow<Int>` | Local: desde FE-2.1 `VideoRepositoryCompuesto.deLaApp(appContext)` = `AssetsVideoRepository` (`assets/videos/`) + `FuenteRecorridos` (`files/recoleccion/`, solo `finalizado`) | Galería, Lista, Detalle de video y (FE-2.1) 7.3. Detalle abajo |
 | `RecoleccionRepository` | `crearVideo(inicio): String` · `carpetaFotos(videoId): File` · `registrarFoto(videoId, archivo, DatosFoto): FotoRecolectada` · `desplazarFotos(videoId, desdeIndice, dLat, dLng)` · `fotos(videoId)` · `finalizar(videoId, duracionS, distanciaM, pasos): ResumenRecoleccion` · `descartar(videoId)` · `buscarEnCurso(): String?` · `leerEnCurso(videoId): VideoEnCurso` (FE-2.3) · `guardarProgreso(videoId, ProgresoRecoleccion)` (FE-2.3) · `contarPendientes(): Int` · `marcarSubida(videoId, fotoIds)` · `espacioLibreBytes(): Long` | Local (`RecoleccionRepositoryLocal(context)`, `data/repository/RecoleccionRepository.kt`) | `RecoleccionViewModel` (lo crea directamente) y, desde FE-2.3, `UbicacionManualScreen` (solo `buscarEnCurso` y `leerEnCurso`, para «Retomar …»). La subida (FE-2.1) no pasa por aquí: usa `AlmacenRecorridos` (§5.10). Detalle abajo |
 | `CalibracionPasoRepository` | `guardada(): Double?` · `longitudPasoM(): Double` (la calibrada, o `PdrEngine.LONGITUD_PASO_DEFECTO_M`) · `guardar(Valido, ahoraMs = ahora)` · `restablecer()` (borra todo el archivo) | Local (`CalibracionPasoRepository(context)`, `data/repository/CalibracionPasoRepository.kt`; **sin interfaz**) | `PdrTracker` (valor por defecto del parámetro), `CalibracionViewModel` y `UbicacionManualScreen`. Detalle abajo |
-| `LugaresRepository` | `suspend obtenerLugares(): List<LugarDestino>` (lanza `IOException`, solo documentado en el KDoc) | Stub (`LugaresRepositoryStub`, 300 ms; devuelve `LUGARES_DE_PRUEBA`, 6 lugares) | `SeleccionDestinoViewModel` (lo crea directamente); futuras 6.3 y 7.6/7.7 |
+| `LugaresRepository` | `suspend obtenerLugares(): List<LugarDestino>` (lanza `IOException`; con el backend real `SinConexionException`, `ApiException` o `RespuestaInesperadaException`) | **Real** desde FE-3.1 (`RemoteLugaresRepository`, `GET /v1/places`, §5.10); queda `LugaresRepositoryStub` (300 ms, `LUGARES_DE_PRUEBA`, 6 lugares) para vistas previas y pruebas | `SeleccionDestinoViewModel` (lo crea directamente); futuras 6.3 y 7.6/7.7 |
 | `EscaneoBackend` | `suspend analizar(fotos: List<File>)` → `Unit` (lanza `IOException`). Vive en `ui/ubicacion/EscaneoBackend.kt`, **no** en `data/repository/` | Stub (`EscaneoBackendStub`, 2,5 s) | `EscaneoViewModel` (lo instancia directamente). Detalle en 5.2 |
 | `BackendHealth` | `suspend estaEnLinea(): Boolean` (no lanza). `data/repository/BackendHealth.kt` | **Real** (`RemoteBackendHealth`, `GET /v1/health`, §5.10) | `InicioViewModel` (lo fija en una propiedad). Detalle en 5.5 |
 
@@ -1713,7 +1783,8 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 - `LugarDestino` es una `data class` inmutable (para cambiar algo, `copy(...)`). Obligatorios: `id: String`, `nombre: String`, `categoria: CategoriaLugar`, `lat: Double` y `lng: Double`. Con valor por defecto: `alias: List<String> = emptyList()`, `distanciaMetros: Int? = null` e `imagenUrl: String? = null`.
 - `alias` son otros nombres que la persona puede decir (p. ej. «biblioteca», «los trillizos») y alimentan `BuscarLugares` (5.7): cuantos más alias cubran cómo habla la gente, mejor acierta la voz.
 - `distanciaMetros` son **metros enteros desde la posición actual**; `null` si aún no hay ubicación. Depende de la posición, no del lugar. Al ser `data class`, dos copias del mismo lugar con distinta distancia **no son iguales** (`equals`): comparar lugares por `id`.
-- `imagenUrl` es una URL o `file:///android_asset/...`; si es `null`, la lista muestra el ícono de la categoría.
+- `imagenUrl` es una URL o `file:///android_asset/...`; si es `null` o no carga (FE-3.1), la lista muestra el ícono de la categoría. Con el backend es `imagen_url`: una URL prefirmada de 1 h o `null` (hoy siempre `null`, backend §5.3).
+- Con el backend (FE-3.1): `id` es el UUID del lugar, `nombre` el guardado (recortado; único sin distinguir mayúsculas ni tildes), y `descripcion` y `referencias` de `LugarPublico` **no** pasan al modelo (no hay campos; FE-3.4 decide, abajo).
 - `CategoriaLugar` tiene 8 valores. `etiqueta` va en singular (filas de la lista y filtro de texto de `BuscarLugares.filtrar`) y `etiquetaPlural`, en los chips de filtro:
 
 | Valor | `etiqueta` | `etiquetaPlural` | Grupo |
@@ -1757,7 +1828,7 @@ unificarlos en un solo modelo. Comparación (código y secciones 7.6 y 7.7):
 `Usuario.kt`: `enum class Rol { USER, ADMIN }`, `Usuario(id: String, nombre: String, correo: String, rol: Rol)` y `Sesion(token: String, usuario: Usuario, expiraEnMs: Long)` (FE-1.2: `expiraEnMs` = `expira_en` del login en milisegundos Unix; `fun vencida(ahoraMs: Long) = ahoraMs >= expiraEnMs`). Las tres son sin valores por defecto, y las dos últimas son `data class`. El KDoc de `Sesion` dice que el token nunca se registra en logs. Coincide con 5.3: `SessionManager.obtener()` devuelve `""` si faltan id, nombre o correo.
 - ⚠ **El `toString()` autogenerado de `Sesion` incluye el token y el de `Usuario`, el correo.** Interpolar una `Sesion` o un `Usuario` en un `AppLog` los escribiría en Logcat y en el archivo de logs, contra lo que dice el KDoc. Solución simple: sobrescribir `toString()` en ambas. No se buscó si algún código lo hace hoy.
 
-`LugaresRepository`: `suspend fun obtenerLugares(): List<LugarDestino>`, «con su distancia a la posición actual» (`GET /v1/places`); la `IOException` solo está en el KDoc. `LugaresRepositoryStub` espera 300 ms y devuelve `LUGARES_DE_PRUEBA`, un `val` público del mismo archivo (coordenadas aproximadas, solo mientras no exista backend). Los 6 lugares (ids únicos, apto para `key = { it.id }`):
+`LugaresRepository`: `suspend fun obtenerLugares(): List<LugarDestino>`, «con su distancia a la posición actual si se conoce» (`GET /v1/places`); las excepciones solo están en el KDoc. La implementación real es `RemoteLugaresRepository` (FE-3.1; firma, posición y errores en §5.10, «Lugares»). `LugaresRepositoryStub` (sin uso en la app desde FE-3.1) espera 300 ms y devuelve `LUGARES_DE_PRUEBA`, un `val` público del mismo archivo (coordenadas aproximadas), que usa la vista previa de Destino. Los 6 lugares (ids únicos, apto para `key = { it.id }`):
 
 | `id` | Nombre | Categoría | Alias | `distanciaMetros` |
 |---|---|---|---|---|
@@ -1768,7 +1839,7 @@ unificarlos en un solo modelo. Comparación (código y secciones 7.6 y 7.7):
 | `auditorio-principal` | Auditorio Principal | `AUDITORIO` | auditorio | 260 |
 | `entrada-principal` | Entrada Principal | `ENTRADA` | entrada, porteria | 310 |
 
-Qué casos **no** ejercitan estos datos de prueba:
+Qué casos **no** ejercitan estos datos de prueba (con el backend real, desde FE-3.1, sí se ven el caso sin ubicación y el ⚠ de «Lugares cercanos» sin distancias):
 - Ningún lugar tiene `imagenUrl`: siempre se ve el ícono de la categoría.
 - Todos tienen distancia (fija, creciente y en el mismo orden de la lista): no se ve el caso sin ubicación ni el ⚠ de «Lugares cercanos» sin distancias (5.5).
 - No hay lugares de `DEPORTES` ni de `ADMINISTRACION`: esos filtros dan «No hay lugares con estos filtros».
@@ -1806,7 +1877,7 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 
 | Ruta | Pantalla | Recibe | Entrega (callbacks) |
 |---|---|---|---|
-| `inicio` | `InicioScreen` | — | `onUbicarme` → `ubicarme`, `onIrALugar` → `destino`, `onAccesoAdministrador` → `login` |
+| `inicio` | `InicioScreen` | — | `onUbicarme` → `ubicarme`, `onIrALugar` → `destino`, `onAccesoAdministrador` → `login`, `onVerMapa` (FE-3.1: voz «mapa» o acción de TalkBack «Ver mapa») → `navigate("mapa") { launchSingleTop = true }` |
 | `ubicarme` | `EscaneoScreen` | — | `onCompletado` (**sin datos**; hoy hace `popBackStack()`, TODO resultado 6.3), `onCancelar` → `popBackStack()`. `onAjustes` **no está conectado** (valor por defecto `{}`) |
 | `destino` | `SeleccionDestinoScreen` | — | `onDestinoConfirmado(LugarDestino)` (hoy **descarta** el destino y abre `ubicarme`), `onAjustes` → `ajustes`, `onVolver` |
 | `login` | `LoginScreen` | — | `onLoginExitoso` → `admin/panel` (quita `login` de la pila), `onVolver` |
@@ -1819,7 +1890,7 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 | `admin/imagenes` | `GaleriaScreen` | — | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
 | `admin/videos` | `VideosScreen` | — | `onVolver`, `onAbrirVideo(id)` → `admin/videos/<id>` |
 | `admin/videos/{videoId}` | `VideoDetalleScreen` | `videoId` (argumento de ruta, texto) | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
-| `mapa` | `MapaPublicoScreen` (2.6) | — | Ruta pública registrada en FE-2.3 para las pruebas en dispositivo; ninguna pantalla navega a ella todavía (la entrada desde Inicio, el comando de voz «mapa» y la acción de TalkBack son de FE-3.1). Se abre al arrancar con el extra `ruta` (abajo); Atrás vuelve a `inicio` |
+| `mapa` | `MapaPublicoScreen` (2.6) | — | Ruta pública registrada en FE-2.3. Desde FE-3.1 la abre `inicio` (`onVerMapa`); en el APK de depuración también se abre al arrancar con el extra `ruta` (abajo). Queda encima de `inicio`: Atrás (del sistema; la página no tiene botón Volver) vuelve a Inicio, que repite la bienvenida. No entrega nada |
 
 Rutas con placeholder vacío (pantalla en blanco, no cierran la app): `admin/lugares`, `admin/estadisticas`, `ajustes`
 (desde FE-2.1 `admin/recoleccion/resumen` ya no lo es). Registrar una ruta **dos veces** hace que la última
@@ -1857,7 +1928,8 @@ registrada** cierra la app con un error.
   `LaunchedEffect(nav, rutaInicial) { nav.navigate(rutaInicial) }`, encima de `inicio` (que no se compone, así que no pide
   permisos hasta volver). Comando: `adb shell am force-stop com.example.myapplication` y `adb shell am start -n
   com.example.myapplication/.MainActivity --es ruta mapa` (sin el `force-stop`, una tarea viva solo pasa al frente y el
-  extra no llega).
+  extra no llega). Desde FE-3.1 la entrada normal al mapa es desde Inicio; la ruta de prueba se conserva para
+  `validation-2-3`.
 - **Permisos en la ruta:** `inicio` pide los iniciales y `ubicarme` la cámara antes de mostrar la
   pantalla (ver 5.3). `admin/recoleccion` pide solo la cámara; la ruta de navegación (6.5) deberá hacer lo mismo. `admin/calibracion` pide solo `Permisos.ACTIVIDAD`.
   `admin/ubicacion-manual` ya pide `Permisos.INICIALES` y descarta el resultado (la 7.3 en sí no necesita
@@ -2007,7 +2079,8 @@ Formato de los datos:
 > fija solo **lo que hace la app** con él. Desde FE-1.1 existen el cliente, el mapeo de errores, el mapeo de datos y
 > `RemoteBackendHealth`; desde FE-1.2, el login (`RemoteAuthRepository`) y la sesión de las rutas protegidas
 > (`SesionInterceptor`); desde FE-2.1, la recolección (`/v1/collect/…`) y `GET /v1/admin/videos/{id}` desde la cola de
-> subida (`data/local/`, abajo). Los demás repositorios siguen siendo *stubs* o datos locales (§5.6) hasta su lote.
+> subida (`data/local/`, abajo); desde FE-3.1, los lugares públicos (`GET /v1/places`, `RemoteLugaresRepository`). Los
+> demás repositorios siguen siendo *stubs* o datos locales (§5.6) hasta su lote.
 
 **Configuración y cliente**
 - `ApiConfig.kt` (`object ApiConfig`, paquete raíz): `API_BASE_URL` = output `api_base_url` de Terraform
@@ -2033,13 +2106,14 @@ Formato de los datos:
 
 | Pieza | Archivo | Firma y uso |
 |---|---|---|
-| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
+| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
 | `ClienteApi` | `ClienteApi.kt` (`object`) | `ClienteApi.api: CampusApi` (instancia única, `lazy`, contra `ApiConfig.BASE_URL`, registra con `AppLog.i("Api", …)`; usa el `vigilante` que haya **al crearse**). `ClienteApi.vigilante: VigilanteSesion?` (`@Volatile var`, `null` por defecto; FE-1.2: `MyApp.onCreate` lo asigna antes de que nadie use `api`; sustituye al `proveedorToken` de FE-1.1, que ya no existe). `ClienteApi.crear(urlBase = ApiConfig.BASE_URL, token = { null }, registrar: (String) -> Unit, vigilante: VigilanteSesion? = null): CampusApi` (añade la barra final que exige Retrofit) y `ClienteApi.okHttp(token = { null }, registrar, vigilante = null): OkHttpClient` para pruebas (MockWebServer) o clientes propios. Con `vigilante`, las rutas protegidas pasan por `SesionInterceptor` y `token` no se usa; sin él, por `AutenticacionInterceptor(token)` |
 | `RequestIdInterceptor(registrar)` | `ClienteApi.kt` | Pone `X-Request-Id` y registra **una línea por petición**: `GET /v1/health -> 200 (85 ms) rid=<uuid>` o `GET /v1/health -> falla UnknownHostException (3 ms) rid=<uuid>`. Solo método, ruta sin parámetros, código y duración: nunca encabezados ni cuerpos. `rid` es el de la respuesta si la trae, si no el enviado. `validate11.py` C1a busca esta línea en `files/logs/app.log`: cambiar el formato exige cambiar `PATRON_SALUD` del validador. Una petición que `SesionInterceptor` no deja salir **no** deja línea `Api` (deja la `Sesion` del vigilante) |
 | `AutenticacionInterceptor(token)` | `ClienteApi.kt` | Regex `RUTA_PROTEGIDA` = `.*/v1/(admin\|collect)(/.*)?` sobre la ruta; `/v1/administrar` no la cumple. Solo cuando `ClienteApi` no tiene vigilante |
 | `SesionInterceptor(vigilante: VigilanteSesion)` | `ClienteApi.kt` (FE-1.2) | En las rutas de `RUTA_PROTEGIDA` (las demás pasan sin tocar): 1) `vigilante.sesionParaPeticion("<MÉTODO> <ruta>")`; si da `null` lanza `SinSesionException(ruta)` sin llamar al backend; 2) envía con `Authorization: Bearer <token de esa sesión>`; 3) si la respuesta es `401` y `MapeoErroresApi.codigoError(peekBody(64 KB))` está en `CODIGOS_SESION`, `vigilante.rechazada(codigo, token, …)`. Devuelve la respuesta intacta (`llamar` la convierte en `ApiException(SesionVencida(codigo))`) |
 | `SinSesionException(ruta)` | `ClienteApi.kt` (FE-1.2) | `IOException` (desde un interceptor OkHttp solo admite esas: otra excepción cerraría la app en su hilo). `llamar` la convierte en `ApiException(FalloApi.SesionVencida(MapeoErroresApi.SIN_SESION_LOCAL), http = 401, requestId = null)`, **nunca** en «sin conexión» (el `401` es por equivalencia: no hubo HTTP) |
 | `RemoteAuthRepository(api = ClienteApi.api)` | `RemoteAuthRepository.kt` (FE-1.2) | `AuthRepository` real: `llamar { api.login(LoginPeticionDto(identificador, password)) }` → `MapeoDatosApi.sesion(dto)`. Errores en §5.6 («`AuthRepository` en detalle») |
+| `RemoteLugaresRepository(api = ClienteApi.api, posicion: () -> Pair<Double, Double>? = { null }, registrar = { AppLog.w("Lugares", it) })` | `RemoteLugaresRepository.kt` (FE-3.1) | `LugaresRepository` real (abajo, «Lugares») · `TAG = "Lugares"` |
 | `llamar(peticion): T` | `ErroresApi.kt` (función `suspend` de nivel superior) | `llamar { api.salud() }` devuelve el cuerpo de un 2xx o lanza: `SinConexionException` (red, *timeout*, 5xx de API Gateway), `CredencialesInvalidasException` (la de `data/repository/AuthRepository.kt`), `ApiException` (el resto, también la sesión perdida de `SesionInterceptor`) o `RespuestaInesperadaException` (2xx sin cuerpo o JSON roto). La cancelación de la corrutina se propaga |
 | `llamarSinCuerpo(peticion)` | `ErroresApi.kt` | Igual, para rutas `204` declaradas `Response<Unit>` (en un 204 Retrofit da `body() == null` y `llamar` lo trataría como respuesta inesperada) |
 | `FalloApi` | `ErroresApi.kt` (`sealed interface`) | `SinConexion`, `CredencialesInvalidas`, `SesionVencida(codigo)`, `SinPermisos`, `DemasiadosIntentos`, `EmbeddingNoDisponible`, `Validacion(http, codigo, mensaje, campos: List<CampoInvalido(campo, motivo)>)`, `Desconocido(http: Int?, codigo: String?)`. Una fila por fila de la tabla de abajo |
@@ -2047,7 +2121,7 @@ Formato de los datos:
 | `SinConexionException(requestId = null, causa = null)` | `ErroresApi.kt` | **Es una `IOException`**: `LoginViewModel` y los demás que ya atrapan `IOException` la tratan como «sin conexión» sin cambios |
 | `RespuestaInesperadaException(mensaje, causa)` | `ErroresApi.kt` | 2xx que no cumple el contrato (falta un campo obligatorio, rol desconocido, JSON roto). Para la UI es «Algo salió mal» |
 | `MapeoErroresApi` | `ErroresApi.kt` (`object`) | `clasificar(http: Int, cuerpo: String?): FalloApi` (lógica pura) · `excepcion(fallo, http, requestId): Exception` · `deExcepcion(t: Throwable): FalloApi` (para un `catch` genérico en un ViewModel; desde FE-1.2 reconoce `SinSesionException` como `SesionVencida(SIN_SESION_LOCAL)`) · `CODIGOS_SESION` (`TOKEN_EXPIRADO`, `TOKEN_INVALIDO`, `NO_AUTENTICADO`) · FE-1.2: `codigoError(cuerpo: String?): String?` (`error.codigo` de un cuerpo de §5.1, o `null`) y `SIN_SESION_LOCAL = "SIN_SESION_LOCAL"` (código de `SesionVencida` cuando la petición no salió del teléfono; el backend nunca lo envía) |
-| DTOs | `DtosApi.kt` | `SaludDto`, `LoginPeticionDto` (FE-1.2, el único que envía la app), `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto`, `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional y, desde FE-2.1, `conteo`) y, desde FE-2.1, los de la recolección (abajo). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos de respuesta anulables y con valor por defecto** (trampa abajo) |
+| DTOs | `DtosApi.kt` | `SaludDto`, `LoginPeticionDto` (FE-1.2, el único que envía la app), `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto` (y, desde FE-3.1, `ListaLugaresDto`), `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional y, desde FE-2.1, `conteo`) y, desde FE-2.1, los de la recolección (abajo). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos de respuesta anulables y con valor por defecto** (trampa abajo) |
 | `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `sesion(LoginRespuestaDto): Sesion` (FE-1.2: `token` no vacío + `usuario` + `expiraEnMs`; si falta algo, `RespuestaInesperadaException`) · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` |
 | `RemoteBackendHealth(api, limiteMs = 5_000)` | `RemoteBackendHealth.kt` | `BackendHealth` real: `true` solo con `200` y `"estado": "ok"`; cualquier otra cosa (sin red, *timeout*, 5xx, otro `estado`) es `false`; nunca lanza salvo cancelación. `LIMITE_MS = 5_000` |
 
@@ -2064,13 +2138,34 @@ Login (FE-1.2, hecho): `POST /v1/auth/login` con cuerpo `LoginPeticionDto` → `
 (backend §5.3) → `LoginRespuestaDto` → `MapeoDatosApi.sesion(dto)`. `503 SERVICIO_OCUPADO` sigue en `Desconocido`
 (decisión en §5.5, «Login»).
 
+**Lugares (FE-3.1, hecho): `RemoteLugaresRepository.obtenerLugares()`** (contrato: backend §5.3, `GET /v1/places`).
+1. `posicion()`: con `(lat, lng)` pide `GET /v1/places?lat=<lat>&lng=<lng>` (el backend da `distancia_m` y ordena por
+   ella); con `null` (hoy siempre: la ubicación pública es de FE-3.2, ADR-FE-23) pide `GET /v1/places` sin parámetros
+   (`distancia_m = null`, orden por nombre normalizado del backend). Nunca envía `categoria` (el filtro de 6.4 es local).
+2. `llamar { api.lugares(lat, lng) }`. Ruta pública: no pasa por `SesionInterceptor` ni lleva `Authorization`
+   (comprobado en `RemoteLugaresRepositoryTest` con un proveedor de token). Deja la línea `Api` de siempre
+   (`GET /v1/places -> 200 (… ms) rid=…`, sin parámetros).
+3. Sin `items` → `RespuestaInesperadaException`; cada `LugarPublico` con `MapeoDatosApi.lugarDestino` (falta `id`,
+   `nombre`, `lat` o `lng` → `RespuestaInesperadaException`; categoría desconocida → se descarta); después
+   `distinctBy { id }`. Si descarta algo, una línea `AppLog.w("Lugares", …)` con cuántos y qué categorías (sin nombres
+   de lugares). Devuelve la lista en el orden del backend.
+4. Errores: sin red, *timeout* o `5xx` de API Gateway → `SinConexionException` (Destino: «Sin conexión»); `422`,
+   `503 BASE_NO_DISPONIBLE` u otro → `ApiException` (Destino: `DESCONOCIDO`, que la pantalla muestra igual que «Sin
+   conexión», §5.5).
+Lo cubre `RemoteLugaresRepositoryTest` (9): sin posición (ruta, sin `Authorization`, mapeo, orden, `imagen_url`), con
+posición (`lat`/`lng` en la URL y distancias redondeadas: 85,4 → 85, 120,5 → 121), categoría desconocida, `id` repetido,
+lista vacía, sin `items`, lugar sin nombre, `503 BASE_NO_DISPONIBLE` y sin red. Para dar posición (FE-3.2):
+`RemoteLugaresRepository(posicion = { holder.posicion?.let { it.lat to it.lng } })` o similar; el ViewModel de Destino
+crea hoy el repositorio sin argumentos.
+
 **Detalles internos del cliente (para no abrir `data/remote/`)**
 - Campos de los DTOs (propiedad Kotlin ← clave JSON; todos `T? = null` salvo el de la petición):
   `LoginPeticionDto(identificador: String, password: String)` (FE-1.2; su `toString()` no muestra los valores) ·
   `SaludDto(estado, version, commit)` ·
   `UsuarioDto(id, nombre, correo, rol)` · `LoginRespuestaDto(token, expiraEn ← expira_en, usuario: UsuarioDto?)` ·
   `LugarPublicoDto(id, nombre, categoria, lat, lng, alias: List<String>?, descripcion, referencias, imagenUrl ←
-  imagen_url, distanciaM ← distancia_m)` · `AlertaDto(id, lat, lng, mensaje, tipo, prioridad, radioM ← radio_m:
+  imagen_url, distanciaM ← distancia_m)` · `ListaLugaresDto(items: List<LugarPublicoDto>?, total: Int?)` (FE-3.1) ·
+  `AlertaDto(id, lat, lng, mensaje, tipo, prioridad, radioM ← radio_m:
   Int?, activa, vigenciaDesde, vigenciaHasta, actualizadoEn, version: Int?)` · `EstadisticasAdminDto(totalFotos,
   totalLugares, alertasActivas, ultimoVideo: UltimoVideoDto(numero, creadoEn)?)` · `ReferenciaDto(id, nombre)` ·
   `ImagenAdminDto(id, videoId, orden, lat, lng, rumbo: Double?, capturadaEn, estado, error, calidad, lugar:
@@ -2171,7 +2266,7 @@ fila.
 | Backend (JSON) | App (Kotlin) |
 |---|---|
 | Enumerados en minúsculas (`"biblioteca"`, `"admin"`, `"alta"`) | `enum.valueOf(valor.uppercase())` (`CategoriaLugar`, `Rol`); `tipo` y `prioridad` de alertas se quedan como texto en `Alerta` |
-| `LugarPublico` | `LugarDestino` (`distancia_m` → `distanciaMetros: Int?` redondeado; `imagen_url` → `imagenUrl`) |
+| `LugarPublico` | `LugarDestino` (`distancia_m` → `distanciaMetros: Int?` redondeado; `imagen_url` → `imagenUrl`; `descripcion` y `referencias` no se usan). Lista de `GET /v1/places` (`{items, total}`) → `ListaLugaresDto` (FE-3.1; `total` no se usa) |
 | `Alerta.radio_m` | `Alerta.radio` |
 | `GET /v1/admin/stats` | `ResumenAdmin`: `ultimo_video.numero` → `ultimoVideoNumero`; `ultimo_video.creado_en` (ISO-8601) → `ultimoVideoFecha` en milisegundos; `fotosPendientes` sale de la cola local de subida, no del backend |
 | `usuario` del login | `Usuario`; `expira_en` → `Sesion.expiraEnMs` (milisegundos) y se guarda con la sesión (`expira_en_ms`, §5.3) |
@@ -2468,13 +2563,22 @@ dataset; FE-2.2, FE-3.2 y FE-4.1 las reutilizan):
 | `dimensiones_jpeg(datos: bytes)` → `(ancho, alto) \| None` | Lee el marcador SOF (`C0`–`CF` salvo `C4`, `C8`, `CC`) de los primeros bytes de un JPEG, saltando APPn (también un EXIF de 64 KB); no es JPEG, cortado o `SOS` antes del SOF → `None`. Sin Pillow |
 | `leer_objeto_s3(bucket, clave, *, primeros=131072)` → `ObjetoS3(clave, bytes, dimensiones)` | `aws s3api get-object --bucket … --key … --range bytes=0-<primeros−1> <temporal>` (solo lectura): el tamaño total sale de `ContentRange` (`bytes 0-131071/612345`; sin él, `ContentLength`) y las medidas, de `dimensiones_jpeg`. No existe → `ErrorAws` (`NoSuchKey`). No usa URLs prefirmadas |
 
+Ayudas que añadió FE-3.1 (para validadores que crean datos de prueba por la API y para los pasos guiados en el
+teléfono; FE-3.4 y FE-3.6 las reutilizan):
+
+| Elemento | Qué hace |
+|---|---|
+| `http_delete(url, *, timeout=15, token=None)` → `RespuestaHttp` | `DELETE` con `X-Request-Id` propio, como `http_get` (4xx/5xx se devuelven; sin respuesta → `ErrorRed`; `token` → `Authorization: Bearer`, nunca se imprime) |
+| `esperar_enter(instruccion)` | Paso guiado: escribe `· PASO GUIADO — <instrucción>` y `· Pulsa Enter aquí cuando esté hecho (Ctrl+C cancela).` por stderr y lee una línea de la entrada estándar. EOF (sin terminal) → `ErrorConfiguracion` (código 3). Ctrl+C interrumpe el validador: la limpieza corre igual (`finally` de `correr`), pero no se escribe informe. Las pruebas la sustituyen |
+
 
 Forma de un validador (`validate11.py` es el ejemplo): `import comun`, `main(argv=None)` crea el `Validador` y devuelve
 `v.correr(cuerpo, argv)`, el módulo termina con `sys.exit(main())`. Sus pruebas (`tests/ops/test_validate11.py`)
 sustituyen `comun.gradle`, `comun.adb`, `comun.http_get`, etc. con `monkeypatch` y recorren `main()` entero; corren en
 el job `validadores` de `frontend.yml`. `uv run --frozen pytest` desde `project/` (29 casos al cerrar FE-1.1; 73 con
 FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_validate23.py`, 20; 128 con FE-2.1:
-`test_validate21.py`, 20, y `test_comun_fe21.py`, 15).
+`test_validate21.py`, 20, y `test_comun_fe21.py`, 15; 129 con el arreglo de 0.7.2; 159 con FE-3.1:
+`test_validate31.py`, 30, que incluye las pruebas de `http_delete` y `esperar_enter`).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -2567,6 +2671,47 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   inexistente o repetido, FE-2.3 sin «Hecho», foto fuera de límites, `con_errores`, pocas fotos, espera agotada, hora
   límite, encendido fallido con apagado, `--solo C4` sin AWS) y C4 contra el `MainActivity.kt` real y variantes rotas;
   comprueban que ni el token ni la contraseña salen por stdout, stderr o el informe.
+- `validate31.py` (FE-3.1; ejemplo de un validador que crea y borra datos de prueba por la API y usa un **paso guiado**
+  en el teléfono): IDs `C1a, C1b, C2a, C2b` con grupos `C1 → [C1a, C1b]` y `C2 → [C2a, C2b]`; la manual es `C2c`.
+  Constantes: `CLASES_C1A` (`RemoteLugaresRepositoryTest`), `CLASES_C2A` (`ComandoParserTest`,
+  `ObservadorPrimerPlanoTest`), `MINIMO_CASOS` (6, 4 y 4; hoy 9, 5 y 6), `LUGAR_PRUEBA` (`validacion-3-1-lugar`),
+  `CATEGORIA_PRUEBA` (`bloque`), `POSICION_CAMPUS` (6.2006, −75.5783: si `GET /v1/places` está vacío),
+  `DESPLAZAMIENTO_GRADOS` (0,0002: ~22 m al norte del primer lugar), `PERMISOS_INICIO` + `PERMISO_ACTIVIDAD` (como
+  `validate12`), `LIMITE_INICIO_S` (30), `LIMITE_DESTINO_S` (20), `MAX_DESPLAZAMIENTOS` (40), `INTENTOS_SIN_FILAS` (3),
+  `SIN_NOVEDAD_PARA_TERMINAR` (2), `TITULO_DESTINO` («¿A dónde quieres ir?»), `FIN_FILA` («. Toca para elegir este
+  destino.»), `ETIQUETAS_CATEGORIA` (las 8 `etiqueta`), `ERROR_CARGA` («No se pudo cargar la lista de lugares.»),
+  `SIN_RESULTADOS` («No hay lugares con estos filtros»), `INSTRUCCION_C1B` y las rutas `MAIN_ACTIVITY`, `INICIO_SCREEN`,
+  `INICIO_VIEWMODEL` y `MAPA_PUBLICO`. Piezas puras: `normalizar_nombre(texto)` (la del backend §4.9: NFKD sin marcas,
+  `casefold`, espacios reducidos), `nombre_de_fila(descripcion)` (el nombre desde el `content-desc` de `FilaLugar`:
+  quita `FIN_FILA`, un «, a N metros» final y «, <etiqueta>»; si no encaja, `None`), `filas_visibles(nodos)` (nombres
+  de arriba abajo), `bloque_ruta(texto, ruta)` (como el de `validate21`, exacto) y `comprobar_entrada_mapa(main,
+  inicio_screen, inicio_vm, mapa)` (C2b). Precondiciones, en orden y sin seguir si una falla: P1 Gradle (3); en `dev` y
+  solo si C1b está incluida (si no, P2–P5 quedan «no evaluada»): P2 dispositivo físico (3), P3 FE-1.1 «Hecho» + URL
+  vigente + `ApiConfig.BASE_URL` igual + `GET /health` 200 `ok` (como `validate12` P4; 2, o 3 sin URL), P4 login del
+  admin (`credenciales_admin`; 401 o rol distinto → 3; otro → 2) y P5 BE-3.1 «Hecho» en `PLAN_BACKEND` y
+  `GET /places` → 200 con `items` (anota cuántos; **no** exige ≥ 1). C1a y C2a: una sola ejecución de Gradle con las
+  clases incluidas (como `validate21`). C1b: `preparar_telefono()` (copia de `validate12`: registra `am force-stop` en
+  la limpieza, `installDebug`, `pm grant`); `GET /admin/places?q=validacion-3-1` con el token y `DELETE` de los que se
+  llaman **exactamente** `validacion-3-1-lugar` (comparados con `normalizar_nombre`; nunca otros); `POST /admin/places`
+  (`bloque`, junto al primer lugar de P5 o en `POSICION_CAMPUS`, `alias: []`, una `descripcion`) → 201, y registra su
+  `DELETE` en la limpieza en cuanto tiene el id; `abrir_app()` y espera «Acceso administrador»; `esperar_enter`
+  (`INSTRUCCION_C1B`); `esperar_destino()` (cada ~1 s hasta 20 s: `ERROR_CARGA` o `SIN_RESULTADOS` → falla; el título y
+  alguna fila → sigue; con el título sin filas al acabar el plazo también sigue; sin título → falla con lo que se ve);
+  `leer_lista()` (junta los nombres y desliza con `desplazar_hacia_abajo` + `dormir(0.5)` + volcado hasta dos
+  desplazamientos seguidos sin filas nuevas; sin ninguna fila tras 3 → falla; más de 40 → falla); `GET /places` de
+  nuevo; pasa si no faltan ni sobran nombres (comparación exacta) y está `validacion-3-1-lugar`. C2b lee los cuatro
+  archivos de Kotlin y comprueba: el bloque de `composable("inicio")` tiene `onVerMapa = { … navigate("mapa") … }`, el
+  de `composable("mapa")` compone `MapaPublicoScreen(`, `InicioScreen.kt` tiene `CustomAccessibilityAction("Ver mapa")
+  { onVerMapa()` y `InicioEvento.VerMapa -> onVerMapa()`, `InicioViewModel.kt` `Comando.VER_MAPA ->
+  navegar(InicioEvento.VerMapa)` y `MapaPublicoScreen.kt` un `PdrTracker(… cicloDeVida = …)` con
+  `LocalLifecycleOwner.current.lifecycle`. La manual C2c lleva como contexto si C1b ya instaló el APK. Las pruebas
+  (`tests/ops/test_validate31.py`) simulan el teléfono (Inicio y Destino con una lista que se desplaza: cabecera de
+  1100 px, filas de 230 px, `input swipe` de 960 px, solo las filas visibles en el volcado), la API de lugares con
+  estado (restos, `409` por nombre, `DELETE`), Gradle y el paso guiado; recorren `main()` en `local` y `dev` (feliz con
+  un resto y un lugar real que también contiene el prefijo, lista vieja sin el lugar nuevo, error de carga, Destino que
+  no se abre, EOF en el paso guiado, backend sin lugares, 61 lugares con carga lenta, BE-3.1 sin «Hecho»,
+  credenciales malas, `--solo C2`, pocos casos) y C2b contra el código real y seis variantes rotas; comprueban que ni la
+  contraseña ni el token salen por stdout, stderr o el informe y que nunca se llama a `pm clear`.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -2633,6 +2778,17 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   métricas) y las procesa durante la espera de C1. Hora límite para empezar: 21:30 de Bogotá (se apaga solo a las
   22:00). **Sin comprobar en `dev`:** `EmbeddingDev` de la app no se ha ejecutado contra AWS (sigue el mismo contrato
   que el `EmbeddingDev` del backend, que sí, BE-2.2 y BE-2.4).
+- **FE-3.1, `validate31.py`:** el paso guiado lee la entrada estándar: correrlo en una terminal interactiva de WSL (con la
+  entrada redirigida, p. ej. `< /dev/null` o desde un script sin terminal, `esperar_enter` ve EOF → código 3). Con **TalkBack activo**, `adb shell input swipe`
+  puede no desplazar la lista (TalkBack convierte los gestos de un dedo en exploración táctil; **sin comprobar** en el
+  Xiaomi): la instrucción pide desactivarlo antes de pulsar Enter; si no, C1b fallaría con «faltan …» (solo habría
+  leído las filas de la primera pantalla). En `dev` puede no haber ningún lugar (los de la validación de BE-3.1 se borraron al terminar;
+  **sin comprobar** si hay lugares reales; desde backend 0.12.0 BE-3.2 tampoco exige ≥ 1): P5 no lo exige y el lugar
+  de prueba va a `POSICION_CAMPUS`. La comparación es por nombre
+  exacto: dos lugares con el mismo nombre no pueden existir (el backend da `409`), pero un lugar con una categoría que
+  la app no conoce faltaría en la lista (se descarta con una línea `Lugares` en `app.log`). **Sin comprobar en `dev`:**
+  que `uiautomator dump` vuelque Selección de destino mientras escucha (halo animado del micrófono; Inicio, con su orbe
+  animado, sí se volcó en FE-1.2) y el `content-desc` real de `FilaLugar` en el Xiaomi.
 
 ---
 
@@ -2649,7 +2805,7 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 
 **Elementos:**
 - Título de la app y mensaje de bienvenida (se lee por voz al abrir): *"Di uno para saber
-  dónde estás, o dos para ir a un lugar."*
+  dónde estás, dos para ir a un lugar, o mapa para ver el mapa."* (lo del mapa desde FE-3.1).
 - **Botón grande 1: "Ubicarme"** (ocupa ~40 % de la pantalla). Acción: iniciar flujo 2.1.
 - **Botón grande 2: "Ir a un lugar"** (ocupa ~40 % de la pantalla). Acción: abrir selección
   de destino.
@@ -2662,7 +2818,8 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 
 **Comportamiento:**
 - Al abrir, lee las instrucciones y empieza a escuchar.
-- Reconoce "uno", "dos" y sinónimos ("ubicarme", "ir a").
+- Reconoce "uno", "dos" y sinónimos ("ubicarme", "ir a") y, desde FE-3.1, "mapa", que abre el **mapa público** (2.6,
+  ruta `mapa`; Atrás vuelve a Inicio). Con TalkBack, el botón principal tiene las acciones «Ir a un lugar» y «Ver mapa».
 - Si no entiende, repite las opciones.
 - Pide los permisos (cámara, micrófono, actividad física) en un único diálogo del sistema la
   primera vez. *Pendiente (FE-3.5):* la explicación hablada previa al diálogo.
@@ -2773,8 +2930,10 @@ confirmar avanza automáticamente a la guía.
 coincidencias, las lee y pide elegir. Tras confirmar, si aún no hay ubicación vigente,
 lanza el escaneo 360° y luego la navegación.
 
-**Implementación actual:** con una lista de lugares de prueba (stub). Lo que falta (backend real con distancias,
-fotos de los lugares, orden por popularidad y pasar el destino a la vista 6.5) está en `PLAN.md`, lotes FE-3.1 y FE-3.2.
+**Implementación actual:** desde FE-3.1 con los lugares del backend (`GET /v1/places`, `RemoteLugaresRepository`,
+§5.10) y la foto de cada lugar si el backend la da (si no, o si no carga, el ícono de la categoría; hoy el backend no
+tiene fotos de lugares). Lo que falta: distancias reales, que llegan cuando haya una posición vigente (FE-3.2); orden
+por popularidad (BE-5.2); y pasar el destino a la vista 6.5 (FE-3.2).
 
 **Voz:** usa el mismo `VoiceController` de Inicio y Escaneo. Si se negó el micrófono, la vista
 funciona solo con toques y muestra un aviso. Tocar, pausar o salir invalida el flujo hablado en
@@ -2796,7 +2955,8 @@ para elegir.
 | `ui/destino/componentes/` | `PanelesVoz` (barra, micrófono, texto reconocido, confirmación, opciones), `ListaLugares` (chips, buscador, lista, botón Volver) y `Comun` (tarjeta, íconos por categoría) |
 | `domain/usecase/BuscarLugares.kt` | Coincidencia aproximada, filtro del buscador e interpretación de "sí" / "no" |
 | `domain/model/LugarDestino.kt` | `LugarDestino` y `CategoriaLugar` |
-| `data/repository/LugaresRepository.kt` | Contrato (`GET /v1/places`) y stub temporal (**TODO:** reemplazar por un `Remote*` en `data/remote/` sobre `ClienteApi`, §5.10) |
+| `data/repository/LugaresRepository.kt` | Contrato y stub (`LUGARES_DE_PRUEBA`, para la vista previa) |
+| `data/remote/RemoteLugaresRepository.kt` | Implementación real (FE-3.1): `GET /v1/places` sobre `ClienteApi` (§5.10) |
 
 ---
 
@@ -3700,6 +3860,36 @@ lectura, los primeros 128 KB: el total sale de `ContentRange` y las medidas del 
 Mide lo que de verdad recibió el backend y no necesita el teléfono ni BE-4.1. *Consecuencias:* C3b necesita
 `AWS_PROFILE` con `s3:GetObject` sobre el bucket del dataset; si el backend expusiera `bytes`, `ancho` y `alto` de cada
 imagen (ya están en su tabla `imagenes`), C3b podría hacerse solo con la API (propuesta para el backend, no pedida).
+
+**ADR-FE-22 — El PDR del mapa público sigue el ciclo de vida de su pantalla, no el del proceso (aceptada, 2026-10-26,
+FE-3.1).**
+Hallazgo de FE-2.3 (C5): con el ciclo de vida del **proceso** (ADR-FE-16), un mapa que seguía compuesto sin verse
+volvió a registrar sensores cuando la app volvió al primer plano por otra actividad. Con la entrada al mapa desde
+Inicio (FE-3.1) hacía falta que el mapa deje de leer sensores cuando no es la pantalla visible o sale de la pila.
+Opciones: que `MapaPublicoScreen` observe `ON_STOP`/`ON_START` y llame a `detener()`/`iniciar()` (perdería el «rastreo
+pedido» y la página tendría que volver a pulsar ▶); que el tracker observe a la vez proceso y pantalla; o pasarle al
+tracker el ciclo de vida de la **entrada de la pila** (`LocalLifecycleOwner` dentro del `composable`). Se eligió la
+tercera: el parámetro `cicloDeVida` ya existía, la entrada de la pila está limitada por la actividad (si la actividad
+se detiene, la entrada también) y por la navegación (tapada por otra pantalla → `CREATED`), y al salir de la pila la
+composición llama a `liberar()`. La conexión pasó a `ObservadorPrimerPlano` para probarla en la JVM con
+`LifecycleRegistry` (`ObservadorPrimerPlanoTest`). *Consecuencias:* el `ON_STOP` del mapa llega en el acto (no a los
+~700 ms del proceso); las líneas `Pdr` siguen diciendo «segundo plano»/«primer plano» también cuando el mapa queda
+tapado; calibración y recolección siguen con el proceso (sus trackers viven en ViewModels y sus pantallas ya llaman a
+`detener()` en `ON_STOP`); una pantalla nueva que cree un `PdrTracker` en la composición (p. ej. la navegación guiada,
+6.5, si no lo crea en su ViewModel) debe pasarle su ciclo de vida.
+
+**ADR-FE-23 — `RemoteLugaresRepository` recibe la posición por un proveedor y hoy pide los lugares sin posición
+(aceptada, 2026-10-26, FE-3.1).**
+`GET /v1/places` da distancias reales solo si se envían `lat` y `lng`, pero el flujo público aún no tiene una posición
+vigente: la da el escaneo (FE-3.2) y dónde se guarda es la decisión abierta 15. Opciones: cambiar
+`LugaresRepository.obtenerLugares()` para recibir la posición (cambio de contrato de §5.6 y de la pantalla), usar la
+posición del PDR del mapa público (no es una ubicación del usuario: es un punto que tocó en el mapa) o inyectar un
+proveedor `posicion: () -> Pair<Double, Double>?` en el repositorio. Se eligió el proveedor, con `{ null }` por defecto
+(la forma de `posicionAdmin` del editor de mapa): la interfaz de §5.6 no cambia, el ViewModel de Destino solo cambia una
+línea y FE-3.2 conecta su *holder* sin tocar el repositorio. *Consecuencias:* hasta FE-3.2 la lista llega sin
+distancias y por nombre (el ⚠ de «Lugares cercanos» de 5.5 se ve con datos reales, FE-3.5); el repositorio descarta
+—con una línea `Lugares`— los lugares de una categoría que la app no conoce y los `id` repetidos, en vez de fallar
+toda la lista o romper la `LazyColumn`.
 
 ### 8.2 Decisiones abiertas
 

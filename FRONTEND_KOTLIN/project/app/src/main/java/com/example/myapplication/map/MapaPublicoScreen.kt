@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.myapplication.logs.AppLog
 import com.example.myapplication.sensors.PdrEvento
 import com.example.myapplication.sensors.PdrTracker
@@ -54,12 +55,19 @@ private fun WebView.js(codigo: String) {
  * `onNativeHeading(grados)`, `onNativeAccel(desviacion)`, `onNativeBrujula(disponible)`,
  * `onNativeStepUnavailable(motivo)`.
  * Web → Kotlin: ver [PuentePdr].
+ *
+ * Ruta `mapa` (FE-3.1: desde Inicio por la voz «mapa» o la acción de TalkBack «Ver mapa»; Atrás vuelve a Inicio). Los
+ * sensores siguen el ciclo de vida de la entrada de la pila de esta pantalla (ADR-FE-22): se quitan en su `ON_STOP`
+ * (app en segundo plano, o el mapa tapado por otra pantalla) y se liberan al salir de la composición.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun MapaPublicoScreen(modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
-    val tracker = remember { PdrTracker(ctx) }
+    // FE-3.1 (ADR-FE-22): el tracker sigue el ciclo de vida de esta pantalla (la entrada de la pila), no el del
+    // proceso: si el mapa queda en la pila sin ser lo visible (o en otra tarea), sus sensores no vuelven al primer plano.
+    val cicloPantalla = LocalLifecycleOwner.current.lifecycle
+    val tracker = remember { PdrTracker(ctx, cicloDeVida = cicloPantalla) }
     var webView by remember { mutableStateOf<WebView?>(null) }
 
     DisposableEffect(Unit) {

@@ -8,7 +8,6 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.SystemClock
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.example.myapplication.data.repository.CalibracionPasoRepository
 import com.example.myapplication.logs.AppLog
@@ -75,8 +74,11 @@ sealed interface PdrEvento {
  *
  * Segundo plano (FE-2.3): sigue a [cicloDeVida] (por defecto el del proceso, `ProcessLifecycleOwner`). En `ON_STOP`
  * quita los sensores aunque el rastreo siga pedido ([PdrEstado.activo] sigue en `true`) y en `ON_START` los vuelve a
- * registrar si nadie llamó a [detener] mientras tanto ([InterruptorSensores]). Crear el tracker en el hilo principal
- * (registra el observador) y llamar a [liberar] al terminar (lo quita).
+ * registrar si nadie llamó a [detener] mientras tanto ([InterruptorSensores], [ObservadorPrimerPlano]). Crear el
+ * tracker en el hilo principal (registra el observador) y llamar a [liberar] al terminar (lo quita).
+ * Una pantalla que crea el tracker en la composición (no en un ViewModel) le pasa el ciclo de vida de su entrada de la
+ * pila (`LocalLifecycleOwner.current.lifecycle`): así deja de leer sensores cuando no es la pantalla visible, aunque el
+ * proceso siga en primer plano (FE-3.1, ADR-FE-22; lo hace `MapaPublicoScreen`).
  */
 class PdrTracker(
     context: Context,
@@ -161,7 +163,7 @@ class PdrTracker(
         onAceleracion = null
         if (!liberado) {
             liberado = true
-            cicloDeVida?.removeObserver(observadorProceso)
+            cicloDeVida?.removeObserver(observadorCiclo)
         }
     }
 
@@ -246,20 +248,14 @@ class PdrTracker(
         )
     }
 
-    // ── Ciclo de vida del proceso (FE-2.3) ─────
+    // ── Ciclo de vida (FE-2.3; ObservadorPrimerPlano desde FE-3.1) ─────
     // Va al final: el observador y los listeners deben existir antes de registrarlo (addObserver en un ciclo ya
     // iniciado entrega ON_CREATE y ON_START en el acto; sin rastreo pedido no cambian nada).
 
-    private val observadorProceso = LifecycleEventObserver { _, evento ->
-        when (evento) {
-            Lifecycle.Event.ON_START -> aplicar(interruptor.alPrimerPlano(), "primer plano")
-            Lifecycle.Event.ON_STOP -> aplicar(interruptor.alSegundoPlano(), "segundo plano")
-            else -> Unit
-        }
-    }
+    private val observadorCiclo = ObservadorPrimerPlano(interruptor) { cambio, motivo -> aplicar(cambio, motivo) }
 
     init {
-        cicloDeVida?.addObserver(observadorProceso)
+        cicloDeVida?.addObserver(observadorCiclo)
     }
 
     private companion object {

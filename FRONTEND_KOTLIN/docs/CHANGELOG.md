@@ -23,6 +23,61 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.8.0] — 2026-10-26
+
+- **Lote que la motivó:** FE-3.1 (lugares públicos y entrada al mapa; sin alertas, que son de FE-3.6).
+- **Qué cambió:**
+  - Código: `RemoteLugaresRepository` (`data/remote/`, nuevo): `GET /v1/places` con la posición por un proveedor (hoy
+    `{ null }`), descarta categorías desconocidas e `id` repetidos con una línea `Lugares`; `CampusApi.lugares(lat?,
+    lng?, categoria?)` y `ListaLugaresDto`. `SeleccionDestinoViewModel` lo usa en lugar del stub (`LugaresRepositoryStub`
+    queda para la vista previa). `FilaLugar`: si la foto (`imagenUrl`) no carga, el ícono de la categoría (antes, un
+    cuadro vacío). `Comando.VER_MAPA` en `ComandoParser` (palabra completa «mapa»/«mapas»; palabras separadas también
+    por signos); `InicioEvento.VerMapa`, `InicioViewModel.verMapa()` y `BIENVENIDA` con «o mapa para ver el mapa»;
+    `InicioScreen`/`InicioContent(onVerMapa = {})` y la acción de TalkBack «Ver mapa» en el orbe; la ruta `inicio`
+    navega a `mapa` (`launchSingleTop`). `ObservadorPrimerPlano` (`sensors/`, nuevo, extraído de `PdrTracker`) y
+    `MapaPublicoScreen` crea su `PdrTracker` con el ciclo de vida de su entrada de la pila (hallazgo de FE-2.3).
+  - Pruebas JVM nuevas: `RemoteLugaresRepositoryTest` (9), `ComandoParserTest` (5), `ObservadorPrimerPlanoTest` (6).
+    Total 171.
+  - Validadores: `src/ops/validate31.py` (C1a, C1b con paso guiado, C2a, C2b; manual C2c) y en `comun.py`
+    `http_delete` y `esperar_enter`; `test_validate31.py` (30). Total 159.
+  - Documento: §4.5 nuevo; §3.2 (pruebas, ruta `mapa`, tag `Lugares`, `sensors/`); §4.1 (171 casos; resultado de
+    `lintDebug`); §5.2 (`ComandoParser`, `PdrTracker.cicloDeVida`, `ObservadorPrimerPlano`, receta, segundo plano y
+    longitud de paso); §5.5 (`MapaPublicoScreen`, `FilaLugar`, Inicio, `SeleccionDestinoViewModel`); §5.6
+    (`LugaresRepository` real, `LugarDestino` con el backend); §5.8 (`inicio` → `mapa`, fila `mapa`); §5.10 (ruta, DTO,
+    `RemoteLugaresRepository` y «Lugares»); §5.11 (ayudas de FE-3.1, `validate31.py`, trampas); §6.1 y §6.4;
+    ADR-FE-22 (el PDR del mapa sigue el ciclo de vida de su pantalla) y ADR-FE-23 (posición por proveedor; hoy sin
+    posición).
+  - `validation-3-1` reescrita: entornos `local` y `dev`; precondiciones en el orden del contrato común (P5 ya no
+    exige ≥ 1 lugar); C1 → C1a (JVM) y C1b (teléfono, paso guiado); C2 → C2a (JVM) y C2b (estático) de apoyo y la
+    manual C2c; §5 con variables, preparación y salida esperada.
+  - `PLAN.md`: FE-3.1 pasa a «En curso»; FE-3.5 ya no lleva «miniatura sin ícono de respaldo» (lo resolvió FE-3.1).
+- **Contradicciones corregidas:**
+  - `validation-3-1` P4 exigía `GET /v1/places` con ≥ 1 lugar y C1 creaba el lugar de prueba «junto al primer lugar»:
+    en `dev` puede no haber ninguno (el backend quitó ese requisito de BE-3.2 en su 0.12.0 por lo mismo). Ahora solo
+    exige `200` y, sin lugares, usa una posición fija del campus.
+  - §4.3 y §4.4 seguían diciendo «a verificar en dispositivo» de FE-2.3 C4–C5 y de FE-2.1 C1–C2, ya validados en `dev`
+    según PLAN §3: ahora dicen lo verificado y lo que falta. El encabezado decía «la prueba en el campus (FE-2.1 C1 y
+    C2) sigue pendiente».
+  - §4.1 decía que `frontend.yml` estaba «sin comprobar en un runner hasta el primer PR»: pasó en el PR #8 (FE-1.1 C3).
+  - §5.5 (Destino) decía que con el stub todas las distancias son `null`; el stub sí las trae (85–310 m, §5.6).
+  - El hallazgo de C5 de FE-2.3 solo estaba en la fila FE-2.3 de PLAN §3: ahora también en §4.3 y §4.5.
+- **Contratos tocados (§5):** §5.2 (`Comando` con un valor nuevo antes de `NINGUNO`: un `when` exhaustivo de otro
+  archivo dejaría de compilar; `ComandoParser` separa por signos; `ObservadorPrimerPlano` nuevo); §5.5
+  (`InicioScreen`/`InicioContent` con `onVerMapa` por defecto `{}`, `InicioEvento.VerMapa` nuevo —incompatible para un
+  `when` exhaustivo—, `FilaLugar` con respaldo); §5.6 (`LugaresRepository` real, sin cambiar la interfaz); §5.8 (`inicio`
+  entrega `onVerMapa` → `mapa`); §5.10 (ruta y DTO nuevos, `RemoteLugaresRepository`); §5.11 (ayudas nuevas,
+  compatibles). Piezas, ADR y cambios incompatibles en 0.x: sube la menor.
+- **Cómo se verificó:** en Windows, `.\gradlew.bat --console=plain testDebugUnitTest assembleDebug` con JBR 21 →
+  `BUILD SUCCESSFUL`, 171 casos sin fallos; `lintDebug` falla por un error anterior (`MapaWebView.kt:125`) y no da avisos
+  en los archivos de FE-3.1. En WSL, `uv run --frozen ruff check .` («All checks passed!»), `ruff format --check .`
+  («14 files already formatted»), `pytest -q` (159 passed) y `validate31.py --entorno local` → código 0 (P1; C1a 9/9;
+  C2a 5/5 y 6/6; C2b; C1b omitida; la manual C2c). Sin teléfono y sin tocar `dev` (lo coordina el maestro).
+- **Pendiente:** `validate31.py --entorno dev` con el teléfono (C1b) y la manual C2c con video (`validation-3-1` §3 y
+  §5). Sin comprobar: la miniatura con foto (el backend no tiene fotos de lugares), `uiautomator dump` de Destino
+  mientras escucha, que `input swipe` no desplace con TalkBack activo, el nombre de las acciones de TalkBack en el
+  Xiaomi y que el mapa abierto desde Inicio no deje conexiones en `dumpsys sensorservice` tras volver. Distancias
+  reales cuando FE-3.2 dé una posición; orden por popularidad con BE-5.2.
+
 ## [0.7.2] — 2026-10-26
 - Lote que la motivó: FE-2.1 (validación en `dev`).
 - Qué cambió: `validate21.py` P4 tomaba la **primera** fila que empieza por `| FE-2.3 |` del PLAN, que es la de §2.1

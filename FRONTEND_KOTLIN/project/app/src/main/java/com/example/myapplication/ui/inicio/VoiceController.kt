@@ -14,27 +14,34 @@ import java.text.Normalizer
 import java.util.Locale
 import java.util.UUID
 
-enum class Comando { UBICARME, IR_A_LUGAR, NINGUNO }
+enum class Comando { UBICARME, IR_A_LUGAR, VER_MAPA, NINGUNO }
 
-/** Interpreta lo que dijo la persona: "uno", "dos" y sinónimos. */
+/** Interpreta lo que dijo la persona: "uno", "dos", "mapa" (FE-3.1) y sinónimos. */
 object ComandoParser {
     private fun normalizar(texto: String): String =
         Normalizer.normalize(texto.lowercase(Locale.ROOT), Normalizer.Form.NFD)
             .replace("\\p{Mn}+".toRegex(), "")
 
+    /** Palabras completas: desde FE-3.1 se separan también por signos («uno,» cuenta como «uno»). */
+    private val separador = "[^\\p{L}\\p{N}]+".toRegex()
+
     fun parse(texto: String): Comando {
         val t = normalizar(texto)
-        val palabras = t.split("\\s+".toRegex())
+        val palabras = t.split(separador).filter { it.isNotEmpty() }
 
         val ubicar = "uno" in palabras || "1" in palabras ||
             "ubic" in t || "donde estoy" in t || "donde estamos" in t
         val ir = "dos" in palabras || "2" in palabras ||
             "ir a" in t || "llevar" in t || "lugar" in t || "destino" in t || "llegar" in t
+        // FE-3.1: la palabra completa «mapa» o «mapas» («ver el mapa», «abre el mapa»).
+        val mapa = "mapa" in palabras || "mapas" in palabras
 
+        val coinciden = listOf(ubicar, ir, mapa).count { it }
         return when {
-            ubicar && !ir -> Comando.UBICARME
-            ir && !ubicar -> Comando.IR_A_LUGAR
-            else -> Comando.NINGUNO
+            coinciden != 1 -> Comando.NINGUNO
+            ubicar -> Comando.UBICARME
+            ir -> Comando.IR_A_LUGAR
+            else -> Comando.VER_MAPA
         }
     }
 }

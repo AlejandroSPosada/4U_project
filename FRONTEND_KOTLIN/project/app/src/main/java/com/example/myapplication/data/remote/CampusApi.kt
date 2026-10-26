@@ -5,6 +5,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * Rutas de la API del backend (contrato: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5). La URL base ya termina en
@@ -22,6 +23,18 @@ interface CampusApi {
     /** `POST /v1/auth/login` (backend §5.3; FE-1.2). Ruta pública: no lleva `Authorization`. */
     @POST("auth/login")
     suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>
+
+    /**
+     * `GET /v1/places` (backend §5.3; FE-3.1). Ruta pública (sin `Authorization`). `lat` y `lng` van juntos o ninguno:
+     * con posición el backend da `distancia_m` y ordena por ella; sin ella, `distancia_m` es `null` y ordena por nombre.
+     * Retrofit omite los parámetros `null` de la URL.
+     */
+    @GET("places")
+    suspend fun lugares(
+        @Query("lat") lat: Double? = null,
+        @Query("lng") lng: Double? = null,
+        @Query("categoria") categoria: String? = null,
+    ): Response<ListaLugaresDto>
 
     /** `POST /v1/collect/videos` (backend §5.4; FE-2.1): `201` nuevo, `200` si ya existía ese `ref_cliente`. */
     @POST("collect/videos")

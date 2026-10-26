@@ -117,12 +117,16 @@ private fun abrirAjustesApp(ctx: Context) {
     ctx.startActivity(intent)
 }
 
-/** Punto de entrada: conecta ViewModel, permisos y navegación. */
+/**
+ * Punto de entrada: conecta ViewModel, permisos y navegación. [onVerMapa] (FE-3.1) abre el mapa público: por la voz
+ * «mapa» o la acción de TalkBack «Ver mapa» del orbe.
+ */
 @Composable
 fun InicioScreen(
     onUbicarme: () -> Unit,
     onIrALugar: () -> Unit,
     onAccesoAdministrador: () -> Unit,
+    onVerMapa: () -> Unit = {},
     viewModel: InicioViewModel = viewModel(),
 ) {
     val ctx = LocalContext.current
@@ -155,6 +159,7 @@ fun InicioScreen(
             when (it) {
                 InicioEvento.Ubicarme -> onUbicarme()
                 InicioEvento.IrALugar -> onIrALugar()
+                InicioEvento.VerMapa -> onVerMapa()
             }
         }
     }
@@ -183,6 +188,7 @@ fun InicioScreen(
         onAccesoAdministrador = onAccesoAdministrador,
         onReintentarPermisos = { lanzadorPermisos.launch(permisosNecesarios()) },
         onIrAAjustes = { abrirAjustesApp(ctx) },
+        onVerMapa = viewModel::verMapa,
     )
 }
 
@@ -197,6 +203,7 @@ fun InicioContent(
     onAccesoAdministrador: () -> Unit,
     onReintentarPermisos: () -> Unit,
     onIrAAjustes: () -> Unit,
+    onVerMapa: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -243,6 +250,7 @@ fun InicioContent(
                 onClick = onOrbe,
                 onUbicarme = onUbicarme,
                 onIrALugar = onIrALugar,
+                onVerMapa = onVerMapa,
             )
         }
 
@@ -323,6 +331,7 @@ private fun Orbe(
     onClick: () -> Unit,
     onUbicarme: () -> Unit,
     onIrALugar: () -> Unit,
+    onVerMapa: () -> Unit,
 ) {
     val transicion = rememberInfiniteTransition(label = "pulso")
     val pulso by transicion.animateFloat(
@@ -357,6 +366,8 @@ private fun Orbe(
                             "y saber dónde estás."
                 customActions = listOf(
                     CustomAccessibilityAction("Ir a un lugar") { onIrALugar(); true },
+                    // FE-3.1: el mapa público (ruta `mapa`).
+                    CustomAccessibilityAction("Ver mapa") { onVerMapa(); true },
                 )
             },
     )

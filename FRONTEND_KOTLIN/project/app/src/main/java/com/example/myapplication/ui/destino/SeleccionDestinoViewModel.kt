@@ -3,8 +3,8 @@ package com.example.myapplication.ui.destino
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myapplication.data.remote.RemoteLugaresRepository
 import com.example.myapplication.data.repository.LugaresRepository
-import com.example.myapplication.data.repository.LugaresRepositoryStub
 import com.example.myapplication.domain.model.CategoriaLugar
 import com.example.myapplication.domain.model.LugarDestino
 import com.example.myapplication.domain.usecase.BuscarLugares
@@ -45,7 +45,8 @@ class SeleccionDestinoViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // --- Dependencias -------------------------------------------------------
-    private val repositorio: LugaresRepository = LugaresRepositoryStub()
+    // FE-3.1: `GET /v1/places` real. Sin posición (la ubicación es de FE-3.2): distancias nulas, orden por nombre.
+    private val repositorio: LugaresRepository = RemoteLugaresRepository()
     private val voz = VoiceController(app)
 
     // --- Salidas hacia la UI ------------------------------------------------

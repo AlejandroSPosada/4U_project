@@ -140,6 +140,8 @@ fun AppNav(rutaInicial: String? = null) {
                     onUbicarme = { nav.navigate("ubicarme") },
                     onIrALugar = { nav.navigate("destino") },
                     onAccesoAdministrador = { nav.navigate("login") },
+                    // FE-3.1: voz «mapa» o acción de TalkBack «Ver mapa». Queda encima de `inicio`: Atrás vuelve.
+                    onVerMapa = { nav.navigate("mapa") { launchSingleTop = true } },
                 )
             }
         }
@@ -321,8 +323,9 @@ fun AppNav(rutaInicial: String? = null) {
             }
         }
 
-        // Mapa público (2.6) con seguimiento por pasos. FE-2.3 registra la ruta para las pruebas en dispositivo
-        // (se abre con MainActivity.EXTRA_RUTA en el APK de depuración); la entrada desde Inicio es de FE-3.1.
+        // Mapa público (2.6) con seguimiento por pasos. Desde FE-3.1 se abre desde Inicio (voz «mapa» o acción de
+        // TalkBack «Ver mapa»); en el APK de depuración también con MainActivity.EXTRA_RUTA (FE-2.3). Atrás vuelve a
+        // Inicio. Su PdrTracker sigue el ciclo de vida de esta entrada de la pila, no el del proceso (ADR-FE-22).
         composable("mapa") {
             MapaPublicoScreen()
         }

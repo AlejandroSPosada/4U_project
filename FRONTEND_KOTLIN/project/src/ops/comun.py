@@ -81,6 +81,21 @@ def dormir(segundos: float) -> None:
     time.sleep(segundos)
 
 
+def esperar_enter(instruccion: str) -> None:
+    """Paso guiado (FE-3.1): imprime la instrucción por stderr y espera a que la persona pulse Enter en la terminal.
+
+    Sin terminal (entrada estándar cerrada o vacía: EOF) → ErrorConfiguracion. Ctrl+C interrumpe el validador (la
+    limpieza corre igual). Las pruebas la sustituyen."""
+    avisar(f"PASO GUIADO — {instruccion}")
+    avisar("Pulsa Enter aquí cuando esté hecho (Ctrl+C cancela).")
+    try:
+        linea = sys.stdin.readline()
+    except (OSError, ValueError) as e:
+        raise ErrorConfiguracion(f"el paso guiado necesita una terminal: {e}") from e
+    if linea == "":
+        raise ErrorConfiguracion("el paso guiado necesita una terminal: la entrada estándar está cerrada (EOF)")
+
+
 def lote_hecho(texto_plan: str, lote: str) -> bool:
     """¿La tabla de estado (§3) de un PLAN dice «Hecho» para `lote`?
 
@@ -312,6 +327,23 @@ def http_post_json(url: str, cuerpo: dict, *, timeout: float = 15.0, token: str 
             return respuesta
         dormir(espera)
     return respuesta  # pragma: no cover — el bucle siempre devuelve
+
+
+def http_delete(url: str, *, timeout: float = 15.0, token: str | None = None) -> RespuestaHttp:
+    """`DELETE` con `X-Request-Id` propio (FE-3.1: borrar el lugar de prueba). 4xx/5xx se devuelven; sin respuesta →
+    ErrorRed. `token` añade `Authorization: Bearer <token>`; nunca se imprime."""
+    peticion = urllib.request.Request(url, method="DELETE", headers=_encabezados(token))
+    inicio = time.monotonic()
+    try:
+        with urllib.request.urlopen(peticion, timeout=timeout) as r:  # noqa: S310 — URL https comprobada
+            cuerpo = r.read().decode("utf-8", errors="replace")
+            return RespuestaHttp(r.status, dict(r.headers.items()), cuerpo, _ms(inicio))
+    except urllib.error.HTTPError as e:
+        cuerpo = e.read().decode("utf-8", errors="replace")
+        return RespuestaHttp(e.code, dict(e.headers.items()), cuerpo, _ms(inicio))
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        motivo = getattr(e, "reason", e)
+        raise ErrorRed(f"{type(motivo).__name__}: {resumir(str(motivo), 150)}") from e
 
 
 def codigo_error(r: RespuestaHttp) -> str | None:

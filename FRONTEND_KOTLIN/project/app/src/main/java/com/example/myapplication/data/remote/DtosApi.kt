@@ -59,6 +59,12 @@ data class LugarPublicoDto(
     @SerializedName("distancia_m") val distanciaM: Double? = null,
 )
 
+/** Respuesta 200 de `GET /v1/places` (backend §5.3; FE-3.1): `{"items": [LugarPublico…], "total": n}`. */
+data class ListaLugaresDto(
+    @SerializedName("items") val items: List<LugarPublicoDto>? = null,
+    @SerializedName("total") val total: Int? = null,
+)
+
 /** `Alerta` de `GET /v1/alerts` (y la base de `AlertaAdmin`). */
 data class AlertaDto(
     @SerializedName("id") val id: String? = null,

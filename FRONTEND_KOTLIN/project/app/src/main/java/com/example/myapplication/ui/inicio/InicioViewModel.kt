@@ -23,6 +23,9 @@ data class InicioUiState(
 sealed interface InicioEvento {
     data object Ubicarme : InicioEvento
     data object IrALugar : InicioEvento
+
+    /** FE-3.1: abrir el mapa público (ruta `mapa`), por la voz «mapa» o la acción de TalkBack «Ver mapa». */
+    data object VerMapa : InicioEvento
 }
 
 class InicioViewModel(app: Application) : AndroidViewModel(app) {
@@ -31,8 +34,9 @@ class InicioViewModel(app: Application) : AndroidViewModel(app) {
     private val backend: BackendHealth = RemoteBackendHealth(ClienteApi.api)
 
     companion object {
+        // FE-3.1: añade «mapa» (el comando nuevo debe poder descubrirse sin ver la pantalla).
         const val BIENVENIDA =
-            "Di uno para saber dónde estás, o dos para ir a un lugar."
+            "Di uno para saber dónde estás, dos para ir a un lugar, o mapa para ver el mapa."
         private const val NO_ENTENDI = "No te entendí. $BIENVENIDA"
         private const val MAX_INTENTOS = 3
     }
@@ -73,6 +77,9 @@ class InicioViewModel(app: Application) : AndroidViewModel(app) {
     fun ubicarme() = navegar(InicioEvento.Ubicarme)
     fun irALugar() = navegar(InicioEvento.IrALugar)
 
+    /** FE-3.1: acción de TalkBack «Ver mapa» (por voz: «mapa», [ComandoParser]). */
+    fun verMapa() = navegar(InicioEvento.VerMapa)
+
     fun alPausar() {
         voz.stopAll()
         _estado.value = _estado.value.copy(escuchando = false)
@@ -95,6 +102,7 @@ class InicioViewModel(app: Application) : AndroidViewModel(app) {
                 when (ComandoParser.parse(texto)) {
                     Comando.UBICARME -> navegar(InicioEvento.Ubicarme)
                     Comando.IR_A_LUGAR -> navegar(InicioEvento.IrALugar)
+                    Comando.VER_MAPA -> navegar(InicioEvento.VerMapa)
                     Comando.NINGUNO -> repetirOpciones()
                 }
             },
