@@ -23,6 +23,37 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.8.1] — 2026-10-26
+
+- **Lote que la motivó:** FE-3.1 (cierre: validado en `dev`) y la decisión del usuario del 2026-10-26, a la propuesta
+  del maestro «cerrar FE-3.1 como Hecho con lo validado (C1b en dev y la entrada al mapa por voz) y pasar la prueba con
+  TalkBack del mapa y el hueco del punto de inicio a FE-3.6»: «Si, por favor. Cambialo y demos por hecho lo que
+  llevamos.»
+- **Qué cambió (solo documentos; el código validado es el de `b553390`):**
+  - `PLAN.md`: FE-3.1 C2 queda solo con la voz «mapa» y Atrás → Inicio, con la decisión anotada; fila de §3 en
+    «Hecho» (`b553390` 2026-10-26, informe, primer intento con código 3, evidencia, lo que pasó a FE-3.6 y los hallazgos
+    con TalkBack 17). FE-3.6: entregables nuevos (punto de inicio del mapa sin tocarlo, desde Ubicarme; probar «Ver
+    mapa» con TalkBack) y criterio C5. FE-3.5: nota de los hallazgos con TalkBack 17. FE-4.3: quitar Coil 3 sin uso,
+    el error de `lintDebug` y el texto viejo de `validate31.py`.
+  - `validation-3-1`: C2c solo por voz, con su resultado y la evidencia (`evidencia/fe-3-1/c2-1-inicio.png`,
+    `c2-2-mapa-por-voz.png`, `c2-3-atras-a-inicio.png`); resultado de la ejecución en `dev`; trampa de MIUI («Instalar
+    vía USB» se apaga solo); aviso de que el texto que imprime `validate31.py` para C2c aún pide TalkBack.
+  - `validation-3-6`: C5 nuevo (abrir el mapa con TalkBack «Ver mapa», inicio sin tocar el mapa —y, mientras exista,
+    con toque y ▶—, Atrás y `dumpsys sensorservice` al volver), con procedimiento y hallazgos de TalkBack 17.
+  - ARCHITECTURE: encabezado; §4.5 con lo validado en `dev`, lo que pasó a FE-3.6, el mapa que hoy no sirve a una
+    persona ciega (inicio por toque) y los hallazgos con TalkBack 17; §4.1, trampa de los dos Coil del build;
+    §5.2 (tags de `AppLog` al día, evidencia de FE-3.6 C5); §5.5 (`MapaPublicoScreen` y acciones del orbe con lo
+    comprobado y lo que no); §5.11 (texto desactualizado de `instruccion_c2`/`INSTRUCCION_C1B`, lo comprobado de
+    `validate31.py` en `dev`, 0 lugares en `dev`); §6.1.
+- **Contradicciones corregidas:** la fila de tags de `AppLog` de §5.2 no tenía `Pdr`, `Subida` ni `Lugares` (§3.2 sí).
+  §3.2 se mantiene como la lista completa.
+- **Contratos tocados (§5):** ninguno (parche: el código no cambia; la acción «Ver mapa» sigue existiendo).
+- **Cómo se verificó:** `validate31.py --entorno dev` con código 0 sobre `b553390` (sin `-dirty`; informe
+  `.validacion/FE-3.1-20261026-142022.json`, Xiaomi 23028RA60L, Android 14) y C2c por voz con capturas, ambos hechos
+  por el maestro con el usuario; `frontend.yml` en verde sobre `b553390`.
+- **Pendiente:** FE-3.6 C5 (TalkBack «Ver mapa», inicio desde Ubicarme, sensores del mapa en el teléfono); el texto de
+  C2c de `validate31.py` en el próximo cambio de código.
+
 ## [0.8.0] — 2026-10-26
 
 - **Lote que la motivó:** FE-3.1 (lugares públicos y entrada al mapa; sin alertas, que son de FE-3.6).

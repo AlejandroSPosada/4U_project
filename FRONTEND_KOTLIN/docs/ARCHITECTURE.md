@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.8.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.8.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; falta la validación en `dev` con el teléfono). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -565,6 +565,11 @@ con el SDK del runner funciona.
 - `gradle/gradle-daemon-jvm.properties` pide un *toolchain* 25: Gradle 8.7 lo ignora (esa función es de Gradle 8.8+).
   Si alguien actualiza el *wrapper*, Gradle intentará usar Java 25 para el *daemon*.
 - `gradlew` está en Git sin el bit de ejecución (modo `100644`): en Linux, `chmod +x gradlew` o `bash gradlew`.
+- (FE-3.1) **Dos Coil en el build:** `app/build.gradle.kts` declara `io.coil-kt:coil-compose:2.7.0` (lo que usan las
+  vistas: `import coil.compose.AsyncImage` en `GaleriaScreen`, `ResumenVideoScreen` y `ListaLugares`, comprobado con
+  `grep` el 2026-10-26) y también `libs.coil.compose` = `io.coil-kt.coil3:coil-compose:3.0.4` (sin uso en el código).
+  Coil 3 no carga URLs `http(s)` sin un módulo `coil-network-*`, que no está: una vista nueva debe importar
+  `coil.compose.*` (Coil 2). Quitar la de Coil 3 es limpieza pendiente (FE-4.3).
 - `local.properties` (ruta del SDK) no se versiona; en CI Gradle usa `ANDROID_HOME`.
 - En un comentario `/** … */` de Kotlin, el texto `/*` (p. ej. una ruta `admin/` seguida de asterisco) abre un
   comentario anidado y la compilación falla con «Unclosed comment»: escribirlo de otra forma.
@@ -671,7 +676,7 @@ Qué se construyó (detalle y firmas en §5.2, §5.5, §5.6, §5.8, §5.10 y §5
 | Entrada al mapa desde Inicio | `ui/inicio/InicioViewModel.kt` (`InicioEvento.VerMapa`, `verMapa()`, `BIENVENIDA` con «mapa»), `InicioScreen.kt` (`onVerMapa`, acción de TalkBack «Ver mapa» en el orbe), `MainActivity.kt` | La ruta `inicio` navega a `mapa` con `launchSingleTop`; Atrás vuelve a Inicio (5.8) |
 | PDR del mapa atado a la pantalla | `sensors/ObservadorPrimerPlano.kt` (nuevo, `internal`), `sensors/PdrTracker.kt`, `map/MapaPublicoScreen.kt` | El tracker del mapa observa el ciclo de vida de **su entrada de la pila** (`LocalLifecycleOwner`), no el del proceso: deja de leer sensores cuando el mapa no es lo visible y no vuelve a registrarlos si la app vuelve al primer plano por otra pantalla (hallazgo de FE-2.3; ADR-FE-22). Calibración y recolección siguen con el del proceso |
 | Pruebas | `RemoteLugaresRepositoryTest` (9), `ComandoParserTest` (5), `ObservadorPrimerPlanoTest` (6) | Apoyo de C1 (lista de `GET /v1/places`) y de C2 (voz «mapa», sensores del mapa) en la JVM (§4.1) |
-| Validador | `src/ops/validate31.py` + `comun.http_delete` y `comun.esperar_enter` | Local: C1a y C2a (JVM) y C2b (estático). Dev: además C1b (lugar de prueba por API, paso guiado y lista leída con uiautomator); C2c manual (§5.11) |
+| Validador | `src/ops/validate31.py` + `comun.http_delete` y `comun.esperar_enter` | Local: C1a y C2a (JVM) y C2b (estático). Dev: además C1b (lugar de prueba por API, paso guiado y lista leída con uiautomator); C2c manual, solo por voz desde el 2026-10-26 (§5.11) |
 
 **El hallazgo de FE-2.3 y por qué aplica aquí.** En FE-2.3 (C5, 2026-10-25 21:48:35) se abrió el mapa con la ruta de
 prueba (`am start … --es ruta mapa`), la app pasó a segundo plano y al abrirla desde el ícono salió Inicio, pero el
@@ -695,14 +700,40 @@ sensores.
   Inicio (`alAbrir` en cada composición, ⚠ de 5.5).
 - Con TalkBack activo, `adb shell input swipe` puede no desplazar la lista (TalkBack convierte los gestos de un dedo en
   exploración táctil; **sin comprobar** en el Xiaomi): el paso guiado de C1b pide desactivarlo antes de pulsar Enter.
+- **El mapa público no sirve todavía a una persona ciega** (visto con el usuario al validar, 2026-10-26): el
+  seguimiento solo empieza si se **toca** un punto del mapa (o el botón GPS, decisión abierta 14) y se pulsa ▶, y sin
+  alertas (FE-3.6) el mapa no le anuncia nada. El punto de inicio debe salir de «Ubicarme» (FE-3.2) y el rastreo
+  empezar sin tocar la pantalla: pasó a FE-3.6 (PLAN §2.2) por decisión del usuario.
+- MIUI puede apagar «Instalar vía USB» por su cuenta entre sesiones (el primer intento en `dev` dio
+  `INSTALL_FAILED_USER_RESTRICTED`, código 3): comprobarlo antes de cada validación con teléfono.
+
+**Hallazgos con TalkBack 17** (TalkBack 17.0.1 en el Xiaomi 23028RA60L, Android 14, 2026-10-26; sirven a FE-3.5 y
+FE-3.6):
+- Al activar TalkBack sale primero su **tutorial**; hay que terminarlo o salir antes de usar la app.
+- El **toque con tres dedos** abre «Search screen» (búsqueda en pantalla), **no** el menú de TalkBack.
+- El **doble toque** sobre el botón principal de Inicio ejecuta su acción principal (Ubicarme: abre el escaneo), no las
+  acciones personalizadas («Ir a un lugar», «Ver mapa»).
+- **Sin comprobar** cómo se abren las acciones personalizadas en TalkBack 17 (menú de TalkBack → «Acciones», con el
+  gesto que indiquen su tutorial o sus ajustes). Hasta saberlo, con TalkBack por toque solo se llega a Ubicarme desde
+  Inicio; por voz se llega a todo («uno», «dos», «mapa»). FE-3.6 C5 lo prueba y anota aquí el gesto.
 
 Verificado en local el 2026-10-26: `testDebugUnitTest assembleDebug` en Windows → `BUILD SUCCESSFUL` (171 casos, 0
 fallos); en WSL `ruff check`, `ruff format --check` y `pytest` (159 casos) en verde y `validate31.py --entorno local` →
-código 0 (P1; C1a 9/9; C2a 5/5 y 6/6; C2b; C1b omitida; la manual C2c). **A verificar en dispositivo y en `dev`
-(FE-3.1 C1 y C2):** la lista de Destino contra `GET /v1/places` (C1b), la voz «mapa» y la acción «Ver mapa» con
-TalkBack (C2c), que el mapa abierto desde Inicio sigue al PDR y que `dumpsys sensorservice` no muestra la app tras
-volver a Inicio. Sin comprobar: la miniatura con foto (en `dev` no hay `imagen_url`) y que `uiautomator dump` vuelque
-Destino con la animación del micrófono (Inicio, con la suya, sí se volcó en FE-1.2).
+código 0 (P1; C1a 9/9; C2a 5/5 y 6/6; C2b; C1b omitida; la manual C2c). `frontend.yml` en verde sobre `b553390`.
+
+**Validado en `dev` el 2026-10-26** (Xiaomi 23028RA60L, Android 14; detalle en la fila FE-3.1 de PLAN §3 y en
+`validation-3-1` §3 y §5): `validate31.py --entorno dev` con código 0 sobre `b553390` (informe
+`.validacion/FE-3.1-20261026-142022.json`). **Comprobado en el teléfono:** la lista de Destino es la de
+`GET /v1/places` (C1b: `dev` tenía 0 lugares, así que la lista fue solo `validacion-3-1-lugar`, en 2 desplazamientos);
+el `content-desc` de `FilaLugar` se lee como dice §5.5; `uiautomator dump` volcó Destino justo tras abrirla (pregunta y
+escucha) sin «could not get idle state»; el paso guiado con la voz «dos» abre Destino; la voz «mapa» abre el mapa
+público («StepTracker · Comenzar») y Atrás vuelve a Inicio, que vuelve a escuchar (C2c, capturas en
+`validation/evidencia/fe-3-1/`). **Pasó a FE-3.6** (decisión del usuario del 2026-10-26, PLAN §2.2 FE-3.1): abrir el
+mapa con la acción de TalkBack «Ver mapa», fijar el inicio y ▶, y comprobar después con `dumpsys sensorservice` que el
+mapa ya no lee sensores al volver a Inicio (`validation-3-6` C5); por eso **sigue sin comprobar en el teléfono** el
+ciclo de vida de la pantalla del PDR del mapa (ADR-FE-22: lo cubre `ObservadorPrimerPlanoTest` en la JVM). Sin
+comprobar: la miniatura con foto (el backend no tiene fotos de lugares), una lista larga desplazada en el teléfono
+(en `dev` había un solo lugar) y las distancias reales (FE-3.2).
 
 ---
 
@@ -756,7 +787,7 @@ Destino con la animación del micrófono (Inicio, con la suya, sí se volcó en 
 | `VoiceController` | `ui/inicio/VoiceController.kt` (paquete `ui.inicio`, aunque lo usan 3 vistas) | `VoiceController(context)` · `speak(texto: String, alTerminar: () -> Unit = {})` · `listen(onResult: (String) -> Unit, onFail: () -> Unit)` · `stopListening()` · `stopAll()` · `release()` en `onCleared`. Envuelve `TextToSpeech` y `SpeechRecognizer` en español de Colombia (`es-CO`). **Solo desde el hilo principal.** Un controlador por ViewModel. | Verificado contra el código. Comportamiento exacto:<br>• `speak` usa `QUEUE_FLUSH`: **corta** lo que se esté diciendo y el `alTerminar` anterior **no** se llama. Solo el último `speak` tiene callback.<br>• `alTerminar` se llama al terminar **o si hay un error** de TTS (no se distinguen).<br>• `stopAll()` no dispara `alTerminar` (no se sobreescribe `onStop`), pero un `alTerminar` que ya estaba encolado en el hilo principal sí llega: por eso el token (abajo) sigue siendo necesario.<br>• Si el TTS aún no está listo, `speak` queda pendiente y **solo se guarda el último**. Si el TTS falla al iniciar, `speak` nunca habla ni llama a `alTerminar`: un flujo que encadena `speak → listen` se queda parado. Poner siempre una salida por toque.<br>• Tras `release()` `speak` no hace nada (tampoco llama a `alTerminar`).<br>• `listen` cancela el reconocimiento anterior, **no** detiene el TTS (escuchar mientras habla capta la propia voz: llamar a `listen` desde el `alTerminar`) y **no** comprueba `RECORD_AUDIO` (sin permiso responde `onFail`).<br>• `onResult` recibe hasta **3 hipótesis unidas por espacio** (`"sí no sí"`); esto importa para `InterpretarRespuesta` (5.7).<br>• `onFail` cubre: reconocimiento no disponible (se llama **de forma síncrona**, antes de que `listen` retorne), error, silencio y sin resultados.<br>Candidato a mover a `voice/`. |
 | `Comando` / `ComandoParser` | **Dentro de `ui/inicio/VoiceController.kt`** (no existe `ComandoParser.kt` aparte) | `ComandoParser.parse(texto): Comando` → `UBICARME`, `IR_A_LUGAR`, `VER_MAPA` (FE-3.1) o `NINGUNO`. | Quita tildes y pasa a minúsculas. `UBICARME` si hay la palabra "uno"/"1" o el texto contiene "ubic", "donde estoy", "donde estamos". `IR_A_LUGAR` si hay "dos"/"2" o contiene "ir a", "llevar", "lugar", "destino", "llegar". `VER_MAPA` (FE-3.1) si hay la **palabra completa** "mapa" o "mapas" ("mapamundi" no cuenta). Si coinciden **dos o más** o **ninguno** → `NINGUNO` ("mapa del lugar" o "mi ubicación en el mapa" dan `NINGUNO`). Cuidado: "ir a", "ubic" y "lugar" se buscan como *fragmento* del texto, así que también aciona con "salir a", "venir a" o "ubicación". Desde FE-3.1 las palabras se separan por cualquier carácter que no sea letra ni número (`"uno,"` y `"¡dos!"` cuentan; antes, solo por espacios). Lo cubre `ComandoParserTest` (5). Solo sirve para el menú de Inicio; para nombres de lugares y sí/no, ver 5.7. Añadir un valor a `Comando` obliga a ampliar el `when` de `InicioViewModel.escuchar`. |
 | `FeedbackCaptura` | `ui/ubicacion/FeedbackCaptura.kt` | `FeedbackCaptura(ctx)` · `confirmar()` (vibra 120 ms + pitido de 120 ms) · `liberar()` | Verificado. Es `internal` (visible en todo el módulo), así que otra vista puede usarla. Liberar en `onCleared`. El pitido sale por el canal de **notificaciones** (volumen 80): con el teléfono en silencio solo vibra. Si el sistema no puede crear el generador de tonos, simplemente no suena (no falla). `liberar()` solo libera el tono; no usarla después de liberar. Necesita `VIBRATE` en el Manifest (§3.2). |
-| `AppLog` | `logs/AppLog.kt` (`object`) | `AppLog.d(TAG, msg)` · `AppLog.i(TAG, msg)` · `AppLog.w(TAG, msg, t = null)` · `AppLog.e(TAG, msg, t = null)` · `AppLog.nuevaSesion(prefijo): String` · `AppLog.sesion` (lectura/escritura) · `AppLog.init(context)` (solo `MyApp`) | Verificado. **`d` e `i` no reciben excepción**: para registrar una usar `w` o `e`. Cada línea va a Logcat (`[sesion] texto`) y a `files/logs/app.log` con hora, nivel, tag, hilo y sesión. Rota a ~1 MB (pasa a `app.log.1`, que pisa al anterior: historial máximo ≈ 2 MB). **Antes de `AppLog.init` solo escribe en Logcat.** La escritura al archivo es **síncrona en el hilo que llama**: no registrar en bucles calientes (el sensor de orientación llega a ~50 Hz). `nuevaSesion` genera `prefijo-NNNNN` con 5 dígitos del reloj: sirve para seguir una vuelta, **no garantiza unicidad**. Los errores de escritura se tragan en silencio. ⚠ El `SimpleDateFormat` interno es compartido y no es seguro entre hilos: con registros simultáneos desde varios hilos la hora de una línea puede salir corrupta. **No hay función de exportar**: el archivo se consulta como dice la §3.2. Tags en uso: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`, `Api` (FE-1.1: `RequestIdInterceptor`, §5.10, registra cada petición HTTP con `AppLog.i`, también el sondeo de Inicio cada 15 s) y `Sesion` (FE-1.2: `VigilanteSesion`, §5.3, con `AppLog.w`, p. ej. `GET /v1/admin/stats -> 401 TOKEN_EXPIRADO: sesión cerrada`). Verificado: `InicioViewModel`, `LoginViewModel` y `VideosViewModel` **no registran nada** por sí mismos. No registrar tokens ni lecturas de sensores. Se inicia en `MyApp.onCreate` (`AppLog.init(this)`, que además registra fabricante, modelo y versión de Android con el tag `App`). Las excepciones no capturadas se registran con el tag `CRASH` y luego se pasan al manejador anterior del sistema (la app se cierra igual). |
+| `AppLog` | `logs/AppLog.kt` (`object`) | `AppLog.d(TAG, msg)` · `AppLog.i(TAG, msg)` · `AppLog.w(TAG, msg, t = null)` · `AppLog.e(TAG, msg, t = null)` · `AppLog.nuevaSesion(prefijo): String` · `AppLog.sesion` (lectura/escritura) · `AppLog.init(context)` (solo `MyApp`) | Verificado. **`d` e `i` no reciben excepción**: para registrar una usar `w` o `e`. Cada línea va a Logcat (`[sesion] texto`) y a `files/logs/app.log` con hora, nivel, tag, hilo y sesión. Rota a ~1 MB (pasa a `app.log.1`, que pisa al anterior: historial máximo ≈ 2 MB). **Antes de `AppLog.init` solo escribe en Logcat.** La escritura al archivo es **síncrona en el hilo que llama**: no registrar en bucles calientes (el sensor de orientación llega a ~50 Hz). `nuevaSesion` genera `prefijo-NNNNN` con 5 dígitos del reloj: sirve para seguir una vuelta, **no garantiza unicidad**. Los errores de escritura se tragan en silencio. ⚠ El `SimpleDateFormat` interno es compartido y no es seguro entre hilos: con registros simultáneos desde varios hilos la hora de una línea puede salir corrupta. **No hay función de exportar**: el archivo se consulta como dice la §3.2. Tags en uso: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`, `Api` (FE-1.1: `RequestIdInterceptor`, §5.10, registra cada petición HTTP con `AppLog.i`, también el sondeo de Inicio cada 15 s) y `Sesion` (FE-1.2: `VigilanteSesion`, §5.3, con `AppLog.w`, p. ej. `GET /v1/admin/stats -> 401 TOKEN_EXPIRADO: sesión cerrada`); después se añadieron `Pdr` (FE-2.3), `Subida` (FE-2.1) y `Lugares` (FE-3.1): la lista completa, con el formato de cada uno, está en §3.2 («Registro de eventos»). Verificado: `InicioViewModel`, `LoginViewModel` y `VideosViewModel` **no registran nada** por sí mismos. No registrar tokens ni lecturas de sensores. Se inicia en `MyApp.onCreate` (`AppLog.init(this)`, que además registra fabricante, modelo y versión de Android con el tag `App`). Las excepciones no capturadas se registran con el tag `CRASH` y luego se pasan al manejador anterior del sistema (la app se cierra igual). |
 
 **Patrón de flujo hablado con token** (implementado y verificado en `SeleccionDestinoViewModel`: `hablar`, `escuchar`, `detenerVoz`; detalle en 5.5):
 hablar → al terminar, escuchar → interpretar → hablar… Cada interrupción de la persona (toca algo,
@@ -830,7 +861,8 @@ Cuidados:
   página sigue igual): `ON_STOP` llega en el acto al pasar a segundo plano o al quedar tapado por otra pantalla, y una
   entrada que se queda en la pila sin verse no vuelve a registrar aunque el proceso vuelva al primer plano (el hallazgo
   de FE-2.3, §4.5). El registro (`AppLog`, tag `Pdr`) deja `sensores registrados (iniciar|primer plano; rotación …,
-  acelerómetro …)` y `sensores quitados (detener|segundo plano)`: sirve de evidencia en FE-2.3 C5 y en FE-3.1.
+  acelerómetro …)` y `sensores quitados (detener|segundo plano)`: sirve de evidencia en FE-2.3 C5 y en FE-3.6 C5 (que heredó de FE-3.1
+  la prueba del mapa en el teléfono).
 - **Longitud de paso (7.3b):** `RecoleccionViewModel` crea `PdrTracker(app)` sin argumentos y `MapaPublicoScreen` `PdrTracker(ctx, cicloDeVida = …)` (FE-3.1); los dos recogen la longitud calibrada
   sin cambios (`RecoleccionViewModel` lo crea en su constructor, al abrir la vista 7.4). `distanciaMetros` es `pasos × longitud`, así que el disparador por distancia de 7.4 dispara cada `ceil(metros / longitud)` pasos (lo prueba `DisparadorCapturaTest` con `PdrEngine`).
   La calibración usa **su propio** `PdrTracker` (`CalibracionViewModel`): si otra pantalla dejara uno sin liberar, habría dos escuchando sensores.
@@ -1084,7 +1116,7 @@ pinta sus colores a mano. Un tema propio sería el sitio natural para unificar l
 | `Modifier.tarjeta(radio)` | ídem | `internal` | Fondo `Superficie` + borde de 1 dp `Borde` con esquinas redondeadas (`radio` 20 dp por defecto; `FilaLugar` usa 18 dp). Aplica recorte, fondo y borde, en ese orden. |
 | `CategoriaLugar.icono()` | ídem | `internal` | Ícono de cada categoría (el dominio no conoce Compose). Verificado: es un `when` **exhaustivo, sin `else`**, así que una categoría nueva no compila hasta que se le asigne ícono. Tabla abajo. |
 | `AlertaFormSheet` | `ui/admin/mapa/AlertaFormSheet.kt` (`public`) | `(alerta: Alerta, esNueva: Boolean, error: String?, onCambio: (Alerta) -> Unit, onGuardar, onCancelar, onEliminar)` | Hoja inferior (`ModalBottomSheet`) para crear o editar una alerta (vista 7.9). Detalle abajo. |
-| `MapaPublicoScreen` | `map/MapaPublicoScreen.kt` (`public`) | `MapaPublicoScreen(modifier: Modifier = Modifier)` | Mapa público (`index.html` + `app.js`) en un `WebView` con seguimiento por pasos. Crea su propio `PdrTracker`, registra el puente `AndroidBridge` (`PuentePdr`) y empuja la posición, el rumbo y los avisos a la página (tabla en 2.6). Aplica `systemBarsPadding()` (el mapa no maneja *insets*). Libera sensores y `WebView` al salir. Desde FE-3.1 crea el tracker con el ciclo de vida de **su entrada de la pila** (`PdrTracker(ctx, cicloDeVida = LocalLifecycleOwner.current.lifecycle)`, ADR-FE-22): en segundo plano o tapado por otra pantalla quita los sensores solo y los vuelve a poner al volver a verse (la pantalla no maneja `ON_STOP`). Ruta `mapa` (5.8): desde FE-3.1 se abre desde Inicio (voz «mapa», acción de TalkBack «Ver mapa»; Atrás vuelve a Inicio) y en el APK de depuración también con `am start … --es ruta mapa`. ⚠ A verificar en dispositivo (FE-2.3 C3 caminando; FE-3.1 C2c). |
+| `MapaPublicoScreen` | `map/MapaPublicoScreen.kt` (`public`) | `MapaPublicoScreen(modifier: Modifier = Modifier)` | Mapa público (`index.html` + `app.js`) en un `WebView` con seguimiento por pasos. Crea su propio `PdrTracker`, registra el puente `AndroidBridge` (`PuentePdr`) y empuja la posición, el rumbo y los avisos a la página (tabla en 2.6). Aplica `systemBarsPadding()` (el mapa no maneja *insets*). Libera sensores y `WebView` al salir. Desde FE-3.1 crea el tracker con el ciclo de vida de **su entrada de la pila** (`PdrTracker(ctx, cicloDeVida = LocalLifecycleOwner.current.lifecycle)`, ADR-FE-22): en segundo plano o tapado por otra pantalla quita los sensores solo y los vuelve a poner al volver a verse (la pantalla no maneja `ON_STOP`). Ruta `mapa` (5.8): desde FE-3.1 se abre desde Inicio (voz «mapa», acción de TalkBack «Ver mapa»; Atrás vuelve a Inicio) y en el APK de depuración también con `am start … --es ruta mapa`. La entrada por voz y la vuelta con Atrás, comprobadas en el Xiaomi (FE-3.1 C2c, 2026-10-26). ⚠ A verificar en dispositivo: el PDR caminando (FE-2.3 C3), la acción de TalkBack, el seguimiento con su ciclo de vida y el inicio sin tocar el mapa (FE-3.6 C5; hoy el inicio exige tocar el mapa, §4.5). |
 | `CalibracionScreen` / `CalibracionContent` | `ui/admin/calibracion/CalibracionScreen.kt` (`public`) | `CalibracionScreen(onVolver, modifier, vm = viewModel())` · `CalibracionContent(ui, acciones, modifier)` | Vista 7.3b completa (detalle abajo, «CalibracionScreen y CalibracionBridge»). **No navega.** |
 | `UbicacionManualScreen` / `UbicacionManualContent` | `ui/admin/recoleccion/UbicacionManualScreen.kt` (`public`) | `UbicacionManualScreen(onVolver, onConfirmar: (InicioRecoleccion) -> Unit, onAjustes = {}, onCalibrar = {}, onRetomar = {}, viewModel = viewModel(factory = …))` · `UbicacionManualContent(estado, acciones, modifier, longitudCalibradaM: Double? = null, grabacionPendiente: GrabacionPendiente? = null)` | Vista 7.3 completa (detalle abajo, «UbicacionManual»). Sustituye a `MapaPublicoScreen` en la ruta `admin/ubicacion-manual`. `onRetomar` y `grabacionPendiente`: FE-2.3. |
 | `ResumenVideoScreen` / `ResumenVideoContent` | `ui/admin/recoleccion/ResumenVideoScreen.kt` (`public`) | `ResumenVideoScreen(videoId: String?, onIrAlPanel: () -> Unit, modifier = Modifier, vm = viewModel(key = "resumen-<videoId o actual>", factory = ResumenVideoViewModel.Factory(videoId)))` · `ResumenVideoContent(ui: ResumenVideoUiState, acciones: ResumenVideoAcciones, control: RecoleccionMapaControl?, modifier)` | Vista 7.5 completa (FE-2.1; detalle abajo, «`ResumenVideoScreen` y `ResumenVideoViewModel`»). **No navega**: `onIrAlPanel` lo decide la ruta (5.8). `control = null` dibuja un recuadro en lugar del mapa (previews). |
@@ -1514,7 +1546,7 @@ Flujo:
 
 Pantalla:
 - Orbe de 252 dp (rol botón) con pulso mientras `escuchando`; título de 28 sp que pasa a «Te escucho…»; indicador de señal decorativo; texto fijo «Activa el lector de pantalla»; barra inferior con el punto verde/rojo del backend y «Acceso administrador» (alto ≈ 48 dp).
-- Accesibilidad del orbe: «Botón principal. Toca dos veces para iniciar el escaneo de 360 grados y saber dónde estás.» y dos acciones personalizadas de TalkBack, «Ir a un lugar» y, desde FE-3.1, «Ver mapa» (`onVerMapa` → `InicioViewModel.verMapa()` → evento `VerMapa` → la ruta navega a `mapa`). La descripción **no cambia** al escuchar y «Te escucho…» no es *live region*. El texto en pantalla («Presiona para ubicarte o para llegar a un lugar.») no menciona el mapa (la interacción de Inicio la decide FE-3.5).
+- Accesibilidad del orbe: «Botón principal. Toca dos veces para iniciar el escaneo de 360 grados y saber dónde estás.» y dos acciones personalizadas de TalkBack, «Ir a un lugar» y, desde FE-3.1, «Ver mapa» (`onVerMapa` → `InicioViewModel.verMapa()` → evento `VerMapa` → la ruta navega a `mapa`). La descripción **no cambia** al escuchar y «Te escucho…» no es *live region*. El texto en pantalla («Presiona para ubicarte o para llegar a un lugar.») no menciona el mapa (la interacción de Inicio la decide FE-3.5). ⚠ Con TalkBack 17 en el Xiaomi no se encontró cómo abrir esas acciones (el doble toque ejecuta Ubicarme; el toque con tres dedos abre «Search screen»): hallazgos en §4.5; la prueba de «Ver mapa» es de FE-3.6 C5.
 - `BannerPermisos` lista los faltantes con nombre legible («Cámara», «Micrófono», «Sensores de actividad») y dos acciones: «Permitir» (relanza el diálogo) y «Ajustes» (`ACTION_APPLICATION_DETAILS_SETTINGS`). La lista se refresca tras cada solicitud y al volver de Ajustes.
 
 Cuidados:
@@ -2704,7 +2736,12 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   de `composable("mapa")` compone `MapaPublicoScreen(`, `InicioScreen.kt` tiene `CustomAccessibilityAction("Ver mapa")
   { onVerMapa()` y `InicioEvento.VerMapa -> onVerMapa()`, `InicioViewModel.kt` `Comando.VER_MAPA ->
   navegar(InicioEvento.VerMapa)` y `MapaPublicoScreen.kt` un `PdrTracker(… cicloDeVida = …)` con
-  `LocalLifecycleOwner.current.lifecycle`. La manual C2c lleva como contexto si C1b ya instaló el APK. Las pruebas
+  `LocalLifecycleOwner.current.lifecycle`. La manual C2c (`instruccion_c2(contexto)`) lleva como contexto si C1b ya
+  instaló el APK. ⚠ **Texto desactualizado:** desde 0.8.1 C2c es solo por voz (decisión del usuario del 2026-10-26),
+  pero el texto que imprime `instruccion_c2` (y `INSTRUCCION_C1B`, que ofrece la acción de TalkBack «Ir a un lugar»)
+  sigue siendo el del código validado en `b553390`: pide también TalkBack, ▶ y `dumpsys`. Vale lo que dice
+  `validation-3-1` §3; el siguiente lote que toque el código de la app lo corrige (solo el texto: ninguna prueba
+  comprueba esas palabras salvo «dos» en la instrucción del paso guiado). Las pruebas
   (`tests/ops/test_validate31.py`) simulan el teléfono (Inicio y Destino con una lista que se desplaza: cabecera de
   1100 px, filas de 230 px, `input swipe` de 960 px, solo las filas visibles en el volcado), la API de lugares con
   estado (restos, `409` por nombre, `DELETE`), Gradle y el paso guiado; recorren `main()` en `local` y `dev` (feliz con
@@ -2782,13 +2819,16 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   entrada redirigida, p. ej. `< /dev/null` o desde un script sin terminal, `esperar_enter` ve EOF → código 3). Con **TalkBack activo**, `adb shell input swipe`
   puede no desplazar la lista (TalkBack convierte los gestos de un dedo en exploración táctil; **sin comprobar** en el
   Xiaomi): la instrucción pide desactivarlo antes de pulsar Enter; si no, C1b fallaría con «faltan …» (solo habría
-  leído las filas de la primera pantalla). En `dev` puede no haber ningún lugar (los de la validación de BE-3.1 se borraron al terminar;
-  **sin comprobar** si hay lugares reales; desde backend 0.12.0 BE-3.2 tampoco exige ≥ 1): P5 no lo exige y el lugar
-  de prueba va a `POSICION_CAMPUS`. La comparación es por nombre
-  exacto: dos lugares con el mismo nombre no pueden existir (el backend da `409`), pero un lugar con una categoría que
-  la app no conoce faltaría en la lista (se descarta con una línea `Lugares` en `app.log`). **Sin comprobar en `dev`:**
-  que `uiautomator dump` vuelque Selección de destino mientras escucha (halo animado del micrófono; Inicio, con su orbe
-  animado, sí se volcó en FE-1.2) y el `content-desc` real de `FilaLugar` en el Xiaomi.
+  leído las filas de la primera pantalla). En `dev` puede no haber ningún lugar: el 2026-10-26 `GET /v1/places` dio
+  **0 lugares** (los de la validación de BE-3.1 se borraron al terminar; desde backend 0.12.0 BE-3.2 tampoco exige
+  ≥ 1): P5 no lo exige y el lugar de prueba va a `POSICION_CAMPUS`, así que C1b comparó una lista de una sola fila. La
+  comparación es por nombre exacto: dos lugares con el mismo nombre no pueden existir (el backend da `409`), pero un
+  lugar con una categoría que la app no conoce faltaría en la lista (se descarta con una línea `Lugares` en
+  `app.log`). **Comprobado en `dev` (2026-10-26, Xiaomi):** `uiautomator dump` volcó Destino justo tras abrirla (sin
+  «could not get idle state») y el `content-desc` de `FilaLugar` se leyó con `nombre_de_fila`. **Sin comprobar:** el
+  desplazamiento de una lista larga en el teléfono (con una fila, «2 desplazamientos» son los dos de fin de lista) y si
+  el micrófono seguía animado durante el volcado. El primer intento dio código 3 por `INSTALL_FAILED_USER_RESTRICTED`:
+  MIUI había apagado «Instalar vía USB» (`validation-3-1` §5, paso 6).
 
 ---
 
@@ -2819,7 +2859,9 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 **Comportamiento:**
 - Al abrir, lee las instrucciones y empieza a escuchar.
 - Reconoce "uno", "dos" y sinónimos ("ubicarme", "ir a") y, desde FE-3.1, "mapa", que abre el **mapa público** (2.6,
-  ruta `mapa`; Atrás vuelve a Inicio). Con TalkBack, el botón principal tiene las acciones «Ir a un lugar» y «Ver mapa».
+  ruta `mapa`; Atrás vuelve a Inicio). Con TalkBack, el botón principal tiene las acciones «Ir a un lugar» y «Ver mapa»
+  (cómo abrirlas en TalkBack 17, sin comprobar: §4.5). *Pendiente (FE-3.6):* que el mapa empiece el seguimiento en la
+  posición de «Ubicarme» sin tocar la pantalla.
 - Si no entiende, repite las opciones.
 - Pide los permisos (cámara, micrófono, actividad física) en un único diálogo del sistema la
   primera vez. *Pendiente (FE-3.5):* la explicación hablada previa al diálogo.

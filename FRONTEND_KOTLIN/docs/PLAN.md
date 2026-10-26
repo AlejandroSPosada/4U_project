@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.8.0**. Este archivo contiene además el **catálogo único de historias de usuario**
+Alineado con `ARCHITECTURE.md` **v0.8.1**. Este archivo contiene además el **catálogo único de historias de usuario**
 del proyecto (§5), que los planes de las otras carpetas referencian.
 
 ---
@@ -161,11 +161,17 @@ públicas pasó a FE-3.6 (como en el backend, donde BE-3.1 queda con lugares y l
   existe desde FE-2.3, que solo la abre con un extra del `Intent` en depuración; falta llegar desde Inicio, con el
   comando de voz «mapa» y la acción de TalkBack «Ver mapa»; no depende de las alertas, que se anunciarán ahí en FE-3.6);
   hallazgo de FE-2.3: que el `PdrTracker` del mapa deje de leer sensores cuando el mapa no es la pantalla visible
-  (hecho en FE-3.1 con el ciclo de vida de la pantalla, ADR-FE-22).
+  (hecho en FE-3.1 con el ciclo de vida de la pantalla, ADR-FE-22). La acción «Ver mapa» está en el código, pero su
+  prueba con TalkBack pasó a FE-3.6 (abajo).
 - **Criterios de cierre:**
   - C1. Selección de destino muestra los lugares de `GET /v1/places`.
-  - C2. Desde Inicio se abre el mapa público con el comando de voz «mapa» y con la acción de TalkBack «Ver mapa», y
-    Atrás vuelve a Inicio.
+  - C2. Desde Inicio se abre el mapa público con el comando de voz «mapa», y Atrás vuelve a Inicio.
+- **Decisión del usuario del 2026-10-26** (al validar en `dev`): C2 decía también «y con la acción de TalkBack «Ver
+  mapa»». Con TalkBack 17 en el Xiaomi no se encontró cómo abrir las acciones del botón principal (hallazgos en la fila
+  FE-3.1 de §3) y, además, para usar el mapa hay que tocar el punto de inicio, cosa que una persona ciega no puede
+  hacer. Propuesta del maestro: «cerrar FE-3.1 como Hecho con lo validado (C1b en dev y la entrada al mapa por voz) y
+  pasar la prueba con TalkBack del mapa y el hueco del punto de inicio a FE-3.6»; respuesta del usuario: «Si, por
+  favor. Cambialo y demos por hecho lo que llevamos.»
 - **Historias:** HU-03.
 
 #### FE-3.2 — Ubicación real y Resultado (6.3)
@@ -223,6 +229,9 @@ públicas pasó a FE-3.6 (como en el backend, donde BE-3.1 queda con lugares y l
     ícono de respaldo la resolvió FE-3.1.)
   - Los dos ⚠ de `BuscarLugares` (5.7): coincidencia exacta que gana sin preguntar e hipótesis unidas de `listen`.
   - Estado viejo de Destino al volver del escaneo (5.5, `SeleccionDestinoViewModel`).
+  - Tener en cuenta lo visto con TalkBack 17 en el Xiaomi al validar FE-3.1 (ARCHITECTURE §4.5, «Hallazgos con
+    TalkBack 17»): las acciones personalizadas del orbe («Ir a un lugar», «Ver mapa») no se encontraron con los gestos
+    probados, así que hoy por toque con TalkBack solo se llega a Ubicarme.
 - **Criterios de cierre:**
   - C1. Las pruebas de accesibilidad automáticas (Espresso con `AccessibilityChecks`) pasan en las vistas públicas.
   - C2. `BuscarLugaresTest` cubre los dos casos ⚠.
@@ -241,12 +250,23 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
   - Anunciar las alertas en el mapa público (ruta `mapa`, `MapaPublicoScreen`, posición por PDR) mientras se camina.
   - Alertas cercanas en `ResultadoUbicacionScreen` (6.3): se muestran y se leen después de la ubicación. Salen de la
     caché local y de la posición estimada: `POST /v1/localize` no trae alertas (backend §5.3).
+  - Desde FE-3.1 (decisión del usuario del 2026-10-26, PLAN §2.2 FE-3.1): **punto de inicio del mapa público sin tocar
+    el mapa.** Hoy el seguimiento solo empieza si se toca un punto del mapa (o el botón GPS) y se pulsa ▶, algo que una
+    persona ciega no puede hacer. El inicio debe salir de la ubicación de «Ubicarme» (el resultado de FE-3.2, por el
+    *holder* de la decisión abierta 15) y el rastreo debe poder empezar sin ▶ (por voz o al abrir el mapa). A decidir
+    en el lote: hoy el punto de partida lo fija la página (`AndroidBridge.setPosition`, ARCHITECTURE §5.9), así que
+    probablemente haga falta una función nueva Kotlin → web (cambio de contrato de §5.9).
+  - Desde FE-3.1: probar con TalkBack la acción «Ver mapa» del botón principal de Inicio (ya está en el código,
+    ARCHITECTURE §5.5) y documentar cómo se abren las acciones en TalkBack 17 (hallazgos en ARCHITECTURE §4.5).
 - **Criterios de cierre:**
   - C1. Una alerta creada en el backend llega al teléfono en la siguiente sincronización, y al borrarla desaparece.
   - C2. En modo avión, tras una sincronización previa, se anuncia una alerta al entrar en su radio.
   - C3. `DetectarAlertasCercanasTest` cubre radio, incertidumbre, una vez por aproximación y vigencia.
   - C4. En el Resultado (6.3), una alerta activa dentro del radio de la posición estimada se muestra y se lee después
     de la ubicación.
+  - C5 (desde FE-3.1, decisión del usuario del 2026-10-26). Con TalkBack activo, desde Inicio se abre el mapa público
+    con la acción «Ver mapa»; el seguimiento empieza en la posición de «Ubicarme» sin tocar el mapa (y, mientras
+    exista, también fijando un punto y pulsando ▶), y Atrás vuelve a Inicio.
 - **Historias:** HU-05.
 
 #### FE-4.1 — Videos e imágenes contra el backend (7.11–7.14)
@@ -281,6 +301,10 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
 #### FE-4.3 — Limpieza y deuda técnica
 - **Código y configuración:**
   - Sacar de `java/com/example/myapplication/` los archivos `archivos_zip.py`, `crear_archivos.py` y `out.zip`.
+  - Quitar la dependencia sin uso de Coil 3 (`libs.coil.compose`, `io.coil-kt.coil3`); las vistas usan Coil 2
+    (ARCHITECTURE §4.1, «Trampas»; visto en FE-3.1). Arreglar el error de `lintDebug` en `MapaWebView.kt:125` (§4.1).
+  - Corregir el texto de `validate31.py` para la manual C2c y el paso guiado (hoy aún pide TalkBack, ▶ y `dumpsys`;
+    C2c es solo por voz desde el 2026-10-26, ARCHITECTURE §5.11), si antes no lo hace otro lote que toque el código.
   - Quitar de `project/` (código, scripts y su README) las referencias a `eafit.mbtiles`.
   - Quitar `ACTIVITY_RECOGNITION` de `Permisos.INICIALES`, `Permisos.ACTIVIDAD`, la ruta `admin/calibracion` y el
     Manifest (3.2, «Permisos de Android»).
@@ -349,12 +373,12 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
 | FE-2.1 | 2 | Hecho | [2-1](./validation/validation-2-1.md) | `a69a79a` 2026-10-26 | 0.7.2 | `dev` (`/v1/collect/…`, `GET /v1/admin/videos[/{id}]`, S3 `dataset/`); local (`files/recoleccion/`) | Código y pruebas listos (ARCHITECTURE 0.7.0, §4.4): vista 7.5 y su ruta (C4), cola de subida en `data/local/` (re-codificación ≤ 1600 px y ≤ 4 MB, lotes de 50, `PUT` sin interceptores, `403` → URLs nuevas, «esperar sesión», retomar sin duplicar), `EstadoFoto.PENDIENTE`, Galería/Lista/Detalle con los recorridos locales y tarjeta de subidas en el Panel. 151 casos JVM (C2a 13/8/13, C3a 12); `validate21.py --entorno local` con código 0 (2026-10-25; P1, C2a, C3a, C4). **En `dev`, en casa por decisión del usuario (2026-10-26)**, con un Redmi Note 15 Pro y el APK de `4c87f5e`: recorrido de prueba `validacion_21_casa` (`rec_0017`, 56 fotos, «Cada 3 s»). C2c manual: con 13 fotos subidas, modo avión, app cerrada desde Recientes, reabierta, y la subida se retomó hasta «Subido» (capturas de 7.5 subiendo, 24 de 56, y de 7.13 vistas por el maestro; no se versionan: muestran la casa). `validate21.py --entorno dev --video validacion_21_casa` con código 0 (informe `.validacion/FE-2.1-20261026-130806.json`): P1–P8 (`embedding` encendido en 173 s y apagado al final), C1 (56 fotos `procesada` en 244 s), C2a, C2b (56 = `total_fotos`, sin órdenes repetidas), C3a, C3b (máx. 473 591 B y 1600 px) y C4. La primera corrida (sobre `5642cbd`) se bloqueó por un error del validador en P4, corregido en `a69a79a` (0.7.2). Al terminar, el maestro borró del backend los dos recorridos de prueba (`validacion-21-casa`, 11 fotos, y `validacion_21_casa`, 56) con SQL por la tarea de validación y `aws s3 rm` (autorizado por el usuario): `limpiar-validacion` no sirve para recorridos de la app, porque su `ref_cliente` es `rec_NNNN` y no empieza por `validacion-`. Hallazgo: en 7.14 (Detalle de video) las miniaturas de un recorrido local salen vacías, aunque en 7.5 se ven (pendiente, FE-4.1). Decisiones provisionales del maestro, a confirmar por el usuario: CHANGELOG 0.7.0, «Pendiente» |
 | FE-2.2 | 2 | Pendiente | [2-2](./validation/validation-2-2.md) | — | — | | |
 | FE-2.3 | 2 | Hecho | [2-3](./validation/validation-2-3.md) | `02adcb9` 2026-10-25 | 0.7.1 | Local (`files/recoleccion/`, `campus_calibracion`); no usa el backend | Código y pruebas listos (ARCHITECTURE 0.6.0, §4.3): C1 con las cuatro clases en Gradle (13, 11, 10 y 6 casos; `CalibracionPasoTest` y `StepDetectorTest` no existían), C2 sin cambios de código, retomar tras matar el proceso (C4) y `PdrTracker` que sigue el ciclo de vida del proceso (C5); ruta `mapa` de prueba (`--es ruta mapa`). `validate23.py --entorno local` con código 0 (2026-10-25). **En `dev`** (2026-10-25, Xiaomi 23028RA60L, Android 14): `validate23.py --entorno dev` con código 0 sobre `02adcb9` (informe `.validacion/FE-2.3-20261026-023206.json`; calibración guardada: ninguna, la app usaba 0,72 m). **C4 pasa:** una sola carpeta nueva `rec_0013`, `finalizado`, fotos `0001`–`0021` seguidas (9 antes de `am kill`, 12 después); evidencia `c4-recoleccion.txt` y `c4-manifest.json` (el video `c4-video.mp4` no se sube: puede mostrar la cámara en casa). **C5 pasa:** en segundo plano la app no está en las conexiones activas de `dumpsys sensorservice` (calibración y mapa) y en primer plano sí (acelerómetro y vector de rotación); `app.log` con `sensores quitados (detener)`, `(segundo plano)` y `registrados (primer plano; …)`; evidencia `c5-*.txt`. Hallazgo: abrir la app desde el ícono tras la ruta de prueba `mapa` muestra Inicio, pero el `PdrTracker` del mapa sigue en la pila y vuelve a registrar sensores en primer plano (21:48:35): el PDR sigue al proceso, no a la pantalla visible (tener en cuenta en FE-3.1). **C3, en casa por decisión del usuario (2026-10-26)**, en un Redmi Note 15 Pro con el APK de `4c87f5e`: 7.3b contó bien los pasos reales (10 en un tramo de 7,1 m marcado en el mapa, sin medir en el terreno), así que la longitud guardada (0,71 m) es provisional; el PDR del mapa público y 7.3 en un recorrido conocido de ≥ 100 m no se hicieron. Evidencia: [`registro.md`](./validation/evidencia/fe-2-3/registro.md). **Antes de grabar el dataset hay que recalibrar 7.3b en un tramo recto medido, con el teléfono con el que se grabe** |
-| FE-3.1 | 3 | En curso | [3-1](./validation/validation-3-1.md) | — | — | `dev` (`GET /v1/places`; lugar de prueba `validacion-3-1-lugar` por `POST`/`DELETE /v1/admin/places`) | Código y pruebas listos (ARCHITECTURE 0.8.0, §4.5): `RemoteLugaresRepository` (`GET /v1/places`; sin posición hasta FE-3.2, ADR-FE-23), foto del lugar o ícono de respaldo, entrada al mapa desde Inicio (voz «mapa», acción de TalkBack «Ver mapa», Atrás vuelve) y el PDR del mapa atado al ciclo de vida de su pantalla (hallazgo de FE-2.3, ADR-FE-22). 171 casos JVM (C1a 9; C2a 5 y 6); `validate31.py --entorno local` con código 0 (2026-10-26; P1, C1a, C2a, C2b). **Falta** `validate31.py --entorno dev` con el teléfono (C1b, paso guiado) y el video de C2c (`validation-3-1` §3 y §5). Orden por popularidad: BE-5.2 |
+| FE-3.1 | 3 | Hecho | [3-1](./validation/validation-3-1.md) | `b553390` 2026-10-26 | 0.8.1 | `dev` (`GET /v1/places`, 0 lugares; lugar de prueba `validacion-3-1-lugar` por `POST`/`DELETE /v1/admin/places`, borrado al terminar) | Código y pruebas (ARCHITECTURE 0.8.0, §4.5): `RemoteLugaresRepository` (`GET /v1/places`; sin posición hasta FE-3.2, ADR-FE-23), foto del lugar o ícono de respaldo, entrada al mapa desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»; Atrás vuelve) y el PDR del mapa atado al ciclo de vida de su pantalla (hallazgo de FE-2.3, ADR-FE-22); 171 casos JVM; `frontend.yml` en verde sobre `b553390`. `validate31.py --entorno dev` con código 0 sobre `b553390` (sin `-dirty`) en el Xiaomi 23028RA60L (Android 14), informe `.validacion/FE-3.1-20261026-142022.json` (14:20–14:23 UTC): P1–P5 (`GET /v1/places` → 0 lugares en `dev`); C1a 9/9; C1b «1 lugares en Selección de destino = GET /v1/places (incluye validacion-3-1-lugar; 2 desplazamientos)», con Destino abierto por el usuario con la voz «dos» y el Enter del paso guiado mandado por el maestro; C2a 5/5 y 6/6; C2b; limpieza: lugar borrado y `am force-stop`. El primer intento (14:17 UTC) dio código 3: C1b `INSTALL_FAILED_USER_RESTRICTED` (MIUI había apagado «Instalar vía USB»; se reactivó junto con «Depuración USB (Configuración de seguridad)»). C2c, solo por voz (09:24 de Bogotá): app abierta desde el lanzador, «mapa» → mapa público («StepTracker · Comenzar») → Atrás → Inicio («Te escucho…»); evidencia [`c2-1-inicio.png`, `c2-2-mapa-por-voz.png`, `c2-3-atras-a-inicio.png`](./validation/evidencia/fe-3-1/) (fotogramas de un `screenrecord` de 74 s, sin audio, que no se versiona: 14 MB); no se fijó punto ni se pulsó ▶, así que no hubo líneas `Pdr` ni `dumpsys sensorservice`. **Por decisión del usuario del 2026-10-26** (§2.2 FE-3.1, «Si, por favor. Cambialo y demos por hecho lo que llevamos.») C2 queda solo con la voz y pasan a FE-3.6 la prueba con TalkBack («Ver mapa», fijar inicio y ▶) y el punto de inicio sin tocar el mapa (desde Ubicarme). Hallazgos con TalkBack 17.0.1 en el Xiaomi: al activarlo sale primero su tutorial; el toque con tres dedos abre «Search screen», no el menú de TalkBack; el doble toque en el botón principal de Inicio ejecuta su acción principal (Ubicarme), no «Ver mapa»; cómo abrir las acciones, sin comprobar. Orden por popularidad: BE-5.2 |
 | FE-3.2 | 3 | Pendiente | [3-2](./validation/validation-3-2.md) | — | — | | Requiere decidir la decisión abierta 15 |
 | FE-3.3 | 3 | Pendiente | [3-3](./validation/validation-3-3.md) | — | — | | Para validar espera BE-3.3 (alertas del backend, fuera del núcleo) |
 | FE-3.4 | 3 | Pendiente | [3-4](./validation/validation-3-4.md) | — | — | | |
 | FE-3.5 | 3 | Pendiente | [3-5](./validation/validation-3-5.md) | — | — | | Requiere decidir la decisión abierta 18 |
-| FE-3.6 | 3 | Pendiente | [3-6](./validation/validation-3-6.md) | — | — | | Fuera del núcleo (decisión del usuario del 2026-10-25: «No necesitamos las alertas por el momento»). Sale de FE-3.1 y FE-3.2 |
+| FE-3.6 | 3 | Pendiente | [3-6](./validation/validation-3-6.md) | — | — | | Fuera del núcleo (decisión del usuario del 2026-10-25: «No necesitamos las alertas por el momento»). Sale de FE-3.1 y FE-3.2. Desde el 2026-10-26 (decisión del usuario al cerrar FE-3.1) lleva también la prueba con TalkBack del mapa (C5) y el punto de inicio del mapa sin tocarlo |
 | FE-4.1 | 4 | Pendiente | [4-1](./validation/validation-4-1.md) | — | — | | |
 | FE-4.2 | 4 | Pendiente | [4-2](./validation/validation-4-2.md) | — | — | | Puede empezar ya |
 | FE-4.3 | 4 | Pendiente | [4-3](./validation/validation-4-3.md) | — | — | | Puede empezar ya (salvo lo que dependa de decisiones) |

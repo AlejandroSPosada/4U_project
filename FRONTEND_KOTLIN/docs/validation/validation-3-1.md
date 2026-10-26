@@ -5,7 +5,8 @@
 | Lote | `FE-3.1` — criterios en [`PLAN.md`](../PLAN.md) §2.2 |
 | Script | `project/src/ops/validate31.py` |
 | Entornos | `dev` con dispositivo físico (cierra el lote, junto con la evidencia de C2c); `local` (sin teléfono ni backend: C1a, C2a y C2b) |
-| Criterios | Automáticos: C1 (C1b; apoyo C1a), C2 (apoyo: C2a y C2b) · Manuales: C2 (C2c) |
+| Criterios | Automáticos: C1 (C1b; apoyo C1a), C2 (apoyo: C2a y C2b) · Manuales: C2 (C2c, solo por voz desde el 2026-10-26) |
+| Resultado | **Hecho** el 2026-10-26: `validate31.py --entorno dev` con código 0 sobre `b553390` y C2c por voz (§3 y el final de §5) |
 
 Contrato común de los validadores: `INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` §5.11. Lo propio de esta carpeta
 (dónde corren, variables, `comun.py`, detalles de `validate31.py`, trampas): `ARCHITECTURE.md` §5.11. Piezas que se
@@ -40,37 +41,43 @@ En este orden. En `local`, C1b queda `omitida` («solo en dev»).
 | C1a | Borra los XML anteriores y ejecuta una vez `<VALIDACION_GRADLE> testDebugUnitTest --tests '*.RemoteLugaresRepositoryTest'` (junto con C2a si está incluida); lee `app/build/test-results/testDebugUnitTest/TEST-*.RemoteLugaresRepositoryTest.xml` | Gradle sale con 0 y la clase tiene su XML, 0 fallos, errores ni omitidos y ≥ 6 casos (hoy 9). Cubren `GET /v1/places` sin y con posición, sin `Authorization`, el mapeo a `LugarDestino`, lugares descartados y los errores (`ARCHITECTURE.md` §5.10, «Lugares»); lo confirma la revisión del PR |
 | C1b | (`dev`) `installDebug` (**conserva los datos**) y `pm grant` de los permisos de Inicio (como `validate12`). Con el token de P4: borra el lugar `validacion-3-1-lugar` que haya dejado una ejecución anterior (§4) y lo crea con `POST /v1/admin/places`. `am force-stop` + `am start` y espera Inicio («Acceso administrador»). **Paso guiado:** pide a la persona abrir Selección de destino (voz «dos», o la acción de TalkBack «Ir a un lugar» y después desactivar TalkBack) y pulsar Enter. Espera hasta 20 s la pantalla («¿A dónde quieres ir?» y alguna fila), lee los nombres de las filas (`content-desc` de `FilaLugar`) con `uiautomator dump`, desplazando la lista con `adb shell input swipe` hasta que dos desplazamientos seguidos no traen filas nuevas, y la compara con `GET /v1/places` | Los nombres de las filas son exactamente los de `items[].nombre`, sin faltantes ni sobrantes, e incluyen `validacion-3-1-lugar`. Falla en el acto si Destino muestra «No se pudo cargar la lista de lugares.» o «No hay lugares con estos filtros», y si no se ve Selección de destino en 20 s (con lo que se veía). Sin terminal para el paso guiado (EOF) → `error` (3) |
 | C2a | Como C1a, con `--tests '*.ComandoParserTest' --tests '*.ObservadorPrimerPlanoTest'` | XML con 0 fallos, errores ni omitidos y ≥ 4 casos cada una (hoy 5 y 6): la voz «mapa» (palabra completa, sola) y que el PDR del mapa no vuelve a leer sensores si el mapa sigue en la pila sin verse aunque el proceso vuelva al primer plano (hallazgo de FE-2.3, ADR-FE-22) |
-| C2b | Lee `MainActivity.kt`, `InicioScreen.kt`, `InicioViewModel.kt` y `MapaPublicoScreen.kt` | La ruta `inicio` pasa a `InicioScreen` un `onVerMapa` que navega a `"mapa"`; la ruta `mapa` compone `MapaPublicoScreen(`; el orbe tiene `CustomAccessibilityAction("Ver mapa") { onVerMapa()`; `InicioEvento.VerMapa -> onVerMapa()`; `Comando.VER_MAPA -> navegar(InicioEvento.VerMapa)`; y `MapaPublicoScreen` crea el `PdrTracker` con `cicloDeVida =` el `LocalLifecycleOwner.current.lifecycle` |
+| C2b | Lee `MainActivity.kt`, `InicioScreen.kt`, `InicioViewModel.kt` y `MapaPublicoScreen.kt` | La ruta `inicio` pasa a `InicioScreen` un `onVerMapa` que navega a `"mapa"`; la ruta `mapa` compone `MapaPublicoScreen(`; el orbe tiene `CustomAccessibilityAction("Ver mapa") { onVerMapa()`; `InicioEvento.VerMapa -> onVerMapa()`; `Comando.VER_MAPA -> navegar(InicioEvento.VerMapa)`; y `MapaPublicoScreen` crea el `PdrTracker` con `cicloDeVida =` el `LocalLifecycleOwner.current.lifecycle`. (La acción «Ver mapa» se comprueba aquí en el código; su prueba con TalkBack en el teléfono es de FE-3.6, §3) |
 
 ## 3. Comprobaciones manuales
 
-La evidencia se guarda en `evidencia/fe-3-1/` y se cita en el PR. En los comandos, `adb` es `$VALIDACION_ADB` en WSL
-(§5) y `EVID=../docs/validation/evidencia/fe-3-1` desde `FRONTEND_KOTLIN/project`. El script la imprime como
-`[MANUAL] C2c`.
+La evidencia se guarda en [`evidencia/fe-3-1/`](./evidencia/fe-3-1/) y se cita en el PR. En los comandos, `adb` es
+`$VALIDACION_ADB` en WSL (§5) y `EVID=../docs/validation/evidencia/fe-3-1` desde `FRONTEND_KOTLIN/project`. El script
+la imprime como `[MANUAL] C2c`.
+
+**Desde el 2026-10-26 C2c es solo por voz** (decisión del usuario al validar en `dev`, PLAN §2.2 FE-3.1: «Si, por
+favor. Cambialo y demos por hecho lo que llevamos.»). Lo que llevaba además —abrir el mapa con TalkBack y la acción
+«Ver mapa», fijar un punto de inicio y pulsar ▶, y comprobar después con `dumpsys sensorservice` y las líneas `Pdr`
+que el mapa deja de leer sensores al volver a Inicio— pasó a [`validation-3-6`](./validation-3-6.md) §3 (FE-3.6 C5),
+junto con el punto de inicio del mapa sin tocarlo. **Trampa:** el texto que imprime `validate31.py` para `[MANUAL] C2c`
+todavía menciona TalkBack, ▶ y `dumpsys` (es el del código validado en `b553390`); se corrige en el próximo cambio de
+código de la app. Para cerrar FE-3.1 vale el procedimiento de abajo.
 
 | ID | Qué hace la persona | Evidencia |
 |---|---|---|
-| C2c | Desde Inicio abre el mapa público (ruta `mapa`, `MapaPublicoScreen`) con el comando de voz «mapa»; vuelve con Atrás; lo abre otra vez con TalkBack activo y la acción «Ver mapa»; en el mapa fija un punto de inicio y pulsa ▶; vuelve a Inicio y comprueba que el mapa ya no lee sensores (procedimiento abajo) | `c2-video.mp4` (corto, con audio: las dos formas abren el mapa, la posición empieza en el punto tocado y Atrás vuelve a Inicio; si muestra algo privado no se versiona y se cita en el PR), `c2-sensores-inicio.txt` (`dumpsys sensorservice` de vuelta en Inicio) y `c2-app-log.txt` (líneas `Pdr`) |
+| C2c | Desde Inicio abre el mapa público (ruta `mapa`, `MapaPublicoScreen`) con el comando de voz «mapa» y vuelve a Inicio con Atrás (procedimiento abajo) | Capturas o fotogramas de una grabación de pantalla: Inicio, el mapa abierto por la voz y la vuelta a Inicio. Un video que muestre algo privado (o pesado) no se versiona y se cita en el PR |
 
-**C2c — procedimiento** (`ARCHITECTURE.md` §4.5, §5.5 «Inicio» y §5.2 «Segundo plano»; el APK del commit que se valida
-ya instalado: lo instala C1b o el paso 6 de §5).
-1. Abrir la app desde el lanzador (Inicio). Empezar la grabación de pantalla con audio (en el Xiaomi, «Grabadora de
-   pantalla» con el micrófono).
-2. Tras la bienvenida («…, o mapa para ver el mapa»), decir **«mapa»**: se abre el mapa público. Pulsar **Atrás**: vuelve
-   a Inicio (repite la bienvenida).
-3. Activar **TalkBack**. Con el foco en el botón principal de Inicio, abrir las acciones (menú de TalkBack → «Acciones»;
-   el gesto exacto depende de la versión de TalkBack, **sin comprobar** en el Xiaomi) y elegir **«Ver mapa»**: se abre
-   el mapa. Desactivar TalkBack si estorba para tocar el mapa.
-4. Tocar un punto del mapa como inicio y pulsar **▶**: la posición empieza en el punto tocado. Dar unos pasos (opcional).
-5. Pulsar **Atrás**: vuelve a Inicio. Parar la grabación y guardarla como `$EVID/c2-video.mp4`.
-6. Con la app en Inicio (sin volver al mapa), esperar 5 s y
-   `adb shell dumpsys sensorservice > $EVID/c2-sensores-inicio.txt` y
-   `adb exec-out run-as com.example.myapplication cat files/logs/app.log | grep "I/Pdr" | tail -n 10 > $EVID/c2-app-log.txt`.
-7. Pasa si el video muestra las dos entradas y las dos vueltas, si en `c2-sensores-inicio.txt` no hay ninguna conexión
-   **activa** de `com.example.myapplication` al acelerómetro ni al vector de rotación (el historial de registros
-   anteriores también la nombra y no cuenta; formato de `dumpsys` **sin comprobar** en el Xiaomi, como en
-   `validation-2-3` C5) y si `c2-app-log.txt` muestra `sensores registrados (iniciar; …)` al pulsar ▶ seguido de
-   `sensores quitados (segundo plano)` o `(detener)` al volver.
+**C2c — procedimiento** (`ARCHITECTURE.md` §4.5 y §5.5 «Inicio»; el APK del commit que se valida ya instalado: lo
+instala C1b o `installDebug`).
+1. Abrir la app desde el lanzador (Inicio). Empezar a grabar la pantalla (en el Xiaomi, «Grabadora de pantalla», o
+   `adb shell screenrecord /sdcard/fe31-c2.mp4`, que no graba audio y para con Ctrl+C).
+2. Tras la bienvenida («…, o mapa para ver el mapa»), decir **«mapa»**: se abre el mapa público (la página
+   «StepTracker», con «Comenzar»).
+3. Pulsar **Atrás**: vuelve a Inicio, que repite la bienvenida y vuelve a escuchar («Te escucho…»).
+4. Parar la grabación y guardar en `$EVID` las capturas (o fotogramas) de los tres momentos.
+5. Pasa si se ven las tres pantallas en ese orden.
+
+**Hecho el 2026-10-26** (09:24 de Bogotá, Xiaomi 23028RA60L, Android 14, APK de `b553390`): el usuario dijo «mapa» →
+mapa público («StepTracker · Comenzar») → Atrás → Inicio («Te escucho…»). Evidencia:
+[`c2-1-inicio.png`](./evidencia/fe-3-1/c2-1-inicio.png), [`c2-2-mapa-por-voz.png`](./evidencia/fe-3-1/c2-2-mapa-por-voz.png)
+y [`c2-3-atras-a-inicio.png`](./evidencia/fe-3-1/c2-3-atras-a-inicio.png), fotogramas de un `screenrecord` de 74 s
+(sin audio, 14 MB, no versionado). No se fijó un punto ni se pulsó ▶: no hubo líneas `Pdr` ni se tomó
+`dumpsys sensorservice` (eso queda en FE-3.6 C5). Con TalkBack no se completó (hallazgos con TalkBack 17 en
+`ARCHITECTURE.md` §4.5).
 
 ## 4. Datos de prueba y limpieza
 
@@ -163,7 +170,9 @@ C2c. No necesita `embedding` (sin hora límite). El informe queda en
    ```
    Esperado: una línea `<serial>	device` (no `unauthorized` ni `offline`).
 6. Solo en Xiaomi (MIUI/HyperOS): «Instalar vía USB» y «Depuración USB (Configuración de seguridad)» activadas
-   (`validation-1-2` §5, paso 5). Para comprobarlo:
+   (`validation-1-2` §5, paso 5). **MIUI puede apagar «Instalar vía USB» por su cuenta** entre sesiones: así falló el
+   primer intento del 2026-10-26 (C1b `INSTALL_FAILED_USER_RESTRICTED`, código 3); mirarlo antes de cada validación.
+   Esta orden solo comprueba la segunda (la primera se ve al instalar):
    ```bash
    $VALIDACION_ADB shell input keyevent 0
    ```
@@ -180,10 +189,11 @@ C2c. No necesita `embedding` (sin hora límite). El informe queda en
    `../docs/validation/evidencia/fe-3-1`.
 
 **Ejecución.** En una terminal interactiva, con el teléfono a mano: el validador instala la app, la abre en Inicio y se
-detiene en el **paso guiado** (líneas `· PASO GUIADO — …` por stderr). Entonces, en el teléfono, decir **«dos»** (o
-usar la acción de TalkBack «Ir a un lugar» y desactivar TalkBack), esperar a ver «¿A dónde quieres ir?» y la lista
-**sin tocar el buscador ni los filtros**, y pulsar **Enter** en la terminal. Después no tocar el teléfono: el validador
-desliza la lista solo.
+detiene en el **paso guiado** (líneas `· PASO GUIADO — …` por stderr). Entonces, en el teléfono, decir **«dos»**,
+esperar a ver «¿A dónde quieres ir?» y la lista **sin tocar el buscador ni los filtros**, y pulsar **Enter** en la
+terminal. Después no tocar el teléfono: el validador desliza la lista solo. (La instrucción del script ofrece también
+la acción de TalkBack «Ir a un lugar», pero con TalkBack 17 en el Xiaomi no se encontró cómo abrir las acciones:
+usar la voz; `ARCHITECTURE.md` §4.5.)
 
 ```bash
 uv run --group ops python src/ops/validate31.py --entorno dev
@@ -207,7 +217,8 @@ Resultado: pasa (código 0)
 ```
 
 Al terminar, en stderr: `· limpieza: cerrar la app (am force-stop)` y `· limpieza: borrar el lugar validacion-3-1-lugar`.
-Después, hacer la manual C2c (§3) con el APK ya instalado.
+Después, hacer la manual C2c (§3) con el APK ya instalado: solo la parte por voz (el texto de `[MANUAL] C2c` todavía
+pide también TalkBack, ▶ y `dumpsys`; eso es de FE-3.6, §3).
 
 Casos previstos:
 - `[ERROR] C1b el paso guiado necesita una terminal: la entrada estándar está cerrada (EOF)` (código 3) → correr el
@@ -223,7 +234,7 @@ Casos previstos:
   Destino no deja quieta la pantalla (**sin comprobar**): tocar el micrófono para que deje de escuchar y repetir; si
   sigue, avisar al maestro.
 - `[ERROR] C1b el teléfono no deja a adb conceder CAMERA (pm grant) (SecurityException): …` o `installDebug:
-  INSTALL_FAILED_USER_RESTRICTED …` (código 3) → paso 6.
+  INSTALL_FAILED_USER_RESTRICTED …` (código 3) → paso 6 (visto el 2026-10-26: MIUI había apagado «Instalar vía USB»).
 - `[FALLA] P4 las credenciales del admin no sirven (401 CREDENCIALES_INVALIDAS) …` (código 3) → revisar
   `VALIDACION_ADMIN_*` (paso 1) o el secreto.
 - `[FALLA] P5 BE-3.1 …` (código 2) → el backend de lugares no está desplegado o la base no responde.
@@ -235,3 +246,12 @@ En `local` (sin teléfono, API ni AWS): `uv run --group ops python src/ops/valid
 Con el validador en `dev` con código 0 sobre un commit de `main` sin `-dirty` y la evidencia de C2c en
 `evidencia/fe-3-1/`, la fila FE-3.1 de PLAN §3 pasa a «Hecho» y se quitan de ARCHITECTURE §4.5 los «a verificar en
 dispositivo y en `dev`» que la evidencia confirme.
+
+**Validado el 2026-10-26** (Xiaomi 23028RA60L, Android 14). El primer intento (14:17 UTC) dio código 3: C1b
+`INSTALL_FAILED_USER_RESTRICTED` (paso 6). El segundo, sobre `b553390` sin `-dirty`, dio **código 0** (informe
+`.validacion/FE-3.1-20261026-142022.json`, 14:20–14:23 UTC): P1–P5 (`GET /v1/places` → 0 lugares en `dev`, así que el
+lugar de prueba se creó en `POSICION_CAMPUS`); C1a 9/9; C1b «1 lugares en Selección de destino = GET /v1/places
+(incluye validacion-3-1-lugar; 2 desplazamientos)», con Destino abierto por el usuario con la voz «dos» y el Enter
+mandado por el maestro; C2a 5/5 y 6/6; C2b; limpieza con el lugar borrado y `am force-stop`. `uiautomator dump` volcó
+Destino sin «could not get idle state» justo después de abrirla, cuando pregunta y escucha (si el micrófono seguía
+animado en ese instante no quedó registrado). C2c por voz: §3.
