@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.4.0**. Este archivo contiene además el **catálogo único de historias de usuario**
+Alineado con `ARCHITECTURE.md` **v0.5.0**. Este archivo contiene además el **catálogo único de historias de usuario**
 del proyecto (§5), que los planes de las otras carpetas referencian.
 
 ---
@@ -93,7 +93,8 @@ Los lotes FE-0.1 a FE-0.12 están descritos en `ARCHITECTURE.md` (vista correspo
 
 #### FE-1.2 — Login contra el backend
 - **Entregables:** `RemoteAuthRepository` (`POST /v1/auth/login`); la sesión guarda `expira_en`; respuesta a
-  `401 TOKEN_*` en cualquier ruta de admin (cerrar sesión e ir a Login, §5.10).
+  `401 TOKEN_*` / `NO_AUTENTICADO` en cualquier ruta `/v1/admin/…` o `/v1/collect/…` (cerrar sesión e ir a Login,
+  §5.3 y §5.10).
 - **Criterios de cierre:**
   - C1. El admin inicial entra al panel.
   - C2. Un usuario `user` ve «Sin permisos».
@@ -319,7 +320,7 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
 | FE-0.11 | 0 | Hecho | — | — | 0.1.0 | Local (`files/recoleccion/`) | Sin pruebas automáticas (FE-2.3) |
 | FE-0.12 | 0 | Hecho | — | — | 0.1.0 | Local (`SharedPreferences`) | ⚠ Pasada completa sin probar (FE-2.3) |
 | FE-1.1 | 1 | Hecho | [1-1](./validation/validation-1-1.md) | `c5917bd` 2026-10-25 | 0.4.0 | `dev` (`GET /v1/health`) | `validate11.py --entorno dev` con código 0 en un Xiaomi 23028RA60L (Android 14): C1a (`GET /v1/health` → 200 desde el teléfono), C2, C4a y C4b (338 ms). C1b manual: [capturas](./validation/evidencia/fe-1-1/) «Conectado» → modo avión «Sin conexión» → «Conectado». C3: `frontend.yml` en verde en el PR #8 (`104673b`). En MIUI/HyperOS hay que activar «Instalar vía USB» en Opciones de desarrollador; sin eso `installDebug` da `INSTALL_FAILED_USER_RESTRICTED` |
-| FE-1.2 | 1 | Pendiente | [1-2](./validation/validation-1-2.md) | — | — | | |
+| FE-1.2 | 1 | En curso | [1-2](./validation/validation-1-2.md) | — | — | `dev` (`POST /v1/auth/login`; cuenta `validacion+user` por tarea suelta de `migrate`) | Código, pruebas y validador listos (ARCHITECTURE 0.5.0). En local: `testDebugUnitTest` con `SesionVencidaTest` 9/9 y `RemoteAuthRepositoryTest` 6/6; `validate12.py --entorno local` con código 0. Falta `validate12.py --entorno dev` con el teléfono (C1, C2). En MIUI/HyperOS hace falta además «Depuración USB (Configuración de seguridad)» (`pm grant` e `input`) |
 | FE-2.1 | 2 | Pendiente | [2-1](./validation/validation-2-1.md) | — | — | | |
 | FE-2.2 | 2 | Pendiente | [2-2](./validation/validation-2-2.md) | — | — | | |
 | FE-2.3 | 2 | Pendiente | [2-3](./validation/validation-2-3.md) | — | — | | Puede empezar ya: no depende del backend |

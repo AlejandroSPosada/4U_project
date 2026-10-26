@@ -68,6 +68,16 @@ object MapeoErroresApi {
 
     val CODIGOS_SESION = setOf("TOKEN_EXPIRADO", "TOKEN_INVALIDO", "NO_AUTENTICADO")
 
+    /**
+     * Código de [FalloApi.SesionVencida] cuando la petición protegida no salió del teléfono porque no había sesión o su
+     * `expira_en` ya había pasado (FE-1.2, [SinSesionException]). No lo envía nunca el backend.
+     */
+    const val SIN_SESION_LOCAL = "SIN_SESION_LOCAL"
+
+    /** `error.codigo` de un cuerpo de error del backend (§5.1), o `null` (otro formato, vacío o JSON roto). */
+    fun codigoError(cuerpo: String?): String? =
+        objetoJson(cuerpo)?.get("error")?.takeIf { it.isJsonObject }?.asJsonObject?.texto("codigo")
+
     /** Clasifica una respuesta no exitosa a partir de su código HTTP y su cuerpo (texto, puede ser null). */
     fun clasificar(http: Int, cuerpo: String?): FalloApi {
         val json = objetoJson(cuerpo)
@@ -98,6 +108,7 @@ object MapeoErroresApi {
     fun deExcepcion(t: Throwable): FalloApi = when (t) {
         is ApiException -> t.fallo
         is CredencialesInvalidasException -> FalloApi.CredencialesInvalidas
+        is SinSesionException -> FalloApi.SesionVencida(SIN_SESION_LOCAL)
         is IOException -> FalloApi.SinConexion
         else -> FalloApi.Desconocido(null, null)
     }
@@ -149,6 +160,9 @@ suspend fun llamarSinCuerpo(peticion: suspend () -> Response<Unit>) {
 
 private suspend fun <T> ejecutarPeticion(peticion: suspend () -> Response<T>): Response<T> = try {
     peticion()
+} catch (e: SinSesionException) {
+    // Va antes de IOException: la petición protegida no salió del teléfono (sin sesión o vencida), no es la red.
+    throw ApiException(FalloApi.SesionVencida(MapeoErroresApi.SIN_SESION_LOCAL), 401, null)
 } catch (e: com.google.gson.stream.MalformedJsonException) {
     // Va antes de IOException: Gson la lanza como IOException, pero es un cuerpo 2xx roto, no un fallo de red.
     throw RespuestaInesperadaException("JSON inválido en una respuesta 2xx", e)

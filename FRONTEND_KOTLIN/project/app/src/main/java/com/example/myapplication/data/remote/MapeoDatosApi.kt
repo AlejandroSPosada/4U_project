@@ -8,6 +8,7 @@ import com.example.myapplication.domain.model.Foto
 import com.example.myapplication.domain.model.LugarDestino
 import com.example.myapplication.domain.model.ResumenAdmin
 import com.example.myapplication.domain.model.Rol
+import com.example.myapplication.domain.model.Sesion
 import com.example.myapplication.domain.model.Usuario
 import com.example.myapplication.domain.model.Video
 import java.text.ParseException
@@ -45,6 +46,16 @@ object MapeoDatosApi {
     /** `expira_en` del login en milisegundos (FE-1.2 lo guarda con la sesión). */
     fun expiraEnMs(dto: LoginRespuestaDto): Long =
         isoAMilis(dto.expiraEn) ?: throw RespuestaInesperadaException("expira_en ausente o inválido")
+
+    /**
+     * Respuesta 200 del login → [Sesion] (FE-1.2). Obligatorios: `token` (no vacío), `expira_en` y lo de [usuario].
+     * No filtra por rol: un `user` también recibe su sesión (lo decide `LoginViewModel`).
+     */
+    fun sesion(dto: LoginRespuestaDto): Sesion = Sesion(
+        token = dto.token?.takeIf { it.isNotBlank() } ?: throw RespuestaInesperadaException("login sin token"),
+        usuario = usuario(dto.usuario),
+        expiraEnMs = expiraEnMs(dto),
+    )
 
     /** `LugarPublico` → `LugarDestino`. `null` si la categoría no la conoce la app (se descarta el lugar). */
     fun lugarDestino(dto: LugarPublicoDto): LugarDestino? {

@@ -23,6 +23,63 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.5.0] — 2026-10-25
+
+- **Lote que la motivó:** FE-1.2 (login contra el backend).
+- **Qué cambió:**
+  - Código: `RemoteAuthRepository` (`POST /v1/auth/login`, `LoginPeticionDto`, `CampusApi.login`,
+    `MapeoDatosApi.sesion`) y `LoginViewModel.Factory` lo usa en lugar de `AuthRepositoryStub`; `Sesion` gana
+    `expiraEnMs` (y `vencida(ahoraMs)`); `SessionManager(almacen, reloj)` con `AlmacenSesion`/`AlmacenSesionCifrado`
+    (clave nueva `expira_en_ms`; `obtener()` da `null` y borra una sesión vencida, sin llamar al backend) y el
+    constructor `SessionManager(context)` de siempre; `VigilanteSesion`, `MotivoSinSesion` y `EventosSesion`
+    (`session/VigilanteSesion.kt`); `SesionInterceptor` y `SinSesionException` en `ClienteApi.kt`, que sustituye a
+    `AutenticacionInterceptor` cuando hay vigilante; `ClienteApi.vigilante` reemplaza a `ClienteApi.proveedorToken`;
+    `MapeoErroresApi.codigoError` y `SIN_SESION_LOCAL`; `llamar` convierte `SinSesionException` en
+    `ApiException(SesionVencida("SIN_SESION_LOCAL"), 401, null)`; `MyApp` asigna el vigilante (tag `Sesion`); `AppNav`
+    vuelve a Login desde rutas `admin/…` al recibir `EventosSesion.sinSesion`.
+  - Pruebas: `SesionVencidaTest` (9) y `RemoteAuthRepositoryTest` (6).
+  - Validadores: `src/ops/validate12.py`; en `comun.py`, ayudas de AWS por la CLI `aws` (`aws_json`, `cuenta_aws`,
+    `terraform_outputs`, `leer_secreto`, `credenciales_admin`, `tarea_cli`, `crear_usuario_validacion`,
+    `desactivar_usuario_validacion`), `http_post_json`, `lote_hecho`, `reloj`/`dormir` y el manejo de la interfaz del
+    teléfono (`volcar_pantalla`, `tocar`, `escapar_input_text`, `escribir_texto`, `abrir_login`,
+    `enviar_credenciales`, `exigir_adb_permitido`…); `adb()` sin PTY. Pruebas: `test_validate12.py` (16) y
+    `test_comun_login.py` (28); total 73.
+  - Documento: nuevo §4.2 (lo construido en FE-1.2); §5.3 reescrito (caducidad, `AlmacenSesion`, `VigilanteSesion`,
+    `EventosSesion` y el flujo completo «401 / sesión vencida → Login»); §5.5 (Login con el backend real y la
+    decisión de no dar mensaje propio a `503 SERVICIO_OCUPADO`; guarda del Panel con sesión vencida); §5.6
+    (`RemoteAuthRepository`, `Sesion` con `expiraEnMs`); §5.8 (vuelta a Login desde `AppNav`); §5.10 (piezas nuevas,
+    orden de interceptores, fila del `401` de sesión, cómo probar una ruta protegida); §5.11 (CLI `aws`, variables
+    `VALIDACION_ADMIN_*`, tabla de las ayudas nuevas, detalles de `validate12.py` y trampas de MIUI, uiautomator,
+    `input text` y el teclado); §3.2 (paquete `session/`, pruebas, tag `Sesion`); §4.1 (pruebas y una trampa de
+    `assertThrows` con `llamar`); §7.1 y §7.2; ADR-FE-14 (sesión perdida en el cliente HTTP con evento global) y
+    ADR-FE-15 (validadores con la CLI `aws`).
+  - `validation-1-2`: precondiciones reordenadas como en `validation-1-1` (primero las de la máquina, código 3; después
+    las de otros lotes, código 2); P1 de antes decía que `ApiConfig.kt` «contiene `VALIDACION_API_URL`» (no es así: se
+    compara `ApiConfig.BASE_URL` con la URL vigente); las credenciales del admin salen del secreto si no hay variables;
+    C1 y C2 detallan cómo se maneja el teléfono y qué falla en MIUI; §5 con variables, preparación (incluida
+    «Depuración USB (Configuración de seguridad)») y salida esperada.
+  - `PLAN.md`: FE-1.2 pasa a «En curso»; los entregables de §2.2 nombran también `/v1/collect/…` (como C3).
+- **Contratos tocados (§5):** §5.3 (`SessionManager` con constructor nuevo y caducidad; `AlmacenSesion`; formato del
+  almacén: clave `expira_en_ms`; `VigilanteSesion`, `EventosSesion`); §5.6 (`Sesion(token, usuario, expiraEnMs)`:
+  incompatible para quien la construya —solo `AuthRepositoryStub` y el almacén—); §5.10 (`ClienteApi.proveedorToken`
+  desaparece y llega `ClienteApi.vigilante`; `crear`/`okHttp` con `vigilante`; `SesionInterceptor`,
+  `SinSesionException`, `CampusApi.login`, `LoginPeticionDto`, `MapeoDatosApi.sesion`, `MapeoErroresApi.codigoError` y
+  `SIN_SESION_LOCAL`); §5.8 (`AppNav` navega a `login` por `EventosSesion`); §5.11 (ayudas de `comun.py`). Piezas
+  nuevas y cambios incompatibles: en `0.x`, sube la menor.
+- **Cómo se verificó:** en Windows, `.\gradlew.bat --console=plain testDebugUnitTest assembleDebug` con JBR 21 →
+  `BUILD SUCCESSFUL`, 50 casos sin fallos (`SesionVencidaTest` 9/9, `RemoteAuthRepositoryTest` 6/6, más los 35 de
+  FE-1.1). En WSL, `uv run --frozen ruff check .` («All checks passed!»), `ruff format --check .` («7 files already
+  formatted») y `pytest -q` (73 passed); `validate12.py --entorno local` → código 0 (P1, C3 9/9, C4 6/6; C1 y C2
+  omitidas) y `validate11.py --entorno local` sigue en 0. Lecturas de AWS (2026-10-25): las consultas JMESPath de
+  `tarea_cli` contra una tarea parada real, los outputs `ecs_cluster`, `familias_tarea.migrate`, `subredes_tareas` y
+  `sg_migrate`, y que los logs de `migrate` (`migrate/app/<id>`) son líneas JSON con `evento` (`usuario_guardado`,
+  `usuario_desactivado`).
+- **Pendiente:** `validate12.py --entorno dev` con el teléfono (C1 y C2; lo corre el maestro, `validation-1-2` §5);
+  comprobar en el Xiaomi el nombre del campo de `dumpsys input_method` y la activación de «Depuración USB
+  (Configuración de seguridad)»; `toString()` de `Sesion` y `Usuario` sin token ni correo sigue en FE-4.3.
+
+---
+
 ## [0.4.0] — 2026-10-25
 
 - **Lote que la motivó:** FE-1.1 (cliente HTTP, conexión real y CI).

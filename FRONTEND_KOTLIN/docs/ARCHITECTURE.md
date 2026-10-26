@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.4.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.5.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; el resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -383,8 +383,12 @@ com.example.myapplication/
 ├── camera/                      # CameraX, captura automática (una carpeta por escaneo), calidad de imagen (sin uso por ahora)
 ├── map/                         # WebView del mapa Leaflet/OSM, AndroidBridge y datos de capas (usuario, ruta, lugares, alertas). Hoy: MapaPublicoScreen, PuentePdr y MapaWebView (fábrica común de los WebView de mapa, 5.9)
 ├── voice/                       # Wrappers de TextToSpeech y SpeechRecognizer
-└── session/                     # Sesión, token, rol (USER / ADMIN)
+└── session/                     # Sesión (token, rol, expira_en): SessionManager, AlmacenSesion, VigilanteSesion y EventosSesion (§5.3)
 ```
+
+Pruebas unitarias (JVM) en `app/src/test/java/com/example/myapplication/`: `data/remote/` (`MapeoErroresApiTest`,
+`MapeoDatosApiTest`, `ClienteApiTest`, `RemoteAuthRepositoryTest`) y `session/SesionVencidaTest` (lista y conteos en
+§4.1).
 
 > Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
 > (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video y de la ubicación manual (`ubicacion_manual.html/js`), y la base común `mapa_base.js` (5.9).
@@ -401,7 +405,9 @@ com.example.myapplication/
   `ui/navigation/AppNavHost.kt` como se planeó; ver 5.8.
 - Rutas públicas: Inicio, Ubicación, Destino, Navegación, Ajustes, Login.
 - Rutas `admin/*` protegidas: si no hay sesión con rol `ADMIN` se redirige a Login. ⚠ **Hoy `AppNav`
-  no aplica esa protección a nivel de ruta**; solo el panel dispara `onSinSesion` (ver 5.8).
+  no aplica esa protección al entrar en la ruta**: el panel la comprueba en su `init` (`onSinSesion`) y, desde FE-1.2,
+  `AppNav` vuelve a Login cuando una petición `/v1/admin/…` o `/v1/collect/…` se queda sin sesión estando en una
+  pantalla `admin/…` (`EventosSesion`, §5.3 y 5.8). Guardas al entrar en cada ruta: FE-4.3.
 - El acceso a Login desde Inicio debe ser discreto (el usuario final casi nunca lo usa),
   pero accesible para TalkBack.
 
@@ -441,8 +447,9 @@ almacenamiento externo.
   Debe declararse en el Manifest con `android:name=".MyApp"`.
 - Cada escaneo abre una sesión (`AppLog.nuevaSesion("scan")`): sus líneas llevan un id como
   `[scan-12345]` para seguir una vuelta completa.
-- Tags usados: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM` y, desde FE-1.1, `Api` (una línea por petición HTTP
-  con su `X-Request-Id`; formato en §5.10).
+- Tags usados: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`, desde FE-1.1 `Api` (una línea por petición HTTP
+  con su `X-Request-Id`; formato en §5.10) y desde FE-1.2 `Sesion` (`AppLog.w`: una ruta protegida sin sesión o un
+  `401` de sesión; sin token ni correo; §5.3).
 - Registrar transiciones y decisiones, **no** cada lectura de sensor (50 por segundo).
 - No registrar datos sensibles (tokens, credenciales).
 
@@ -502,8 +509,10 @@ Componentes compartidos en `ui/components/`: `BotonGrande.kt`, `MapaCampus.kt`, 
   `cmd.exe /c '.\gradlew.bat' testDebugUnitTest` (el `.\` es obligatorio: §5.11, «Trampas»).
 - Linux (CI): `chmod +x gradlew && ./gradlew --no-daemon testDebugUnitTest assembleDebug`.
 - Pruebas unitarias en la JVM: `app/src/test/java/…`. Desde FE-1.1: `data/remote/MapeoErroresApiTest` (14 casos),
-  `MapeoDatosApiTest` (13) y `ClienteApiTest` (7), más el `ExampleUnitTest` de la plantilla. No usan Android: el código
-  probado no llama a `android.util.Log` (el registrador se inyecta, §5.10).
+  `MapeoDatosApiTest` (13) y `ClienteApiTest` (7), más el `ExampleUnitTest` de la plantilla. Desde FE-1.2:
+  `data/remote/RemoteAuthRepositoryTest` (6) y `session/SesionVencidaTest` (9). Total al cerrar FE-1.2: 50 casos. No
+  usan Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
+  `EncryptedSharedPreferences` (la sesión se prueba con un `AlmacenSesion` en memoria, §5.3).
 
 **`frontend.yml`** (raíz del monorepo, `.github/workflows/`):
 
@@ -532,6 +541,30 @@ la compilación en Linux con el SDK del runner no se ha ejecutado todavía.
   comentario anidado y la compilación falla con «Unclosed comment»: escribirlo de otra forma.
 - La compilación con `--no-daemon` avisa «a single-use Daemon process will be forked» por `org.gradle.jvmargs`: es
   normal.
+- En las pruebas, `assertThrows(X::class.java) { runBlocking { llamar { api.ruta() } } }` no compila («Argument type
+  mismatch»): el `ThrowingRunnable` devuelve `void`, Kotlin infiere `T = Unit` para `llamar` y choca con el
+  `Response<Dto>`. Hay que dar el tipo: `llamar<Dto> { … }` (así lo hace `SesionVencidaTest`).
+
+### 4.2 Login contra el backend (FE-1.2)
+
+Qué se construyó (detalle y firmas en §5.3, §5.5, §5.6 y §5.10; validación en
+[`validation-1-2`](./validation/validation-1-2.md)):
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| `RemoteAuthRepository` | `data/remote/RemoteAuthRepository.kt` | `POST /v1/auth/login` → `Sesion(token, usuario, expiraEnMs)`; `LoginViewModel.Factory` la usa en lugar de `AuthRepositoryStub` |
+| `Sesion.expiraEnMs` | `domain/model/Usuario.kt` | `expira_en` del login en milisegundos; `vencida(ahoraMs)` |
+| `SessionManager(almacen, reloj)` + `AlmacenSesion` | `session/SessionManager.kt`, `session/AlmacenSesion.kt` | Guarda `expira_en_ms`; `obtener()` trata una sesión vencida como «sin sesión» y la borra, sin llamar al backend |
+| `VigilanteSesion`, `MotivoSinSesion`, `EventosSesion` | `session/VigilanteSesion.kt` | Qué hacer cuando una ruta protegida se queda sin sesión: cerrar sesión y emitir `onSinSesion` |
+| `SesionInterceptor`, `SinSesionException` | `data/remote/ClienteApi.kt` | En `/v1/admin/…` y `/v1/collect/…`: sin sesión no envía la petición; `401 TOKEN_EXPIRADO`/`TOKEN_INVALIDO`/`NO_AUTENTICADO` cierra la sesión |
+| `MyApp` | `MyApp.kt` | Asigna `ClienteApi.vigilante` (con `onSinSesion = EventosSesion::emitir` y registro con el tag `Sesion`) |
+| `AppNav` | `MainActivity.kt` | Recoge `EventosSesion.sinSesion`: en una ruta `admin/…` navega a `login` con la pila `inicio → login` (no cierra la app) |
+| Pruebas | `SesionVencidaTest` (9), `RemoteAuthRepositoryTest` (6) | Criterios C3 y C4 de FE-1.2 |
+| Validador | `src/ops/validate12.py` + ayudas nuevas de `comun.py` | Login en el teléfono con adb (C1 admin entra al Panel, C2 `user` ve «Sin permisos»), cuenta `user` de prueba con tareas sueltas de `migrate` (§5.11) |
+
+Verificado en local el 2026-10-25: `testDebugUnitTest assembleDebug` → `BUILD SUCCESSFUL` (50 casos, 0 fallos);
+`validate12.py --entorno local` → código 0. **Sin comprobar** todavía en `dev` con el teléfono (C1 y C2): lo corre el
+maestro (`validation-1-2` §5).
 
 ---
 
@@ -585,7 +618,7 @@ la compilación en Linux con el SDK del runner no se ha ejecutado todavía.
 | `VoiceController` | `ui/inicio/VoiceController.kt` (paquete `ui.inicio`, aunque lo usan 3 vistas) | `VoiceController(context)` · `speak(texto: String, alTerminar: () -> Unit = {})` · `listen(onResult: (String) -> Unit, onFail: () -> Unit)` · `stopListening()` · `stopAll()` · `release()` en `onCleared`. Envuelve `TextToSpeech` y `SpeechRecognizer` en español de Colombia (`es-CO`). **Solo desde el hilo principal.** Un controlador por ViewModel. | Verificado contra el código. Comportamiento exacto:<br>• `speak` usa `QUEUE_FLUSH`: **corta** lo que se esté diciendo y el `alTerminar` anterior **no** se llama. Solo el último `speak` tiene callback.<br>• `alTerminar` se llama al terminar **o si hay un error** de TTS (no se distinguen).<br>• `stopAll()` no dispara `alTerminar` (no se sobreescribe `onStop`), pero un `alTerminar` que ya estaba encolado en el hilo principal sí llega: por eso el token (abajo) sigue siendo necesario.<br>• Si el TTS aún no está listo, `speak` queda pendiente y **solo se guarda el último**. Si el TTS falla al iniciar, `speak` nunca habla ni llama a `alTerminar`: un flujo que encadena `speak → listen` se queda parado. Poner siempre una salida por toque.<br>• Tras `release()` `speak` no hace nada (tampoco llama a `alTerminar`).<br>• `listen` cancela el reconocimiento anterior, **no** detiene el TTS (escuchar mientras habla capta la propia voz: llamar a `listen` desde el `alTerminar`) y **no** comprueba `RECORD_AUDIO` (sin permiso responde `onFail`).<br>• `onResult` recibe hasta **3 hipótesis unidas por espacio** (`"sí no sí"`); esto importa para `InterpretarRespuesta` (5.7).<br>• `onFail` cubre: reconocimiento no disponible (se llama **de forma síncrona**, antes de que `listen` retorne), error, silencio y sin resultados.<br>Candidato a mover a `voice/`. |
 | `Comando` / `ComandoParser` | **Dentro de `ui/inicio/VoiceController.kt`** (no existe `ComandoParser.kt` aparte) | `ComandoParser.parse(texto): Comando` → `UBICARME`, `IR_A_LUGAR` o `NINGUNO`. | Quita tildes y pasa a minúsculas. `UBICARME` si hay la palabra "uno"/"1" o el texto contiene "ubic", "donde estoy", "donde estamos". `IR_A_LUGAR` si hay "dos"/"2" o contiene "ir a", "llevar", "lugar", "destino", "llegar". Si coinciden **ambos** o **ninguno** → `NINGUNO`. Cuidado: "ir a", "ubic" y "lugar" se buscan como *fragmento* del texto, así que también aciona con "salir a", "venir a" o "ubicación". No quita signos de puntuación (`"uno,"` no cuenta como la palabra "uno"). Solo sirve para el menú de Inicio; para nombres de lugares y sí/no, ver 5.7. |
 | `FeedbackCaptura` | `ui/ubicacion/FeedbackCaptura.kt` | `FeedbackCaptura(ctx)` · `confirmar()` (vibra 120 ms + pitido de 120 ms) · `liberar()` | Verificado. Es `internal` (visible en todo el módulo), así que otra vista puede usarla. Liberar en `onCleared`. El pitido sale por el canal de **notificaciones** (volumen 80): con el teléfono en silencio solo vibra. Si el sistema no puede crear el generador de tonos, simplemente no suena (no falla). `liberar()` solo libera el tono; no usarla después de liberar. Necesita `VIBRATE` en el Manifest (§3.2). |
-| `AppLog` | `logs/AppLog.kt` (`object`) | `AppLog.d(TAG, msg)` · `AppLog.i(TAG, msg)` · `AppLog.w(TAG, msg, t = null)` · `AppLog.e(TAG, msg, t = null)` · `AppLog.nuevaSesion(prefijo): String` · `AppLog.sesion` (lectura/escritura) · `AppLog.init(context)` (solo `MyApp`) | Verificado. **`d` e `i` no reciben excepción**: para registrar una usar `w` o `e`. Cada línea va a Logcat (`[sesion] texto`) y a `files/logs/app.log` con hora, nivel, tag, hilo y sesión. Rota a ~1 MB (pasa a `app.log.1`, que pisa al anterior: historial máximo ≈ 2 MB). **Antes de `AppLog.init` solo escribe en Logcat.** La escritura al archivo es **síncrona en el hilo que llama**: no registrar en bucles calientes (el sensor de orientación llega a ~50 Hz). `nuevaSesion` genera `prefijo-NNNNN` con 5 dígitos del reloj: sirve para seguir una vuelta, **no garantiza unicidad**. Los errores de escritura se tragan en silencio. ⚠ El `SimpleDateFormat` interno es compartido y no es seguro entre hilos: con registros simultáneos desde varios hilos la hora de una línea puede salir corrupta. **No hay función de exportar**: el archivo se consulta como dice la §3.2. Tags en uso: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM` y `Api` (FE-1.1: `RequestIdInterceptor`, §5.10, registra cada petición HTTP con `AppLog.i`, también el sondeo de Inicio cada 15 s). Verificado: `InicioViewModel`, `LoginViewModel` y `VideosViewModel` **no registran nada** por sí mismos. No registrar tokens ni lecturas de sensores. Se inicia en `MyApp.onCreate` (`AppLog.init(this)`, que además registra fabricante, modelo y versión de Android con el tag `App`). Las excepciones no capturadas se registran con el tag `CRASH` y luego se pasan al manejador anterior del sistema (la app se cierra igual). |
+| `AppLog` | `logs/AppLog.kt` (`object`) | `AppLog.d(TAG, msg)` · `AppLog.i(TAG, msg)` · `AppLog.w(TAG, msg, t = null)` · `AppLog.e(TAG, msg, t = null)` · `AppLog.nuevaSesion(prefijo): String` · `AppLog.sesion` (lectura/escritura) · `AppLog.init(context)` (solo `MyApp`) | Verificado. **`d` e `i` no reciben excepción**: para registrar una usar `w` o `e`. Cada línea va a Logcat (`[sesion] texto`) y a `files/logs/app.log` con hora, nivel, tag, hilo y sesión. Rota a ~1 MB (pasa a `app.log.1`, que pisa al anterior: historial máximo ≈ 2 MB). **Antes de `AppLog.init` solo escribe en Logcat.** La escritura al archivo es **síncrona en el hilo que llama**: no registrar en bucles calientes (el sensor de orientación llega a ~50 Hz). `nuevaSesion` genera `prefijo-NNNNN` con 5 dígitos del reloj: sirve para seguir una vuelta, **no garantiza unicidad**. Los errores de escritura se tragan en silencio. ⚠ El `SimpleDateFormat` interno es compartido y no es seguro entre hilos: con registros simultáneos desde varios hilos la hora de una línea puede salir corrupta. **No hay función de exportar**: el archivo se consulta como dice la §3.2. Tags en uso: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`, `Api` (FE-1.1: `RequestIdInterceptor`, §5.10, registra cada petición HTTP con `AppLog.i`, también el sondeo de Inicio cada 15 s) y `Sesion` (FE-1.2: `VigilanteSesion`, §5.3, con `AppLog.w`, p. ej. `GET /v1/admin/stats -> 401 TOKEN_EXPIRADO: sesión cerrada`). Verificado: `InicioViewModel`, `LoginViewModel` y `VideosViewModel` **no registran nada** por sí mismos. No registrar tokens ni lecturas de sensores. Se inicia en `MyApp.onCreate` (`AppLog.init(this)`, que además registra fabricante, modelo y versión de Android con el tag `App`). Las excepciones no capturadas se registran con el tag `CRASH` y luego se pasan al manejador anterior del sistema (la app se cierra igual). |
 
 **Patrón de flujo hablado con token** (implementado y verificado en `SeleccionDestinoViewModel`: `hablar`, `escuchar`, `detenerVoz`; detalle en 5.5):
 hablar → al terminar, escuchar → interpretar → hablar… Cada interrupción de la persona (toca algo,
@@ -770,21 +803,57 @@ Cuidados:
 
 ### 5.3 Permisos y sesión
 
-**Sesión (`SessionManager`, `session/SessionManager.kt`)**
+**Sesión (`SessionManager`, `session/SessionManager.kt`; desde FE-1.2 con `expira_en`)**
 
 | Pieza | Firma | Qué hace / cuidado |
 |---|---|---|
-| Constructor | `SessionManager(context: Context)` | Guarda en `EncryptedSharedPreferences` (archivo `campus_session`, llaves AES256-SIV, valores AES256-GCM, llave maestra en Android Keystore). El almacén se crea **de forma perezosa** en el primer uso: ese primer acceso puede tardar y puede lanzar excepción si el Keystore falla (p. ej. tras restaurar una copia de seguridad). Usa `applicationContext`, así que no filtra la `Activity`. |
-| `guardar(sesion: Sesion)` | `Unit` | Escribe token, id, nombre, correo y rol (`apply`, asíncrono). |
-| `obtener()` | `Sesion?` | `null` si no hay token **o** el rol guardado no es válido. Si faltan id, nombre o correo, los devuelve como `""`. **No comprueba caducidad del token.** |
-| `esAdmin()` | `Boolean` | `obtener()?.usuario?.rol == Rol.ADMIN`. Lee y descifra toda la sesión en cada llamada: guardar el resultado en el ViewModel en vez de llamarlo en cada recomposición. |
-| `cerrarSesion()` | `Unit` | `clear()` de todo el archivo: borra token y datos del usuario. |
+| Constructor principal | `SessionManager(almacen: AlmacenSesion, reloj: () -> Long = { System.currentTimeMillis() })` | Lógica pura: guarda en el `AlmacenSesion` que se le pase; `reloj` da la hora en milisegundos Unix (las pruebas lo fijan). |
+| Constructor de la app | `SessionManager(context: Context)` | `= SessionManager(AlmacenSesionCifrado(context))`. Es el que usan las `Factory` (Login, Panel) y `MyApp`. El almacén cifrado se crea **de forma perezosa** en el primer uso: ese primer acceso puede tardar y puede lanzar excepción si el Keystore falla (p. ej. tras restaurar una copia de seguridad). Usa `applicationContext`, así que no filtra la `Activity`. |
+| `guardar(sesion: Sesion)` | `Unit` | Escribe token, id, nombre, correo, rol y `expira_en` (`apply`, asíncrono). |
+| `obtener()` | `Sesion?` | `null` si no hay token, si el rol guardado no es válido, si falta `expira_en` **o si `expira_en` ya pasó** (`Sesion.vencida(reloj())`: `ahora >= expiraEnMs`, sin margen, como el backend); en este último caso **además borra** la sesión. Nunca llama al backend. Si faltan id, nombre o correo, los devuelve como `""`. |
+| `esAdmin()` | `Boolean` | `obtener()?.usuario?.rol == Rol.ADMIN` (una sesión vencida da `false`). Lee y descifra toda la sesión en cada llamada: guardar el resultado en el ViewModel en vez de llamarlo en cada recomposición. |
+| `cerrarSesion()` | `Unit` | `AlmacenSesion.borrar()`: en la app, `clear()` de todo el archivo (token, datos del usuario y `expira_en`). |
 
-- Quién lo usa (el Panel admin está verificado en `PanelAdminViewModel`, ver 5.5; Login verificado en `LoginViewModel`, ver 5.5): Login guarda la sesión de un `ADMIN` y, si ya existe una, entra directo al panel; el Panel admin lee nombre y rol, cierra sesión y usa `onSinSesion`. Un usuario que no es `ADMIN` **no se guarda**.
-- ⚠ Cada `SessionManager(context)` crea su propia instancia de `EncryptedSharedPreferences`: crear **una por ViewModel**, no una por pantalla ni por recomposición. `MyApp` **no guarda ninguna instancia compartida** (solo crea una para limpiar la sesión al arrancar).
-- ⚠ **La sesión se borra en cada arranque en frío.** `MyApp.onCreate` llama a `SessionManager(this).cerrarSesion()` (decisión de producto: "el admin debe iniciar sesión cada vez que se abre la app desde cero"; si falla solo deja un `AppLog.e`). Consecuencias: la sesión **solo sobrevive mientras el proceso siga vivo**; si Android mata la app en segundo plano (p. ej. en una recolección larga), al volver no habrá sesión y el panel dispara `onSinSesion`. Cualquier flujo largo del admin debe tolerarlo.
+**`AlmacenSesion` (`session/AlmacenSesion.kt`, FE-1.2)** — `interface` con `leer(): Sesion?` (la sesión tal cual, sin mirar
+la caducidad; `null` si no hay token, el rol no es un `Rol` o falta `expira_en`), `escribir(sesion)` y `borrar()`.
+`AlmacenSesionCifrado(context)` es la de la app: `EncryptedSharedPreferences`, archivo `campus_session`, llaves
+AES256-SIV, valores AES256-GCM, llave maestra AES256-GCM en Android Keystore. Claves: `token`, `id`, `nombre`,
+`correo`, `rol` (nombre del enum: `ADMIN`/`USER`) y `expira_en_ms` (`Long`, milisegundos Unix). Una sesión guardada
+sin `expira_en_ms` (anterior a FE-1.2) no es válida. Existe para probar la sesión en la JVM: `SesionVencidaTest` usa un
+almacén en memoria propio (no hay uno en `main`).
+
+**Sin sesión en una ruta protegida (`session/VigilanteSesion.kt`, FE-1.2)**
+
+| Pieza | Firma | Qué hace / cuidado |
+|---|---|---|
+| `MotivoSinSesion` | `sealed interface`: `SinSesionLocal` (`data object`) · `Rechazada(codigo: String)` | `SinSesionLocal`: no había sesión o su `expira_en` ya pasó, la petición no salió del teléfono. `Rechazada`: el backend respondió `401` con `TOKEN_EXPIRADO`, `TOKEN_INVALIDO` o `NO_AUTENTICADO` (backend §5.2). |
+| `VigilanteSesion` | `VigilanteSesion(session: SessionManager, onSinSesion: (MotivoSinSesion) -> Unit, registrar: (String) -> Unit = {})` | Lógica pura (sin Android). La usa `SesionInterceptor` (§5.10) desde los hilos de OkHttp: `onSinSesion` no debe tocar la interfaz (la app pasa `EventosSesion::emitir`). **Nunca lanza**: si el almacén cifrado falla al leer, cuenta como «sin sesión» y lo registra. `registrar` recibe líneas sin token ni correo (la app: `AppLog.w("Sesion", …)`). |
+| `token()` | `String?` | Token de la sesión vigente (`null` sin sesión, vencida o con el almacén roto). |
+| `sesionParaPeticion(peticion: String)` | `Sesion?` | `peticion` = `"GET /v1/admin/stats"`. Devuelve la sesión vigente; si no hay (o venció: `obtener()` ya la borró), registra «`<peticion>` no se envía: sin sesión o vencida» y llama a `onSinSesion(SinSesionLocal)`. |
+| `rechazada(codigo, tokenEnviado, peticion)` | `Unit` | Tras un `401` de sesión: si la sesión guardada sigue siendo la del `tokenEnviado` (o ya no hay), `session.cerrarSesion()`, registra «`<peticion>` -> 401 `<codigo>`: sesión cerrada» y `onSinSesion(Rechazada(codigo))`. Si mientras tanto se guardó **otra** sesión (otro token: el admin volvió a entrar), no hace nada (el rechazo era de la anterior). |
+| `EventosSesion` | `object`: `sinSesion: Flow<MotivoSinSesion>` · `emitir(motivo)` | Eventos «sin sesión» de toda la app sobre un `Channel(Channel.CONFLATED)` + `receiveAsFlow()`: **un solo colector** (`AppNav`); sin colector se guarda el último y llega cuando alguien recoja. |
+
+Flujo completo (cómo se cumple «401 → cerrar sesión e ir a Login» y «sesión vencida = sin sesión»):
+1. `MyApp.onCreate` borra la sesión (arranque en frío, abajo) y asigna
+   `ClienteApi.vigilante = VigilanteSesion(SessionManager(this), EventosSesion::emitir, { AppLog.w("Sesion", it) })`.
+2. Toda petición de `ClienteApi.api` a `/v1/admin/…` o `/v1/collect/…` pasa por `SesionInterceptor` (§5.10): sin sesión
+   o vencida → no se envía y `llamar` lanza `ApiException(FalloApi.SesionVencida("SIN_SESION_LOCAL"), 401, null)`;
+   `401 TOKEN_*`/`NO_AUTENTICADO` → sesión cerrada y `ApiException(FalloApi.SesionVencida(<codigo>), 401, <rid>)`. En
+   los dos casos se emite `onSinSesion`.
+3. `AppNav` recoge `EventosSesion.sinSesion` y, **solo si la ruta actual empieza por `admin/`**, navega a `login` con
+   `popUpTo("inicio")` y `launchSingleTop` (pila `inicio → login`; «Volver al inicio» vuelve a Inicio). En el flujo
+   público no navega: una persona ciega nunca acaba en Login por una petición de fondo.
+4. El ViewModel que hizo la petición recibe la `ApiException` y no tiene que navegar; basta con no mostrar un error
+   propio para `FalloApi.SesionVencida` (`MapeoErroresApi.deExcepcion` la reconoce, también la `SinSesionException`).
+5. Las pantallas que miran la sesión sin red (Login con `esAdmin()`, Panel con `obtener()`) ya ven una sesión vencida
+   como «sin sesión»: el Panel emite su `SinSesion` y va a Login (5.5).
+
+- Quién lo usa (el Panel admin está verificado en `PanelAdminViewModel`, ver 5.5; Login verificado en `LoginViewModel`, ver 5.5): Login guarda la sesión de un `ADMIN` y, si ya existe una (vigente), entra directo al panel; el Panel admin lee nombre y rol, cierra sesión y usa `onSinSesion`; `ClienteApi.vigilante` lee el token y cierra la sesión ante un `401` de sesión. Un usuario que no es `ADMIN` **no se guarda**.
+- ⚠ Cada `SessionManager(context)` crea su propia instancia de `AlmacenSesionCifrado` (y de `EncryptedSharedPreferences`): crear **una por ViewModel**, no una por pantalla ni por recomposición. Todas leen el mismo archivo (Android comparte el `SharedPreferences` de un mismo nombre dentro del proceso), así que lo que guarda Login lo ve el vigilante. Desde FE-1.2 `MyApp` sí guarda una instancia durante toda la vida del proceso: la del `VigilanteSesion` de `ClienteApi`.
+- ⚠ **La sesión se borra en cada arranque en frío.** `MyApp.onCreate` llama a `cerrarSesion()` (decisión de producto: "el admin debe iniciar sesión cada vez que se abre la app desde cero"; si falla solo deja un `AppLog.e`). Consecuencias: la sesión **solo sobrevive mientras el proceso siga vivo**; si Android mata la app en segundo plano (p. ej. en una recolección larga), al volver no habrá sesión y el panel dispara `onSinSesion`. Cualquier flujo largo del admin debe tolerarlo. Además vence a las 12 h (`JWT_TTL_MIN` del backend; `expira_en` = `exp` del JWT).
 - Nunca registrar el token en `AppLog`.
 - Verificado en `LoginViewModel`: `session.esAdmin()` se llama en su `init`, en el hilo principal y **sin `try/catch`**: si el Keystore falla, crear el ViewModel lanza excepción y Login no abre (5.5).
+- La hora de caducidad la da el reloj del teléfono: con el reloj adelantado, la app da por vencida una sesión que el backend aún acepta (y al revés, con el reloj atrasado el backend responde `401 TOKEN_EXPIRADO`, que también lleva a Login). No hay margen ni corrección de desfase.
 
 **Permisos**
 
@@ -982,7 +1051,7 @@ Cuidados:
 | `cerrarSesion()` | `session.cerrarSesion()` y emite `SesionCerrada`. |
 
 Cuidados:
-- **La guarda de rol corre solo en `init`:** sin sesión o con rol distinto de `ADMIN` emite `SinSesion` y no carga nada; mientras el ViewModel viva no se vuelve a comprobar (5.8: `AppNav` tampoco protege las demás rutas `admin/*`).
+- **La guarda de rol corre solo en `init`:** sin sesión, con la sesión vencida (`expira_en` pasado, FE-1.2: `obtener()` da `null`) o con rol distinto de `ADMIN` emite `SinSesion` y no carga nada; mientras el ViewModel viva no se vuelve a comprobar. Las peticiones protegidas que haga después (FE-2.2: `GET /v1/admin/stats`) quedan cubiertas por `SesionInterceptor` + `EventosSesion` (5.3): `AppNav` vuelve a Login aunque el panel no lo pida.
 - `session.obtener()` se llama en el hilo principal y sin `try/catch`. ⚠ Deducido de unir esto con 5.3 (el primer acceso al almacén cifrado puede tardar y lanzar excepción si falla el Keystore): ese fallo cerraría la app al abrir el panel.
 - Si `cargarResumen()` falla después de haber cargado antes, `resumen` **conserva el dato anterior** junto con `errorResumen = true`: `PanelAdminScreen` muestra entonces el aviso de error **y** los datos viejos, con el chip "En tiempo real" (ver abajo).
 - Llamarla dos veces seguidas lanza dos cargas sin cancelar la primera; gana la que termine última.
@@ -1323,7 +1392,7 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| `LoginViewModel` | `ViewModel(auth: AuthRepository, session: SessionManager)`. Su `Factory(context)` convierte a `applicationContext` por sí sola y **fija** `AuthRepositoryStub()`: para el backend real se cambia ahí. Expone `state: StateFlow<LoginUiState>` y `eventos` (`Channel(BUFFERED)` + `receiveAsFlow()`: un solo colector; sin colector el evento espera, no se pierde). |
+| `LoginViewModel` | `ViewModel(auth: AuthRepository, session: SessionManager)`. Su `Factory(context)` convierte a `applicationContext` por sí sola y, desde FE-1.2, **fija** `RemoteAuthRepository()` (backend real, `ClienteApi.api`; antes `AuthRepositoryStub()`). Expone `state: StateFlow<LoginUiState>` y `eventos` (`Channel(BUFFERED)` + `receiveAsFlow()`: un solo colector; sin colector el evento espera, no se pierde). |
 | `LoginUiState` | `identificador`, `password`, `mostrarPassword = false`, `cargando = false`, `error: LoginError? = null`. Calculada `puedeEnviar` = identificador no vacío (`isNotBlank`) **y** contraseña no vacía (sin recortar) **y** `!cargando`. |
 | `LoginError` | `CredencialesInvalidas`, `SinConexion`, `SinPermisos`, `Desconocido`. El texto que ve la persona lo decide la pantalla (tabla más abajo). |
 | `LoginEvento` | Solo `IrAlPanel`. |
@@ -1336,8 +1405,16 @@ Cuidados:
 4. Cualquier otro rol → `session.cerrarSesion()` (**borra también una sesión que ya existiera**), vacía `password` y `error = SinPermisos`.
 5. `CredencialesInvalidasException` → `CredencialesInvalidas`; `IOException` → `SinConexion`; cualquier otra `Exception` → `Desconocido`.
 
+Con el backend real (FE-1.2, `RemoteAuthRepository`, 5.6 y §5.10): `401 CREDENCIALES_INVALIDAS` → «Credenciales
+inválidas»; sin red, *timeout* o `5xx` de API Gateway (`api` sin tareas: `500 {"message"}`) → «Sin conexión»; el resto
+(`429` del *throttling* de API Gateway, 2 req/s en el login; `422`; `503 SERVICIO_OCUPADO` con `Retry-After: 5`;
+`503 BASE_NO_DISPONIBLE`; un `200` sin `token` o `expira_en` o con un rol desconocido) → «Algo salió mal», cuyo texto
+ya pide intentarlo de nuevo. **Decisión de FE-1.2:** `503 SERVICIO_OCUPADO` no tiene mensaje propio (pasa pocas veces y
+reintentar a mano basta); si se ve a menudo, se le da uno. Cada intento deja la línea `Api` de `RequestIdInterceptor`
+(`POST /v1/auth/login -> <código> (<n> ms) rid=<uuid>`) para diagnosticar un «Algo salió mal».
+
 Cuidados:
-- En el `init`, si `session.esAdmin()` ya es `true` emite `IrAlPanel` (entra directo al panel). Corre en el hilo principal **sin `try/catch`** (ver 5.3). Como `MyApp` borra la sesión en cada arranque en frío, el atajo solo ocurre con el proceso vivo (p. ej. volver al modo público desde el panel y pulsar «Acceso administrador»).
+- En el `init`, si `session.esAdmin()` ya es `true` emite `IrAlPanel` (entra directo al panel). Corre en el hilo principal **sin `try/catch`** (ver 5.3). Como `MyApp` borra la sesión en cada arranque en frío, el atajo solo ocurre con el proceso vivo (p. ej. volver al modo público desde el panel y pulsar «Acceso administrador») y con la sesión sin vencer (una vencida da `false`, FE-1.2).
 - `catch (e: Exception)` también atrapa `CancellationException` (no la relanza) y los fallos de `session.guardar`: salen como `Desconocido`. No hay `AppLog`: ningún error de login deja rastro (bien para contraseña y token, pero `Desconocido` no se puede diagnosticar).
 - Tras un login correcto solo se vacía `password`; `identificador` queda en el estado.
 
@@ -1372,11 +1449,11 @@ Cuidados:
 ### 5.6 Datos: repositorios y modelos
 
 Convención: `interface XRepository` + `XRepositoryStub` (o `AssetsX` si lee de `assets/`) + TODO `RemoteX`
-en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean el stub directamente (verificado: `SeleccionDestinoViewModel` con `LugaresRepositoryStub()` y las `Factory` de Login y Lista de videos con `AuthRepositoryStub()` y `AssetsVideoRepository`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1).
+en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean el stub directamente (verificado: `SeleccionDestinoViewModel` con `LugaresRepositoryStub()` y la `Factory` de Lista de videos con `AssetsVideoRepository`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1) y la `Factory` de Login, `RemoteAuthRepository` (FE-1.2).
 
 | Repositorio | Métodos | Implementación actual | Usado por |
 |---|---|---|---|
-| `AuthRepository` | `suspend login(identificador: String, password: String): Sesion` (lanza `CredencialesInvalidasException` o `java.io.IOException`) | Stub (`AuthRepositoryStub`) | `LoginViewModel` (por `Factory`) |
+| `AuthRepository` | `suspend login(identificador: String, password: String): Sesion` (lanza `CredencialesInvalidasException` o `java.io.IOException`; con el backend real también `ApiException` y `RespuestaInesperadaException`) | **Real** (`RemoteAuthRepository`, `POST /v1/auth/login`, FE-1.2); queda `AuthRepositoryStub` sin uso | `LoginViewModel` (por `Factory`) |
 | `AdminRepository` | `suspend obtenerResumen(): ResumenAdmin` (lanza `IOException`, solo documentado en el KDoc) | Stub (`AdminRepositoryStub`, 600 ms) | `PanelAdminViewModel` (por `Factory`). Detalle abajo |
 | `VideoRepository` | `suspend obtenerVideos(): List<Video>` (cada `Video` ya trae sus `fotos`) · `suspend renombrarVideo(videoId, nombre)` · `suspend eliminarVideo(videoId)` · `suspend eliminarFoto(videoId, fotoId)` · `cambios(): Flow<Int>` | Local (`AssetsVideoRepository(context)`) | Galería, Lista y Detalle de video |
 | `RecoleccionRepository` | `crearVideo(inicio): String` · `carpetaFotos(videoId): File` · `registrarFoto(videoId, archivo, DatosFoto): FotoRecolectada` · `desplazarFotos(videoId, desdeIndice, dLat, dLng)` · `fotos(videoId)` · `finalizar(videoId, duracionS, distanciaM, pasos): ResumenRecoleccion` · `descartar(videoId)` · `buscarEnCurso(): String?` · `contarPendientes(): Int` · `marcarSubida(videoId, fotoIds)` · `espacioLibreBytes(): Long` | Local (`RecoleccionRepositoryLocal(context)`, `data/repository/RecoleccionRepository.kt`) | `RecoleccionViewModel` (lo crea directamente). Detalle abajo |
@@ -1387,7 +1464,7 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 
 | Modelo | Archivo | Notas |
 |---|---|---|
-| `Usuario`, `Rol`, `Sesion` | `domain/model/Usuario.kt` | Verificado (bache 3). `Rol` = `USER` / `ADMIN`; `Usuario(id, nombre, correo, rol)`; `Sesion(token, usuario)`. ⚠ El `toString()` de `Sesion` incluye el token. Detalle abajo |
+| `Usuario`, `Rol`, `Sesion` | `domain/model/Usuario.kt` | Verificado (bache 3; `Sesion` cambió en FE-1.2). `Rol` = `USER` / `ADMIN`; `Usuario(id, nombre, correo, rol)`; `Sesion(token, usuario, expiraEnMs)`. ⚠ El `toString()` de `Sesion` incluye el token. Detalle abajo |
 | `ResumenAdmin` | `domain/model/ResumenAdmin.kt` | Verificado (bache 3): 6 campos, 5 datos del panel (el último video usa número y fecha). Detalle abajo |
 | `Alerta`, `Lugar(nombre, lat, lng)` | `domain/model/Alerta.kt` | Detalle abajo. `Lugar` lo usa el editor de mapa |
 | `LugarDestino`, `CategoriaLugar` | `domain/model/LugarDestino.kt` | Verificado contra el código. `id`, `nombre`, `categoria`, `lat`, `lng`, `alias`, `distanciaMetros?`, `imagenUrl?`. Detalle más abajo |
@@ -1398,9 +1475,10 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 
 **`AuthRepository` en detalle (verificado)**
 
-- `CredencialesInvalidasException` (mensaje "Credenciales inválidas") vive en el mismo archivo. Contrato real: `POST /v1/auth/login` (backend §5.3): `401 CREDENCIALES_INVALIDAS` → `CredencialesInvalidasException`; sin conexión, *timeout* o `5xx` → `IOException` (tabla completa en §5.10). Verificado en `LoginViewModel`: una `IOException` se muestra como «sin conexión» y **cualquier otra** excepción como `LoginError.Desconocido` (5.5).
+- `CredencialesInvalidasException` (mensaje "Credenciales inválidas") vive en el mismo archivo. Contrato real: `POST /v1/auth/login` (backend §5.3): `401 CREDENCIALES_INVALIDAS` → `CredencialesInvalidasException`; sin conexión, *timeout* o `5xx` de API Gateway → `IOException` (tabla completa en §5.10). Verificado en `LoginViewModel`: una `IOException` se muestra como «sin conexión» y **cualquier otra** excepción como `LoginError.Desconocido` (5.5).
+- **`RemoteAuthRepository(api: CampusApi = ClienteApi.api)`** (`data/remote/RemoteAuthRepository.kt`, FE-1.2): `llamar { api.login(LoginPeticionDto(identificador, password)) }` y `MapeoDatosApi.sesion(dto)` (§5.10). Envía `identificador` tal cual lo recibe (`LoginViewModel` ya lo recorta) y `password` sin recortar. `200` → `Sesion(token, usuario, expiraEnMs)`; `401 CREDENCIALES_INVALIDAS` → `CredencialesInvalidasException`; sin red → `SinConexionException`; otro código → `ApiException` (p. ej. `503 SERVICIO_OCUPADO` → `FalloApi.Desconocido(503, "SERVICIO_OCUPADO")`); `200` sin `token`, sin `expira_en` o con rol desconocido → `RespuestaInesperadaException`. No registra nada propio (solo la línea `Api` de `RequestIdInterceptor`). Lo cubre `RemoteAuthRepositoryTest` (6 casos: 200 admin con la petición exacta, 200 `user`, 401, sin red, 200 sin `expira_en`, 503).
 - Un login correcto devuelve la `Sesion` también para un usuario `USER`: **es el `LoginViewModel` quien decide no guardarla** (7.1). El repositorio no filtra por rol.
-- **Cuentas del stub** (`AuthRepositoryStub`, espera simulada de 1,2 s; la contraseña se ignora): `admin@campus.edu.co` → `ADMIN`; `user@campus.edu.co` → `USER`; `offline` → `IOException`; cualquier otro → credenciales inválidas. Se compara el identificador sin espacios y en minúsculas, pero `correo` queda como lo escribió la persona. Cuidado: el stub devuelve `nombre = "Administrador"` y `token = "stub-token"` incluso para `USER`; no usar ese nombre en pruebas de interfaz.
+- **Cuentas del stub** (`AuthRepositoryStub`, sin uso desde FE-1.2; espera simulada de 1,2 s; la contraseña se ignora): `admin@campus.edu.co` → `ADMIN`; `user@campus.edu.co` → `USER`; `offline` → `IOException`; cualquier otro → credenciales inválidas. Se compara el identificador sin espacios y en minúsculas, pero `correo` queda como lo escribió la persona. Su sesión vence a las 12 h (`expiraEnMs = ahora + 12 h`). Cuidado: el stub devuelve `nombre = "Administrador"` y `token = "stub-token"` incluso para `USER`; no usar ese nombre en pruebas de interfaz.
 - Nunca registrar `password` ni `token` en `AppLog`.
 
 **`Alerta` y `Lugar` en detalle (verificado)**
@@ -1532,7 +1610,7 @@ unificarlos en un solo modelo. Comparación (código y secciones 7.6 y 7.7):
 
 `AdminRepository`: `suspend fun obtenerResumen(): ResumenAdmin`; la `IOException` («si no hay conexión») solo está en el KDoc. `AdminRepositoryStub` espera 600 ms y devuelve 2842 fotos, 48 lugares, 3 alertas, video 12, `ultimoVideoFecha = System.currentTimeMillis()` y 27 fotos pendientes. Cuidados del stub: nunca lanza excepción, así que el estado de error del panel no se puede ver; la fecha es siempre «ahora», por lo que el panel muestra siempre «Hoy, HH:mm»; el último video nunca es nulo, así que no se ve el «—»; y dice 48 lugares mientras `LUGARES_DE_PRUEBA` tiene 6.
 
-`Usuario.kt`: `enum class Rol { USER, ADMIN }`, `Usuario(id: String, nombre: String, correo: String, rol: Rol)` y `Sesion(token: String, usuario: Usuario)`. Las tres son sin valores por defecto, y las dos últimas son `data class`. El KDoc de `Sesion` dice que el token nunca se registra en logs. Coincide con 5.3: `SessionManager.obtener()` devuelve `""` si faltan id, nombre o correo.
+`Usuario.kt`: `enum class Rol { USER, ADMIN }`, `Usuario(id: String, nombre: String, correo: String, rol: Rol)` y `Sesion(token: String, usuario: Usuario, expiraEnMs: Long)` (FE-1.2: `expiraEnMs` = `expira_en` del login en milisegundos Unix; `fun vencida(ahoraMs: Long) = ahoraMs >= expiraEnMs`). Las tres son sin valores por defecto, y las dos últimas son `data class`. El KDoc de `Sesion` dice que el token nunca se registra en logs. Coincide con 5.3: `SessionManager.obtener()` devuelve `""` si faltan id, nombre o correo.
 - ⚠ **El `toString()` autogenerado de `Sesion` incluye el token y el de `Usuario`, el correo.** Interpolar una `Sesion` o un `Usuario` en un `AppLog` los escribiría en Logcat y en el archivo de logs, contra lo que dice el KDoc. Solución simple: sobrescribir `toString()` en ambas. No se buscó si algún código lo hace hoy.
 
 `LugaresRepository`: `suspend fun obtenerLugares(): List<LugarDestino>`, «con su distancia a la posición actual» (`GET /v1/places`); la `IOException` solo está en el KDoc. `LugaresRepositoryStub` espera 300 ms y devuelve `LUGARES_DE_PRUEBA`, un `val` público del mismo archivo (coordenadas aproximadas, solo mientras no exista backend). Los 6 lugares (ids únicos, apto para `key = { it.id }`):
@@ -1609,10 +1687,15 @@ registrada** cierra la app con un error.
   codificar. El id del video es el nombre de su carpeta (5.6): no usar `/` ni caracteres especiales.
   Si el argumento falta, la ruta no dibuja nada.
 - **La recolección no usa argumentos de ruta:** los datos viajan por `SesionDeRecoleccion` (5.6; decisión 15).
-- **Sin protección de rutas `admin/*`:** `AppNav` no comprueba la sesión al entrar en `admin/mapa`,
-  `admin/imagenes` ni `admin/videos[/{id}]`; solo el panel dispara `onSinSesion`. ⚠ Confirmar si cada
+- **Sin protección al entrar en las rutas `admin/*`:** `AppNav` no comprueba la sesión al entrar en `admin/mapa`,
+  `admin/imagenes` ni `admin/videos[/{id}]`; el panel dispara `onSinSesion` en su `init`. ⚠ Confirmar si cada
   pantalla admin lo comprueba por su cuenta. Ojo con la restauración tras matar el proceso: `MyApp`
   ya habrá borrado la sesión (5.3) y Android puede restaurar la pila en una pantalla admin.
+- **Vuelta a Login por sesión perdida (FE-1.2):** `AppNav` tiene un `LaunchedEffect(nav)` que recoge
+  `EventosSesion.sinSesion` (5.3). Si la ruta actual (`nav.currentDestination?.route`) empieza por `admin/`, hace
+  `nav.navigate("login") { popUpTo("inicio"); launchSingleTop = true }`: la pila queda `inicio → login` y la app no se
+  cierra. En cualquier otra ruta (flujo público, `login`) ignora el evento. Así cualquier pantalla admin que llame a
+  `/v1/admin/…` o `/v1/collect/…` con la sesión vencida o rechazada vuelve a Login sin código propio.
 - **Permisos en la ruta:** `inicio` pide los iniciales y `ubicarme` la cámara antes de mostrar la
   pantalla (ver 5.3). `admin/recoleccion` pide solo la cámara; la ruta de navegación (6.5) deberá hacer lo mismo. `admin/calibracion` pide solo `Permisos.ACTIVIDAD`.
   `admin/ubicacion-manual` ya pide `Permisos.INICIALES` y descarta el resultado (la 7.3 en sí no necesita
@@ -1759,7 +1842,8 @@ Formato de los datos:
 
 > El contrato de la API (rutas, cuerpos, errores) es del backend: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5. Aquí se
 > fija solo **lo que hace la app** con él. Desde FE-1.1 existen el cliente, el mapeo de errores, el mapeo de datos y
-> `RemoteBackendHealth` (abajo); los demás repositorios siguen siendo *stubs* o datos locales (§5.6) hasta su lote.
+> `RemoteBackendHealth`; desde FE-1.2, el login (`RemoteAuthRepository`) y la sesión de las rutas protegidas
+> (`SesionInterceptor`). Los demás repositorios siguen siendo *stubs* o datos locales (§5.6) hasta su lote.
 
 **Configuración y cliente**
 - `ApiConfig.kt` (`object ApiConfig`, paquete raíz): `API_BASE_URL` = output `api_base_url` de Terraform
@@ -1771,44 +1855,55 @@ Formato de los datos:
 - Solo HTTPS: el Manifest declara `android:usesCleartextTraffic="false"` (ADR-FE-13; antes estaba en `true`).
 - Cliente HTTP: **Retrofit 2.11.0 + OkHttp 4.12.0 + Gson 2.10.1** (ADR-FE-12). Los repositorios `Remote*` viven en
   `data/remote/` y cumplen las mismas interfaces de §5.6, así que las pantallas no cambian.
-- Encabezados: `Authorization: Bearer <token>` solo en rutas `/v1/admin/…` y `/v1/collect/…` y solo si hay token
-  (`AutenticacionInterceptor`); `X-Request-Id` (UUID v4 nuevo por petición, salvo que la petición ya traiga uno) que se
-  escribe en `AppLog` para cruzar con los logs del servidor (`RequestIdInterceptor`). El backend devuelve el mismo id
-  en su respuesta (backend §5.1; visto en `dev` el 2026-10-25).
+- Encabezados: `Authorization: Bearer <token>` solo en rutas `/v1/admin/…` y `/v1/collect/…`: en la app lo pone
+  `SesionInterceptor` con el token de la sesión vigente (FE-1.2; sin sesión la petición no sale); sin vigilante
+  (pruebas), `AutenticacionInterceptor` si hay token. `X-Request-Id` (UUID v4 nuevo por petición, salvo que la petición
+  ya traiga uno) que se escribe en `AppLog` para cruzar con los logs del servidor (`RequestIdInterceptor`). El backend
+  devuelve el mismo id en su respuesta (backend §5.1; visto en `dev` el 2026-10-25).
 - Tiempos máximos: conexión 10 s; lectura 30 s, igual que `TIMEOUT_BACKEND_MS` del escaneo (5.2) y que el límite de
   API Gateway (`/v1/localize` tarda como máximo ~20 s en el backend). `RemoteBackendHealth` corta además la llamada
   entera a 5 s.
 
-**Piezas de `data/remote/` (FE-1.1)** — paquete `com.example.myapplication.data.remote`:
+**Piezas de `data/remote/` (FE-1.1; FE-1.2 añade el login y la sesión)** — paquete
+`com.example.myapplication.data.remote`:
 
 | Pieza | Archivo | Firma y uso |
 |---|---|---|
-| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>`. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
-| `ClienteApi` | `ClienteApi.kt` (`object`) | `ClienteApi.api: CampusApi` (instancia única, `lazy`, contra `ApiConfig.BASE_URL`, registra con `AppLog.i("Api", …)`). `ClienteApi.proveedorToken: () -> String?` (`@Volatile var`, hoy `{ null }`): **FE-1.2 lo asigna** una vez (p. ej. en `MyApp.onCreate`) para leer el token de `SessionManager`. `ClienteApi.crear(urlBase = ApiConfig.BASE_URL, token = { null }, registrar: (String) -> Unit): CampusApi` (añade la barra final que exige Retrofit) y `ClienteApi.okHttp(token, registrar): OkHttpClient` para pruebas (MockWebServer) o clientes propios |
-| `RequestIdInterceptor(registrar)` | `ClienteApi.kt` | Pone `X-Request-Id` y registra **una línea por petición**: `GET /v1/health -> 200 (85 ms) rid=<uuid>` o `GET /v1/health -> falla UnknownHostException (3 ms) rid=<uuid>`. Solo método, ruta sin parámetros, código y duración: nunca encabezados ni cuerpos. `rid` es el de la respuesta si la trae, si no el enviado. `validate11.py` C1a busca esta línea en `files/logs/app.log`: cambiar el formato exige cambiar `PATRON_SALUD` del validador |
-| `AutenticacionInterceptor(token)` | `ClienteApi.kt` | Regex `.*/v1/(admin\|collect)(/.*)?` sobre la ruta; `/v1/administrar` no la cumple |
-| `llamar(peticion): T` | `ErroresApi.kt` (función `suspend` de nivel superior) | `llamar { api.salud() }` devuelve el cuerpo de un 2xx o lanza: `SinConexionException` (red, *timeout*, 5xx de API Gateway), `CredencialesInvalidasException` (la de `data/repository/AuthRepository.kt`), `ApiException` (el resto) o `RespuestaInesperadaException` (2xx sin cuerpo o JSON roto). La cancelación de la corrutina se propaga |
+| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
+| `ClienteApi` | `ClienteApi.kt` (`object`) | `ClienteApi.api: CampusApi` (instancia única, `lazy`, contra `ApiConfig.BASE_URL`, registra con `AppLog.i("Api", …)`; usa el `vigilante` que haya **al crearse**). `ClienteApi.vigilante: VigilanteSesion?` (`@Volatile var`, `null` por defecto; FE-1.2: `MyApp.onCreate` lo asigna antes de que nadie use `api`; sustituye al `proveedorToken` de FE-1.1, que ya no existe). `ClienteApi.crear(urlBase = ApiConfig.BASE_URL, token = { null }, registrar: (String) -> Unit, vigilante: VigilanteSesion? = null): CampusApi` (añade la barra final que exige Retrofit) y `ClienteApi.okHttp(token = { null }, registrar, vigilante = null): OkHttpClient` para pruebas (MockWebServer) o clientes propios. Con `vigilante`, las rutas protegidas pasan por `SesionInterceptor` y `token` no se usa; sin él, por `AutenticacionInterceptor(token)` |
+| `RequestIdInterceptor(registrar)` | `ClienteApi.kt` | Pone `X-Request-Id` y registra **una línea por petición**: `GET /v1/health -> 200 (85 ms) rid=<uuid>` o `GET /v1/health -> falla UnknownHostException (3 ms) rid=<uuid>`. Solo método, ruta sin parámetros, código y duración: nunca encabezados ni cuerpos. `rid` es el de la respuesta si la trae, si no el enviado. `validate11.py` C1a busca esta línea en `files/logs/app.log`: cambiar el formato exige cambiar `PATRON_SALUD` del validador. Una petición que `SesionInterceptor` no deja salir **no** deja línea `Api` (deja la `Sesion` del vigilante) |
+| `AutenticacionInterceptor(token)` | `ClienteApi.kt` | Regex `RUTA_PROTEGIDA` = `.*/v1/(admin\|collect)(/.*)?` sobre la ruta; `/v1/administrar` no la cumple. Solo cuando `ClienteApi` no tiene vigilante |
+| `SesionInterceptor(vigilante: VigilanteSesion)` | `ClienteApi.kt` (FE-1.2) | En las rutas de `RUTA_PROTEGIDA` (las demás pasan sin tocar): 1) `vigilante.sesionParaPeticion("<MÉTODO> <ruta>")`; si da `null` lanza `SinSesionException(ruta)` sin llamar al backend; 2) envía con `Authorization: Bearer <token de esa sesión>`; 3) si la respuesta es `401` y `MapeoErroresApi.codigoError(peekBody(64 KB))` está en `CODIGOS_SESION`, `vigilante.rechazada(codigo, token, …)`. Devuelve la respuesta intacta (`llamar` la convierte en `ApiException(SesionVencida(codigo))`) |
+| `SinSesionException(ruta)` | `ClienteApi.kt` (FE-1.2) | `IOException` (desde un interceptor OkHttp solo admite esas: otra excepción cerraría la app en su hilo). `llamar` la convierte en `ApiException(FalloApi.SesionVencida(MapeoErroresApi.SIN_SESION_LOCAL), http = 401, requestId = null)`, **nunca** en «sin conexión» (el `401` es por equivalencia: no hubo HTTP) |
+| `RemoteAuthRepository(api = ClienteApi.api)` | `RemoteAuthRepository.kt` (FE-1.2) | `AuthRepository` real: `llamar { api.login(LoginPeticionDto(identificador, password)) }` → `MapeoDatosApi.sesion(dto)`. Errores en §5.6 («`AuthRepository` en detalle») |
+| `llamar(peticion): T` | `ErroresApi.kt` (función `suspend` de nivel superior) | `llamar { api.salud() }` devuelve el cuerpo de un 2xx o lanza: `SinConexionException` (red, *timeout*, 5xx de API Gateway), `CredencialesInvalidasException` (la de `data/repository/AuthRepository.kt`), `ApiException` (el resto, también la sesión perdida de `SesionInterceptor`) o `RespuestaInesperadaException` (2xx sin cuerpo o JSON roto). La cancelación de la corrutina se propaga |
 | `llamarSinCuerpo(peticion)` | `ErroresApi.kt` | Igual, para rutas `204` declaradas `Response<Unit>` (en un 204 Retrofit da `body() == null` y `llamar` lo trataría como respuesta inesperada) |
 | `FalloApi` | `ErroresApi.kt` (`sealed interface`) | `SinConexion`, `CredencialesInvalidas`, `SesionVencida(codigo)`, `SinPermisos`, `DemasiadosIntentos`, `EmbeddingNoDisponible`, `Validacion(http, codigo, mensaje, campos: List<CampoInvalido(campo, motivo)>)`, `Desconocido(http: Int?, codigo: String?)`. Una fila por fila de la tabla de abajo |
 | `ApiException(fallo, http, requestId)` | `ErroresApi.kt` | Lo que lanza `llamar` salvo «sin conexión» y «credenciales». `requestId` = `X-Request-Id` de la respuesta: el ViewModel lo registra en «Algo salió mal» |
 | `SinConexionException(requestId = null, causa = null)` | `ErroresApi.kt` | **Es una `IOException`**: `LoginViewModel` y los demás que ya atrapan `IOException` la tratan como «sin conexión» sin cambios |
 | `RespuestaInesperadaException(mensaje, causa)` | `ErroresApi.kt` | 2xx que no cumple el contrato (falta un campo obligatorio, rol desconocido, JSON roto). Para la UI es «Algo salió mal» |
-| `MapeoErroresApi` | `ErroresApi.kt` (`object`) | `clasificar(http: Int, cuerpo: String?): FalloApi` (lógica pura) · `excepcion(fallo, http, requestId): Exception` · `deExcepcion(t: Throwable): FalloApi` (para un `catch` genérico en un ViewModel) · `CODIGOS_SESION` |
-| DTOs | `DtosApi.kt` | `SaludDto`, `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto`, `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos anulables y con valor por defecto** (trampa abajo) |
-| `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` |
+| `MapeoErroresApi` | `ErroresApi.kt` (`object`) | `clasificar(http: Int, cuerpo: String?): FalloApi` (lógica pura) · `excepcion(fallo, http, requestId): Exception` · `deExcepcion(t: Throwable): FalloApi` (para un `catch` genérico en un ViewModel; desde FE-1.2 reconoce `SinSesionException` como `SesionVencida(SIN_SESION_LOCAL)`) · `CODIGOS_SESION` (`TOKEN_EXPIRADO`, `TOKEN_INVALIDO`, `NO_AUTENTICADO`) · FE-1.2: `codigoError(cuerpo: String?): String?` (`error.codigo` de un cuerpo de §5.1, o `null`) y `SIN_SESION_LOCAL = "SIN_SESION_LOCAL"` (código de `SesionVencida` cuando la petición no salió del teléfono; el backend nunca lo envía) |
+| DTOs | `DtosApi.kt` | `SaludDto`, `LoginPeticionDto` (FE-1.2, el único que envía la app), `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto`, `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos de respuesta anulables y con valor por defecto** (trampa abajo) |
+| `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `sesion(LoginRespuestaDto): Sesion` (FE-1.2: `token` no vacío + `usuario` + `expiraEnMs`; si falta algo, `RespuestaInesperadaException`) · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` |
 | `RemoteBackendHealth(api, limiteMs = 5_000)` | `RemoteBackendHealth.kt` | `BackendHealth` real: `true` solo con `200` y `"estado": "ok"`; cualquier otra cosa (sin red, *timeout*, 5xx, otro `estado`) es `false`; nunca lanza salvo cancelación. `LIMITE_MS = 5_000` |
 
-**Cómo se añade una ruta (FE-1.2 en adelante)**: 1) DTO en `DtosApi.kt` (campos anulables); 2) método en `CampusApi`
+**Cómo se añade una ruta**: 1) DTO en `DtosApi.kt` (campos anulables); 2) método en `CampusApi`
 que devuelve `Response<Dto>`; 3) `Remote<X>Repository(api: CampusApi = ClienteApi.api)` en `data/remote/` que llama
 `llamar { api.ruta(…) }` y convierte con `MapeoDatosApi`; 4) la `Factory` o el ViewModel cambia el stub por el
 `Remote*`; 5) prueba con MockWebServer (`ClienteApi.crear(urlBase = servidor.url("/v1").toString(), registrar = {})`).
-Para FE-1.2: `POST /v1/auth/login` con cuerpo `{"identificador", "password"}` (backend §5.3) → `LoginRespuestaDto`
-→ `Sesion(token, MapeoDatosApi.usuario(dto.usuario))` + `MapeoDatosApi.expiraEnMs(dto)`; `FalloApi.SesionVencida`
-es el disparador de «cerrar sesión e ir a Login». `503 SERVICIO_OCUPADO` del login hoy cae en `Desconocido`: FE-1.2
-decide si merece mensaje propio (lleva `Retry-After: 5`).
+Una ruta `/v1/admin/…` o `/v1/collect/…` no necesita nada más para la sesión: `ClienteApi.api` le pone el token y, si
+la sesión venció o el backend la rechaza, cierra la sesión y `AppNav` vuelve a Login (§5.3); el ViewModel recibe
+`ApiException(FalloApi.SesionVencida)` y solo tiene que no mostrar un error propio. Para probarla con sesión, pasar un
+`VigilanteSesion` a `ClienteApi.crear(…, vigilante = …)` o `okHttp(…, vigilante = …)` como hace `SesionVencidaTest`.
+
+Login (FE-1.2, hecho): `POST /v1/auth/login` con cuerpo `LoginPeticionDto` → `{"identificador":"…","password":"…"}`
+(backend §5.3) → `LoginRespuestaDto` → `MapeoDatosApi.sesion(dto)`. `503 SERVICIO_OCUPADO` sigue en `Desconocido`
+(decisión en §5.5, «Login»).
 
 **Detalles internos del cliente (para no abrir `data/remote/`)**
-- Campos de los DTOs (propiedad Kotlin ← clave JSON; todos `T? = null`): `SaludDto(estado, version, commit)` ·
+- Campos de los DTOs (propiedad Kotlin ← clave JSON; todos `T? = null` salvo el de la petición):
+  `LoginPeticionDto(identificador: String, password: String)` (FE-1.2; su `toString()` no muestra los valores) ·
+  `SaludDto(estado, version, commit)` ·
   `UsuarioDto(id, nombre, correo, rol)` · `LoginRespuestaDto(token, expiraEn ← expira_en, usuario: UsuarioDto?)` ·
   `LugarPublicoDto(id, nombre, categoria, lat, lng, alias: List<String>?, descripcion, referencias, imagenUrl ←
   imagen_url, distanciaM ← distancia_m)` · `AlertaDto(id, lat, lng, mensaje, tipo, prioridad, radioM ← radio_m:
@@ -1819,9 +1914,14 @@ decide si merece mensaje propio (lleva `Retry-After: 5`).
   creadoEn, totalFotos, fotos: List<ImagenAdminDto>?)`. `VideoResumenDto` **no** trae todavía `iniciado_en`,
   `finalizado_en`, `duracion_s`, `distancia_m`, `pasos`, `inicio`, `conteo` ni `creado_por`: el lote que los necesite
   (FE-2.1, FE-4.1) los añade.
-- Orden de los interceptores en `ClienteApi.okHttp`: primero `AutenticacionInterceptor`, después `RequestIdInterceptor`
-  (el que registra; ve el encabezado `Authorization` pero nunca lo escribe). Sin `HttpLoggingInterceptor`: no lo
-  añadas, imprimiría el token.
+- Orden de los interceptores en `ClienteApi.okHttp`: primero `SesionInterceptor` (con vigilante, la app) o
+  `AutenticacionInterceptor` (sin él), después `RequestIdInterceptor` (el que registra; ve el encabezado
+  `Authorization` pero nunca lo escribe). Sin `HttpLoggingInterceptor`: no lo añadas, imprimiría el token.
+- `SesionInterceptor` lee el cuerpo de un `401` con `peekBody` (como mucho 64 KB), así que `llamar` todavía puede leerlo
+  para clasificarlo. El token que compara `VigilanteSesion.rechazada` es el **mismo** que envió (lo tomó de la sesión
+  que validó antes de enviar), no el que haya en ese momento.
+- Retrofit con funciones `suspend` encola la llamada: los interceptores corren en los hilos de OkHttp, no en el de la
+  corrutina. Por eso `VigilanteSesion` no toca la interfaz y `EventosSesion` es un `Channel`.
 - `ClienteApi.crear(…)` construye un `OkHttpClient` y un `Retrofit` **nuevos** en cada llamada: en la app se usa siempre
   `ClienteApi.api` (uno solo, con su *pool* de conexiones); `crear` es para pruebas.
 - Convertidor: `GsonConverterFactory.create()` con un `Gson()` por defecto (sin política de nombres y **sin escribir
@@ -1837,7 +1937,10 @@ decide si merece mensaje propio (lleva `Retry-After: 5`).
 - Pruebas: `ClienteApi.crear(urlBase = servidor.url("/v1").toString(), token = { "t" }, registrar = { lineas += it })`
   con `MockWebServer` (`okhttp3.mockwebserver`, `testImplementation(libs.okhttp.mockwebserver)`); las corrutinas con
   `kotlinx.coroutines.runBlocking` (no hay `kotlinx-coroutines-test` en el build). `SocketPolicy.DISCONNECT_AT_START`
-  simula «sin red»; `SocketPolicy.NO_RESPONSE`, un *timeout*.
+  simula «sin red»; `SocketPolicy.NO_RESPONSE`, un *timeout*. Para rutas protegidas que `CampusApi` aún no tiene,
+  `SesionVencidaTest` declara una interfaz Retrofit propia (`admin/stats`, `collect/videos`, `admin/videos/{id}`,
+  `places`) sobre `ClienteApi.okHttp(registrar = {}, vigilante = …)`, con `SessionManager(almacenEnMemoria, reloj = {
+  ahora })`; un `Dispatcher` de MockWebServer permite cambiar la sesión mientras la petición está en el servidor.
 
 **Trampas del cliente**
 - **Gson y Kotlin:** Gson crea los objetos sin pasar por el constructor, así que un campo que falta en el JSON queda en
@@ -1862,7 +1965,7 @@ decide si merece mensaje propio (lleva `Retry-After: 5`).
 |---|---|
 | Sin red, *timeout*, `5xx` con cuerpo `{"message": …}` (generado por API Gateway) | `IOException` → «sin conexión» (`LoginError.SinConexion`, `ErrorDestino.SIN_CONEXION`, banner de Inicio) |
 | `401 CREDENCIALES_INVALIDAS` | `CredencialesInvalidasException` → `LoginError.CredencialesInvalidas` |
-| `401 TOKEN_EXPIRADO` / `TOKEN_INVALIDO` / `NO_AUTENTICADO` en rutas de admin | `SessionManager.cerrarSesion()` y la ruta va a Login (mismo efecto que `onSinSesion`) |
+| `401 TOKEN_EXPIRADO` / `TOKEN_INVALIDO` / `NO_AUTENTICADO` en `/v1/admin/…` o `/v1/collect/…` (y, sin llamar al backend, una sesión ausente o con `expira_en` pasado) | `SessionManager.cerrarSesion()`, `onSinSesion` y, desde una pantalla `admin/…`, la ruta va a Login sin cerrar la app (FE-1.2: `SesionInterceptor` + `VigilanteSesion` + `EventosSesion`, §5.3). El ViewModel recibe `ApiException(FalloApi.SesionVencida(codigo))`, con `codigo = SIN_SESION_LOCAL` si no se llamó al backend |
 | `403 SIN_PERMISOS` | Igual que «sin permisos» de Login (7.1) |
 | `429` (cuerpo `{"message": …}`) | «Demasiados intentos, espera un momento» |
 | `503 EMBEDDING_NO_DISPONIBLE` | Escaneo (6.2) termina en error hablado: «El servicio de ubicación no está disponible en este momento» (en `dev`, con embeddings apagado o arrancando, infra §3.4) |
@@ -1887,15 +1990,15 @@ fila.
 | `LugarPublico` | `LugarDestino` (`distancia_m` → `distanciaMetros: Int?` redondeado; `imagen_url` → `imagenUrl`) |
 | `Alerta.radio_m` | `Alerta.radio` |
 | `GET /v1/admin/stats` | `ResumenAdmin`: `ultimo_video.numero` → `ultimoVideoNumero`; `ultimo_video.creado_en` (ISO-8601) → `ultimoVideoFecha` en milisegundos; `fotosPendientes` sale de la cola local de subida, no del backend |
-| `usuario` del login | `Usuario`; `expira_en` se guarda con la sesión |
+| `usuario` del login | `Usuario`; `expira_en` → `Sesion.expiraEnMs` (milisegundos) y se guarda con la sesión (`expira_en_ms`, §5.3) |
 | `VideoResumen` / `ImagenAdmin` | `Video` / `Foto`. El `id` del video pasa a ser UUID (hoy es el nombre de la carpeta); `uid` de `Foto` sigue siendo `videoId/id`. `EstadoFoto` necesita un valor `PENDIENTE` para `pendiente_subida` (FE-2.1) |
 | Fechas ISO-8601 | `creadoEn` / `capturadaEn` siguen siendo texto en los modelos actuales; convertir solo donde se ordene o filtre |
 
 Implementación (FE-1.1), por fila: `MapeoDatosApi.enumDe` (desconocido → `null`; en `usuario`, un rol desconocido es
 `RespuestaInesperadaException`) · `lugarDestino` (categoría desconocida → `null`, el lugar se descarta; `distancia_m`
 con `roundToInt`) · `alerta` (`tipo` por defecto `otro`, `prioridad` `normal`, `radio` 15, `activa` `true` si faltan) ·
-`resumenAdmin(dto, fotosPendientes)` · `usuario` + `expiraEnMs` (FE-1.2 añade `expira_en` a `Sesion`; hoy `Sesion` es
-`(token, usuario)`) · `video` (fotos ordenadas por `orden`; `Foto.id` = UUID de la imagen, así `uid` =
+`resumenAdmin(dto, fotosPendientes)` · `usuario` + `expiraEnMs`, unidos en `sesion(dto)` (FE-1.2: `Sesion(token,
+usuario, expiraEnMs)`) · `video` (fotos ordenadas por `orden`; `Foto.id` = UUID de la imagen, así `uid` =
 `<uuid video>/<uuid imagen>`; `lugar` = nombre del lugar) y `foto` · `isoAMilis`. Obligatorios (si faltan,
 `RespuestaInesperadaException`): `id`, `correo` del usuario; `id`, `nombre`, `lat`, `lng` del lugar; `id`, `lat`, `lng`,
 `mensaje` de la alerta; los tres totales de `stats`; `id`, `video_id`, `lat`, `lng` de la imagen; `id` del video. Lo
@@ -1969,10 +2072,13 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
 - **Datos de prueba:** los mismos prefijos `validacion-` en lo que el validador o la persona nombran (lugares, alertas,
   videos de prueba); los recorridos reales del campus son dataset y se quedan. En el dispositivo, el validador borra
   los datos de la app con `pm clear` solo si su documento lo indica. La cuenta `validacion+user@campus.edu.co` se crea,
-  reactiva y desactiva como en backend §5.11.
+  reactiva y desactiva como en backend §5.11 (en la app, con `crear_usuario_validacion` y
+  `desactivar_usuario_validacion` de `comun.py`, desde FE-1.2).
 
-**Dónde se ejecutan hoy (FE-1.1)**: en WSL (`uv`, `terraform`, `gh`), llamando por *interop* al Gradle y al `adb` de
-Windows, porque el JDK, el SDK y el USB del teléfono están en Windows (§4.1). Variables:
+**Dónde se ejecutan hoy (FE-1.1; FE-1.2 añade la CLI `aws`)**: en WSL (`uv`, `terraform`, `gh`, `aws` v2), llamando por
+*interop* al Gradle y al `adb` de Windows, porque el JDK, el SDK y el USB del teléfono están en Windows (§4.1). Las
+llamadas a AWS (FE-1.2: identidad, secreto del admin, tareas sueltas de `migrate`, logs) usan la CLI `aws` de WSL con
+`AWS_PROFILE`, no boto3 (ADR-FE-15). Variables:
 
 | Variable | Uso | Valor en la máquina del equipo (WSL) |
 |---|---|---|
@@ -1981,7 +2087,8 @@ Windows, porque el JDK, el SDK y el USB del teléfono están en Windows (§4.1).
 | `VALIDACION_ADB` | Comando para `adb`. Por defecto el `adb` del `PATH` o `$ANDROID_HOME/platform-tools/adb` | `/mnt/c/Users/frank/AppData/Local/Android/Sdk/platform-tools/adb.exe` |
 | `ANDROID_SERIAL` | Elegir dispositivo si hay varios (también lo lee el `installDebug` de Gradle, por eso va en `WSLENV`) | — |
 | `VALIDACION_API_URL` | URL base con `/v1`. Solo se usa si `terraform output` no está disponible (Terraform manda) | — |
-| `AWS_PROFILE` | Leer `terraform output -raw api_base_url` (estado en S3) | `campus-admin` |
+| `AWS_PROFILE` | Leer `terraform output` (estado en S3) y, desde FE-1.2, la CLI `aws` (cuenta, secreto, `ecs run-task`, logs) | `campus-admin` |
+| `VALIDACION_ADMIN_CORREO`, `VALIDACION_ADMIN_PASSWORD` | FE-1.2: credenciales del admin (hacen falta las dos). Si falta alguna y es `dev`, se leen de `campus-locator/dev/admin-inicial` (claves `correo` y `password`), como `credenciales_admin` del backend (§5.11 del backend) | — (se usa el secreto) |
 | `UV_PROJECT_ENVIRONMENT` | Opcional: el `.venv` fuera de `/mnt/c` (más rápido) | `/root/.cache/uv-envs/fe-ops` |
 
 **Entornos y códigos (lo propio de la app)**: en `local` las comprobaciones que necesitan teléfono o red se marcan
@@ -2015,10 +2122,43 @@ validador nuevo sin leer el código; si cambian, se actualiza en el mismo cambio
 | `avisar`, `resumir`, `commit_actual()` | Progreso a stderr; recorte; commit corto con `-dirty` si hay cambios en archivos versionados de `project/` (con `core.autocrlf=input`, trampa abajo) |
 | `PROYECTO`, `RAIZ_REPO`, `DIR_INFORMES`, `DIR_TF_DEV`, `API_CONFIG`, `DIR_RESULTADOS_PRUEBAS`, `PAQUETE`, `ACTIVIDAD` (`com.example.myapplication/.MainActivity`), `LOG_APP` (`files/logs/app.log`) | Constantes |
 
+Ayudas que añadió FE-1.2 (para los validadores que inician sesión en el teléfono, usan la cuenta `user` de prueba o
+llaman a AWS; FE-2.1, FE-2.2, FE-3.3, FE-3.4 y FE-4.1 las reutilizan):
+
+| Elemento | Qué hace |
+|---|---|
+| `reloj()`, `dormir(s)` | `time.monotonic()` y `time.sleep()` detrás de una función: las pruebas los sustituyen por un reloj falso (dormir avanza el reloj). Todo lo que espera en `comun` y `validate12` los usa |
+| `lote_hecho(texto_plan, lote)` → `bool`; `PLAN_APP` | ¿La fila `\| <lote> \| <fase> \| Hecho \| …` de la tabla de estado de un PLAN dice «Hecho» en la tercera celda? (una fila de §2.1 no cuenta). `PLAN_APP` = `FRONTEND_KOTLIN/docs/PLAN.md` |
+| `http_post_json(url, cuerpo, timeout=15)` → `RespuestaHttp`; `codigo_error(r)` → `str \| None` | `POST` JSON con `X-Request-Id` propio; 4xx/5xx se devuelven, sin respuesta → `ErrorRed`. Un `429` **de API Gateway** (cuerpo `{"message"}`) se reintenta tras 1, 2 y 4 s (el login tiene *throttling* de 2 req/s). Nunca imprime el cuerpo enviado. `codigo_error` = `error.codigo` de §5.1 del backend |
+| `aws(*args, timeout=120)` → `Resultado`; `aws_json(*args, accion=, timeout=120, mostrar_error=True)` → JSON | CLI `aws` con `--region us-east-1 --output json --no-cli-pager` (perfil de `AWS_PROFILE`). En `aws_json`: credenciales o permisos (`AccessDenied*`, `ExpiredToken`, `InvalidClientTokenId`, `UnrecognizedClientException`, «Unable to locate credentials», perfil inexistente…) → `ErrorConfiguracion`; otro error → `ErrorAws(mensaje, codigo)` (hereda de `Falla`; `.codigo` = el de AWS, p. ej. `ResourceNotFoundException`). `mostrar_error=False` deja en el mensaje solo el código (para comandos con secretos en los parámetros) |
+| `cuenta_aws()` → ARN | `aws sts get-caller-identity`; cuenta distinta de `CUENTA` (`648617469176`) → `ErrorConfiguracion` |
+| `terraform_outputs(directorio=DIR_TF_DEV)` → `{nombre: valor}` | `terraform output -json` (los valores, sin el envoltorio `{"value": …}`); sin `init` o sin credenciales → `ErrorConfiguracion`. Nunca se imprime |
+| `leer_secreto(secreto, lote="INF-1.2")` → `dict` | `secretsmanager get-secret-value --query SecretString`; no existe → `Bloqueo` del `lote`; sin permiso → `ErrorConfiguracion`; no es un objeto JSON → `ErrorConfiguracion` |
+| `credenciales_admin(entorno)` → `(correo, password)` | `VALIDACION_ADMIN_CORREO` y `VALIDACION_ADMIN_PASSWORD` si están las dos; si no y es `dev`, las claves `correo` y `password` de `SECRETO_ADMIN` (`campus-locator/dev/admin-inicial`); si no, `ErrorConfiguracion` |
+| `salidas_tarea(outputs)` → `(cluster, familia, red)` | De los outputs de infra §5.2: `ecs_cluster`, `familias_tarea["migrate"]` y la red de `run-task` (`subredes_tareas` + `sg_migrate`, `assignPublicIp = ENABLED`). Si falta alguno → `Bloqueo` (INF-1.1/INF-1.3) |
+| `tarea_cli(outputs, argumentos, entorno=None, leer_log=True, limite_s=900)` → `ResultadoTarea(arn, id, codigo, motivo, eventos)` | `python -m app.cli <argumentos>` en una tarea suelta de la última revisión ACTIVA de `campus-locator-dev-migrate` (Fargate, `--started-by validacion-app`, contenedor `app`). `entorno` va en `containerOverrides.environment` por un archivo temporal (`--overrides file://…`, permisos 600), nunca en la línea de comandos ni en mensajes; queda visible en `describe-tasks` para quien tenga acceso a la cuenta: solo valores de prueba. Espera con `aws ecs wait tasks-stopped` (máx. 10 min del *waiter*) y lee con `describe-tasks --query` solo `exitCode` del contenedor `app` y `stoppedReason` (no trae los *overrides*). Con código ≠ 0 lee `LOG_MIGRATE` (`/campus-locator/dev/migrate`, stream `migrate/app/<id>`, hasta 6 intentos con 5 s) y guarda en `eventos` los `evento` de sus líneas JSON (`eventos_log(mensajes)`) |
+| `motivo_tarea(t)` | Texto para un detalle: código, eventos de fallo (`usuario_rechazado`, `usuario_no_encontrado`, `comando_fallido`, `configuracion_incompleta`, `base_no_disponible`) y `stoppedReason` |
+| `crear_usuario_validacion(outputs)` → contraseña; `desactivar_usuario_validacion(outputs, tolerar_inexistente=True)` → detalle; `USUARIO_VALIDACION`, `NOMBRE_USUARIO_VALIDACION` | `crear-usuario --correo validacion+user@campus.edu.co --nombre validacion-user --rol user` con `CREAR_USUARIO_PASSWORD = validacion-pw-<uuid4>` (crea o reactiva; la contraseña se devuelve y nunca se imprime) y `desactivar-usuario --correo …`; `Falla` con `motivo_tarea` si no dan 0 (con `tolerar_inexistente`, «no existe» —1 con `usuario_no_encontrado`— no es fallo). Tardan ~1–2 min cada una |
+| `exigir_adb_permitido(r, que)`; `MENSAJE_SEGURIDAD_MIUI` | Si la salida de adb trae `SecurityException`, `INJECT_EVENTS`, `GRANT_RUNTIME_PERMISSIONS` o `Permission Denial` → `ErrorConfiguracion` «el teléfono no deja a adb `<que>`… en MIUI/HyperOS activa «Depuración USB (Configuración de seguridad)»…». La usan `tocar`, `escribir_texto`, `tecla`, `desplazar_hacia_abajo` y el `pm grant` de `validate12` |
+| `Nodo(texto, descripcion, clase, limites, habilitado, contrasena)` (`.centro`, `.es_campo`, `.dice(v)`, `.contiene(f)`); `parsear_ui(xml)` → `list[Nodo]` | Un nodo de `uiautomator dump`: `text`, `content-desc`, `class`, `bounds` (`(x1, y1, x2, y2)`), `enabled`, `password`. `dice` = texto o descripción igual; `es_campo` = clase `…EditText`. XML roto → `Falla` |
+| `volcar_pantalla(intentos=3)` → `list[Nodo]`; `RUTA_UI` | `adb exec-out "uiautomator dump /data/local/tmp/validacion-ui.xml 2>&1; cat …; rm -f …"` (una sola orden: el volcado puede llevar lo escrito en un campo y no queda en el teléfono). Toma el XML desde `<hierarchy` (antes llega «UI hierchary dumped to: …»). Reintenta con 1 s si no sale; si no → `Falla`, con «could not get idle state» en el mensaje si uiautomator lo dijo |
+| `textos_visibles(nodos, limite=12)` | Textos de la pantalla para un diagnóstico, **sin** campos de texto ni contraseñas |
+| `tocar(nodo)`, `tecla(codigo)` (`TECLA_ATRAS = "4"`), `teclado_visible()`, `tamano_pantalla()`, `desplazar_hacia_abajo()` | `input tap` en el centro; `input keyevent`; `dumpsys input_method` contiene `mInputShown=true` (o `mIsInputViewShown`/`isInputViewShown`); `wm size` (el `Override size` si existe); `input swipe` del 70 % al 30 % del alto por el centro (300 ms) |
+| `escapar_input_text(texto)`; `escribir_texto(texto)` | Escape para `adb shell input text`: espacio → `%s`; lo que no sea `[A-Za-z0-9@._-+,:=/]`, con `\` delante (el `sh` del teléfono lo deja literal). Un texto con `%s` no se puede escribir (`input` lo vuelve espacio) y uno con caracteres no ASCII imprimibles tampoco → `ErrorConfiguracion` (sin el texto en el mensaje). `escribir_texto` nunca imprime el texto ni la salida de adb |
+| `abrir_app()` | `am force-stop` + `am start -W -n ACTIVIDAD` (arranque en frío: `MyApp` borra la sesión) |
+| `esperar_nodo(encontrar, limite_s, que)` → `(nodo, nodos)`; `primero(nodos, dice=, contiene=)`; `campos_texto(nodos)` | Vuelca cada ~1 s hasta que `encontrar(nodos)` dé un nodo (puede lanzar `Falla` para abortar antes); si no, `Falla` «en N s no apareció `<que>`; en pantalla: …». `campos_texto` = los `EditText` de arriba abajo |
+| `abrir_login(limite_s=30)` | `abrir_app()`, espera y toca «Acceso administrador» (Inicio), espera Login (dos campos e «Iniciar sesión»). Los permisos de Inicio deben estar concedidos antes (si no, el diálogo del sistema tapa Inicio) |
+| `enviar_credenciales(correo, password)` → instante del toque | Toca el primer campo y escribe el correo, toca el segundo y escribe la contraseña, toca «Iniciar sesión» (si el teclado tapa el campo o el botón, Atrás **solo si** `teclado_visible()`); devuelve `reloj()` justo antes del toque. Botón deshabilitado → `Falla` |
+| `CUENTA`, `REGION`, `SECRETO_ADMIN`, `LOG_MIGRATE` | Constantes (`648617469176`, `us-east-1`, `campus-locator/dev/admin-inicial`, `/campus-locator/dev/migrate`) |
+
+Cambio de FE-1.2 en lo existente: `adb(…)` pasa la entrada estándar vacía (`entrada=""`), así `adb shell` no abre un
+PTY (con PTY se mezclan stderr y stdout y los finales de línea pasan a `\r\n`).
+
 Forma de un validador (`validate11.py` es el ejemplo): `import comun`, `main(argv=None)` crea el `Validador` y devuelve
 `v.correr(cuerpo, argv)`, el módulo termina con `sys.exit(main())`. Sus pruebas (`tests/ops/test_validate11.py`)
 sustituyen `comun.gradle`, `comun.adb`, `comun.http_get`, etc. con `monkeypatch` y recorren `main()` entero; corren en
-el job `validadores` de `frontend.yml`. `uv run --frozen pytest` desde `project/` (29 casos al cerrar FE-1.1).
+el job `validadores` de `frontend.yml`. `uv run --frozen pytest` desde `project/` (29 casos al cerrar FE-1.1; 73 con
+FE-1.2: `test_validate12.py` y `test_comun_login.py`).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -2033,6 +2173,22 @@ el job `validadores` de `frontend.yml`. `uv run --frozen pytest` desde `project/
   rid=(\S+)`; `lineas_salud(texto, desde)` → `[(hora, resultado, rid)]`; IDs `C1a, C2, C4a, C4b` con grupos `C1 →
   [C1a]` y `C4 → [C4a, C4b]`. Un validador nuevo copia esa forma: `Contexto` con lo que comparten las comprobaciones,
   una función por precondición y por comprobación.
+- `validate12.py` (FE-1.2; es el ejemplo de un validador que maneja la interfaz del teléfono y usa la cuenta `user`):
+  IDs `C1, C2, C3, C4` sin grupos. Constantes: `CLASE_C3 = "SesionVencidaTest"`, `CLASE_C4 = "RemoteAuthRepositoryTest"`,
+  `MINIMO_CASOS` (4 y 3), `LIMITE_LOGIN_S = 15`, `INTENTOS_DESPLAZAR = 4`, `PERMISOS_INICIO` (`CAMERA`,
+  `RECORD_AUDIO`) + `PERMISO_ACTIVIDAD` (`ACTIVITY_RECOGNITION`, solo con SDK ≥ 29, como `Permisos.INICIALES`),
+  `ERRORES_LOGIN` (los títulos de banner «Credenciales inválidas», «Sin conexión», «Algo salió mal»: si aparecen, C1 o
+  C2 fallan en el acto con ese texto). `saludo_esperado(nombre)` = «Hola, <antes del primer espacio>» o «Hola» (como
+  `PanelAdminViewModel`). `Contexto`: `preparar_telefono()` (una vez: registra la limpieza `am force-stop`,
+  `installDebug` —`INSTALL_FAILED_USER_RESTRICTED` → código 3 con «Instalar vía USB»— y `pm grant` de los permisos de
+  Inicio con `exigir_adb_permitido`), `asegurar_usuario()` (una vez: registra `desactivar_usuario_validacion` **antes**
+  de lanzar `crear-usuario`, así la limpieza la desactiva aunque la creación falle a medias) y `pruebas()` (una sola
+  ejecución de Gradle con las clases de C3 y C4 que estén incluidas). P3 (AWS) solo se evalúa si C2 está incluida;
+  con `--solo` sin C2 queda «no evaluada». Las pruebas (`tests/ops/test_validate12.py`) simulan el teléfono entero
+  (clase `Telefono`: pantallas Inicio, Login y Panel en XML de uiautomator, `input tap/text/keyevent/swipe`, `pm grant`
+  con o sin `SecurityException`, teclado que tapa el botón) y sustituyen `comun.tarea_cli`, `comun.reloj` y
+  `comun.dormir`; comprueban además que la contraseña, el token y `validacion-pw-` no salen ni por stdout, ni por
+  stderr, ni en el informe.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -2050,6 +2206,31 @@ el job `validadores` de `frontend.yml`. `uv run --frozen pytest` desde `project/
   con CRLF, índice con LF). El Git de WSL, sin esa opción, ve ~100 archivos de `project/` como modificados (comprobado
   el 2026-10-25). Por eso `commit_actual()` usa `git -c core.autocrlf=input status …` (así solo cuenta los cambios
   reales) y **los commits de esta carpeta se hacen con el Git de Windows** o con `-c core.autocrlf=input` en WSL.
+- **MIUI/HyperOS (Xiaomi):** además de «Instalar vía USB» (sin ella `installDebug` da `INSTALL_FAILED_USER_RESTRICTED`,
+  FE-1.1), `pm grant` e `input` exigen **«Depuración USB (Configuración de seguridad)»** en Opciones de desarrollador;
+  sin ella fallan con `SecurityException` (`GRANT_RUNTIME_PERMISSIONS`, `INJECT_EVENTS`). `exigir_adb_permitido` lo
+  convierte en código 3 con la solución. MIUI suele pedir una cuenta Mi y SIM para activarla (sin comprobar en el
+  Xiaomi del equipo).
+- **`uiautomator dump` solo vuelca lo visible:** omite los nodos fuera de la pantalla (p. ej. «Cerrar sesión» al pie del
+  Panel), por eso C1 desliza hasta 4 veces. Compose expone el árbol **sin fusionar**: el texto de un botón es un nodo
+  hijo (`TextView text="Iniciar sesión"`) y el botón (`android.widget.Button`) no tiene texto; tocar el centro del
+  hijo pulsa el botón. Por lo mismo, `enabled` del hijo puede decir `true` aunque el botón esté deshabilitado (el
+  control de `enviar_credenciales` solo detecta el caso contrario). Un `EditText` de Compose lleva en `text` lo escrito
+  (por eso `textos_visibles` omite los campos y `volcar_pantalla` borra el XML del teléfono en la misma orden).
+  `uiautomator dump` espera a que la interfaz quede quieta (hasta ~10 s); si una animación sin fin sigue mandando
+  eventos de accesibilidad, responde «ERROR: could not get idle state» y no vuelca nada. Inicio tiene un orbe
+  animado: que no lo provoque está **sin comprobar** en el teléfono (en las capturas de FE-1.1 «Acceso administrador»
+  se ve sin desplazar).
+- **`input text` y el `sh` del teléfono:** `adb shell input text X` une los argumentos y los pasa a `sh -c` en el
+  teléfono: sin escapar, `$`, `'`, `;`, `&`… se interpretan; y `input` cambia cada `%s` por un espacio (no hay forma de
+  escribir un `%s` literal). Probado con un `sh` de Linux (`test_comun_login.py`); **sin comprobar** con `"` o `\` a
+  través del `adb.exe` de Windows llamado desde WSL (las contraseñas que usa el validador son alfanuméricas con `-`).
+- **Teclado en pantalla:** al escribir, el teclado puede tapar el segundo campo o «Iniciar sesión». `enviar_credenciales`
+  pulsa Atrás solo si `dumpsys input_method` dice `mInputShown=true` (con el teclado cerrado, Atrás volvería a Inicio).
+  El nombre exacto de ese campo en el Android del Xiaomi está **sin comprobar**.
+- **CLI `aws`:** `aws ecs wait tasks-stopped` se rinde a los 10 min (100 × 6 s) con código 255; `get-log-events` puede
+  devolver vacío los primeros segundos (por eso los reintentos). `run-task` recibe la contraseña de `crear-usuario` por
+  archivo y su error se resume solo con el código de AWS (`mostrar_error=False`).
 
 ---
 
@@ -2319,9 +2500,13 @@ Todos los controles deben ser operables por TalkBack y con áreas grandes.
 - Botón **"Volver al inicio"** al flujo público.
 
 **Comportamiento:**
-- Al iniciar sesión se llama a `POST /v1/auth/login` (token + rol).
-- **Rol `ADMIN`:** se guarda la sesión y se navega a `admin/panel`, quitando Login de la
+- Al iniciar sesión se llama a `POST /v1/auth/login` (token + rol + `expira_en`; real desde FE-1.2,
+  `RemoteAuthRepository`, 5.6).
+- **Rol `ADMIN`:** se guarda la sesión (con su `expira_en`) y se navega a `admin/panel`, quitando Login de la
   pila de navegación.
+- **Sesión vencida o rechazada (FE-1.2):** una sesión con `expira_en` pasado cuenta como «sin sesión» sin llamar al
+  backend, y un `401 TOKEN_EXPIRADO`/`TOKEN_INVALIDO`/`NO_AUTENTICADO` en `/v1/admin/…` o `/v1/collect/…` cierra la
+  sesión; en los dos casos, desde una pantalla `admin/…` la app vuelve a Login sin cerrarse (5.3, 5.8).
 - **Rol distinto de `ADMIN`:** se informa que no tiene permisos, **no se guarda la sesión**
   y no se habilita el panel.
 - Si al abrir Login ya existe una sesión `ADMIN` guardada, se entra directo al panel. (Solo dentro
@@ -2343,9 +2528,11 @@ contraseña"); botones y campos de 64 dp o más.
 | `ui/auth/LoginScreen.kt` | Pantalla (`LoginScreen`) y contenido sin estado (`LoginContent`), con previews |
 | `ui/auth/LoginViewModel.kt` | Estado (`LoginUiState`), errores (`LoginError`), evento `IrAlPanel` y lógica del login |
 | `ui/components/BannerEstado.kt` | Banner de error/advertencia reutilizable |
-| `session/SessionManager.kt` | Sesión cifrada: `guardar`, `obtener`, `esAdmin`, `cerrarSesion` |
-| `data/repository/AuthRepository.kt` | Contrato del login (`AuthRepository`) y stub temporal (**TODO:** reemplazar por un `Remote*` en `data/remote/` sobre `ClienteApi`, §5.10) |
-| `domain/model/Usuario.kt` | `Rol` (USER/ADMIN), `Usuario`, `Sesion` |
+| `session/SessionManager.kt`, `session/AlmacenSesion.kt` | Sesión cifrada: `guardar`, `obtener` (vencida = `null`), `esAdmin`, `cerrarSesion` |
+| `session/VigilanteSesion.kt` | Sin sesión en una ruta protegida: `VigilanteSesion`, `MotivoSinSesion`, `EventosSesion` (5.3) |
+| `data/repository/AuthRepository.kt` | Contrato del login (`AuthRepository`) y el stub de antes (sin uso) |
+| `data/remote/RemoteAuthRepository.kt` | Login real: `POST /v1/auth/login` (FE-1.2, §5.10) |
+| `domain/model/Usuario.kt` | `Rol` (USER/ADMIN), `Usuario`, `Sesion` (con `expiraEnMs`) |
 
 **Navegación:** ruta `login` en `AppNav` (`MainActivity.kt`); conexiones en §5.8.
 
@@ -2376,7 +2563,7 @@ contraseña"); botones y campos de 64 dp o más.
 - Pie con nombre del panel y versión de la app.
 
 **Comportamiento:**
-- **Guarda de rol:** al abrir el panel se verifica la sesión. Si no hay sesión `ADMIN`, se
+- **Guarda de rol:** al abrir el panel se verifica la sesión. Si no hay sesión `ADMIN` (o venció: FE-1.2), se
   redirige a Login.
 - **Cerrar sesión:** llama a `SessionManager.cerrarSesion()` (borra token y datos) y regresa
   a Inicio. No pide confirmación.
@@ -3002,6 +3189,27 @@ falta revisar las reglas de Retrofit (sin comprobar).
 El Manifest pasa a `android:usesCleartextTraffic="false"`: la API solo existe por HTTPS (infra §5.13) y las páginas
 de `assets/` solo cargan recursos `https://` (Leaflet, fuentes, teselas). El valor `true` venía de un prototipo que
 llamaba a una IP por `http://` (el antiguo `ApiConfig.PREDICT_URL`).
+
+**ADR-FE-14 — La sesión perdida se resuelve en el cliente HTTP y se avisa con un evento global (aceptada, 2026-10-25,
+FE-1.2).**
+Hacía falta que un `401` de sesión en **cualquier** ruta `/v1/admin/…` o `/v1/collect/…`, y una sesión con `expira_en`
+pasado, cerraran la sesión y volvieran a Login sin cerrar la app. Opciones: que cada ViewModel admin lo resolviera al
+atrapar `ApiException(SesionVencida)`; o un único punto en OkHttp. Se eligió el interceptor (`SesionInterceptor`) más
+un `VigilanteSesion` de lógica pura y un `EventosSesion` (`Channel`) que recoge `AppNav`: ningún lote siguiente puede
+olvidarlo, la sesión vencida se detecta **antes** de enviar (no gasta una petición ni deja pasar un token caducado) y
+se prueba en la JVM con MockWebServer (`SesionVencidaTest`). La navegación solo ocurre desde rutas `admin/…`, para no
+llevar a Login a una persona del flujo público. Se separó el almacén (`AlmacenSesion`) de `SessionManager` para poder
+probar la caducidad sin `EncryptedSharedPreferences`. *Consecuencias:* `ClienteApi.proveedorToken` desaparece
+(`ClienteApi.vigilante`); `Sesion` lleva `expiraEnMs`; la caducidad depende del reloj del teléfono (5.3); un `401` de
+un token anterior no cierra una sesión nueva.
+
+**ADR-FE-15 — Los validadores llaman a AWS con la CLI `aws`, no con boto3 (aceptada, 2026-10-25, FE-1.2).**
+`validate12.py` necesita la identidad, un secreto, tareas sueltas de ECS y sus logs. Los validadores de la app solo
+usan la biblioteca estándar (grupo `ops` vacío, §5.11) y ya llamaban a programas externos (`terraform`, Gradle, `adb`);
+la CLI `aws` v2 está en la máquina del equipo (WSL) y se sustituye fácil en las pruebas (`comun.aws`). boto3 habría
+añadido una dependencia, su `uv.lock` y dobles de botocore. *Consecuencias:* hace falta `aws` v2 en el `PATH`; la
+contraseña de `crear-usuario` va por un archivo temporal (`--overrides file://…`) y no por la línea de comandos; las
+consultas usan `--query` (JMESPath) para no traer de vuelta los *overrides*.
 
 ### 8.2 Decisiones abiertas
 

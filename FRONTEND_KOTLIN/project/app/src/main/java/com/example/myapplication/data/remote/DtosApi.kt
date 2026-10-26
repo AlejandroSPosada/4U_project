@@ -18,6 +18,18 @@ data class SaludDto(
     @SerializedName("commit") val commit: String? = null,
 )
 
+/**
+ * Cuerpo de `POST /v1/auth/login` (backend §5.3): `{"identificador", "password"}`. Es lo que envía la app, así que sus
+ * campos no son anulables. `password` va sin recortar; `identificador`, como lo recorta `LoginViewModel`.
+ */
+data class LoginPeticionDto(
+    @SerializedName("identificador") val identificador: String,
+    @SerializedName("password") val password: String,
+) {
+    /** Sin la contraseña: este objeto nunca debe acabar en un registro. */
+    override fun toString(): String = "LoginPeticionDto(identificador=…, password=…)"
+}
+
 /** `usuario` de `POST /v1/auth/login`. */
 data class UsuarioDto(
     @SerializedName("id") val id: String? = null,

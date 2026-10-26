@@ -2,8 +2,11 @@ package com.example.myapplication
 
 import android.app.Application
 import android.os.Build
+import com.example.myapplication.data.remote.ClienteApi
 import com.example.myapplication.logs.AppLog
+import com.example.myapplication.session.EventosSesion
 import com.example.myapplication.session.SessionManager
+import com.example.myapplication.session.VigilanteSesion
 
 class MyApp : Application() {
     override fun onCreate() {
@@ -18,7 +21,19 @@ class MyApp : Application() {
         }
 
         // El admin debe iniciar sesión cada vez que se abre la app desde cero
-        runCatching { SessionManager(this).cerrarSesion() }
+        val sesion = SessionManager(this)
+        runCatching { sesion.cerrarSesion() }
             .onFailure { AppLog.e("App", "No se pudo limpiar la sesión", it) }
+
+        // FE-1.2: sesión de las rutas /v1/admin y /v1/collect (token, expira_en y 401 de sesión → Login).
+        ClienteApi.vigilante = VigilanteSesion(
+            session = sesion,
+            onSinSesion = EventosSesion::emitir,
+            registrar = { AppLog.w(TAG_SESION, it) },
+        )
+    }
+
+    private companion object {
+        const val TAG_SESION = "Sesion"
     }
 }

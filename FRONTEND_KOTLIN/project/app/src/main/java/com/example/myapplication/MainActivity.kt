@@ -35,6 +35,7 @@ import com.example.myapplication.ui.admin.recoleccion.UbicacionManualScreen
 import com.example.myapplication.ui.admin.recoleccion.RecoleccionScreen
 import com.example.myapplication.ui.admin.calibracion.CalibracionScreen
 import com.example.myapplication.domain.model.SesionDeRecoleccion
+import com.example.myapplication.session.EventosSesion
 
 
 class MainActivity : ComponentActivity() {
@@ -79,6 +80,20 @@ object Permisos {
 @Composable
 fun AppNav() {
     val nav = rememberNavController()
+
+    // FE-1.2: una ruta protegida se quedó sin sesión (401 TOKEN_* / NO_AUTENTICADO, o expira_en pasado). Si se está
+    // en una pantalla admin, vuelve a Login sin cerrar la app (pila: inicio → login). En el flujo público no navega.
+    LaunchedEffect(nav) {
+        EventosSesion.sinSesion.collect {
+            val actual = nav.currentDestination?.route.orEmpty()
+            if (actual.startsWith("admin/")) {
+                nav.navigate("login") {
+                    popUpTo("inicio")
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
 
     // Regla: cada ruta se registra UNA sola vez. Si se repite, la última reemplaza a la anterior
     // (un placeholder vacío puede tapar la pantalla real).
