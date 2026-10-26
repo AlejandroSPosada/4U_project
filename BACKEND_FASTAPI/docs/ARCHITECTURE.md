@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.10.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.10.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.2 (validados en `dev`) y de BE-2.4 (`project/`; sin validar en `dev`); lo de los demás lotes es diseño propuesto |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.2 y de BE-2.4 (`project/`), todo validado en `dev`; lo de los demás lotes es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -698,8 +698,12 @@ una sola vez y BE-3.2 la reutiliza en el paso 3 de §4.10. Como en la localizaci
 sitio (ADR-BE-06) y no se registra nada en `eventos_localizacion`.
 
 **Construido (ADR-BE-16).** Probado en local con PostgreSQL 17.11 y pgvector 0.8.7 (`db` del compose) y embeddings
-simulado (`tests/base/test_diagnostico_base.py`); **sin comprobar en `dev`** hasta que pase `validate24.py`. Una
-petición, en este orden (cada paso responde su error de §5.5 y no sigue):
+simulado (`tests/base/test_diagnostico_base.py`), y en `dev` con `validate24.py` sobre `50d931d` (2026-10-25; PLAN
+§3): cada una de las 3 fotos de prueba (`jpeg_patron`, ya indexadas a partir de la copia reducida JPEG calidad 90 del
+`worker`) sale como su propio primer vecino con similitud 0,9991, 0,9992 y 0,9996, así que el cuerpo multipart binario
+pasa bien por API Gateway; uno de 1,6 MiB también llega al backend y recibe su `400 FOTOS_INVALIDAS` (C3b). En
+esa ejecución el índice tenía solo las 3 fotos de prueba (N = 3: aún no hay dataset real), así que el plan con miles de
+vectores sigue a verificar (abajo, R16). Una petición, en este orden (cada paso responde su error de §5.5 y no sigue):
 1. `requiere_admin` (router `/v1/admin`, §4.4): `401`/`403`/`503 BASE_NO_DISPONIBLE`.
 2. FastAPI valida `k` (`Query(5, ge=1, le=50)`): `422 VALIDACION` con `detalle.campos = [{"campo": "k", …}]` (también
    `k=abc` o `k=5.5`).
@@ -772,6 +776,33 @@ endpoint).
 | Pruebas con base | `tests/base/test_diagnostico_base.py`: `vector_de(bytes)` (vector unitario de 384 sacado del SHA-256 de los bytes: la misma foto da el mismo vector; dos distintas, similitud ~0), `Embeddings` (doble de `embedding.vectorizar` con `version`, `llamadas` —`n`, `prioridad`, `request_id`— y `fallo`), `indexar(ajustes, fotos, version=…, rumbo=340.3)` → `{"video_id", "imagenes"}` (un video `validacion-24` con una imagen `procesada` y su vector por foto, en `1.0 + orden·0,0001, −100.0`), `jpeg(semilla)`, `consultar(api, foto, k, tipo=, parte=)` y la fixture `api` (admin con sesión). BE-3.2 puede partir de ahí |
 | Ejemplo de doble de embeddings en la API | `monkeypatch.setattr(app.clientes.embedding, "vectorizar", doble)` con la firma `(ajustes, imagenes, *, prioridad, transporte=None, request_id=None)` |
 
+**Guía para BE-3.2** (`POST /v1/localize`, §5.3; el algoritmo es §4.10, que este lote no toca). Con las piezas de
+arriba, sin abrir `project/`:
+1. Cuerpo: `leer_cuerpo(request, LOC_MAX_FOTOS × LOC_MAX_BYTES_FOTO + MARGEN_MULTIPART)`; si pasa,
+   `400 FOTOS_INVALIDAS`. `partes_multipart(request.headers.get("content-type"), cuerpo)` (`NoEsMultipart` →
+   `400 FOTOS_INVALIDAS`; `MultipartInvalido` → `400 SOLICITUD_INVALIDA`, como aquí).
+2. Fotos: las partes `fotos`, **en el orden en que llegan** (ese orden es el `indice` de `detalle.indice` y el de
+   `rumbos`); de 1 a `LOC_MAX_FOTOS` (si no, `400 FOTOS_INVALIDAS` con el índice de la primera que sobra, o 0 si no hay
+   ninguna); `motivo_foto_no_valida(parte.tipo, parte.datos, LOC_MAX_BYTES_FOTO)` en cada una, con su índice.
+3. Metadatos: la parte `metadatos` es texto (`Parte.tipo` = `text/plain` si no declara otro): `parte.datos` en UTF-8
+   → JSON → su modelo Pydantic (`rumbos` del mismo largo que las fotos; si no, `400 FOTOS_INVALIDAS`, §5.3).
+4. Embeddings: **una** llamada `embedding.vectorizar(ajustes, fotos, prioridad="alta", request_id=…)` (5 × 1,5 MB
+   cabe en los límites de embeddings: 8 imágenes, 4 MB cada una, 16 MB en total) dentro de `anyio.fail_after` con un
+   tope por debajo de los 30 s de API Gateway (aquí, `TOPE_EMBEDDING_S` = 20 s, importable de
+   `servicios.diagnostico`). Misma traducción y mismos eventos que el paso 4 de arriba: `ImagenRechazada.indice` es ya
+   el índice de la foto (`400 FOTOS_INVALIDAS`); `EmbeddingNoDisponible`, `RespuestaNoValida` y otra `version_vector`
+   (`servicios.diagnostico.VersionVectorDistinta` sirve también) → `503 EMBEDDING_NO_DISPONIBLE` con
+   `embedding_no_disponible` o `version_vector_distinta`.
+5. Búsqueda: una transacción con `buscar_vecinos(c, vectores.vectores, k=LOC_TOP_K, version_vector=…,
+   ef_search=LOC_EF_SEARCH)`; después, BE-3.2 descarta `similitud < LOC_SIM_MIN` (aquí no se filtra) y agrupa con
+   `Vecino.lat`, `Vecino.lng`, `Vecino.similitud` y `Vecino.rumbo` (`None` si la foto del dataset no tenía rumbo: no
+   entra en la corrección de rumbo). Usa los valores crudos de `Vecino`; `real_legible` y el redondeo son solo para
+   la salida de la API.
+6. A diferencia de BE-2.4, BE-3.2 sí escribe la fila de `eventos_localizacion` (§4.10 paso 10, §5.7).
+7. Pruebas: el doble `Embeddings`/`vector_de` y `indexar` de `tests/base/test_diagnostico_base.py` sirven para tener
+   un índice sin `embedding`; `indexar` pone todas las fotos en `1.0 + orden·0,0001, −100.0`, así que para probar la
+   agrupación geográfica hace falta una variante con coordenadas propias.
+
 Trampas:
 - `request.form()` y los parámetros `File`/`UploadFile` de FastAPI **no** se usan en estas rutas (disco y
   `python-multipart`, arriba). Una ruta nueva que reciba fotos usa `leer_cuerpo` + `partes_multipart`.
@@ -780,6 +811,11 @@ Trampas:
   enviado como `image/jpeg`, `400` por la firma). `image/jpeg; charset=binary` vale.
 - HNSW es aproximado (R16): con muchos vectores, algún vecino exacto puede faltar; la herramienta de evaluación de
   embeddings lo compara con fuerza bruta (`SERVICE_EMBEDDING/docs/ARCHITECTURE.md` §4.5).
+- `embeddings.vector` es `vector(384)`: un vector de otra dimensión hace fallar la sentencia en PostgreSQL (no es «base
+  no disponible»: saldría como `500`). Comparar antes la `version_vector` (paso 4) lo evita, porque una versión con
+  otra dimensión trae otro nombre.
+- La herramienta de evaluación de embeddings y `validate24.py` mandan la foto como `consulta.jpg` con `image/jpeg`
+  (`comun.pedir_vecinos`); el nombre de archivo no se mira.
 
 ### 4.9 BE-3.1 — Lugares y alertas (lectura pública y administración)
 **Lectura pública.** `GET /v1/places` devuelve todos los lugares (decenas, sin paginación) con la distancia a la
@@ -1890,6 +1926,14 @@ reutilizan):
   `psql`, el paginador de `list-objects-v2` (páginas de 3) y los logs de `api` y `embedding` (páginas de 2).
   Interruptores de backend defectuoso: `desplegado`, `filtra_umbral`, `guarda_consulta`, `registra_evento`,
   `registra_foto`, `user_entra`, `otro_primero`.
+- Para la comprobación de privacidad de BE-3.2 (C4) se puede copiar el método de C4a y C4b: `c4a_nada_guardado`
+  compara las claves de **todo** el bucket antes y después (`comun.claves_s3(s3, bucket, "")`) y solo admite las
+  nuevas bajo `dataset/<video>/` y `thumbs/<video>/` de sus videos, y los conteos de `SQL_CONTEOS` (BE-3.2 espera,
+  al revés, una fila más de `eventos_localizacion` por localización); `c4b_logs` lee con `comun.mensajes_log` los
+  grupos `LOG_API` y `LOG_EMBEDDING` desde 60 s antes de P2 y falla si algún mensaje contiene `/9j/` (un JPEG en
+  base64) o pesa más de 16 384 bytes en UTF-8. El disco (ECS Exec) no lo mira BE-2.4.
+- En `dev` (2026-10-25, `50d931d`): `embedding` tardó 311 s en encenderse (BE-2.2 midió 172 y 202 s) y las 3 fotos
+  llegaron a `procesada` en 4,1 min (C1).
 
 Trampas de BE-2.4: C4a supone que nadie sube fotos ni localiza en `dev` mientras corre (si no, falla con los dos
 valores para descartarlo). C2a no usa `GET /v1/admin/stats` (BE-2.3 no es dependencia de BE-2.4): N sale de

@@ -20,6 +20,25 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.10.1] — 2026-10-25
+
+- **Lote que la motivó:** BE-2.4 (cierre: `validate24.py --entorno dev` con código 0 sobre `50d931d`, PLAN §3).
+- **Qué cambió:**
+  - Encabezado y §4.8: BE-2.4 validado en `dev`, con lo medido (similitud de cada foto de prueba consigo misma 0,9991,
+    0,9992 y 0,9996 tras la copia reducida del `worker`; el multipart binario y un cuerpo de 1,6 MiB pasan por API
+    Gateway hasta el backend; índice con N = 3, así que el plan con un dataset real sigue a verificar, R16).
+  - §4.8: «Guía para BE-3.2» (cuerpo, partes `fotos` y `metadatos`, una llamada a embeddings con prioridad `alta` y la
+    misma traducción de errores y eventos, `buscar_vecinos` con todas las fotos en una transacción y el filtro
+    `LOC_SIM_MIN` después, valores crudos de `Vecino`, la fila de `eventos_localizacion`, dobles de prueba) y dos
+    trampas (un vector de otra dimensión que 384 sale como `500`; el nombre de archivo de la parte no se mira).
+  - §5.11: cómo reutilizar C4a y C4b de `validate24.py` en la comprobación de privacidad de BE-3.2, y lo medido en
+    `dev` (encendido de `embedding` en 311 s, fotos en `procesada` en 4,1 min).
+- **Contratos tocados (§5):** ninguno (versión de parche).
+- **Cómo se verificó:** solo documentación; las pruebas de contrato que leen este documento (`tests/contrato/`)
+  siguen pasando.
+- **Pendiente:** `EXPLAIN` de la consulta de vecinos en `dev` con un dataset real (R16). `PLAN.md` dice «Alineado con
+  v0.10.0»: lo actualiza el maestro (no se tocó el PLAN en este cambio).
+
 ## [0.10.0] — 2026-10-25
 
 - **Lote que la motivó:** BE-2.4 (Diagnóstico de búsqueda).
