@@ -20,6 +20,68 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.12.0] — 2026-10-25
+
+- **Lote que la motivó:** BE-3.2 (Localización), construcción sin validar: la validación necesita el dataset real
+  (FE-2.1), el conjunto de EMB-3.2 y la calibración.
+- **Qué cambió:**
+  - **`POST /v1/localize` construido** (§4.10 reescrita): router `api/v1/localizar.py` (público, en `router_v1`),
+    `servicios/localizar.py` (una llamada a embeddings con prioridad `alta` y tope de 20 s, comparación de
+    `version_vector`, y búsqueda + algoritmo + lugares + evento en **una** transacción), `dominio/localizacion.py` (el
+    algoritmo en Python puro) y `esquemas/localizacion.py` (`MetadatosLocalizacion` y la respuesta). Reutiliza lo que
+    dejaron BE-2.4 (`leer_cuerpo`, `partes_multipart`, `motivo_foto_no_valida`, `buscar_vecinos`, `TOPE_EMBEDDING_S`,
+    `VersionVectorDistinta`, la traducción de errores y eventos de embeddings) y BE-3.1 (`lugares.leer_todos`,
+    `geo.distancia_m`, `geo.rumbo_grados`, `DECIMALES_DISTANCIA`). Sin alertas en la respuesta (BE-3.3).
+  - **ADR-BE-18** con los detalles que §4.10 no fijaba: centroide de grupo = **media sin ponderar** de sus miembros,
+    recalculada al añadir cada uno, y margen **`m = (p₁ − p₂) / p₁`** (1 con un solo grupo) —decisión del maestro con
+    autorización del usuario (2026-10-25), **a confirmar por el usuario**; es lo que ya simula la herramienta de
+    calibración de EMB-3.2—; desempates (orden de llegada, grupo creado antes, orden de `leer_todos`); radio =
+    desviación ponderada con mínimo; corrección de rumbo con la mejor coincidencia con rumbo de cada foto y desviación
+    estándar circular; confianza **truncada** a 2 decimales con el nivel decidido sobre ese valor; `referencias` sin el
+    lugar cercano; evento solo con `200`. ADR-BE-08 enlaza a ADR-BE-18.
+  - Parámetros `LOC_*` de §5.10 **sin cambiar** (siguen «Iniciales»): §4.10 «Calibración» dice dónde se cambian
+    (`config.py`, §5.10, CHANGELOG y la copia de `metricas.py` de EMB-3.2) y C6 falla hasta entonces.
+  - `validate32.py` nuevo (P1–P6, C1–C6), sin ayudas nuevas en `comun.py`; §5.11 con su descripción, el mundo falso de
+    sus pruebas y sus trampas. `validation-3-2.md` reescrito: precondiciones con el contrato común (lo que falta en la
+    máquina o la hora dan 3, otro lote sin terminar da 2; antes decía «código 2» para todas), BE-2.4 añadido a P2, P3
+    comprueba que BE-3.2 está desplegado, el encendido de `embedding` pasa a P6 (la última, la única que cambia algo),
+    orden de ejecución C1, C3, C5, C2, C4a, C4b, C4c, C6, el conjunto se descarga en memoria (no en `.validacion/`),
+    C6 con la versión 0.12.0 (decía «mayor que 0.2.0») y §5 completo.
+  - §4.1, §4.8 y §4.9 (sus guías para BE-3.2, aplicadas), R1 y R2 al día; §5.11, el *Session Manager plugin* para C4c.
+  - Contradicciones corregidas: `validation-3-2.md` decía que toda precondición fallida daba código 2 (las
+    credenciales, las herramientas y la hora dan 3, infra §5.11); su P2 no pedía BE-2.4, que PLAN §2.1 sí exige para
+    validar; su P3 encendía `embedding` antes de comprobar el resto; C2 revisaba respuestas de C3, que se ejecutaba
+    después; C6 pedía una versión «mayor que 0.2.0», que ya se cumplía; la hora límite era 21:30 con un encendido de
+    hasta 10 min (ahora 21:00, como BE-2.4); C1 y P5 usaban consultas SQL distintas para el dataset (ahora una sola,
+    `SQL_DATASET`, con vector de la versión activa y sin videos `validacion-`). §4.9 decía que P2 pedía `GET
+    /v1/places` con `total` ≥ 1, algo que no garantiza ningún lote: ahora basta `200`.
+- **Contratos tocados (§5):** §5.3 `POST /v1/localize` detallado sin cambiar lo que ya decía: reglas de las partes
+  (orden de llegada, tipo, tamaño, firma, tope del cuerpo, partes ignoradas), `metadatos` (obligatorios `rumbos` y
+  `origen`, `app_version` opcional ≤ 40, ≤ 16 384 bytes, campos de más ignorados), decimales de la respuesta,
+  `confianza` truncada, rango de `correccion_rumbo_grados` (−180, 180], qué son `fotos_con_coincidencia` y
+  `latencia_ms`, `referencias` sin el cercano y su orden, y errores en orden: `detalle.motivo` en `400
+  FOTOS_INVALIDAS` (campo adicional), `422 VALIDACION` y `400 SOLICITUD_INVALIDA` para `metadatos` (casos que no
+  estaban definidos), `400 FOTOS_INVALIDAS` si embeddings no puede decodificar una foto, `503` con otra
+  `version_vector` o sin respuesta en 20 s en total. §5.6 (`FOTOS_INVALIDAS` con `motivo` también en `localize`;
+  `VALIDACION` de `metadatos`). §5.7: «filas de BE-3.2» de `eventos_localizacion` (sin cambio de esquema). §5.10:
+  notas de los `LOC_*` y evento nuevo `localizacion_calculada`; `embedding_no_disponible` y `version_vector_distinta`
+  también en `localize`.
+- **Cómo se verificó:** en local (WSL), `ruff check`, `ruff format --check` y `pytest` con `PRUEBAS_DB_URL` y
+  `PRUEBAS_DB_OBLIGATORIA=1` sobre el `db` del compose (PostgreSQL 17.11, pgvector 0.8.7): 834 pruebas, todas pasan,
+  ninguna omitida. Nuevas: `tests/unit/test_localizacion.py` (filtro, centroide sin ponderar recalculado, primer grupo,
+  radio estricto, puntuación, desempate, margen, posición y radio ponderados, truncado, cortes, corrección de rumbo y
+  contexto), `tests/base/test_localizacion_base.py` (el endpoint con vectores elegidos a mano: `ok` con contexto y su
+  fila en `eventos_localizacion`, `sin_coincidencias`, el grupo que reúne varias fotos gana, público, orden de las
+  partes, cada `400`/`422`, errores de embeddings sin fila, tope de 20 s y nada de la foto en los logs),
+  `tests/contrato/test_contrato_localizacion.py` y `tests/ops/test_validate32.py` (mundo falso con interruptores).
+  Nada ejecutado en `dev`.
+- **Pendiente:** el dataset real (FE-2.1), el conjunto y el informe de EMB-3.2, la calibración (C6 y una versión
+  menor posterior) y `validate32.py --entorno dev` con código 0 sobre un commit de `main` desplegado. Confirmar con el
+  usuario las dos decisiones provisionales de ADR-BE-18 (centroide y margen). Sin comprobar hasta la primera
+  ejecución en `dev`: C4c con ECS Exec desde un proceso sin terminal y los archivos que deja el agente
+  (`EXCLUIDOS_C4C`), el plan de la consulta con el dataset real (R16) y la latencia (C3). `PLAN.md`: fila BE-3.2
+  «En curso» y «Alineado con v0.12.0».
+
 ## [0.11.1] — 2026-10-25
 
 - **Lote que la motivó:** BE-3.1 (cierre: `validate31.py --entorno dev` con código 0 sobre `86fc024`, PLAN §3), antes

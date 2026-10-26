@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.11.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.12.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.2, BE-2.4 y BE-3.1 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`). Lo de los demás lotes es diseño propuesto; las alertas pasaron a BE-3.3, fuera del núcleo y sin código (§4.9) |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.2, BE-2.4 y BE-3.1 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. Lo de los demás lotes es diseño propuesto; las alertas pasaron a BE-3.3, fuera del núcleo y sin código (§4.9) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -106,10 +106,10 @@ BACKEND_FASTAPI/
     │   │   ├── api/
     │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_cola_hash (BE-1.3, §4.4); obtener_almacen (BE-2.1, §4.5)
     │   │   │   ├── cuerpo.py    leer_cuerpo: el cuerpo de la petición en memoria, con tope (BE-2.4, §4.8)
-    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: localize, alerts (BE-3.3), admin_*
-    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9)
-    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); multipart.py y fotos.py (BE-2.4, §4.8); lugares.py y geo.py (BE-3.1, §4.9); localizacion.py, rumbo.py
-    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar, purgar, alertas (BE-3.3), estadisticas
+    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9), localizar (BE-3.2: `router` en /v1, público, §4.10); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: alerts (BE-3.3), admin_*
+    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizacion (BE-3.2, §4.10)
+    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); multipart.py y fotos.py (BE-2.4, §4.8); lugares.py y geo.py (BE-3.1, §4.9); localizacion.py (BE-3.2: el algoritmo, con la corrección de rumbo, §4.10)
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar (BE-3.2, §4.10); purgar, alertas (BE-3.3), estadisticas
     │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas.py (la búsqueda de vecinos, BE-2.4, §4.8)
     │   │   ├── clientes/        embedding.py (httpx: `esta_listo` desde BE-1.1, `vectorizar` desde BE-2.2); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5; `descargar` y `escribir` desde BE-2.2); sqs.py (BE-2.2, §4.6)
     │   │   ├── seguridad/       hash.py (argon2id, §4.3), tokens.py (JWT, §5.2) y dependencias.py (requiere_admin), BE-1.3 (§4.4)
@@ -778,8 +778,8 @@ endpoint).
 | Pruebas con base | `tests/base/test_diagnostico_base.py`: `vector_de(bytes)` (vector unitario de 384 sacado del SHA-256 de los bytes: la misma foto da el mismo vector; dos distintas, similitud ~0), `Embeddings` (doble de `embedding.vectorizar` con `version`, `llamadas` —`n`, `prioridad`, `request_id`— y `fallo`), `indexar(ajustes, fotos, version=…, rumbo=340.3)` → `{"video_id", "imagenes"}` (un video `validacion-24` con una imagen `procesada` y su vector por foto, en `1.0 + orden·0,0001, −100.0`), `jpeg(semilla)`, `consultar(api, foto, k, tipo=, parte=)` y la fixture `api` (admin con sesión). BE-3.2 puede partir de ahí |
 | Ejemplo de doble de embeddings en la API | `monkeypatch.setattr(app.clientes.embedding, "vectorizar", doble)` con la firma `(ajustes, imagenes, *, prioridad, transporte=None, request_id=None)` |
 
-**Guía para BE-3.2** (`POST /v1/localize`, §5.3; el algoritmo es §4.10, que este lote no toca). Con las piezas de
-arriba, sin abrir `project/`:
+**Guía para BE-3.2** (`POST /v1/localize`, §5.3; el algoritmo es §4.10, que este lote no toca). Aplicada tal cual
+en BE-3.2 (0.12.0); lo construido y sus detalles están en §4.10. Con las piezas de arriba, sin abrir `project/`:
 1. Cuerpo: `leer_cuerpo(request, LOC_MAX_FOTOS × LOC_MAX_BYTES_FOTO + MARGEN_MULTIPART)`; si pasa,
    `400 FOTOS_INVALIDAS`. `partes_multipart(request.headers.get("content-type"), cuerpo)` (`NoEsMultipart` →
    `400 FOTOS_INVALIDAS`; `MultipartInvalido` → `400 SOLICITUD_INVALIDA`, como aquí).
@@ -896,7 +896,8 @@ comprobar en `dev`). El lote que la añada (sin asignar en PLAN) define primero 
 | `app.errores.MENSAJE_POR_CODIGO["NOMBRE_DUPLICADO"]` | «Ya existe un lugar con ese nombre (sin distinguir mayúsculas ni tildes).» |
 | Pruebas con base | `tests/base/test_lugares_base.py`: `entrada(nombre, **cambios)` (un `LugarEntrada` completo), `crear(api, nombre, **cambios)` → `LugarAdmin` (exige 201), `foto_con_lugar(ajustes, lugar_id, eliminado=False)` → `imagen_id` (inserta por SQL un video `validacion-31` y una foto con ese `lugar_id`: lo que hará `PATCH` de BE-4.1), `auditoria(ajustes, accion)`, `sql(ajustes, sentencia, **parametros)` y la fixture `api` (admin con sesión, sin S3) |
 
-**Guía para BE-3.2** (paso 9 de §4.10, que este lote no toca): en la transacción de la búsqueda (o en otra corta),
+**Guía para BE-3.2** (paso 9 de §4.10, que este lote no toca; aplicada en BE-3.2, 0.12.0, con `leer_todos` en la
+misma transacción de la búsqueda y `DECIMALES_DISTANCIA` en las dos distancias, §4.10): en la transacción de la búsqueda (o en otra corta),
 `await lugares.leer_todos(conexion)`; con la posición calculada, `geo.distancia_m` a cada lugar para el más cercano a
 ≤ `LOC_LUGAR_CERCANO_M` y las referencias a ≤ `LOC_REFERENCIAS_M`, y `geo.rumbo_grados(posición → lugar)` para
 `referencias[].rumbo_grados`. Para probarlo sin dataset real, `crear` de las pruebas de arriba (coordenadas propias).
@@ -915,10 +916,11 @@ Detalles (0.11.1):
   nombre_normalizado, categoria, lat, lng, creado_por) SELECT :nombre, :normalizado, 'bloque', :lat, :lng, id FROM
   usuarios LIMIT 1`, con `normalizado = normalizar_nombre(nombre)` (único: dos nombres iguales al normalizar violan
   `lugares_nombre_normalizado_key`).
-- Validador de BE-3.2 en `dev`: P2 de `validation-3-2.md` pide `GET /v1/places` con `total` ≥ 1. Si necesita lugares
-  propios cerca de sus puntos de prueba, los crea con `POST /v1/admin/places` y nombre `validacion-32-<ts> …`, los
-  borra con `comun.borrar_lugares` y barre restos con `comun.borrar_lugares_restos` en su `preparacion` (§5.11, ayudas
-  de BE-3.1); nunca toca lugares reales.
+- Validador de BE-3.2 en `dev`: desde 0.12.0, P3 de `validation-3-2.md` solo exige `GET /v1/places` → `200` (anota el
+  `total`; antes pedía `total` ≥ 1, que no dependía de ningún lote) y no crea lugares: ningún criterio de BE-3.2 mira
+  el contexto, que cubren las pruebas con base (§4.10). Si un lote futuro necesita lugares propios en `dev`, los crea
+  con `POST /v1/admin/places` y nombre `validacion-<lote>-<ts> …`, los borra con `comun.borrar_lugares` y barre restos
+  con `comun.borrar_lugares_restos` en su `preparacion` (§5.11, ayudas de BE-3.1); nunca toca lugares reales.
 
 **Guía para BE-4.1** (imágenes con lugar): un `PATCH` de imagen con `lugar_id` bloquea video → imagen (§4.5) y la FK
 toma `KEY SHARE` del lugar al escribir: compatible con el orden de `borrar` de arriba y con el `FOR NO KEY UPDATE` de
@@ -951,33 +953,163 @@ a un lote propio, BE-3.3 (PLAN §2.2). Su contrato de §5.3 y §5.5 queda docume
   `If-Match: <version>` (`409 CONFLICTO_VERSION`).
 
 ### 4.10 BE-3.2 — Localización (`POST /v1/localize`)
-Algoritmo v1 (ADR-BE-08), con los parámetros de §5.10:
-1. **Validar**: 1–5 fotos JPEG, cada una ≤ 1,5 MB; `rumbos` con el mismo largo que `fotos`.
-2. **Vectorizar**: una sola llamada a `POST /v1/embed` con prioridad `alta`; las fotos no se guardan en ningún sitio
-   (ADR-BE-06).
-3. **Buscar**: por cada vector, los `LOC_TOP_K` vecinos por distancia coseno en el índice HNSW de la versión de vector
-   activa (`SET LOCAL hnsw.ef_search`). Similitud = `1 − distancia`. Se descartan los vecinos con similitud menor que
-   `LOC_SIM_MIN`.
-4. **Agrupar** todos los vecinos (de todas las fotos) por cercanía geográfica: se recorren de mayor a menor
-   similitud; cada uno se une al primer grupo cuyo centroide esté a menos de `LOC_RADIO_GRUPO_M`, o abre uno nuevo.
-5. **Puntuar** cada grupo como la suma, sobre las fotos de la consulta, de la mejor similitud que esa foto aporta al
-   grupo. Premia los lugares que coinciden con **varias direcciones** de la vuelta, no con una sola foto.
-6. **Posición**: centroide del mejor grupo ponderado por `similitud ^ LOC_PESO_EXPONENTE`. Radio de incertidumbre =
-   desviación ponderada de las distancias al centroide, con mínimo `LOC_RADIO_MIN_M`.
-7. **Confianza** (0–1): `0,5 · s + 0,3 · c + 0,2 · m`, donde `s` es la mejor similitud del grupo normalizada entre
-   `LOC_SIM_MIN` y `LOC_SIM_ALTA`; `c` la fracción de fotos con al menos una coincidencia en el grupo; `m` el margen
-   relativo frente al segundo grupo. Nivel `alta`, `media` o `baja` según los cortes de §5.10.
-8. **Corrección de rumbo**: para cada foto con coincidencia en el grupo, diferencia circular entre el rumbo de la foto
-   del dataset y el rumbo informado por el teléfono. Si hay ≥ 2 y su dispersión circular es ≤ 30°, se devuelve la
-   media como `correccion_rumbo_grados` (la app la suma a su brújula); si no, `null`.
-9. **Contexto**: lugar más cercano a ≤ 60 m y hasta 3 referencias a ≤ 150 m con su rumbo absoluto desde la
-   posición (la app lo convierte en «a tu derecha», «al frente»…).
-10. Registra un evento anónimo en `eventos_localizacion` (sin fotos, sin identificadores del dispositivo).
+`POST /v1/localize` (§5.3, público) recibe 1–5 fotos de una vuelta de 360° y sus rumbos, y devuelve la posición, la
+confianza, la corrección de la brújula y el lugar cercano con sus referencias. Lo usa la app (Escaneo 360° →
+Resultado, 6.2–6.3, FE-3.2). Algoritmo v1 por vecinos más cercanos y agrupación geográfica (ADR-BE-08), con los
+detalles que fija ADR-BE-18 y los parámetros `LOC_*` de §5.10.
 
-Sin vecinos por encima del umbral (o dataset vacío) la respuesta es `200` con `resultado = "sin_coincidencias"`.
-Presupuesto de tiempo: embedding ≤ `EMBEDDING_TIMEOUT_S` (5 s, límite duro; en `dev` se esperan ≤ 800 ms para 5
-fotos, embeddings §5.7), búsquedas < 100 ms; objetivo p95 en el servidor ≤ 1 s con `embedding` encendido
-(infra §5.10).
+**Estado (0.12.0): construido, sin validar en `dev`.** Probado en local con PostgreSQL 17.11 y pgvector 0.8.7 (`db`
+del compose) y embeddings simulado: `tests/unit/test_localizacion.py` (el algoritmo, sin base),
+`tests/base/test_localizacion_base.py` (el endpoint contra la base, con vectores elegidos a mano),
+`tests/contrato/test_contrato_localizacion.py` (§5.3, §5.6 y §5.10 contra los esquemas, `Settings` y el OpenAPI) y
+`tests/ops/test_validate32.py` (el validador contra un mundo falso). **Falta**, porque depende de otros lotes: el
+dataset real indexado (FE-2.1 + BE-2.2), el conjunto de consulta y el informe de EMB-3.2, la calibración de
+`LOC_SIM_MIN`, `LOC_SIM_ALTA` y los cortes de nivel (abajo, «Calibración») y `validate32.py` con código 0 en `dev`
+(PLAN §3). Hasta entonces los umbrales son los iniciales de §5.10 y ningún número de precisión está medido.
+
+**Una petición**, en este orden (cada paso responde su error de §5.3 y no sigue):
+1. Router `api/v1/localizar.localizar` (en `router_v1`, sin `requiere_admin`: ignora `Authorization`). Toma
+   `inicio = time.perf_counter()` (de ahí sale `latencia_ms`).
+2. `partes_de_la_peticion`: `leer_cuerpo(request, LOC_MAX_FOTOS × LOC_MAX_BYTES_FOTO + MARGEN_MULTIPART)`
+   (5 × 1 572 864 + 65 536 = 7 929 856 bytes, por debajo de los 10 MB de API Gateway; si pasa, `400 FOTOS_INVALIDAS`
+   con `indice` 0) y `partes_multipart` (`NoEsMultipart` → `400 FOTOS_INVALIDAS` «falta la parte fotos»;
+   `MultipartInvalido` → `400 SOLICITUD_INVALIDA`). Las partes que no se llaman `fotos` ni `metadatos` se ignoran.
+3. `fotos_de`: las partes `fotos` **en el orden en que llegan** (aunque haya otras partes en medio): ninguna →
+   `indice` 0; más de `LOC_MAX_FOTOS` → `indice` = `LOC_MAX_FOTOS` (la primera que sobra); después
+   `dominio.fotos.motivo_foto_no_valida` en cada una con su índice (tipo `image/jpeg` sin mirar parámetros, no vacía,
+   ≤ `LOC_MAX_BYTES_FOTO`, firma `FF D8 FF`). No decodifica: lo hace embeddings.
+4. `metadatos_de`: una sola parte `metadatos` (falta o repetida → `422 VALIDACION`, campo `metadatos`), como mucho
+   `METADATOS_MAX_BYTES` (16 384; si no, `422`), JSON en UTF-8 sin mirar su `Content-Type` (si no se puede leer,
+   también por anidamiento excesivo, `400 SOLICITUD_INVALIDA`), validado con `esquemas.localizacion.MetadatosLocalizacion`
+   (`422 VALIDACION` con `detalle.campos` = `metadatos.<campo>`, p. ej. `metadatos.rumbos.1`; un JSON que no es objeto,
+   campo `metadatos`). `rumbos` con otro largo que las fotos → `400 FOTOS_INVALIDAS` con
+   `indice = min(len(rumbos), fotos)` (la primera foto sin rumbo, o el primer rumbo sin foto).
+5. `obtener_motor(request)`: sin motor, `503 BASE_NO_DISPONIBLE`. Va después de validar, como en BE-2.4.
+6. `servicios.localizar.localizar(motor, ajustes, fotos, rumbos, origen=, app_version=, inicio=, request_id=)`:
+   **una** llamada `embedding.vectorizar(ajustes, fotos, prioridad="alta", request_id=<X-Request-Id>)` dentro de
+   `anyio.fail_after(TOPE_EMBEDDING_S)` (20 s, de `servicios.diagnostico`); `version_vector` distinta de
+   `EMBEDDING_VERSION_VECTOR` → `VersionVectorDistinta` sin buscar. Después, **una** transacción
+   (`sesion.transaccion`): `buscar_vecinos(c, vectores, k=LOC_TOP_K, version_vector=…, ef_search=LOC_EF_SEARCH)` (un
+   vector por foto), el algoritmo (`dominio.localizacion.localizar`, Python puro, microsegundos con la
+   conexión abierta), `lugares.leer_todos(c)` y `localizacion.contexto` solo si hay posición, y el `INSERT` en
+   `eventos_localizacion` (paso 10). `latencia_ms` se mide justo antes del `INSERT`. Si el `INSERT` o el `COMMIT`
+   fallan por la base, `503 BASE_NO_DISPONIBLE`: la respuesta y la tabla nunca se contradicen.
+7. Traducción de errores (la misma que BE-2.4, §4.8): `ImagenRechazada(indice, codigo)` → `400 FOTOS_INVALIDAS` con ese
+   `indice` y `motivo` «embeddings la rechazó (<codigo>)»; `EmbeddingNoDisponible` (también el tope de 20 s) y
+   `RespuestaNoValida` → `503 EMBEDDING_NO_DISPONIBLE` con el evento `embedding_no_disponible` (`WARNING`; `ERROR` si
+   la respuesta no cumple el contrato); `VersionVectorDistinta` → `503` con `version_vector_distinta`. Ningún error
+   escribe en `eventos_localizacion`.
+8. `respuesta_de`: redondeo para la salida (abajo) y evento `localizacion_calculada` (§5.10: cifras de la consulta, sin
+   posición, ids ni nada de las fotos salvo el total de bytes).
+
+**El algoritmo** (`dominio/localizacion.py`; los pasos de ADR-BE-08 con los detalles de ADR-BE-18). Entrada: la lista de
+vecinos de cada foto (`db.consultas.Vecino`, valores crudos: similitud sin redondear, `rumbo` `real` sin
+`real_legible`) y los `rumbos` de la consulta; salida: `Localizacion` (valores sin redondear salvo `confianza`).
+3. **Filtro y orden** (`coincidencias`): los vecinos con `similitud ≥ LOC_SIM_MIN` (iguales al umbral, dentro), de
+   mayor a menor similitud; a igualdad, el orden de llegada (foto 0, 1… y, dentro de cada foto, el de
+   `buscar_vecinos`: distancia e `imagen_id`). Una misma imagen del dataset que sale para dos fotos cuenta dos veces
+   (una por foto). Sin ninguna → `sin_coincidencias`.
+4. **Agrupar** (`agrupar`): cada coincidencia entra en el **primer** grupo, por orden de creación, cuyo centroide esté
+   a **menos** de `LOC_RADIO_GRUPO_M` (`geo.distancia_m`, estrictamente menor), aunque otro esté más cerca; si
+   ninguno, abre uno. **Centroide = media sin ponderar** de la latitud y de la longitud de sus miembros, recalculada al
+   añadir cada uno (decisión del maestro, a confirmar por el usuario; ADR-BE-18).
+5. **Puntuar** (`Grupo.puntuacion`): suma, por cada foto de la consulta, de la mejor similitud que esa foto aporta al
+   grupo. Mejor grupo (`mejor_grupo`) = mayor puntuación; a igualdad, el creado antes.
+6. **Posición** (`posicion`): media de latitud y longitud de **todos** los miembros del mejor grupo ponderada por
+   `similitud ^ LOC_PESO_EXPONENTE`. Radio = `√(Σ wᵢ·dᵢ² / Σ wᵢ)` con los mismos pesos y `dᵢ` = distancia del miembro a
+   la posición; como mínimo `LOC_RADIO_MIN_M` (un grupo de un miembro da exactamente ese mínimo).
+7. **Confianza** = `0,5·s + 0,3·c + 0,2·m`, con `s` = (similitud máxima del grupo − `LOC_SIM_MIN`) / (`LOC_SIM_ALTA` −
+   `LOC_SIM_MIN`) acotada a [0, 1] (1 si `LOC_SIM_ALTA` ≤ `LOC_SIM_MIN`), `c` = fotos con alguna coincidencia en el
+   grupo / fotos de la consulta (cuentan también las que no tienen ningún vecino) y **`m` = (p₁ − p₂) / p₁**, con p₁ y p₂
+   las puntuaciones del mejor y del segundo grupo; 1 con un solo grupo (decisión del maestro, a confirmar por el
+   usuario; ADR-BE-18). Se **trunca** a 2 decimales (`truncar_confianza`: `floor(round(x·100, 6)) / 100`, en [0, 1]) y
+   el **nivel se decide con el valor truncado**: `alta` si ≥ `LOC_NIVEL_ALTA_MIN`, `media` si ≥ `LOC_NIVEL_MEDIA_MIN`,
+   si no `baja`.
+8. **Corrección de rumbo** (`correccion_rumbo`): por cada foto con rumbo informado y alguna coincidencia **con rumbo** en
+   el mejor grupo, la de mayor similitud da `diferencia_angular(rumbo del dataset, rumbo del teléfono)` en (−180, 180]
+   (la app la suma a su brújula: teléfono + corrección = dataset). Con ≥ 2 diferencias y desviación estándar circular
+   `√(−2·ln R)` ≤ `LOC_DISPERSION_RUMBO_MAX` (R = longitud del resultante medio de las diferencias), la corrección es
+   su media circular (`atan2`); si no, `None`. Las fotos que solo coinciden con otros grupos no cuentan.
+9. **Contexto** (`contexto`): distancia (`geo.distancia_m`) y rumbo inicial (`geo.rumbo_grados`) desde la posición a
+   cada lugar de `leer_todos`, ordenados por distancia (a igualdad, el orden de `leer_todos`: nombre normalizado e id).
+   `lugar_cercano` = el primero si está a ≤ `LOC_LUGAR_CERCANO_M`; `referencias` = los siguientes a ≤
+   `LOC_REFERENCIAS_M`, **sin repetir el lugar cercano**, como mucho `LOC_REFERENCIAS_MAX`.
+10. **Evento** (servicio): una fila de `eventos_localizacion` por cada `200` (§5.7, «filas de BE-3.2»).
+
+Ejemplo (el de `test_ok_con_posicion_confianza_correccion_y_contexto`): 3 fotos; grupo A con 0,92 (foto 0), 0,85 (foto
+1) y 0,80 (foto 2) en 7 m; grupo B a 200 m con 0,60 (foto 0); una imagen con 0,40 no pasa el umbral. p₁ = 2,57, p₂ =
+0,60, s = 1, c = 3/3, m = 0,7665 → 0,9533 → **0,95**, `alta`. Rumbos del teléfono 90 y 180 frente a 84 y 176 en el
+dataset → corrección −5,0.
+
+**Salida** (`respuesta_de`; el cálculo usa los valores sin redondear): `posicion.lat`/`lng` con 6 decimales
+(`DECIMALES_COORDENADA`), `radio_m` con 1 (`DECIMALES_RADIO`), `confianza` truncada a 2, `correccion_rumbo_grados` con
+1 y en (−180, 180] (−180,0 sale como 180,0), las dos distancias con `dominio.lugares.DECIMALES_DISTANCIA` (1, como
+`GET /v1/places`) y `rumbo_grados` con 1 y en [0, 360) (359,96 sale como 0,0). `fotos_con_coincidencia` = fotos con
+coincidencia en el **mejor grupo** (`c × fotos_usadas`).
+
+**Nombres internos** (para depurar o extender sin abrir el código):
+- `dominio/localizacion.py`: `Parametros` (los `LOC_*` que usa; por defecto, los valores de §5.10), `Coincidencia(foto,
+  lat, lng, similitud, rumbo)`, `Grupo` (`miembros`, `lat`/`lng` = centroide, `anadir`, `puntuacion`, `fotos`,
+  `similitud_max`, `mejor_por_foto`), `Posicion(lat, lng, radio_m)`, `Localizacion(resultado, posicion, confianza,
+  nivel, correccion_rumbo_grados, fotos_usadas, fotos_con_coincidencia, coincidencias, grupos, similitud_max, s, c,
+  m)`, `LugarContexto(lugar, distancia_m, rumbo_grados)` (`lugar` es el `LugarRef` tal cual), `DECIMALES_CONFIANZA`
+  (2); funciones `coincidencias`, `agrupar`, `mejor_grupo`, `posicion`, `truncar_confianza`, `nivel_de`,
+  `diferencia_angular`, `correccion_rumbo`, `localizar(vecinos_por_foto, rumbos, parametros)` y `contexto(posicion,
+  lugares, parametros)`. Los vecinos y los lugares se leen por atributos (protocolos `VecinoBuscado`: `lat`, `lng`,
+  `similitud`, `rumbo`; `LugarConPosicion`: `lat`, `lng`): no importa `db` ni `servicios`.
+- `servicios/localizar.py`: `localizar(…)` → `ResultadoLocalizar(localizacion, lugar_cercano, referencias,
+  version_vector, embedding_ms, busqueda_ms, latencia_ms)`; `parametros_de(ajustes)` → `Parametros`; reexporta
+  `VersionVectorDistinta`. `vectorizar=` sustituye la llamada a embeddings (si no, `embedding.vectorizar`, buscado en
+  el módulo al llamar: las pruebas lo cambian con `monkeypatch.setattr(embedding, "vectorizar", doble)`).
+- `esquemas/localizacion.py`: `MetadatosLocalizacion` (`rumbos: list[float en [0, 360) | None]`, `origen:
+  Literal["escaneo"]`, `app_version` recortada, vacía → `None`, ≤ `APP_VERSION_MAX` (40), sin NUL; campos de más
+  ignorados), `PosicionRespuesta`, `LugarCercano`, `ReferenciaLugar`, `LocalizacionRespuesta` (prohíben campos de
+  más); constantes `PARTE_FOTOS`, `PARTE_METADATOS`, `METADATOS_MAX_BYTES`, `DECIMALES_COORDENADA` (6),
+  `DECIMALES_RADIO` (1), `DECIMALES_RUMBO` (1), `DECIMALES_EVENTO` (5).
+- `api/v1/localizar.py`: `router`, `partes_de_la_peticion`, `fotos_de`, `metadatos_de`, `respuesta_de`; reutiliza
+  `MARGEN_MULTIPART` de `admin_diagnostico`.
+
+**Para los lotes siguientes: qué ofrece BE-3.2 al código** (BE-5.1 `/v1/localize/frame` restringe la búsqueda a un
+radio y reutiliza el resto; BE-5.2 lee `eventos_localizacion`).
+
+| Elemento | Qué hace |
+|---|---|
+| `app.dominio.localizacion.localizar(vecinos_por_foto, rumbos, parametros)` → `Localizacion` | Pasos 3–8. Python puro: se prueba sin base (`tests/unit/test_localizacion.py`). Para BE-5.1 (una foto y una posición previa) basta con filtrar los vecinos por distancia a esa posición antes de llamarlo |
+| `app.dominio.localizacion.contexto(posicion, lugares, parametros)` → `(LugarContexto \| None, [LugarContexto])` | Paso 9 con cualquier lista de objetos con `lat`/`lng` (en el orden de desempate que se quiera) |
+| `app.servicios.localizar.localizar(motor, ajustes, fotos, rumbos, *, origen, app_version, inicio, request_id=None, vectorizar=None)` | Pasos 2–10 (embeddings, búsqueda, algoritmo, contexto y evento en una transacción). `origen` va tal cual a `eventos_localizacion.origen` (`escaneo`; BE-5.1, `frame`) |
+| `app.servicios.localizar.parametros_de(ajustes)` | Los `LOC_*` de `Settings` como `Parametros` |
+| `app.api.v1.localizar.fotos_de(partes, ajustes)`, `metadatos_de(partes, n_fotos)`, `partes_de_la_peticion(request, ajustes)` | La validación de la petición con sus `ErrorApi` (pasos 2–4) |
+| Pruebas con base | `tests/base/test_localizacion_base.py`: `eje(i)` (vector unitario de la foto `i` de la consulta), `con_similitud(i, s)` (vector con similitud coseno `s` con `eje(i)` y 0 con los ejes 0–9; usa ejes libres del 100 al 383), `EmbeddingsFijos` (doble de `vectorizar`: `registrar(fotos)` asigna `eje(i)` a `fotos[i]` por sus bytes; una foto no registrada da un eje sin dataset; `llamadas`, `fallo`, `version`), `indexar_en(ajustes, [(vector, lat, lng, rumbo)])` (un video `validacion-32` con imágenes `procesada` y sus vectores en coordenadas propias: lo que pedía la guía de §4.8), `crear_lugar(ajustes, nombre, lat, lng)`, `eventos(ajustes)` (las filas de `eventos_localizacion`), `norte(m)`/`este(m)`, `localizar(api, fotos, rumbos, metadatos=…, extra=…)` y `_escena` (grupos A y B y tres lugares). Son de un módulo de pruebas: para reutilizarlas, `importlib` (como `test_validate24.py`) |
+
+**Calibración (pendiente de EMB-3.2; C6).** Cuando EMB-3.2 entregue su informe (`recomendado`: `LOC_SIM_MIN`,
+`LOC_SIM_ALTA`, `corte_alta`, `corte_media`, embeddings §5.9) y la persona lo revise, en **un** commit: (1) los valores
+por defecto de `project/src/app/config.py` (`loc_sim_min`, `loc_sim_alta`, `loc_nivel_alta_min`, `loc_nivel_media_min`);
+(2) las filas de §5.10, sin la palabra «Iniciales» y con el informe que las respalda (`tests/contrato/
+test_contrato_localizacion.py` compara §5.10 con `Settings`: si solo cambia uno de los dos, falla); (3) una entrada
+menor del CHANGELOG con «Lote que la motivó: BE-3.2 (calibración …)» (C6 la busca: versión posterior a 0.12.0, BE-3.2 y
+«calibr»); (4) avisar al maestro para que SERVICE_EMBEDDING actualice su copia de los parámetros en
+`tools/evaluacion/metricas.py` (embeddings §5.9: `LOC_SIM_MIN_ACTUAL`…), que este documento no toca. Cambiarlos solo en
+`dev` con una variable de entorno del mismo nombre es posible (§5.9), pero antes hay que añadirla a infra §5.4.
+
+**Trampas**:
+- Un campo de log llamado `nivel` choca con el parámetro `nivel` de `logs.registrar` (y con el campo fijo `nivel` de
+  §5.10): el nivel de confianza va como `nivel_confianza` en `localizacion_calculada`.
+- pgvector guarda `float32`: la similitud de un vector consigo mismo es 1 ± 1e-7 y la de los vectores de prueba difiere
+  del valor pedido en ~1e-7. Las pruebas comparan con margen.
+- EMB-3.2 simula los pasos 3–7 con las similitudes de `vecinos`, redondeadas a 6 decimales, y compara la confianza **sin
+  truncar** con los cortes; aquí se usan las similitudes crudas y la confianza truncada. Solo cambia el nivel de una
+  confianza a menos de 5·10⁻⁷ por debajo de un corte (por el `round(…, 6)` de `truncar_confianza`). Sin documentar en
+  EMB: cómo desempata a igual similitud (aquí, orden de llegada).
+- El `INSERT` del evento va en la transacción de la búsqueda: si la base cae justo ahí, la localización calculada se
+  pierde y la respuesta es `503` (a propósito: no hay respuestas sin su fila).
+- `leer_cuerpo` consume `request.stream()` (§4.8): después `request.body()` está vacío.
+- `origen` solo admite `escaneo`: `frame` es de BE-5.1, que tiene su propia ruta.
+- El índice HNSW es aproximado (R16) y con pocos vectores PostgreSQL puede no usarlo (§4.8); el plan con el dataset
+  real sigue a verificar con `EXPLAIN` en `dev`.
+
+Presupuesto de tiempo: embedding ≤ `EMBEDDING_TIMEOUT_S` por fase (5 s; tope total 20 s; en `dev` se esperan ≤ 800 ms
+para 5 fotos, embeddings §5.7: EMB-3.1 midió 413 ms de p95 para un lote de 5), búsquedas < 100 ms; objetivo p95 en el
+servidor ≤ 1 s con `embedding` encendido (infra §5.10, C3). Sin medir en `dev`.
 
 ### 4.11 BE-4.1 — Administración de videos e imágenes, y purga
 - Listado, detalle (con URLs prefirmadas GET de 1 h para foto y miniatura), renombrar, re-procesar y edición de
@@ -1145,8 +1277,46 @@ Errores:
 - `nivel` ∈ {`alta`, `media`, `baja`}. La app decide qué decir; con `baja` debería sugerir repetir la vuelta (6.3).
 - `referencias[].rumbo_grados`: rumbo absoluto desde `posicion` hacia el lugar.
 
-Errores: `400 FOTOS_INVALIDAS` (cantidad, tipo, tamaño o `rumbos` de distinto largo; `detalle.indice` señala la
-foto), `503 EMBEDDING_NO_DISPONIBLE` (apagado, caído o sin respuesta en `EMBEDDING_TIMEOUT_S`), `503 BASE_NO_DISPONIBLE`.
+En detalle (desde BE-3.2, ARCHITECTURE 0.12.0; el cálculo, en §4.10):
+- **Petición.** Público: no pide token e ignora `Authorization` (también uno no válido). Las partes `fotos` cuentan
+  **en el orden en que llegan** (aunque haya otras partes entre ellas): ese orden es el de `rumbos` y el de
+  `detalle.indice`. Cada una declara `Content-Type: image/jpeg` (se ignoran parámetros como `; charset=…`), no está
+  vacía, pesa como mucho `LOC_MAX_BYTES_FOTO` (1 572 864 bytes) y empieza por `FF D8 FF`; el nombre de archivo da
+  igual. El cuerpo entero, como mucho `LOC_MAX_FOTOS` × `LOC_MAX_BYTES_FOTO` + 64 KiB. Las partes con otro nombre se
+  ignoran.
+- **`metadatos`**: exactamente una parte, de como mucho 16 384 bytes, con un objeto JSON en UTF-8 (su `Content-Type` no
+  se mira). `rumbos` (obligatorio): lista con un elemento por foto, cada uno un número en [0, 360) o `null`. `origen`
+  (obligatorio): `"escaneo"`. `app_version` (opcional): texto de hasta 40 caracteres tras recortar (vacío = `null`), sin
+  NUL. Los demás campos se ignoran; `NaN` o infinitos no valen.
+- **`posicion`**: `lat`/`lng` con 6 decimales; `radio_m` (m, 1 decimal, mínimo `LOC_RADIO_MIN_M`) es la dispersión de
+  las coincidencias del grupo elegido alrededor de la posición.
+- **`confianza`** ∈ [0, 1], **truncada** a 2 decimales; `nivel` se decide con ese mismo valor (cortes de §5.10): una
+  `confianza` de 0,70 nunca llega con `media` si el corte de `alta` es 0,70.
+- **`correccion_rumbo_grados`**: grados en (−180, 180], 1 decimal, o `null` (menos de 2 fotos con rumbo que coincidan
+  con el grupo elegido, o diferencias demasiado dispersas: `LOC_DISPERSION_RUMBO_MAX`). La app la **suma** a su
+  brújula.
+- **`lugar_cercano`**: el lugar más cercano a la posición si está a ≤ `LOC_LUGAR_CERCANO_M` (60 m); si no, `null`.
+  **`referencias`**: los siguientes lugares más cercanos a ≤ `LOC_REFERENCIAS_M` (150 m), sin repetir `lugar_cercano`,
+  como mucho `LOC_REFERENCIAS_MAX` (3), de más cerca a más lejos (a igualdad, por nombre). `distancia_m` con 1 decimal
+  (haversine, como `GET /v1/places`); `rumbo_grados` en [0, 360) con 1 decimal (0 = norte verdadero).
+- **`fotos_usadas`** = fotos de la petición; **`fotos_con_coincidencia`** = las que tienen alguna coincidencia en el
+  grupo elegido (0 con `sin_coincidencias`). `version_vector` = `EMBEDDING_VERSION_VECTOR`. `latencia_ms`: lo que
+  tardó el servidor desde que empezó el endpoint hasta antes de guardar el evento (embeddings y búsqueda incluidos).
+- Cada `200` deja una fila anónima en `eventos_localizacion` (§5.7, «filas de BE-3.2»); un error no deja ninguna. Las
+  fotos no se guardan en ningún sitio: ni S3, ni disco, ni logs (ADR-BE-06).
+
+Errores, en este orden (el primero que aplica):
+1. `400 FOTOS_INVALIDAS` con `detalle = {"indice": i, "motivo": "…"}` (`motivo`, texto corto para humanos): el cuerpo
+   pasa del tope o no es `multipart/form-data` (`indice` 0), no hay ninguna parte `fotos` (0), hay más de
+   `LOC_MAX_FOTOS` (`indice` = `LOC_MAX_FOTOS`, la primera que sobra) o una foto no vale (su índice).
+   `400 SOLICITUD_INVALIDA` si el multipart está mal formado.
+2. `422 VALIDACION` (`detalle.campos` con `metadatos` o `metadatos.<campo>`, p. ej. `metadatos.rumbos.1`) si falta la
+   parte `metadatos`, está repetida, pesa de más o un campo no vale; `400 SOLICITUD_INVALIDA` si no es JSON en UTF-8;
+   `400 FOTOS_INVALIDAS` si `rumbos` no tiene un elemento por foto (`indice` = el menor de los dos largos).
+3. `503 EMBEDDING_NO_DISPONIBLE` (apagado, caído, saturado, sin respuesta en `EMBEDDING_TIMEOUT_S` o en 20 s en total,
+   respuesta fuera de contrato o con otra `version_vector`), o `400 FOTOS_INVALIDAS` (`indice` de la foto, `motivo`
+   «embeddings la rechazó (IMAGEN_INVALIDA)») si embeddings no pudo decodificar una foto.
+4. `503 BASE_NO_DISPONIBLE` (sin base, durante la búsqueda o al guardar el evento).
 
 #### `GET /v1/places`
 Público: no pide token e ignora `Authorization` (también uno no válido). Parámetros opcionales: `lat`, `lng` (ambos o
@@ -1507,14 +1677,14 @@ Errores, en este orden (el primero que aplica):
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 400 | `SOLICITUD_INVALIDA` | Cuerpo mal formado (JSON inválido, multipart roto) |
-| 400 | `FOTOS_INVALIDAS` | `/v1/localize` y `/v1/admin/diagnostico/vecinos`: cantidad, tipo o tamaño de fotos, o `rumbos` incoherente; `detalle.indice` señala la foto y, en `vecinos` (BE-2.4), `detalle.motivo` dice por qué |
+| 400 | `FOTOS_INVALIDAS` | `/v1/localize` y `/v1/admin/diagnostico/vecinos`: cantidad, tipo o tamaño de fotos, o `rumbos` incoherente; `detalle.indice` señala la foto y `detalle.motivo` dice por qué (en `vecinos` desde BE-2.4, en `localize` desde BE-3.2) |
 | 401 | `NO_AUTENTICADO` · `TOKEN_INVALIDO` · `TOKEN_EXPIRADO` | §5.2 (con `WWW-Authenticate: Bearer`) |
 | 401 | `CREDENCIALES_INVALIDAS` | Login fallido (cuerpo fijo, §5.3) |
 | 403 | `SIN_PERMISOS` | Token válido de un usuario activo sin rol `admin` (§5.2) |
 | 404 | `NO_ENCONTRADO` | Recurso inexistente (o video eliminado en rutas de lectura); también una ruta que no existe |
 | 405 | `SOLICITUD_INVALIDA` | Método no permitido en una ruta que existe; `detalle.metodos_permitidos` (p. ej. `["GET"]`) y encabezado `Allow` |
 | 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido al crear o editar (BE-3.1, §5.5; `detalle: null`) · registrar fotos, completar la subida o volver a crear (mismo `ref_cliente`) un video borrado (§5.4) · `If-Match` no coincide (alertas, BE-3.3: sin implementar) |
-| 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]` |
+| 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]`. En `/v1/localize` (BE-3.2), la parte `metadatos`: `campo` = `metadatos` o `metadatos.<campo>` |
 | 500 | `ERROR_INTERNO` | Fallo no previsto (el `X-Request-Id` permite encontrarlo en los logs); también configuración que falta en `api` (`JWT_SECRET`, §5.2; `S3_BUCKET_DATASET` en las rutas de §5.4 que usan S3) |
 | 501 | `NO_IMPLEMENTADO` | Endpoints reservados |
 | 503 | `EMBEDDING_NO_DISPONIBLE` · `BASE_NO_DISPONIBLE` | Dependencia caída, apagada o lenta. `BASE_NO_DISPONIBLE`, en cualquier endpoint que use la base (desde BE-1.3, §4.4) |
@@ -1682,6 +1852,18 @@ propia migración (índice parcial nuevo) y se activa cambiando `EMBEDDING_VERSI
 | `version_vector` | `text` | | | |
 | `app_version` | `text` | sí | | |
 
+**`eventos_localizacion`: filas de BE-3.2** (una por cada `POST /v1/localize` con `200`, en la misma transacción que la
+búsqueda; un error no deja fila; §4.10):
+
+| Columna | Valor |
+|---|---|
+| `origen` | `escaneo` (el de `metadatos`; `frame` queda para BE-5.1) |
+| `resultado` | `ok` o `sin_coincidencias` (`error` no lo escribe BE-3.2) |
+| `nivel`, `confianza` | los de la respuesta (`confianza` ya truncada; `0` y `nivel` nulo con `sin_coincidencias`) |
+| `lat`, `lng` | la posición de la respuesta redondeada a 5 decimales; nulas con `sin_coincidencias` |
+| `fotos_usadas`, `fotos_con_coincidencia`, `latencia_ms`, `version_vector` | los de la respuesta |
+| `app_version` | la de `metadatos` (recortada; nula si no viene o queda vacía). Los validadores envían `validacion-32` |
+
 **`auditoria`**
 
 | Columna | Tipo | Nulo | Por defecto | Reglas |
@@ -1847,13 +2029,13 @@ que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que 
 | `LOGIN_HASH_ESPERA_MAX_S` | 10 | Espera máxima por el turno; después, `503 SERVICIO_OCUPADO`. Muy por debajo de los 30 s de API Gateway |
 | `EMBEDDING_VERSION_VECTOR` | `dinov2-vits14/pp-v1` | Debe coincidir con `GET /v1/info` de embeddings. Se comprueba en la primera llamada tras cada arranque del servicio y cada 10 min (no al arrancar `api`, porque embeddings puede estar apagado); si no coincide, no se usa el servicio y `/v1/health/ready` lo informa (esa regla aún no tiene código). Hoy se compara con la `version_vector` de cada respuesta de `/v1/embed`: el `worker` (BE-2.2) no guarda el vector y `vecinos` (BE-2.4) responde `503 EMBEDDING_NO_DISPONIBLE` sin buscar. Es también el literal del `WHERE` de la búsqueda (§4.8, §5.7) |
 | `EMBEDDING_TIMEOUT_S` / `EMBEDDING_CONNECT_TIMEOUT_S` | 5 / 3 | Un reintento solo si la conexión fue rechazada. 5 s deja margen sobre los ≤ 800 ms esperados para 5 fotos en `dev` (embeddings §5.7); si hace falta, se sube con la variable del mismo nombre |
-| `LOC_MAX_FOTOS` / `LOC_MAX_BYTES_FOTO` | 5 / 1 572 864 (1,5 MB) | `LOC_MAX_BYTES_FOTO` lo usa `vecinos` desde BE-2.4 (tope de la foto; el del cuerpo es ese más 64 KiB, §4.8) |
-| `LOC_TOP_K` / `LOC_EF_SEARCH` | 10 / 64 | Por foto. `vecinos` (BE-2.4) usa `hnsw.ef_search = max(LOC_EF_SEARCH, k)` (§4.8); `LOC_TOP_K` es el `k` con que la herramienta de evaluación de embeddings llama a `vecinos` |
-| `LOC_SIM_MIN` / `LOC_SIM_ALTA` | 0,55 / 0,80 | **Iniciales: se calibran en BE-3.2 con el conjunto de evaluación de EMB-3.2** |
-| `LOC_RADIO_GRUPO_M` / `LOC_PESO_EXPONENTE` / `LOC_RADIO_MIN_M` | 20 / 4 / 5 | |
-| `LOC_NIVEL_ALTA_MIN` / `LOC_NIVEL_MEDIA_MIN` (cortes de nivel) | 0,70 / 0,45 | `alta` ≥ 0,70 · `media` ≥ 0,45 · `baja` < 0,45. Iniciales |
-| `LOC_DISPERSION_RUMBO_MAX` | 30° | Para devolver `correccion_rumbo_grados` |
-| `LOC_LUGAR_CERCANO_M` / `LOC_REFERENCIAS_M` / `LOC_REFERENCIAS_MAX` | 60 / 150 / 3 | |
+| `LOC_MAX_FOTOS` / `LOC_MAX_BYTES_FOTO` | 5 / 1 572 864 (1,5 MB) | Fotos por localización y tope de cada foto (`localize` desde BE-3.2; `LOC_MAX_BYTES_FOTO` también `vecinos`, desde BE-2.4). Tope del cuerpo: `vecinos`, una foto + 64 KiB; `localize`, `LOC_MAX_FOTOS` × `LOC_MAX_BYTES_FOTO` + 64 KiB (§4.8, §4.10) |
+| `LOC_TOP_K` / `LOC_EF_SEARCH` | 10 / 64 | Por foto. `localize` (BE-3.2) busca `LOC_TOP_K` vecinos por foto y `vecinos` (BE-2.4) los `k` pedidos, los dos con `hnsw.ef_search = max(LOC_EF_SEARCH, k)` (§4.8); `LOC_TOP_K` es el `k` con que la herramienta de evaluación de embeddings llama a `vecinos` |
+| `LOC_SIM_MIN` / `LOC_SIM_ALTA` | 0,55 / 0,80 | **Iniciales: se calibran en BE-3.2 con el conjunto de evaluación de EMB-3.2** (cómo y dónde, §4.10 «Calibración»; C6 de `validation-3-2.md` falla mientras digan «Iniciales»). Umbral de las coincidencias (≥) y similitud a la que `s` vale 1 (§4.10, pasos 3 y 7) |
+| `LOC_RADIO_GRUPO_M` / `LOC_PESO_EXPONENTE` / `LOC_RADIO_MIN_M` | 20 / 4 / 5 | Distancia (m, estrictamente menor) al centroide sin ponderar para entrar en un grupo; exponente de los pesos de la posición; radio mínimo (m) (§4.10, pasos 4 y 6) |
+| `LOC_NIVEL_ALTA_MIN` / `LOC_NIVEL_MEDIA_MIN` (cortes de nivel) | 0,70 / 0,45 | `alta` ≥ 0,70 · `media` ≥ 0,45 · `baja` < 0,45, sobre la confianza truncada a 2 decimales (§4.10, paso 7). Iniciales: se calibran con EMB-3.2 como `LOC_SIM_MIN` |
+| `LOC_DISPERSION_RUMBO_MAX` | 30° | Desviación estándar circular máxima de las diferencias de rumbo para devolver `correccion_rumbo_grados` (§4.10, paso 8) |
+| `LOC_LUGAR_CERCANO_M` / `LOC_REFERENCIAS_M` / `LOC_REFERENCIAS_MAX` | 60 / 150 / 3 | `lugar_cercano` a ≤ 60 m; hasta 3 `referencias` a ≤ 150 m sin repetirlo (§4.10, paso 9) |
 | `REC_MAX_FOTOS_VIDEO` / `REC_MAX_LOTE` | 200 / 50 | 200 coincide con `MAX_FOTOS_VIDEO` de la app. `images` (BE-2.1) rechaza con `422` un `orden` > `min(REC_MAX_FOTOS_VIDEO, 200)` (200 es el `CHECK` de §5.7) y un lote de más de `REC_MAX_LOTE` |
 | `REC_MAX_BYTES_FOTO` / `REC_LADO_MIN_PX` | 4 194 304 (4 MB) / 320 | `images` rechaza un `bytes` declarado mayor (`422`); el tamaño real (sin descargar lo que pasa del máximo) y el lado menor tras EXIF los valida el `worker` (BE-2.2, §4.6; una URL PUT no limita tamaño) |
 | `PRESIGN_PUT_TTL_S` / `PRESIGN_GET_TTL_S` | 900 / 3600 | Vida de las URL `PUT` de `images` (BE-2.1) y de las GET (BE-4.1). C3a de la validación espera 900 s + 10 s |
@@ -1862,7 +2044,7 @@ que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que 
 | `WORKER_LADO_EMBEDDING_PX` | 1024 | Copia reducida que se envía al modelo (el original y la miniatura no cambian) |
 | `WORKER_ESPERA_EMBEDDING_S` | 15 | Pausa entre comprobaciones de `/health/ready` con `embedding` no listo, tras un error de SQS y tras un lote con mensajes retenidos |
 | `RECONCILIADOR_CADA_MIN` | 10 | Purgas pendientes |
-| `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api` (sin código todavía; la de *tombstones* es de BE-3.3, §4.9) |
+| `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api` (sin código todavía; la de *tombstones* es de BE-3.3, §4.9; BE-3.2 escribe `eventos_localizacion` pero no la limpia) |
 | `PAGINA_POR_DEFECTO` / `PAGINA_MAX` | 24 / 100 | 24 coincide con `FOTOS_POR_PAGINA` de la Galería. Los usa `GET /v1/admin/videos` desde BE-2.1 |
 | `DB_POOL_API` / `DB_POOL_API_DESBORDE` / `DB_POOL_WORKER` | 5 / 5 / 2 | `db.t4g.micro` admite ~100 conexiones |
 | `DB_CONNECT_TIMEOUT_S` | 5 | Tiempo máximo para abrir una conexión (asyncpg espera 60 s por defecto) y para el `SELECT 1` de `/v1/health/ready` |
@@ -1892,10 +2074,11 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `mensaje_descartado` | `worker` | `motivo` (`prueba_s3`, `clave_no_reconocida`, `video_no_existe`, `video_eliminado`, `imagen_no_existe`, `duplicado`, `objeto_no_existe`), `origen`, `imagen_id`, `video_id` (o `mensaje_id` en los dos primeros) | Nada que procesar; el mensaje se borra (`INFO`) |
 | `mensaje_no_reconocido` | `worker` | `motivo`, `mensaje_id` | Cuerpo que no es ninguno de §5.8; se borra (`WARNING`) |
 | `ingesta_transitoria` | `worker` | `motivo` (`s3: …`, `base: …`, `embedding: …`, `version_vector distinta…`, `imprevisto: …`), `origen`, `imagen_id`, `video_id` (y la traza en `excepcion` si es imprevista) | Fallo transitorio: el mensaje se queda (`WARNING`; `ERROR` si es imprevisto o una respuesta no válida de embeddings) |
-| `version_vector_distinta` | `worker`, `api` | `esperada`, `recibida` | `/v1/embed` devolvió otra `version_vector` que `EMBEDDING_VERSION_VECTOR`: el `worker` no guarda nada; en `api` (BE-2.4, `vecinos`), `503 EMBEDDING_NO_DISPONIBLE` sin buscar (`ERROR`) |
+| `version_vector_distinta` | `worker`, `api` | `esperada`, `recibida` | `/v1/embed` devolvió otra `version_vector` que `EMBEDDING_VERSION_VECTOR`: el `worker` no guarda nada; en `api` (`vecinos` desde BE-2.4, `localize` desde BE-3.2), `503 EMBEDDING_NO_DISPONIBLE` sin buscar (`ERROR`) |
 | `cola_fallida` | `worker` | `operacion` (`recibir` \| `borrar`), `motivo` | Error de SQS; el bucle sigue (`WARNING`) |
 | `vecinos_consultados` | `api` | `k`, `devueltos`, `similitud_max` (`null` sin vecinos), `bytes` (de la foto), `embedding_ms`, `busqueda_ms`, `latencia_ms` | `POST /v1/admin/diagnostico/vecinos` con `200` (BE-2.4, `INFO`). Nunca ids, bytes ni nada de la foto salvo su tamaño |
-| `embedding_no_disponible` | `api` | `motivo` (p. ej. `sin EMBEDDING_URL`, `sin respuesta en 5 s`, `503 SATURADO`, `respuesta no válida: …`) | Una llamada de `api` a `/v1/embed` falló: `vecinos` (BE-2.4) responde `503 EMBEDDING_NO_DISPONIBLE` (`WARNING`; `ERROR` si la respuesta no cumple el contrato). Va seguido de `error_api` |
+| `embedding_no_disponible` | `api` | `motivo` (p. ej. `sin EMBEDDING_URL`, `sin respuesta en 5 s`, `503 SATURADO`, `respuesta no válida: …`) | Una llamada de `api` a `/v1/embed` falló: `vecinos` (BE-2.4) y `localize` (BE-3.2) responden `503 EMBEDDING_NO_DISPONIBLE` (`WARNING`; `ERROR` si la respuesta no cumple el contrato). Va seguido de `error_api` |
+| `localizacion_calculada` | `api` | `resultado`, `nivel_confianza` (`null` con `sin_coincidencias`), `confianza`, `fotos_usadas`, `fotos_con_coincidencia`, `coincidencias` (vecinos sobre `LOC_SIM_MIN`), `grupos`, `similitud_max` (6 decimales o `null`), `bytes` (de todas las fotos), `embedding_ms`, `busqueda_ms`, `latencia_ms` | `POST /v1/localize` con `200` (BE-3.2, `INFO`). Nunca la posición, ids, rumbos ni nada de las fotos salvo su tamaño total |
 | `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` y, desde BE-1.3, en cualquier endpoint que la use (`WARNING`; responde `503`); en `migrate` (toda la CLI, también `limpiar-validacion`), la CLI termina con 2 (`ERROR`) |
 | `configuracion_incompleta` | `migrate`, `api`, `worker` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, falta o no vale la contraseña de `crear-usuario`, o falta `S3_BUCKET_DATASET` en `limpiar-validacion` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida; desde BE-2.1, falta `S3_BUCKET_DATASET` (o no se pudo crear el cliente de S3) en `images` o `complete` (`ERROR`; responde `500`). En `worker` (BE-2.2), al arrancar sin `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` o `DB_*` (`faltan`; `motivo = la ingesta no puede empezar`), y sigue con latidos sin consumir (`ERROR`) |
 | `video_creado` | `api` | `video_id`, `numero`, `nuevo` (`false` si ya existía con ese `ref_cliente`) | `POST /v1/collect/videos` con `201` o `200` (BE-2.1) |
@@ -1950,7 +2133,8 @@ El contrato común (nombres, argumentos, códigos de salida, informe, reglas de 
 - Para **leer** la base (auditoría, vectores, `purgado_en`…) lanzan la tarea de validación de infra §5.11
   (`campus-locator-dev-validacion`, `psql -tAc "<consulta>"`) y leen su log. Solo consultas `SELECT`: lo que se escribe
   pasa por la API o por los comandos de §5.9.
-- La comprobación de disco de BE-3.2 usa ECS Exec sobre la tarea de `api` (infra §3.4).
+- La comprobación de disco de BE-3.2 usa ECS Exec sobre la tarea de `api` (infra §3.4): `aws ecs execute-command` necesita
+  el *Session Manager plugin* de la CLI de AWS en la máquina de quien valida (`validate32.py` P1).
 - Los que necesitan `embedding` (ingesta, localización) lo encienden si está apagado con el contrato de infra §5.10
   (`comun.EmbeddingDev`, abajo), esperan hasta 10 min a que esté sano y a `"embedding": "ok"` en `/v1/health/ready` y
   al terminar lo dejan como lo encontraron (infra §5.11). Como a las 22:00 (hora de Bogotá) se apaga solo, cada uno
@@ -2163,6 +2347,68 @@ borra los `validacion-`). C2c compara el orden de **todos** los lugares con la c
 regla de §5.5 cambia, cambian las dos (y la prueba que las compara). La limpieza no borra lugares sin el prefijo de la
 ejecución salvo los que apuntó.
 
+**`validate32.py`** (validation-3-2, BE-3.2; solo `dev`; **sin ejecutar todavía en `dev`**). Es el ejemplo de un
+validador que localiza con el conjunto de EMB-3.2 y usa ECS Exec. No añade ayudas a `comun.py`: usa `Validador`,
+`EmbeddingDev`, `ClienteApi`, `EntornoBackend.sql`, `red_tareas`, `lote_hecho`, `claves_s3`, `mensajes_log`,
+`mensajes_cola`, `embedding_en_api`, `hora_bogota`, `describir_respuesta`, `codigo_error`, `es_acceso_denegado` y
+`codigo_error_aws`. Lo que tiene y no está en `comun.py`:
+- Orden: P1 credenciales (y, si C4c está incluida, `aws` y `session-manager-plugin` en el PATH: si faltan, 3) → P2
+  BE-2.2, BE-2.4 y BE-3.1 «Hecho», hora (3 si son las 21:00 o más en Bogotá) y `/v1/health/ready` con `"db": "ok"` → P3
+  BE-3.2 desplegado (`POST /v1/localize` con una sola parte `otra` → `400 FOTOS_INVALIDAS`; un `404` es 2; no llama a
+  embeddings ni escribe evento), `GET /v1/places` → `200` y, si C4c está incluida, `enableExecuteCommand` en `api`
+  (si no, 2, INF-1.3) → P4 EMB-3.1 y EMB-3.2 «Hecho» y el conjunto: la última carpeta `evaluacion/<AAAA-MM><letra>/`
+  (orden lexicográfico; las que no tienen esa forma se ignoran), su `puntos.json` y las fotos que existen en S3 (≥ 10
+  puntos con fotos, si no 2) → P5 FE-2.1 «Hecho», la red de tareas, `campus-locator-dev-validacion` y `SQL_DATASET`
+  con la tarea de validación (posiciones del dataset indexado, redondeadas a 5 decimales; ninguna → 2) → P6 `embedding`
+  (como `validate24.py` P5; se salta si `--solo` no incluye ninguna comprobación que localice: C1, C2, C3, C4a, C5).
+  Comprobaciones en este orden: C1, C3, C5, C2 (necesita las respuestas de C1 y C3), C4a, C4b, C4c, C6.
+- Constantes: `VERSION_VECTOR`, `APP_VERSION` (`validacion-32`), `HORA_LIMITE` (21), `DATASET_CERCA_M` (30),
+  `LEJOS_M` (150), `PUNTOS_MIN` (10), `ERROR_MEDIANO_MAX_M` (15), `ERROR_ALTA_MAX_M` (30), `FOTOS_POR_CONSULTA` (5),
+  `LADO_MAX_PX` (1024), `CALIDAD_JPEG` (85), `PETICIONES_C3` (100), `CALENTAMIENTO_C3` (3), `P95_MAX_MS` (1000),
+  `ESPERA_LOGS_C3_S` (120), `REINTENTOS_LOGS_C3` (3, cada `PAUSA_LOGS_C3_S` = 30 s), `CPU_EMBEDDING`/`MEMORIA_EMBEDDING`
+  (`"2048"`/`"4096"`), `EVENTO_MAX_BYTES` (16 384), `MARGEN_LOGS_S` (60), `TAMANO_C4C` (`+50k`), `EXCLUIDOS_C4C`
+  (`/var/log/amazon/`: los logs del agente de ECS Exec dentro del contenedor; a verificar en la primera ejecución),
+  `LOG_APIGW`, `GRUPOS_LOG_C4B`, `COMPROBACIONES_QUE_LOCALIZAN`, `PLAN_BACKEND`, `PLAN_EMBEDDING`, `PLAN_FRONTEND`,
+  `ARQUITECTURA`, `CAMBIOS`, `VERSION_SIN_CALIBRAR` (0.12.0) y `SQL_DATASET`.
+- Funciones: `haversine_m` (copia de `geo.distancia_m`; una prueba compara las dos), `preparar_foto(bytes)` (como la app
+  y la herramienta de EMB-3.2: EXIF aplicado, RGB, lado mayor ≤ 1024 px con Lanczos sin ampliar, JPEG calidad 85, sin
+  EXIF; > 1,5 MB → `Falla`), `md5`, `percentil(valores, p)` (rango más cercano: con 100 valores, p95 = el 95.º),
+  `puntos_de(json)` (`Punto(id, lat, lng, fotos=[(archivo, rumbo)], distancia_m)`; algo sin la forma de embeddings §5.9
+  → `PrecondicionNoCumplida`), `incluida(solo, id)`.
+- `Contexto`: `foto(archivo)` (descarga `evaluacion/<versión>/<archivo>` y la reduce, una vez, **en memoria**: nada se
+  escribe en disco), `consulta(punto)` (las 5 primeras fotos del punto en el orden de `puntos.json`, con sus rumbos),
+  `con_dataset()` (≤ 30 m) y `lejanos()` (> 150 m; los intermedios no se consultan), `localizar(consulta, que)` (`POST
+  /v1/localize` con `fotos` `0.jpg`… y `metadatos` = `{"rumbos", "origen": "escaneo", "app_version":
+  "validacion-32"}`; guarda `Respuesta(que, punto, codigo, cuerpo, error_m, request_id, cliente_ms)`, con `error_m` =
+  haversine a la coordenada real o ∞ con `sin_coincidencias`, y el MD5 de cada foto enviada; no 200 → `Falla`),
+  `asegurar_c1()`, `asegurar_c3()` (3 de calentamiento, que no cuentan, y 100 medidas recorriendo los puntos con 5
+  fotos; con `--solo C2` se hacen igual), `latencias_apigw(ids, desde)` (`requestId → integrationLatency` de
+  `/campus-locator/dev/apigw`, valores en texto, infra §5.10), `exec(tarea, comando)` (por defecto `aws ecs
+  execute-command --interactive` con `comun.ejecutar_proceso`, 120 s; las pruebas lo sustituyen), `hay_plugin()` y
+  `limpiar()` (deja `embedding` como estaba y vacía las fotos de la memoria).
+- C4c: `ecs list-tasks` del servicio `api` y, en cada tarea, `find / -xdev -type f -newermt @<epoch del inicio> -size
+  +50k`; cuentan las líneas que empiezan por `/` (los avisos `find: … Permission denied` y los mensajes de la sesión
+  no), salvo `EXCLUIDOS_C4C`. `-newermt @epoch` (GNU find) evita comillas en el comando de ECS Exec. Que funcione sin
+  terminal (`--interactive` desde un proceso sin TTY) y que el agente no deje otros archivos de más de 50 KB: **sin
+  comprobar** hasta la primera ejecución en `dev`.
+- C6 lee los documentos de la copia local: §5.10 sin «inicial» en las filas de `LOC_SIM_MIN` y de los cortes,
+  versión del encabezado posterior a 0.12.0 y una entrada del CHANGELOG posterior a 0.12.0 cuyo «Lote que la motivó»
+  diga BE-3.2 y que mencione la calibración («calibr»). Con los documentos de hoy falla (a propósito).
+- Pruebas: `tests/ops/test_validate32.py` carga el mundo falso de `test_validate22.py` con `importlib` y lo extiende: el
+  conjunto `evaluacion/2026-11a/` (12 puntos con dataset cada 100 m, uno intermedio a 80 m y uno lejano a 2 km, con
+  fotos de 1200×900 que el validador reduce; una foto de `puntos.json` que falta en S3), `SQL_DATASET`, `GET
+  /v1/places`, `POST /v1/localize` (reconoce cada consulta por la foto ya reducida: a 4 m con nivel `alta`, o
+  `sin_coincidencias` lejos del dataset; cabecera `apigw-requestid`), los logs de `api`, `apigw` y `embedding` (páginas
+  de 7), el tamaño de la tarea de `embedding`, `ingesta` y ECS Exec. Interruptores de backend defectuoso:
+  `error_grande` (C1), `alta_lejos` (C2), `lento` (C3), `guarda_consulta` (C4a), `registra_foto` (C4b), `deja_archivo`
+  (C4c), `coincide_lejos` (C5); y los casos de código 2 (BE-3.2 sin desplegar, un lote sin «Hecho», sin conjunto, pocos
+  puntos, sin dataset, `api` sin ECS Exec) y 3 (hora, sin plugin).
+
+Trampas de BE-3.2: el validador no crea datos de prueba; cada localización deja una fila en `eventos_localizacion`
+(≈ 116 por ejecución completa con 12 puntos, `app_version = validacion-32`) que caduca a los 180 días. C3 falla si
+`ingesta` tiene mensajes (el `worker` competiría por `embedding`): esperar a que se vacíe. C4a compara MD5 con ETags,
+así que solo ve copias exactas de lo enviado (es lo que pide el criterio). `--sin-limpieza` deja `embedding` como esté.
+
 **Trampa del arranque de `embedding`: Cloud Map sin configuración de salud (0.9.1 y 0.9.2).** El servicio de Cloud
 Map de `embedding` (`srv-josm7lql7ddxgzm6`, `embedding.campus-locator.local`, registro A con TTL 10 s) **no tiene
 `HealthCheckConfig` ni `HealthCheckCustomConfig`** (comprobado en `dev` con `servicediscovery get-service`,
@@ -2281,7 +2527,8 @@ cambien de inmediato; lo pesado (S3) va a la cola.
 
 **ADR-BE-08 — Localización v1 por vecinos más cercanos + agrupación geográfica (aceptada, revisable).**
 Simple, explicable y sin entrenamiento. No usa verificación geométrica (p. ej. emparejar puntos locales); se
-reevaluará con los resultados de EMB-3.2. Los parámetros son iniciales y se calibran con datos reales.
+reevaluará con los resultados de EMB-3.2. Los parámetros son iniciales y se calibran con datos reales. Los detalles
+que no fijaba (centroide, margen, desempates, radio, truncado de la confianza) están en ADR-BE-18.
 
 **ADR-BE-09 — Vectores en tabla propia con `version_vector` e índice HNSW parcial por versión (aceptada).**
 Permite indexar con un modelo o preprocesamiento nuevo en paralelo y cambiar de versión sin tiempo fuera de servicio.
@@ -2397,14 +2644,43 @@ foto (aceptada, BE-3.1).**
   `imagen_url` sigue siendo `null` hasta que un lote defina el endpoint (§4.9).
 - **Orden de bloqueo** de `borrar` (videos → lugar → fotos) para respetar el «video → imágenes» de §4.5.
 
+**ADR-BE-18 — Localización v1 construida: centroide sin ponderar, margen relativo, confianza truncada y una sola
+transacción (aceptada, BE-3.2; las dos primeras decisiones, provisionales).** Fija lo que ADR-BE-08 y el §4.10 anterior
+no decían:
+- **Centroide de grupo = media sin ponderar** de sus miembros, recalculada al añadir cada uno, y **margen `m` = (p₁ −
+  p₂) / p₁** (1 con un solo grupo). *Decisión del maestro con autorización del usuario (2026-10-25), a confirmar por
+  el usuario*: es lo que ya simula la herramienta de calibración de EMB-3.2 (`SERVICE_EMBEDDING/docs/ARCHITECTURE.md`
+  §4.5 y §5.9, «Detalle del cálculo»), así lo que se calibra allí es lo que corre aquí. *Alternativas descartadas:*
+  centroide ponderado por similitud (un vecino muy parecido arrastraría el grupo y lo haría depender del orden aún
+  más) o fijo en el primer miembro (no se ajusta al crecer el grupo); margen absoluto p₁ − p₂ (no acotado a [0, 1]).
+  Si el usuario cambia alguna, cambian aquí, en `dominio/localizacion.py` y en la simulación de EMB-3.2 a la vez, y
+  hay que recalibrar.
+- **Desempates deterministas**: a igual similitud, el orden de llegada (foto y rango del vecino); a igual puntuación,
+  el grupo creado antes; a igual distancia, el orden de los lugares de `leer_todos`. Entra en el primer grupo creado
+  que esté a < `LOC_RADIO_GRUPO_M`, no en el más cercano (el «primer grupo» de ADR-BE-08).
+- **Radio** = desviación ponderada (mismos pesos que la posición) de las distancias de los miembros a la posición, con
+  mínimo `LOC_RADIO_MIN_M`. **Corrección de rumbo**: una diferencia por foto (su mejor coincidencia **con rumbo** del
+  grupo), media circular y «dispersión circular» = desviación estándar circular `√(−2·ln R)`.
+- **Confianza truncada a 2 decimales y nivel decidido con el valor truncado**: la app nunca ve 0,70 con `media`.
+  Frente a EMB-3.2, que compara sin truncar, solo cambia una confianza a menos de 5·10⁻⁷ de un corte.
+- **`referencias` sin el lugar cercano**: el ejemplo de §5.3 ya lo suponía (dos lugares distintos).
+- **Una transacción** para buscar, leer los lugares y escribir el evento: la conexión se tiene unos milisegundos más
+  (el algoritmo es Python puro) y a cambio la respuesta y `eventos_localizacion` no se contradicen; un fallo de la base
+  al escribir da `503`. **Evento solo con `200`**: `resultado = 'error'` (§5.7) queda sin uso en BE-3.2 (es la opción
+  conservadora: no registra peticiones que fallan por la base o por embeddings).
+- **Errores de `metadatos`** con los códigos generales de §5.6 (`422 VALIDACION` y `400 SOLICITUD_INVALIDA`); `400
+  FOTOS_INVALIDAS` solo para lo que §5.3 ya decía (fotos y largo de `rumbos`).
+- *Consecuencias:* los umbrales siguen siendo iniciales hasta la calibración (C6); la simulación de EMB-3.2 y este
+  código deben cambiar juntos.
+
 ---
 
 ## 7. Riesgos
 
 | ID | Riesgo | Prob. | Impacto | Mitigación |
 |---|---|---|---|---|
-| R1 | La precisión de ubicación no alcanza (dataset escaso, cambios de luz, lugares parecidos) | Alta | Alto | Conjunto de evaluación (EMB-3.2), calibrar umbrales, confianza honesta (`baja` → repetir), cobertura visible en el panel |
-| R2 | `/v1/localize` supera 1 s en el servidor | Media | Medio | Modelo pequeño (ViT-S/14) en 2 vCPU (infra ADR-INF-14); medir en EMB-3.1 y BE-3.2; fotos de 1024 px; palancas de embeddings §4.4 |
+| R1 | La precisión de ubicación no alcanza (dataset escaso, cambios de luz, lugares parecidos) | Alta | Alto | Conjunto de evaluación (EMB-3.2), calibrar umbrales, confianza honesta (`baja` → repetir), cobertura visible en el panel. BE-3.2 construido (0.12.0) con los umbrales iniciales: precisión sin medir hasta C1/C2 de `validation-3-2.md` |
+| R2 | `/v1/localize` supera 1 s en el servidor | Media | Medio | Modelo pequeño (ViT-S/14) en 2 vCPU (infra ADR-INF-14); medir en EMB-3.1 y BE-3.2; fotos de 1024 px; palancas de embeddings §4.4. EMB-3.1 midió 413 ms de p95 para 5 fotos; BE-3.2 en `dev` (C3), sin medir |
 | R3 | La ingesta retrasa la localización (un solo servicio de embeddings, que no interrumpe un lote en curso) | Media | Medio | Prioridad `alta` para localización (embeddings §5.2); lotes de 4 imágenes reducidas en el `worker` |
 | R4 | Una URL PUT permite subir archivos enormes | Baja | Bajo | URL de 15 min ligada a una clave; el `worker` rechaza > 4 MB y la purga los borra. Un objeto de más de 2 GiB deja `imagenes.bytes` nulo en el `HEAD` (no cabe en `integer`, §4.5) |
 | R5 | Rumbos de fuentes distintas (magnético vs. verdadero) | Alta | Medio | ADR-BE-12; lote del frontend para convertir en el escaneo |

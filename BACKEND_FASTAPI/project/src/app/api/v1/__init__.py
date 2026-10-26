@@ -8,7 +8,7 @@ esos prefijos responde 401 sin token.
 
 from fastapi import APIRouter, Depends
 
-from app.api.v1 import admin_diagnostico, admin_videos, auth, collect, lugares, reservados, salud
+from app.api.v1 import admin_diagnostico, admin_videos, auth, collect, localizar, lugares, reservados, salud
 from app.esquemas.errores import ErrorRespuesta
 from app.seguridad.dependencias import requiere_admin
 
@@ -42,5 +42,6 @@ router_v1.include_router(salud.router)
 router_v1.include_router(auth.router)
 router_v1.include_router(reservados.router_publico)
 router_v1.include_router(lugares.router_publico)
+router_v1.include_router(localizar.router)  # BE-3.2: POST /v1/localize (público)
 router_v1.include_router(_protegido("/admin", RUTAS_ADMIN))
 router_v1.include_router(_protegido("/collect", RUTAS_COLLECT))
