@@ -166,6 +166,15 @@ nombre **`validacion-2-2`** → «Confirmar y comenzar» → en la recolección,
 fotos → «Finalizar video» → en el Resumen de video, **«Guardar y subir después»** (no «Subir y procesar»): la app vuelve
 al Panel. Con el Panel a la vista, pulsar **Enter** en la terminal y no tocar más el teléfono.
 
+Visto al validar el 2026-10-26 en el Xiaomi (ARCHITECTURE §5.5, «`RecoleccionScreen`»):
+- En 7.4, el intervalo se cambia en la fila **«Intervalo de captura automática»** (más abajo, debajo de «Agregar alerta
+  aquí»); la tarjeta «Captura automática» solo informa.
+- **No tocar el engranaje «Ajustes»** de 7.4: abre una pantalla en blanco y, al volver, la grabación queda «En pausa»
+  («Grabación en pausa porque la app pasó a segundo plano.»); si pasa, tocar «Reanudar».
+- Al empezar puede salir una vez «No se pudo tomar la foto.»: después toma fotos con normalidad (basta con esperar).
+- El paso guiado se puede hacer también por `adb` (`input tap`/`input text` sobre lo que vuelca `uiautomator`) con la
+  entrada estándar del validador en una FIFO para mandar el Enter: así lo hizo el maestro.
+
 ```bash
 uv run --group ops python src/ops/validate22.py --entorno dev
 ```
@@ -202,8 +211,9 @@ Casos previstos:
   `dev` (otro validador): repetir cuando termine.
 - `[FALLA] C1b el Panel dice «No se pudo cargar el resumen.» …` → el teléfono no llega a `GET /v1/admin/stats`: mirar
   las líneas `I/Api` de `files/logs/app.log`.
-- `[FALLA] C1b en 30 s no se vio el «Resumen rápido» cargado (datos visibles: …)` → uiautomator no vuelca los datos
-  (**sin comprobar** en el Xiaomi) o el Panel no bajó (¿TalkBack activo?): avisar con el detalle.
+- `[FALLA] C1b en 30 s no se vio el «Resumen rápido» cargado (datos visibles: …)` → el Panel no bajó (¿TalkBack
+  activo?) o la app cambió los datos del resumen (en el Xiaomi uiautomator sí los vuelca, 2026-10-26): avisar con el
+  detalle.
 - `[FALLA] C2b no hay un recorrido nuevo «validacion-2-2» en el teléfono (nuevos: …)` → se grabó con otro nombre (no se
   borra: descartarlo en 7.5) o no se grabó: repetir.
 - `[FALLA] C2b rec_NNNN «validacion-2-2» está en_curso …` → faltó «Finalizar video» (o no tomó ninguna foto): repetir
@@ -215,7 +225,7 @@ Casos previstos:
 - `[ERROR] C2b el paso guiado necesita una terminal: la entrada estándar está cerrada (EOF)` (código 3) → correr el
   validador en una terminal interactiva. La limpieza corre igual.
 - `[ERROR] C1b el teléfono no deja a adb … (SecurityException)` o `installDebug: INSTALL_FAILED_USER_RESTRICTED …`
-  (código 3) → paso 6.
+  (código 3) → paso 6 (visto el 2026-10-26: MIUI había apagado «Instalar vía USB»; el lugar de prueba se borra igual).
 - `[FALLA] P5 las credenciales del admin no sirven (401 CREDENCIALES_INVALIDAS) …` (código 3) → revisar
   `VALIDACION_ADMIN_*` (paso 1) o el secreto.
 
@@ -226,3 +236,15 @@ ni el backend.
 
 Con el validador en `dev` con código 0 sobre un commit de `main` sin `-dirty`, la fila FE-2.2 de PLAN §3 pasa a «Hecho»
 y se quitan de ARCHITECTURE §4.7 y §5.11 los «sin comprobar» que la ejecución confirme.
+
+**Validado el 2026-10-26** (el maestro; Xiaomi 23028RA60L, Android 14, serial `61fb46bf`). El primer intento (18:34 UTC,
+sobre `cf4fcbb`) dio código 3: C1b y C2b `INSTALL_FAILED_USER_RESTRICTED` (paso 6); P4–P6, C1a y C2a pasaron y la
+limpieza borró el lugar. El segundo, sobre `cf4fcbb` sin `-dirty`, dio **código 0** (informe
+`.validacion/FE-2.2-20261026-184835.json`, 18:48–18:54 UTC): P1–P6 (`GET /v1/admin/stats` → 0 fotos, 0 lugares,
+0 alertas, sin video); C1a 11/11 y 6/6; C2a 5/5; C1b «Panel = GET /v1/admin/stats (igual antes y después): 0 fotos,
+1 lugares (incluye validacion-2-2-lugar), 0 alertas, sin video («—»)»; C2b «Fotos pendientes de subir» = 79 = fotos sin
+subir de los recorridos finalizados del teléfono (incluye `rec_0014` «validacion-2-2», 10 fotos; antes de grabar: 69).
+Limpieza: `rec_0014` borrado del teléfono, `am force-stop` y lugar borrado. El paso guiado lo hizo el maestro por `adb`
+con el Enter por una FIFO. **Sin comprobar** (`dev` no tenía videos): el texto de la fecha del último video en el
+teléfono (C1b solo vio «—»). En el teléfono quedan 12 recorridos finalizados viejos con 69 fotos sin subir (no son de
+esta validación: el validador no los toca).

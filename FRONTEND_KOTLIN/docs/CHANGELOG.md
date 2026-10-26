@@ -23,6 +23,30 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.10.1] — 2026-10-26
+- Lote que la motivó: FE-2.2 (cierre).
+- Qué cambió (solo documentos; el código validado es el de `cf4fcbb`):
+  - `PLAN.md` §3: FE-2.2 pasa a «Hecho» (`cf4fcbb` 2026-10-26, ARCHITECTURE 0.10.1), con el informe, el primer
+    intento con código 3 por `INSTALL_FAILED_USER_RESTRICTED`, cómo se hizo el paso guiado (por `adb`, Enter por una
+    FIFO), lo que sigue sin comprobar y los 12 recorridos viejos que quedan en el teléfono.
+  - ARCHITECTURE: encabezado; §4.7 con lo validado en `dev` (BE-2.3 ya «Hecho»; qué quedó comprobado en el teléfono y
+    qué no; que la relectura al volver de 7.5 queda deducida de 69 → 79); §5.5 («`RecoleccionScreen`»: dónde se cambia
+    el intervalo, que «Ajustes» abre un *placeholder* y deja la grabación en pausa, el aviso «No se pudo tomar la foto.»
+    y su origen en `onFotoFallida()`, y el «Cada» repetido —«Cada Cada 3 s» en la fila del intervalo, en las opciones del
+    selector y en la tarjeta—, comprobado en pantalla con el volcado de uiautomator del maestro, con los tres sitios del
+    código); §5.8 (`onAjustes` de 7.4); §5.10 «Panel» (comprobado contra el backend real con `ultimo_video = null`);
+    §5.11 (trampas de `validate22.py`: lo comprobado en `dev`, el paso guiado por `adb` con una FIFO).
+  - `validation-2-2` §5: consejos para el paso guiado en 7.4, casos previstos al día y el resultado de la validación.
+  - `PLAN.md` §2.2 FE-4.3: tarea nueva, quitar el «Cada» repetido de 7.4 (una línea en cada uno de los tres sitios).
+- Contratos tocados (§5): ninguno (parche: aclaraciones y entradas que pasan de «sin comprobar» a comprobadas).
+- Cómo se verificó: `validate22.py --entorno dev` con código 0 sobre `cf4fcbb` (sin `-dirty`; `main` = FE-2.2 `2ecbb52`
+  + INF-3.1 + cierre de BE-2.3), informe `.validacion/FE-2.2-20261026-184835.json` (18:48–18:54 UTC), Xiaomi
+  23028RA60L (Android 14), hecho por el maestro: P1–P6, C1a 11/11 y 6/6, C2a 5/5, C1b (0 fotos, 1 lugar, 0 alertas, sin
+  video) y C2b (79 = 69 + 10 de `rec_0014` «validacion-2-2»); limpieza completa.
+- Pendiente: el texto de la fecha del último video en el teléfono (`dev` no tenía videos; lo cubre `TextosResumenTest`
+  en la JVM); la recarga de «Lugares registrados» al volver de 7.6/7.7 (entregable de FE-3.4); el «Cada Cada 3 s» de 7.4
+  (FE-4.3) y la causa del «No se pudo tomar la foto.» al empezar (sin mirar `app.log`).
+
 ## [0.10.0] — 2026-10-26
 
 - **Lote que la motivó:** FE-2.2 (Panel con datos reales). Además, solo en documentos, la decisión abierta 18 que el

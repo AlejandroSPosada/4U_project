@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.10.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.10.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; probado en la JVM y con `validate22.py` en local, **sin probar en el teléfono ni en `dev`**: BE-2.3 aún no está desplegado). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -852,8 +852,8 @@ Gradle (`--rerun-tasks`, 221 casos), ruff, pytest (190) y `validate32.py --entor
 Qué se construyó (detalle y firmas en §5.5, §5.6, §5.10 y §5.11; validación en
 [`validation-2-2`](./validation/validation-2-2.md)). Contrato que consume: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.5,
 subsección «`GET /v1/admin/stats` (BE-2.3)» (desde backend 0.13.0; qué video es el último, qué cuenta cada total,
-formato de `creado_en` y errores). BE-2.3 se construyó en paralelo y está **sin desplegar**: el código sigue el
-contrato y se probó con MockWebServer. Decisiones: ADR-FE-28 (origen del último video, fecha, dos orígenes y releer al volver).
+formato de `creado_en` y errores). BE-2.3 se construyó en paralelo (el código de la app se probó primero con
+MockWebServer) y quedó «Hecho» antes de validar FE-2.2 en `dev` (backend 0.13.1, su PLAN §3). Decisiones: ADR-FE-28 (origen del último video, fecha, dos orígenes y releer al volver).
 
 | Pieza | Archivo | Qué hace |
 |---|---|---|
@@ -881,10 +881,22 @@ contrato y se probó con MockWebServer. Decisiones: ADR-FE-28 (origen del últim
 
 Verificado en local el 2026-10-26: `testDebugUnitTest assembleDebug` en Windows → `BUILD SUCCESSFUL` (243 casos, 0
 fallos); en WSL `ruff check`, `ruff format --check` («18 files already formatted») y `pytest` (222 casos) en verde y
-`validate22.py --entorno local` → código 0 (P1; C1a 11/11 y 6/6; C2a 5/5; C1b y C2b omitidas). **Sin probar en el
-teléfono ni en `dev`** (necesita BE-2.3 «Hecho» y el Xiaomi; lo coordina el maestro): que uiautomator lea el
-`content-desc` de los cinco `TileDato`, el formato «d MMM» del Android del teléfono, `adb shell date +%z` y
-`run-as … rm -rf` en MIUI.
+`validate22.py --entorno local` → código 0 (P1; C1a 11/11 y 6/6; C2a 5/5; C1b y C2b omitidas).
+
+**Validado en `dev` el 2026-10-26** (el maestro; Xiaomi 23028RA60L, Android 14; detalle en la fila FE-2.2 de PLAN §3 y
+en `validation-2-2` §5): `validate22.py --entorno dev` con código 0 sobre `cf4fcbb` (sin `-dirty`), informe
+`.validacion/FE-2.2-20261026-184835.json` (18:48–18:54 UTC). `dev` estaba vacío: `GET /v1/admin/stats` → 0 fotos,
+0 lugares, 0 alertas, `ultimo_video = null`. C1b: el Panel = la API antes y después (0 fotos, 1 lugar —el de prueba—,
+0 alertas, «—» sin video). C2b: «Fotos pendientes de subir» = 79 = las fotos sin subir de los recorridos finalizados
+del teléfono (69 de 12 recorridos viejos más las 10 de `rec_0014` «validacion-2-2»). El primer intento (18:34 UTC, mismo
+commit) dio código 3 por `INSTALL_FAILED_USER_RESTRICTED` (MIUI había apagado «Instalar vía USB»). **Comprobado en el
+teléfono:** uiautomator vuelca el `content-desc` de los cinco `TileDato` (con el Panel desplazado), la regla de «Fotos
+pendientes» coincide con los manifests, `adb shell date +%Y-%m-%dT%H:%M:%S%z` se lee en MIUI y `run-as … rm -rf`
+borra el recorrido de prueba. Que el Panel relea la cola al volver de 7.5 queda **deducido**: el Panel se abrió en C1b
+antes de grabar (había 69) y al volver mostró 79 sin otro evento de la cola, aunque el validador no guarda el valor
+previo. **Sin comprobar en el teléfono:** el texto de la fecha del último video («Hoy, HH:mm», «Ayer…», «d MMM…»,
+solo probado en la JVM: `dev` no tenía videos) y números con separador de miles (todos < 1000). Hallazgos de 7.4 al
+grabar el recorrido de prueba: §5.5 («`RecoleccionScreen`», cuidados).
 
 ---
 
@@ -1639,6 +1651,22 @@ Comportamiento y cuidados:
 - «Marcar punto de interés» está **deshabilitado**. El aviso temporal (`ui.aviso`) es una tarjeta propia que se descarta al tocarla; no usa `BannerEstado`. `ColorFinalizar` y `ColorAviso` son propios porque `CampusColors.Peligro` es morado (5.4).
 - Reutiliza `BotonIcono` y `Modifier.tarjeta` de `ui/destino/componentes/Comun.kt` (`internal`): regla 4 de 11, conviene moverlos a `ui/components/`.
 - Con fuente grande, los cuatro contadores en fila pueden apretarse. Sin brújula «N» ni giro del mapa.
+- **Visto en el Xiaomi 23028RA60L al grabar el recorrido de prueba de FE-2.2** (2026-10-26, el maestro por `adb`):
+  - El intervalo se cambia en la fila **«Intervalo de captura automática»** (`FilaAccion`, debajo de «Agregar alerta
+    aquí»), que abre el selector; tocar la tarjeta «Captura automática» (`TarjetaCaptura`, solo informa) no hace nada.
+  - El engranaje **«Ajustes»** de la barra superior navega a la ruta `ajustes`, hoy un *placeholder* en blanco (5.8);
+    como 7.4 pasa a `ON_STOP`, `alIrASegundoPlano()` pausa la grabación y al volver sale «Grabación en pausa porque la
+    app pasó a segundo plano.»: hay que tocar «Reanudar». No tocarlo mientras se graba.
+  - Al empezar salió una vez el aviso «No se pudo tomar la foto.» y después tomó fotos con normalidad. Ese aviso es
+    `RecoleccionViewModel.onFotoFallida()` (CameraX falló; el motivo queda solo en el log `Camara`): el primer fallo
+    seguido avisa y la captura espera 1 s (5 s desde el quinto, con «La cámara no responde…»). La causa de ese primer
+    fallo, **sin comprobar** (no se miró `app.log`).
+  - **«Cada» repetido (comprobado en pantalla** con el volcado de uiautomator del maestro, APK de `cf4fcbb`): la fila del
+    intervalo dice «Cada Cada 5 m» / «Cada Cada 3 s», las opciones del selector «Cada Cada 3 m», «… 5 m», «… 10 m»,
+    «… 3 s», «… 5 s», y la tarjeta «Tomando fotos cada Cada 3 s». `ModoCaptura.etiqueta` ya empieza por «Cada» (5.2) y
+    tres sitios le anteponen otro: `RecoleccionScreen.kt` (fila: `"Cada ${ui.modo.etiqueta}"`; selector:
+    `"Cada ${opcion.etiqueta}"`) y `componentes/PanelesRecoleccion.kt` (`TarjetaCaptura`: `"Tomando fotos cada
+    ${modo.etiqueta}"`). Arreglo cosmético de una línea en cada sitio: FE-4.3 (PLAN §2.2).
 - **`RecoleccionMapaControl` (FE-2.1):** además de `centrar()`, `zoomMas()` y `zoomMenos()`, `encuadrar()` (llama al
   JS `encuadrar()`: `fitBounds` de la trayectoria y las fotos con 24 px de margen y zoom ≤ 19, y deja de seguir la
   posición) y `listo: Boolean` (la página ya llamó a `listo()`). Los usa 7.5 (abajo).
@@ -2177,7 +2205,7 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 | `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila); `onAbrirSubida(videoId)` (FE-2.1, tarjeta de subidas) → `navigate("admin/recoleccion/resumen?video=<id>")`. Al volver a esta entrada (p. ej. `popBackStack("admin/panel")` desde 7.4 o 7.5) se reutiliza su ViewModel: desde FE-2.2 relee los recorridos locales en `ON_RESUME` (5.5) |
 | `admin/ubicacion-manual` | `UbicacionManualScreen` (7.3) | — | `onVolver` (flecha y «Cancelar») → `popBackStack()`, `onAjustes` → `ajustes`, `onCalibrar` → `navigate("admin/calibracion")`, `onConfirmar(InicioRecoleccion)` → `SesionDeRecoleccion.iniciar(inicio)` y `navigate("admin/recoleccion")` (7.3 queda en la pila: su ViewModel reactiva «Confirmar» con `alReanudar()`), `onRetomar` (FE-2.3) → `SesionDeRecoleccion.limpiar()` y `navigate("admin/recoleccion")` (sin inicio: 7.4 retoma). Pide `Permisos.INICIALES` antes de mostrar la pantalla y descarta el resultado |
 | `admin/calibracion` | `CalibracionScreen` (7.3b) | — | Pide `Permisos.ACTIVIDAD` antes de mostrar la pantalla y **descarta el resultado** (negarlo no cambia nada: los pasos salen siempre del acelerómetro; quitar este permiso es parte de FE-4.3). `onVolver` → `popBackStack()`. Se llega desde la fila «Calibrar mi paso» de 7.3. No devuelve datos: el resultado se guarda en `CalibracionPasoRepository` (5.6) y lo recoge cada `PdrTracker` al crearse |
-| `admin/recoleccion` | `RecoleccionScreen` (7.4) | `InicioRecoleccion` por `SesionDeRecoleccion` (no por la ruta) | Pide **solo la cámara** antes de mostrar la pantalla (como `ubicarme`; si se niega, `popBackStack()`). `onFinalizado(resumen)` → `SesionDeRecoleccion.finalizar(resumen)` y `navigate("admin/recoleccion/resumen?video=${resumen.videoId}") { popUpTo("admin/ubicacion-manual") { inclusive = true } }` (saca 7.3 y 7.4 de la pila; FE-2.1 pasa el id); `onDescartado` (video sin fotos) → `popBackStack("admin/panel", inclusive = false)`; `onVolver` (solo con error: `SIN_INICIO` —sin inicio ni video `en_curso` que retomar— o `NO_SE_PUDO_CREAR`) → `popBackStack()`; `onAjustes` → `ajustes`. Sin `InicioRecoleccion` (pila restaurada tras matar el proceso, o `onRetomar` de 7.3) retoma el video `en_curso` más reciente (FE-2.3, 5.2) |
+| `admin/recoleccion` | `RecoleccionScreen` (7.4) | `InicioRecoleccion` por `SesionDeRecoleccion` (no por la ruta) | Pide **solo la cámara** antes de mostrar la pantalla (como `ubicarme`; si se niega, `popBackStack()`). `onFinalizado(resumen)` → `SesionDeRecoleccion.finalizar(resumen)` y `navigate("admin/recoleccion/resumen?video=${resumen.videoId}") { popUpTo("admin/ubicacion-manual") { inclusive = true } }` (saca 7.3 y 7.4 de la pila; FE-2.1 pasa el id); `onDescartado` (video sin fotos) → `popBackStack("admin/panel", inclusive = false)`; `onVolver` (solo con error: `SIN_INICIO` —sin inicio ni video `en_curso` que retomar— o `NO_SE_PUDO_CREAR`) → `popBackStack()`; `onAjustes` → `ajustes` (*placeholder* en blanco; al volver, la grabación queda en pausa: 5.5, «`RecoleccionScreen`», visto el 2026-10-26). Sin `InicioRecoleccion` (pila restaurada tras matar el proceso, o `onRetomar` de 7.3) retoma el video `en_curso` más reciente (FE-2.3, 5.2) |
 | `admin/recoleccion/resumen?video={video}` | `ResumenVideoScreen` (7.5, FE-2.1) | `video` = `rec_NNNN` (argumento opcional: `navArgument("video") { type = NavType.StringType; nullable = true; defaultValue = null }`); sin él, `SesionDeRecoleccion.resumen` o el recorrido sin subir más reciente (5.5). `navigate("admin/recoleccion/resumen")` sin argumento también vale | `onIrAlPanel` → `popBackStack("admin/panel", inclusive = false)`; si el Panel no está en la pila, `navigate("admin/panel") { popUpTo("inicio") }`. Atrás lo maneja la pantalla (`BackHandler` → «Guardar y subir después» o salir) |
 | `admin/mapa` | `EditorMapaScreen` | `posicionAdmin: () -> Pair<Double, Double>?` (hoy `{ null }`) | `onVolver`, `onVerLista` (hoy vacío; el comentario dice «vista 17», que corresponde a la lista de alertas 7.10) |
 | `admin/imagenes` | `GaleriaScreen` | — | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
@@ -2485,8 +2513,9 @@ Lo cubre `RemoteAdminRepositoryTest` (11; MockWebServer y un `VigilanteSesion` r
 con la petición exacta (`GET /v1/admin/stats`, `Bearer`) y los seis campos, `ultimo_video = null`, fecha con fracción y
 en otro formato, `ultimo_video` sin `numero`, un total que falta (sin contar la cola), sin sesión (no llega al
 servidor), `401 TOKEN_EXPIRADO` (sesión cerrada y evento), sin red, `503` de API Gateway, `500 ERROR_INTERNO` con su
-`X-Request-Id` y las pendientes de una cola real en una carpeta temporal. **Sin comprobar contra el backend real**
-(BE-2.3 se construye en paralelo; en `dev`, con BE-2.3 «Hecho», `validate22.py` C1b).
+`X-Request-Id` y las pendientes de una cola real en una carpeta temporal. **Contra el backend real** (`dev`, 2026-10-26,
+`validate22.py` C1b, §4.7): el Panel mostró lo mismo que `GET /v1/admin/stats` con `ultimo_video = null`; el caso con
+último video (número y fecha) sigue sin comprobar fuera de la JVM.
 
 **Detalles internos del cliente (para no abrir `data/remote/`)**
 - Campos de los DTOs (propiedad Kotlin ← clave JSON; todos `T? = null` salvo el de la petición):
@@ -3293,10 +3322,14 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   dataset): el validador no lo borra del teléfono ni del backend (lo avisa); borrarlo del backend lo coordina el
   maestro, como en FE-2.1 (`limpiar-validacion` no sirve: su `ref_cliente` es `rec_NNNN`). Con `--sin-limpieza` el
   recorrido de prueba queda en el teléfono (se descarta en 7.5 con «Descartar video»; la siguiente ejecución lo borra
-  como resto). La limpieza termina con `am force-stop`: el teléfono queda sin sesión (5.3). **Sin comprobar en `dev`**
-  (BE-2.3 en paralelo, sin desplegar): que uiautomator vuelque los `content-desc` de los cinco `TileDato` (Compose los
-  fusiona con `mergeDescendants`), la abreviatura del mes de «d MMM» en el Xiaomi (el validador no la compara), la salida
-  de `adb shell date +%z` en MIUI y que `run-as … rm -rf` funcione allí.
+  como resto). La limpieza termina con `am force-stop`: el teléfono queda sin sesión (5.3). **Comprobado en `dev`**
+  (2026-10-26, Xiaomi, §4.7): uiautomator vuelca los `content-desc` de los cinco `TileDato` (Compose los fusiona con
+  `mergeDescendants`), `adb shell date +%Y-%m-%dT%H:%M:%S%z` se lee en MIUI y `run-as … rm -rf` borra el recorrido. El
+  paso guiado también se puede hacer por `adb` (`input tap/text` y `uiautomator`) con la entrada estándar en una FIFO
+  (así lo hizo el maestro): `esperar_enter` solo necesita leer una línea. **Sin comprobar:** la abreviatura del mes de
+  «d MMM» en el Xiaomi (el validador no la compara; `dev` no tenía videos, así que C1b no comparó ninguna fecha). Como
+  siempre en MIUI, «Instalar vía USB» se apaga solo: el primer intento del cierre dio código 3 por
+  `INSTALL_FAILED_USER_RESTRICTED`.
 
 ---
 
