@@ -20,6 +20,23 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.12.1] — 2026-10-26
+
+- **Lote que la motivó:** BE-3.2 (sigue «En curso»), y FE-3.2, que consume `POST /v1/localize`.
+- **Qué cambió:**
+  - **ADR-BE-18 confirmado por el usuario (2026-10-26):** centroide de grupo = media sin ponderar y margen `m = (p₁ −
+    p₂) / p₁` dejan de ser «a confirmar» en §4.10 (pasos 4 y 7), en ADR-BE-18 y en la fila BE-3.2 de PLAN §3. La
+    simulación de EMB-3.2 usa lo mismo (`SERVICE_EMBEDDING/docs/ARCHITECTURE.md` §4.5).
+  - **Aclaración de `referencias` con `lugar_cercano` nulo** (§4.10 paso 9, §5.3 y ADR-BE-18): «los siguientes» se
+    leía como si siempre se saltara el primero. El código (`dominio.localizacion.contexto`) solo quita el objeto
+    `cercano`: si no hay lugar cercano (el más cercano está a más de `LOC_LUGAR_CERCANO_M`), ese más cercano es la
+    primera referencia cuando está a ≤ `LOC_REFERENCIAS_M`. Lo preguntó el lote FE-3.2.
+  - PLAN: alineado con 0.12.1.
+- **Contratos tocados (§5):** §5.3, aclaración de `referencias` sin cambio de comportamiento.
+- **Cómo se verificó:** lectura de `contexto` en `src/app/dominio/localizacion.py` (maestro). Sin cambios de código.
+- **Pendiente:** lo mismo que 0.12.0 (dataset real, conjunto e informe de EMB-3.2, calibración y `validate32.py
+  --entorno dev`).
+
 ## [0.12.0] — 2026-10-25
 
 - **Lote que la motivó:** BE-3.2 (Localización), construcción sin validar: la validación necesita el dataset real

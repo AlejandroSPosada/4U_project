@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.12.0**.
+Alineado con `ARCHITECTURE.md` **v0.12.1**.
 
 ---
 
@@ -237,7 +237,7 @@ en §4.9 y ADR-BE-10. Antes de empezar, revisar con el frontend (FE-3.1 y FE-3.3
 | BE-2.3 | 2 | Pendiente | [2-3](./validation/validation-2-3.md) | — | — | |
 | BE-2.4 | 2 | Hecho | [2-4](./validation/validation-2-4.md) | `50d931d` 2026-10-25 | 0.10.0 | `validate24.py --entorno dev` con código 0 (informe `.validacion/BE-2.4-20261026-020153.json`; el informe registra `17b0acb`, que sobre `50d931d` solo añade docs del frontend; `api`, `migrate` y `worker` con la imagen `backend:50d931d`): P1–P5 (`embedding` encendido en 311 s), C1 (fotos 1–3 en `procesada` en 4,1 min; cada una es su primer vecino con similitud 0,9991, 0,9992 y 0,9996), C2a, C2b, C3a, C3b, C3c, C4a (6 claves nuevas, `eventos_localizacion` sin cambios) y C4b; al final `embedding` apagado, video de prueba borrado y `validacion+user` desactivado. Lo necesita EMB-3.2 |
 | BE-3.1 | 3 | Hecho | [3-1](./validation/validation-3-1.md) | `86fc024` 2026-10-25 | 0.11.0 | Solo lugares desde 0.11.0 (las alertas pasaron a BE-3.3, decisión del usuario del 2026-10-25). `validate31.py --entorno dev` con código 0 (informe `.validacion/BE-3.1-20261026-030207.json`; `api` con la imagen `backend:86fc024`): P1–P3, C1a–C1c (crear, editar y borrar; `DELETE` repetido → 204), C2a–C2c (orden por distancia, filtro por categoría y orden por nombre), C3a–C3c (`409 NOMBRE_DUPLICADO` con mayúsculas, tildes y espacios de más), C4a (6 entradas → `422`) y C4b (`401` sin token); limpieza: 3 lugares de prueba borrados. En local, también código 0 contra el compose |
-| BE-3.2 | 3 | En curso | [3-2](./validation/validation-3-2.md) | — | — | Construido en 0.12.0 (`POST /v1/localize`, ARCHITECTURE §4.10 y ADR-BE-18; `validate32.py`), probado en local (834 pruebas con la base del compose), sin ejecutar nada en `dev`. Centroide sin ponderar y margen `(p₁ − p₂) / p₁`: decisión del maestro, a confirmar por el usuario. Falta: el dataset real (FE-2.1), el conjunto y el informe de EMB-3.2, la calibración de `LOC_SIM_MIN`, `LOC_SIM_ALTA` y los cortes de nivel (§5.10 dice «Iniciales»: C6 falla hasta entonces) y `validate32.py --entorno dev` con código 0 |
+| BE-3.2 | 3 | En curso | [3-2](./validation/validation-3-2.md) | — | — | Construido en 0.12.0 (`POST /v1/localize`, ARCHITECTURE §4.10 y ADR-BE-18; `validate32.py`), probado en local (834 pruebas con la base del compose), sin ejecutar nada en `dev`. Centroide sin ponderar y margen `(p₁ − p₂) / p₁` (ADR-BE-18): confirmados por el usuario el 2026-10-26 (0.12.1). Falta: el dataset real (FE-2.1), el conjunto y el informe de EMB-3.2, la calibración de `LOC_SIM_MIN`, `LOC_SIM_ALTA` y los cortes de nivel (§5.10 dice «Iniciales»: C6 falla hasta entonces) y `validate32.py --entorno dev` con código 0 |
 | BE-3.3 | 3 | Pendiente | [3-3](./validation/validation-3-3.md) | — | — | Fuera del núcleo (decisión del usuario, 2026-10-25). Sin código; su validador (`validate33.py`) tampoco existe |
 | BE-4.1 | 4 | Pendiente | [4-1](./validation/validation-4-1.md) | — | — | |
 | BE-5.1 | 5 | Diferido | — | — | — | |

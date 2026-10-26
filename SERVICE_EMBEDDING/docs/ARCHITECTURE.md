@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.9.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.9.2** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
 | Estado | En construcción: código de EMB-1.1 (servicio base e imagen), EMB-2.1 (vectorización por lotes), EMB-3.1 (benchmark y su validador; latencias de `dev` medidas en §5.7) y la parte de EMB-3.2 que no necesita dataset (protocolo de captura, `tools/evaluacion/` y `validate32.py`, probados con datos sintéticos; sin ejecutar en `dev`); el resto de lotes, pendiente |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -305,8 +305,8 @@ imágenes del dataset). Ningún número de calidad de recuperación de este docu
    [0,50; 0,99] con el que ninguna consulta de nivel alta yerra > 30 m (BE-3.2 C2) y ≥ 90 % quedan a ≤ 15 m;
    `corte_media` = el menor por debajo con ≥ 60 % a ≤ 15 m. Los dos detalles que el §4.10 del backend no fijaba al
    escribir esto los fijó igual BE-3.2 en backend **ADR-BE-18** (backend 0.12.0): centroide de grupo = media sin
-   ponderar de sus miembros, recalculada en cada alta; `m = (p₁ − p₂) / p₁`, 1 con un solo grupo. Siguen siendo
-   decisiones provisionales del maestro **a confirmar por el usuario**; si cambian, cambian a la vez en el backend y en
+   ponderar de sus miembros, recalculada en cada alta; `m = (p₁ − p₂) / p₁`, 1 con un solo grupo. **Confirmadas por
+   el usuario el 2026-10-26** (backend 0.12.1); si cambian, cambian a la vez en el backend y en
    `metricas.py`, y hay que recalibrar. El backend **trunca la confianza a 2 decimales y decide el nivel con el valor
    truncado** (backend §4.10, paso 7); la simulación compara la confianza sin truncar con cortes de la rejilla de 0,01,
    que da el mismo nivel salvo una confianza pegada a un corte (a menos de 5·10⁻⁷, ADR-BE-18). Los parámetros del
@@ -1084,7 +1084,7 @@ localización; el *recall* usa los 5 primeros igual); un contenedor local para l
 `uv`, sin ventaja); optimizar umbrales con búsqueda sobre una métrica global (con ~50 fotos sobreajusta).
 *Consecuencias:* `evaluar` necesita `embedding` encendido; la simulación copia parámetros de backend §5.10 y supone dos
 detalles que el §4.10 del backend no fijaba (centroide de grupo y margen `m`); BE-3.2 los fijó igual en backend
-ADR-BE-18 (0.12.0), aún a confirmar por el usuario, y trunca la confianza antes de decidir el nivel (diferencia
+ADR-BE-18 (0.12.0), confirmado por el usuario el 2026-10-26, y trunca la confianza antes de decidir el nivel (diferencia
 despreciable, §4.5 paso 3); la comparación de variantes espera a BE-4.1 (URL de las imágenes).
 
 ---

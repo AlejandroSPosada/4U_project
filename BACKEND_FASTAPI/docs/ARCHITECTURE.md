@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.12.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-25 |
+| Versión del documento | **0.12.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-26 |
 | Estado | En construcción: hay código de BE-1.1 a BE-2.2, BE-2.4 y BE-3.1 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. Lo de los demás lotes es diseño propuesto; las alertas pasaron a BE-3.3, fuera del núcleo y sin código (§4.9) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
@@ -1012,7 +1012,7 @@ vecinos de cada foto (`db.consultas.Vecino`, valores crudos: similitud sin redon
 4. **Agrupar** (`agrupar`): cada coincidencia entra en el **primer** grupo, por orden de creación, cuyo centroide esté
    a **menos** de `LOC_RADIO_GRUPO_M` (`geo.distancia_m`, estrictamente menor), aunque otro esté más cerca; si
    ninguno, abre uno. **Centroide = media sin ponderar** de la latitud y de la longitud de sus miembros, recalculada al
-   añadir cada uno (decisión del maestro, a confirmar por el usuario; ADR-BE-18).
+   añadir cada uno (confirmado por el usuario el 2026-10-26; ADR-BE-18).
 5. **Puntuar** (`Grupo.puntuacion`): suma, por cada foto de la consulta, de la mejor similitud que esa foto aporta al
    grupo. Mejor grupo (`mejor_grupo`) = mayor puntuación; a igualdad, el creado antes.
 6. **Posición** (`posicion`): media de latitud y longitud de **todos** los miembros del mejor grupo ponderada por
@@ -1021,8 +1021,8 @@ vecinos de cada foto (`db.consultas.Vecino`, valores crudos: similitud sin redon
 7. **Confianza** = `0,5·s + 0,3·c + 0,2·m`, con `s` = (similitud máxima del grupo − `LOC_SIM_MIN`) / (`LOC_SIM_ALTA` −
    `LOC_SIM_MIN`) acotada a [0, 1] (1 si `LOC_SIM_ALTA` ≤ `LOC_SIM_MIN`), `c` = fotos con alguna coincidencia en el
    grupo / fotos de la consulta (cuentan también las que no tienen ningún vecino) y **`m` = (p₁ − p₂) / p₁**, con p₁ y p₂
-   las puntuaciones del mejor y del segundo grupo; 1 con un solo grupo (decisión del maestro, a confirmar por el
-   usuario; ADR-BE-18). Se **trunca** a 2 decimales (`truncar_confianza`: `floor(round(x·100, 6)) / 100`, en [0, 1]) y
+   las puntuaciones del mejor y del segundo grupo; 1 con un solo grupo (confirmado por el usuario el 2026-10-26;
+   ADR-BE-18). Se **trunca** a 2 decimales (`truncar_confianza`: `floor(round(x·100, 6)) / 100`, en [0, 1]) y
    el **nivel se decide con el valor truncado**: `alta` si ≥ `LOC_NIVEL_ALTA_MIN`, `media` si ≥ `LOC_NIVEL_MEDIA_MIN`,
    si no `baja`.
 8. **Corrección de rumbo** (`correccion_rumbo`): por cada foto con rumbo informado y alguna coincidencia **con rumbo** en
@@ -1033,7 +1033,9 @@ vecinos de cada foto (`db.consultas.Vecino`, valores crudos: similitud sin redon
 9. **Contexto** (`contexto`): distancia (`geo.distancia_m`) y rumbo inicial (`geo.rumbo_grados`) desde la posición a
    cada lugar de `leer_todos`, ordenados por distancia (a igualdad, el orden de `leer_todos`: nombre normalizado e id).
    `lugar_cercano` = el primero si está a ≤ `LOC_LUGAR_CERCANO_M`; `referencias` = los siguientes a ≤
-   `LOC_REFERENCIAS_M`, **sin repetir el lugar cercano**, como mucho `LOC_REFERENCIAS_MAX`.
+   `LOC_REFERENCIAS_M`, **sin repetir el lugar cercano**, como mucho `LOC_REFERENCIAS_MAX`. Si `lugar_cercano` es
+   `null` (el más cercano está a más de `LOC_LUGAR_CERCANO_M`), `referencias` **empieza por ese más cercano** si está a
+   ≤ `LOC_REFERENCIAS_M` (el código quita solo el objeto `cercano`, no la primera posición).
 10. **Evento** (servicio): una fila de `eventos_localizacion` por cada `200` (§5.7, «filas de BE-3.2»).
 
 Ejemplo (el de `test_ok_con_posicion_confianza_correccion_y_contexto`): 3 fotos; grupo A con 0,92 (foto 0), 0,85 (foto
@@ -1297,7 +1299,8 @@ En detalle (desde BE-3.2, ARCHITECTURE 0.12.0; el cálculo, en §4.10):
   brújula.
 - **`lugar_cercano`**: el lugar más cercano a la posición si está a ≤ `LOC_LUGAR_CERCANO_M` (60 m); si no, `null`.
   **`referencias`**: los siguientes lugares más cercanos a ≤ `LOC_REFERENCIAS_M` (150 m), sin repetir `lugar_cercano`,
-  como mucho `LOC_REFERENCIAS_MAX` (3), de más cerca a más lejos (a igualdad, por nombre). `distancia_m` con 1 decimal
+  como mucho `LOC_REFERENCIAS_MAX` (3), de más cerca a más lejos (a igualdad, por nombre). Con `lugar_cercano` `null`,
+  la primera referencia es el lugar más cercano (si está a ≤ 150 m). `distancia_m` con 1 decimal
   (haversine, como `GET /v1/places`); `rumbo_grados` en [0, 360) con 1 decimal (0 = norte verdadero).
 - **`fotos_usadas`** = fotos de la petición; **`fotos_con_coincidencia`** = las que tienen alguna coincidencia en el
   grupo elegido (0 con `sin_coincidencias`). `version_vector` = `EMBEDDING_VERSION_VECTOR`. `latencia_ms`: lo que
@@ -2645,11 +2648,11 @@ foto (aceptada, BE-3.1).**
 - **Orden de bloqueo** de `borrar` (videos → lugar → fotos) para respetar el «video → imágenes» de §4.5.
 
 **ADR-BE-18 — Localización v1 construida: centroide sin ponderar, margen relativo, confianza truncada y una sola
-transacción (aceptada, BE-3.2; las dos primeras decisiones, provisionales).** Fija lo que ADR-BE-08 y el §4.10 anterior
-no decían:
+transacción (aceptada, BE-3.2; las dos primeras decisiones, confirmadas por el usuario el 2026-10-26).** Fija lo que
+ADR-BE-08 y el §4.10 anterior no decían:
 - **Centroide de grupo = media sin ponderar** de sus miembros, recalculada al añadir cada uno, y **margen `m` = (p₁ −
-  p₂) / p₁** (1 con un solo grupo). *Decisión del maestro con autorización del usuario (2026-10-25), a confirmar por
-  el usuario*: es lo que ya simula la herramienta de calibración de EMB-3.2 (`SERVICE_EMBEDDING/docs/ARCHITECTURE.md`
+  p₂) / p₁** (1 con un solo grupo). *Decisión del maestro con autorización del usuario (2026-10-25), **confirmada por
+  el usuario el 2026-10-26***: es lo que ya simula la herramienta de calibración de EMB-3.2 (`SERVICE_EMBEDDING/docs/ARCHITECTURE.md`
   §4.5 y §5.9, «Detalle del cálculo»), así lo que se calibra allí es lo que corre aquí. *Alternativas descartadas:*
   centroide ponderado por similitud (un vecino muy parecido arrastraría el grupo y lo haría depender del orden aún
   más) o fijo en el primer miembro (no se ajusta al crecer el grupo); margen absoluto p₁ − p₂ (no acotado a [0, 1]).
@@ -2663,7 +2666,8 @@ no decían:
   grupo), media circular y «dispersión circular» = desviación estándar circular `√(−2·ln R)`.
 - **Confianza truncada a 2 decimales y nivel decidido con el valor truncado**: la app nunca ve 0,70 con `media`.
   Frente a EMB-3.2, que compara sin truncar, solo cambia una confianza a menos de 5·10⁻⁷ de un corte.
-- **`referencias` sin el lugar cercano**: el ejemplo de §5.3 ya lo suponía (dos lugares distintos).
+- **`referencias` sin el lugar cercano**: el ejemplo de §5.3 ya lo suponía (dos lugares distintos). Si no hay lugar
+  cercano (`null`), el más cercano puede ser la primera referencia (§4.10, paso 9; aclarado en 0.12.1).
 - **Una transacción** para buscar, leer los lugares y escribir el evento: la conexión se tiene unos milisegundos más
   (el algoritmo es Python puro) y a cambio la respuesta y `eventos_localizacion` no se contradicen; un fallo de la base
   al escribir da `503`. **Evento solo con `200`**: `resultado = 'error'` (§5.7) queda sin uso en BE-3.2 (es la opción

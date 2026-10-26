@@ -23,6 +23,17 @@ re-indexar el dataset.
 
 ---
 
+## [0.9.2] — 2026-10-26
+
+- **Lote que la motivó:** EMB-3.2 (sigue «En curso»).
+- **Qué cambió:** el usuario confirmó backend ADR-BE-18 (centroide sin ponderar y `m = (p₁ − p₂) / p₁`, backend
+  0.12.1): §4.5 (paso 3 de «Qué se recomienda») y ADR-EMB-14 dejan de decir «a confirmar por el usuario». PLAN:
+  alineado con 0.9.2.
+- **Contratos tocados (§5):** ninguno.
+- **Cómo se verificó:** sin cambios de código; la simulación ya usaba esas fórmulas (0.9.1).
+- **Pendiente:** la docstring de `metricas.localizar` («a confirmar con BE-3.2»), con el próximo cambio de código de
+  EMB-3.2.
+
 ## [0.9.1] — 2026-10-26
 
 - **Lote que la motivó:** EMB-3.2 (sigue «En curso»), al construirse BE-3.2 (backend 0.12.0, `c287989`).
