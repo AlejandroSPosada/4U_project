@@ -155,60 +155,6 @@ def clasificar(cuerpo: str, sello: str) -> str:
     return "resto" if (propio - otro).total_seconds() > ANTIGUEDAD_RESTO_S else "ajeno"
 
 
-class LectorCola:
-    """Borra de una cola los mensajes de prueba (propios y restos) sin estropear los ajenos: los recibidos quedan
-    ocultos hasta `devolver`, que los hace visibles de nuevo; así cada ajeno se recibe como mucho una vez por lectura."""
-
-    def __init__(self, sqs, url: str, nombre: str, sello: str) -> None:
-        self.sqs, self.url, self.nombre, self.sello = sqs, url, nombre, sello
-        self.ajenos: dict[str, str] = {}  # MessageId → ReceiptHandle
-        self.borrados = 0
-
-    def leer(self, segundos: float, objetivo: int | None = None) -> None:
-        """Lee hasta que pasen `segundos`, hasta haber borrado `objetivo` mensajes o hasta una lectura vacía."""
-        limite = time.monotonic() + segundos
-        while time.monotonic() < limite and (objetivo is None or self.borrados < objetivo):
-            mensajes = llamar(
-                f"leer {self.nombre} (sqs:ReceiveMessage)",
-                lambda: self.sqs.receive_message(
-                    QueueUrl=self.url, MaxNumberOfMessages=10, WaitTimeSeconds=2, VisibilityTimeout=OCULTAR_S
-                ),
-            ).get("Messages", [])
-            if not mensajes:
-                return
-            borrar = []
-            for m in mensajes:
-                if clasificar(m.get("Body", ""), self.sello) == "ajeno":
-                    self.ajenos[m["MessageId"]] = m["ReceiptHandle"]
-                else:
-                    borrar.append(m)
-            if borrar:
-                entradas = [{"Id": str(i), "ReceiptHandle": m["ReceiptHandle"]} for i, m in enumerate(borrar)]
-                respuesta = llamar(
-                    f"borrar mensajes de prueba de {self.nombre} (sqs:DeleteMessageBatch)",
-                    lambda e=entradas: self.sqs.delete_message_batch(QueueUrl=self.url, Entries=e),
-                )
-                self.borrados += len(respuesta.get("Successful", []))
-                for fallo in respuesta.get("Failed", []):
-                    comun.avisar(f"no se pudo borrar un mensaje de prueba de {self.nombre}: {fallo.get('Code')}")
-
-    def devolver(self) -> None:
-        """Hace visibles de nuevo los ajenos recibidos. No lanza excepciones (se usa también al limpiar)."""
-        pendientes = list(self.ajenos.values())
-        self.ajenos.clear()
-        for inicio in range(0, len(pendientes), 10):
-            entradas = [
-                {"Id": str(i), "ReceiptHandle": r, "VisibilityTimeout": 0}
-                for i, r in enumerate(pendientes[inicio : inicio + 10])
-            ]
-            try:
-                self.sqs.change_message_visibility_batch(QueueUrl=self.url, Entries=entradas)
-            except Exception as exc:  # noqa: BLE001 — limpieza: avisar y seguir
-                comun.avisar(f"no se pudieron devolver mensajes ajenos a {self.nombre}: {comun.resumir(str(exc), 200)}")
-        if pendientes:
-            comun.avisar(f"{len(pendientes)} mensaje(s) ajeno(s) devuelto(s) a {self.nombre}")
-
-
 # ---------------------------------------------------------------------------------------------------------------------
 # Estado compartido
 # ---------------------------------------------------------------------------------------------------------------------
@@ -604,8 +550,15 @@ def c1b_apagar(ctx: Contexto) -> str:
 # ---------------------------------------------------------------------------------------------------------------------
 
 
-def lector(ctx: Contexto, clave: str) -> LectorCola:
-    return LectorCola(ctx.cliente("sqs"), ctx.urls[clave], emb.COLAS[clave], ctx.sello)
+def lector(ctx: Contexto, clave: str) -> comun.LectorCola:
+    """Lector de la cola (comun.LectorCola, §5.11) que borra los mensajes validacion-2-1 propios y los restos."""
+    return comun.LectorCola(
+        ctx.cliente("sqs"),
+        ctx.urls[clave],
+        emb.COLAS[clave],
+        lambda cuerpo: clasificar(cuerpo, ctx.sello),
+        ocultar_s=OCULTAR_S,
+    )
 
 
 def limpiar_restos(ctx: Contexto) -> None:

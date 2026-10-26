@@ -24,3 +24,6 @@ apagado_embedding = {
   noche           = "cron(0 22 * * ? *)"
   inactividad_min = 45
 }
+
+# INF-3.1: el mismo de bootstrap/terraform.tfvars (presupuesto). SNS envía un correo de confirmación tras el apply.
+correo_alertas = "franklinalejo1042005@gmail.com"

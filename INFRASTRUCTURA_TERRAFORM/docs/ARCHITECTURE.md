@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.13.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-25 |
-| Estado | Diseño propuesto. **INF-0.1 a INF-2.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS; encendido de `embedding` y escalado del `worker`); el resto, sin código todavía |
+| Versión del documento | **0.14.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-26 |
+| Estado | Diseño propuesto. **INF-0.1 a INF-2.1 aplicados** (bootstrap de la cuenta; esqueleto de `envs/dev` y CI de Terraform `infra.yml`; red y grupos de seguridad; datos y secretos; cómputo con la imagen de prueba; borde HTTPS; encendido de `embedding` y escalado del `worker`). **INF-3.1** (observabilidad) con código, `plan` y pruebas locales, **sin aplicar**. INF-6.1, diferido |
 | Nube | AWS, cuenta `648617469176`, región `us-east-1` |
 | Entorno | `dev` (único por ahora) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -71,7 +71,8 @@ Cómo se cambia una interfaz:
                                               │        ▼  :5432 (subred privada)                          │
                                               │   RDS PostgreSQL 17 + pgvector   campus-locator-dev-db    │
                                               └───────────────────────────────────────────────────────────┘
- Transversal: Secrets Manager · CloudWatch Logs/Alarms → SNS campus-locator-dev-alertas · AWS Budgets · ECR
+ Transversal: Secrets Manager · CloudWatch Logs · CloudWatch Alarms y EventBridge → SNS campus-locator-dev-alertas
+             (correo) · AWS Budgets (correo) · ECR
  Fuera de AWS: GitHub Actions (OIDC) despliega · la app pide teselas a OpenStreetMap
 ```
 
@@ -252,15 +253,49 @@ Un clúster `campus-locator-dev` con tres servicios y dos tareas sueltas, todo e
 - Alarmas de CloudWatch publicadas en el topic SNS `campus-locator-dev-alertas` (suscripción por correo, variable
   `correo_alertas`; SNS envía un correo de confirmación y no entrega nada hasta que se confirma): errores 5xx de la API,
   mensajes en cualquier DLQ, `embedding` encendido demasiadas horas seguidas (el apagado automático falló),
-  almacenamiento libre y créditos de CPU de RDS (umbrales en §5.10). Las cuatro alarmas de escalado de INF-2.1 (§5.1)
-  no avisan: su única acción es una política de Application Auto Scaling.
+  almacenamiento libre y créditos de CPU de RDS (umbrales y parámetros exactos en §5.10). Las cuatro alarmas de
+  escalado de INF-2.1 (§5.1) no avisan: su única acción es una política de Application Auto Scaling.
+- Cada alarma de INF-3.1 avisa **solo al pasar a `ALARM`** (un correo por paso; sin aviso al volver a `OK`) y trata la
+  falta de datos como «no incumple» (`notBreaching`): una DLQ vacía e inactiva, una API sin peticiones o `embedding`
+  apagado no publican su métrica y la alarma queda en `OK`. El correo de CloudWatch trae en el asunto `ALARM:` y el
+  nombre de la alarma, y en el cuerpo su descripción, que dice qué revisar.
 - Una regla de **EventBridge** sobre los eventos `ECS Task State Change` avisa al mismo topic cuando una tarea de los
   **servicios** `api`, `worker` o `embedding` se detiene por error: `lastStatus = STOPPED`, `stopCode` =
   `EssentialContainerExited` o `TaskFailedToStart`, y `group` = `service:api`, `service:worker` o
-  `service:embedding`. Las tareas sueltas (`migrate`, `validacion` y las que lanzan los validadores con la definición
-  de `embedding`) tienen otro `group` y no avisan; su resultado lo lee quien las lanzó. Apagar un servicio (a mano,
-  por inactividad o a las 22:00) da `stopCode = ServiceSchedulerInitiated` y tampoco avisa.
+  `service:embedding`, solo del clúster `campus-locator-dev` (la cuenta tiene otros proyectos). Las tareas sueltas
+  (`migrate`, `validacion` y las que lanzan los validadores con la definición de `embedding`) tienen otro `group`
+  (`family:<familia>`) y no avisan; su resultado lo lee quien las lanzó. Apagar un servicio (a mano, por inactividad o
+  a las 22:00) da `stopCode = ServiceSchedulerInitiated` y tampoco avisa (las tareas viejas que detiene un despliegue,
+  igual; sin comprobar). El correo
+  («AWS Notification Message») lleva el **evento completo en JSON**, sin transformar: `group`, `startedBy`,
+  `stopCode`, `stoppedReason`, `taskArn` y cada contenedor con su `exitCode` y `reason`.
   No se activa *Container Insights* (tiene costo y no hace falta para estas alertas).
+- El topic tiene una política propia (§5.6): la declaración por defecto de AWS (la cuenta lo administra), más
+  `cloudwatch.amazonaws.com` (alarmas de la cuenta) y `events.amazonaws.com` (solo la regla de arriba) como
+  publicadores. **No se cifra**: con la clave gestionada `aws/sns`, CloudWatch y EventBridge no pueden publicar, y una
+  clave propia de KMS cuesta 1 USD/mes (ADR-INF-16).
+- Estado de lo de INF-3.1: comprobado con el `plan` contra `dev` (11 altas, nada más) y con las pruebas de
+  `validate31.py` contra un AWS falso (§5.11); el comportamiento en AWS (avisos, correos, permisos del topic) queda
+  **sin comprobar** hasta el `apply` y `validate31.py` en `dev`.
+- Trampas conocidas:
+  - La alarma de 5xx cuenta también los 500 que da API Gateway con `api` en 0 réplicas (§5.13; p. ej., durante un
+    validador de INF-1.x) y los `503 EMBEDDING_NO_DISPONIBLE` de `/v1/localize` con `embedding` apagado: más de 5 en
+    5 min mandan un correo aunque no haya un fallo del código.
+  - La alarma de `embedding` encendido mira horas de reloj: avisa cuando hubo tareas de `embedding` en marcha en cada
+    una de las últimas 10 horas (entre ~9 y 10 h de uso seguido, o un rato en cada hora). Un día de campo largo con
+    `embedding` encendido más de ~9 h la dispara: es lo esperado.
+  - Cualquiera que reciba un aviso puede darse de baja con el enlace del pie del correo: la suscripción desaparece y
+    el siguiente `plan` la vuelve a crear (y hay que confirmarla otra vez). `validate31.py` C1c lo detecta.
+  - Sin comprobar: que una tarea reemplazada por *health checks* fallidos llegue con `EssentialContainerExited` (si
+    llegara con `ServiceSchedulerInitiated`, no avisaría); que EventBridge entregue un evento más de una vez (sería un
+    correo repetido); y que SQS deje de publicar la métrica de una DLQ con mensajes pero sin actividad tras 6 h (la
+    alarma volvería a `OK` sin avisar; el aviso ya se mandó al pasar a `ALARM`).
+  - Sin comprobar hasta `validate31.py` en `dev`: que ECS acepte `run-task --group service:worker` para una tarea
+    suelta (si lo rechaza o lo ignora, C3a falla con ese detalle) y que esa tarea no cuente como del servicio `worker`
+    en `ListTasks --service-name worker` ni en sus métricas; que EventBridge publique con la condición `ArnEquals
+    aws:SourceArn` de la política del topic (si no, C3b da `FailedInvocations`); y el texto exacto de las entradas
+    `Action` de la historia de una alarma (`accion_publicada` busca «fail» o el nombre del topic; sin ninguna entrada,
+    C2a decide con las métricas de SNS y lo dice en el detalle).
 - **AWS Budgets** `campus-locator-mensual`: 100 USD/mes con avisos al 50 % y 80 % del gasto real y al 100 % del
   pronosticado, al mismo correo. Budgets escribe directamente a ese correo (suscriptor `EMAIL`), sin confirmación.
   *Cost Anomaly Detection* activado (sin costo).
@@ -314,7 +349,8 @@ y 160 h de `embedding` encendido al mes (uso de prueba de 1–3 personas y uso i
 | IPv4 públicas | `api` siempre; `embedding`, `worker` y `migrate` mientras corren | 3,9 | 4,6 |
 | RDS `db.t4g.micro` + 20 GB `gp3` | una zona | 14,0 | 14,0 |
 | Secrets Manager | 3 secretos | 1,2 | 1,2 |
-| CloudWatch (logs ~2 GB; 10 alarmas, las 4 de escalado con 16 métricas en sus expresiones; 2 métricas propias) | 0,10 USD por métrica de cada alarma y 0,30 por métrica propia al mes | 3,8 | 3,8 |
+| CloudWatch (logs ~2 GB; las 4 alarmas de escalado de INF-2.1, con 16 métricas en sus expresiones; 2 métricas propias) | 0,50 USD por GB de logs, 0,10 por métrica de cada alarma y 0,30 por métrica propia al mes | 3,2 | 3,2 |
+| Observabilidad (INF-3.1): 6 alarmas de una métrica, topic SNS con suscripción por correo, regla de EventBridge | alarmas: 6 × 0,10; SNS: los primeros 1 000 correos del mes gratis (después, 2 USD por 100 000) y el topic sin costo; EventBridge: los eventos de servicios de AWS en el bus por defecto y su entrega a SNS no se cobran | 0,6 | 0,6 |
 | ECR (~10 GB entre versiones) | conservar 5 por repo | 1,0 | 1,0 |
 | Cloud Map, API Gateway, S3, SQS, transferencia | tráfico de desarrollo | ~3,0 | ~3,0 |
 | **Total aproximado** | | **≈ 40** | **≈ 53** |
@@ -324,6 +360,10 @@ cobran si la media de 24 h supera la línea base), almacenamiento de copias por 
 cualquier recurso creado a mano fuera de Terraform, y horas de `embedding` si el apagado automático falla (cada hora
 encendida cuesta ~0,10 USD; R13). El presupuesto (§3.8) avisa antes de pasar de 100 USD; con `embedding` encendido
 todo el mes se pasaría por poco (~110 USD).
+
+Hasta 0.13.1 la fila de CloudWatch contaba ya las 6 alarmas de INF-3.1 («10 alarmas», 3,8 USD); desde 0.14.0 van en su
+propia fila y el total no cambia. INF-3.1 añade **0,6 USD/mes**. Cada ejecución de `validate31.py` cuesta menos de
+0,01 USD (una tarea de 0,25 vCPU durante ~1 min con IPv4 pública, unas decenas de lecturas de métricas y dos correos).
 
 ---
 
@@ -349,13 +389,15 @@ INFRASTRUCTURA_TERRAFORM/
     │   ├── computo/             ECR, clúster, Cloud Map, log groups de los procesos, roles, definiciones de tarea (incluida la de validación), servicios;
     │   │                        escalado.tf: objetivos, políticas, alarmas y acciones programadas de Application Auto Scaling (INF-2.1)
     │   ├── borde/               HTTP API, VPC Link, integración con Cloud Map, rutas, throttling, access logs (y su log group), filtro de métricas de /v1/localize
-    │   └── observabilidad/      topic SNS, alarmas, regla de EventBridge
+    │   └── observabilidad/      topic SNS con su política y la suscripción por correo, las 6 alarmas, regla de EventBridge y su destino (INF-3.1)
     ├── pruebas/
     │   └── imagen-prueba/       Dockerfile, servidor.py y README.md (cómo publicarla) de la imagen `bootstrap` (§5.11)
     ├── src/
     │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes INF-x.y (§5.11); embedding.py (INF-2.1, §5.10)
+    ├── tests/
+    │   └── ops/                 pruebas locales de los validadores con un AWS falso (desde INF-3.1): falsos.py, test_validate31.py, test_comun.py (§5.11)
     ├── .tflint.hcl              configuración de TFLint para infra.yml
-    └── pyproject.toml           dependencias de los validadores (grupo `ops`: boto3, httpx)
+    └── pyproject.toml           dependencias de los validadores (grupo `ops`: boto3, httpx) y de sus pruebas (grupo `pruebas`: pytest)
 ```
 
 `project/envs/dev/main.tf` solo compone módulos; ningún módulo llama a otro. Las dependencias entre módulos pasan por
@@ -370,7 +412,7 @@ variables y outputs (por ejemplo, `computo` recibe los ARN de los secretos y los
 | **INF-1.3 Cómputo** | Módulo `computo` (30 recursos; entradas, salidas y nombres internos en §5.12): repositorios ECR (etiquetas inmutables, escaneo al subir, conservar 5), clúster sin *Container Insights*, espacio de nombres privado `campus-locator.local` con los servicios de Cloud Map `api` (A + SRV) y `embedding` (A), TTL 10 s, los cinco *log groups* de los procesos, el rol de ejecución y los cuatro roles de tarea de §5.8 (todos con el *boundary*, que `envs/dev` lee de los outputs de `bootstrap` con `terraform_remote_state`), las cinco definiciones de tarea (imagen inicial `:bootstrap`, la imagen de prueba de §5.11, que CI reemplaza; la de validación usa `postgres:17-alpine`) y los servicios `api`, `worker` y `embedding` con `desired_count = 0` hasta el primer despliegue. La imagen de prueba se publica a mano tras el `apply` (`pruebas/imagen-prueba/README.md`): los servicios en 0 no la necesitan para crearse. `validate13.py` sube `api` y `embedding` a 1 solo mientras valida |
 | **INF-1.4 Borde** | Módulo `borde` (7 recursos; entradas, salidas y nombres internos en §5.12): HTTP API `campus-locator-dev-api` con `prevent_destroy` (R8), VPC Link en `publica-a` y `publica-b` con el grupo `-vpclink`, una integración `HTTP_PROXY` privada hacia el servicio de Cloud Map `api` (su ARN sale del nuevo output `cloud_map_api_arn` de `computo`), las rutas `ANY /{proxy+}` y `POST /v1/auth/login` hacia esa integración, etapa `$default` con despliegue automático y el *throttling* de §5.10 (general en `DefaultRouteSettings`, login en `RouteSettings`) y *access logs* en JSON en `/campus-locator/dev/apigw`, que crea el propio módulo. Expone `api_base_url` (el `ApiEndpoint`, sin barra final). `validate14.py` sube `api` a 1 solo mientras valida |
 | **INF-2.1 Encendido de `embedding` y escalado** | `src/ops/embedding.py` (`encender`, `apagar`, `estado`, con el contrato de §5.10; su clase `Operador` la reutilizan los validadores). En `borde`, el filtro de métricas `campus-locator-dev-localize` sobre los *access logs* (métrica `LocalizePeticiones`). En `computo`, `escalado.tf` (11 recursos): los objetivos de Application Auto Scaling de `embedding` y `worker` (rango 0-0 al crearse; después Terraform ignora el rango, que cambian `embedding.py` y las acciones programadas), tres políticas por pasos de capacidad exacta (`embedding-apagar` → 0, `worker-cola` → 1, `worker-colas-vacias` → 0), las cuatro alarmas de expresión que las disparan (inactividad de 45 de 45 min; subida de `worker` con mensajes y CPU de `embedding` en el mismo minuto; bajada tras 15 de 15 min sin mensajes) y las dos acciones de las 22:00 (`America/Bogota`, rango 0-0). `envs/dev` define la métrica (`local.metrica_localize`) y se la pasa a los dos módulos, que así no se referencian entre sí, y la variable `apagado_embedding`. Decisiones en ADR-INF-15; nombres internos en §5.12 |
-| **INF-3.1 Observabilidad** | Topic SNS, suscripción por correo (hay que confirmarla desde el correo que envía SNS), alarmas de §5.10 y regla de EventBridge de §3.8. Expone `sns_alertas_arn` |
+| **INF-3.1 Observabilidad** | Módulo `observabilidad` (11 recursos; entradas, salidas y nombres internos en §5.12): topic SNS `campus-locator-dev-alertas` sin cifrar, con política propia (la cuenta; CloudWatch; EventBridge solo desde la regla) y suscripción por correo a `correo_alertas` (hay que confirmarla desde el correo que envía SNS), las 6 alarmas de §5.10 con acción solo en `ALARM` hacia el topic, y la regla `campus-locator-dev-tarea-detenida` de §3.8 con el topic como destino (el evento va tal cual). Para no adivinar nombres, `borde`, `computo` y `datos` exponen `api_id`, `cluster_arn` y `rds_identificador`, que `envs/dev` le pasa junto con `servicios` y `colas`; `envs/dev` declara `correo_alertas` y expone `sns_alertas_arn`. Ningún recurso existente cambia (`plan`: 11 altas). `LectorCola` pasa de `validate21.py` a `comun.py` (§5.11), porque `validate31.py` también borra mensajes de prueba de una cola. `validate31.py` no toca los servicios: C2 deja un mensaje marcado en una DLQ vacía y lo borra; C3 lanza la tarea de validación con `group = service:worker` y un comando que sale con 3. Decisiones en ADR-INF-16 |
 | **INF-6.1 Producción** (diferido) | Ver PLAN, Fase 6 |
 
 ---
@@ -412,7 +454,7 @@ Inventario de nombres:
 | Bucket del dataset | `campus-locator-dev-dataset-648617469176` |
 | Bucket de estado | `campus-locator-tfstate-648617469176` (claves: `bootstrap/terraform.tfstate`, `dev/terraform.tfstate`) |
 | Colas SQS | `campus-locator-dev-ingesta`, `campus-locator-dev-ingesta-dlq`, `campus-locator-dev-purga`, `campus-locator-dev-purga-dlq` |
-| Topic SNS | `campus-locator-dev-alertas` |
+| Topic SNS | `campus-locator-dev-alertas` (una suscripción `email` a `correo_alertas`, INF-3.1) |
 | Secretos | `campus-locator/dev/db`, `campus-locator/dev/jwt`, `campus-locator/dev/admin-inicial` |
 | Log groups | `/campus-locator/dev/api`, `/campus-locator/dev/worker`, `/campus-locator/dev/embedding`, `/campus-locator/dev/migrate`, `/campus-locator/dev/validacion`, `/campus-locator/dev/apigw` |
 | Streams de log de las tareas | `awslogs-stream-prefix` = nombre del proceso (`api`, `worker`, `embedding`, `migrate`, `validacion`); cada tarea escribe en `<proceso>/app/<id-de-la-tarea>` (p. ej. `embedding/app/0f3c9a…`). Una tarea suelta lanzada con la definición de `embedding` escribe en `/campus-locator/dev/embedding` con el mismo formato |
@@ -425,7 +467,7 @@ Inventario de nombres:
 | Acciones programadas | `campus-locator-dev-embedding-apagar-noche`, `campus-locator-dev-worker-apagar-noche` (INF-2.1) |
 | Filtro de métricas (INF-2.1) | `campus-locator-dev-localize` sobre `/campus-locator/dev/apigw` → métrica `LocalizePeticiones` del espacio `campus-locator/dev` |
 | Métricas propias (INF-2.1) | espacio `campus-locator/dev`, sin dimensiones: `LocalizePeticiones` (la publica el filtro) y `EmbeddingEncendidos` (la publica `embedding.py encender`, §5.10) |
-| Regla de EventBridge | `campus-locator-dev-tarea-detenida` |
+| Regla de EventBridge | `campus-locator-dev-tarea-detenida` (bus `default`; destino con id `sns-alertas` → el topic, INF-3.1) |
 | Entorno de GitHub | `dev` (§3.9) |
 | Workflows | `infra.yml`, `backend.yml`, `embedding.yml`, `frontend.yml` (§5.9) |
 
@@ -446,7 +488,7 @@ Inventario de nombres:
 | `rds_endpoint` | `campus-locator-dev-db.xxxx.us-east-1.rds.amazonaws.com` | depuración |
 | `secretos` | `{ db, jwt, admin_inicial }` → ARN | depuración |
 | `embedding_dns` | `embedding.campus-locator.local` | depuración |
-| `sns_alertas_arn` | ARN | depuración |
+| `sns_alertas_arn` | `arn:aws:sns:us-east-1:648617469176:campus-locator-dev-alertas` | `validate31.py`; depuración (suscripciones, `aws sns publish` de prueba) |
 | `bootstrap: rol_gha_terraform_plan_arn`, `rol_gha_terraform_arn`, `rol_gha_deploy_arn`, `bucket_estado`, `github_repo` | ARN / nombre | variables del repositorio de GitHub (§5.9) y validadores de INF-0.x |
 | `bootstrap: limite_roles_arn` | ARN de `campus-locator-limite-roles` | `envs/dev`: `permissions_boundary` de todos sus roles (INF-1.3; lo lee con `data "terraform_remote_state" "bootstrap"`, §5.12) |
 
@@ -461,7 +503,7 @@ con INF-1.2 y el resto con INF-1.3. Desde INF-0.2, `envs/dev` tiene además el o
 `bootstrap/terraform.tfvars` y `envs/dev/terraform.tfvars` (columna «Dónde»). Los dos archivos se versionan: no
 contienen secretos. Cada variable de `envs/dev` se declara con el lote que la usa (INF-0.2: `aws_account_id`, `region`,
 `proyecto` y `entorno`; INF-1.1: `cidr_vpc`, `az_computo` y `az_secundaria`; INF-1.2: `rds_clase`, `rds_gb`,
-`rds_gb_max` y `pg_version`; INF-1.3: `imagen_inicial_tag`; INF-2.1: `apagado_embedding`).
+`rds_gb_max` y `pg_version`; INF-1.3: `imagen_inicial_tag`; INF-2.1: `apagado_embedding`; INF-3.1: `correo_alertas`).
 
 | Variable | Dónde | Valor en `dev` | Notas |
 |---|---|---|---|
@@ -473,7 +515,7 @@ contienen secretos. Cada variable de `envs/dev` se declara con el lote que la us
 | `az_secundaria` | `envs/dev` | `"us-east-1b"` | Solo para `publica-b` y `privada-b`: el grupo de subredes de RDS exige dos zonas (ADR-INF-03) |
 | `github_repo` | `bootstrap` | `"AlejandroSPosada/4U_project"` | Con las mayúsculas exactas de GitHub. Lo usan los *trust policies* de OIDC; `bootstrap` lo expone como output `github_repo` |
 | `github_ids` | `bootstrap` | `{ propietario = 142058005, repositorio = 1362957467 }` | IDs inmutables del `sub` de OIDC (§5.8): el repositorio se creó después del 2026-07-15. `null` = formato clásico |
-| `correo_alertas` | ambos | *(el de `bootstrap/terraform.tfvars`)* | Presupuesto (`bootstrap`) y topic de alarmas (`envs/dev`) |
+| `correo_alertas` | ambos | *(el de `bootstrap/terraform.tfvars`; el mismo valor en los dos archivos)* | Presupuesto (`bootstrap`) y suscripción del topic de alarmas (`envs/dev`, INF-3.1). Los dos lo validan como dirección de correo. En `envs/dev`, cambiarlo reemplaza la suscripción (la nueva hay que confirmarla); `validate31.py` C1c lo lee de `envs/dev/terraform.tfvars` |
 | `presupuesto_usd` | `bootstrap` | `100` | |
 | `apagado_embedding` | `envs/dev` | `{ zona = "America/Bogota", noche = "cron(0 22 * * ? *)", inactividad_min = 45 }` | Apagado automático de `embedding` (INF-2.1): `zona` IANA y `noche` en el formato `cron(...)` de Application Auto Scaling para las dos acciones nocturnas (`noche = null` u omitida las quita; `validate21.py` exige que existan); `inactividad_min`, entero entre 5 y 1440 (periodos de 60 s de la alarma; lo valida el módulo `computo`) |
 | `imagen_inicial_tag` | `envs/dev` | `"bootstrap"` | Imagen de las definiciones de tarea que crea Terraform. CI registra revisiones con su imagen (ADR-INF-09); cambiarla solo crea revisiones nuevas, que ningún servicio usa hasta el siguiente despliegue |
@@ -558,8 +600,19 @@ quiere mover a variable de entorno, se añade primero a esta tabla.
 - El **formato de los mensajes** (incluido cómo tratar el `s3:TestEvent` que S3 envía al configurar la notificación)
   lo define `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.8. Tras el `apply` de INF-1.2 queda uno en `ingesta`;
   `validate12.py` lo borra (`validation-1-2` §4).
-- **Topic SNS** `campus-locator-dev-alertas`: lo publican CloudWatch Alarms y AWS Budgets; suscripción por correo a
-  `correo_alertas`. No lo usa ningún servicio.
+- **Topic SNS** `campus-locator-dev-alertas` (INF-3.1): lo publican las 6 alarmas de §5.10 y la regla de EventBridge
+  `campus-locator-dev-tarea-detenida` (§3.8); AWS Budgets no (escribe directamente al correo, §3.8). Una suscripción
+  `email` a `correo_alertas`, que hay que confirmar. Sin cifrado (ADR-INF-16). No lo usa ningún servicio.
+  Su política (declaraciones por `Sid`):
+
+  | `Sid` | Principal | Acciones | Condición |
+  |---|---|---|---|
+  | `Cuenta` | `AWS: *` | las ocho de la política por defecto de SNS (`SNS:AddPermission`, `DeleteTopic`, `GetTopicAttributes`, `ListSubscriptionsByTopic`, `Publish`, `RemovePermission`, `SetTopicAttributes`, `Subscribe`) | `StringEquals AWS:SourceOwner = 648617469176` (la de por defecto: reemplazar la política la quitaría) |
+  | `CloudWatch` | servicio `cloudwatch.amazonaws.com` | `sns:Publish` | `aws:SourceAccount = 648617469176` y `aws:SourceArn` como `arn:aws:cloudwatch:us-east-1:648617469176:alarm:*` |
+  | `EventBridge` | servicio `events.amazonaws.com` | `sns:Publish` | `ArnEquals aws:SourceArn` = la regla `campus-locator-dev-tarea-detenida` |
+
+  Para probar la entrega a mano: `aws sns publish --topic-arn <sns_alertas_arn> --subject prueba --message prueba`
+  (con la suscripción confirmada debería llegar un correo «prueba»; sin comprobar).
 
 ### 5.7 Red: puertos, grupos de seguridad, DNS interno y salud
 
@@ -686,9 +739,47 @@ llaves de AWS en GitHub. Formato: `SUBREDES_TAREAS` = IDs de subred separados po
 | Copias de RDS | 7 días; ventana 07:00–07:30 UTC (02:00 en Bogotá, de madrugada) |
 | Mantenimiento de RDS | domingos 08:00–09:00 UTC (03:00 en Bogotá); versión menor automática |
 | `rds.force_ssl` / `max_connections` | `1` / por defecto de la clase |
-| Alarmas | `5xx` de la API > 5 en 5 min · cualquier DLQ con ≥ 1 mensaje · tarea detenida por error (EventBridge, §3.8) · `embedding` encendido más de 10 h seguidas · RDS `FreeStorageSpace` < 4 GiB (4 294 967 296 bytes) · RDS `CPUCreditBalance` < 20 |
+| Alarmas | `5xx` de la API > 5 en 5 min · cualquier DLQ con ≥ 1 mensaje · tarea detenida por error (EventBridge, §3.8) · `embedding` encendido más de 10 h seguidas · RDS `FreeStorageSpace` < 4 GiB (4 294 967 296 bytes) · RDS `CPUCreditBalance` < 20 (parámetros exactos abajo) |
 | Presupuesto | 100 USD/mes; avisos 50 % y 80 % real, 100 % pronosticado |
 | ECR | conservar las 5 imágenes más recientes por repositorio |
+
+**Alarmas de INF-3.1, tal como quedan en AWS** (módulo `observabilidad`, §5.12). Todas: una sola métrica (sin
+expresión), `DatapointsToAlarm = EvaluationPeriods`, `TreatMissingData = notBreaching`, `AlarmActions` = solo
+`sns_alertas_arn`, sin `OKActions` ni `InsufficientDataActions`. Cambiar una es editar esta tabla,
+`modules/observabilidad/main.tf` (`local.alarmas`, forma en §5.12), `alarmas_esperadas` de `validate31.py` y
+`alarmas_bien()` de `tests/ops/falsos.py` en el mismo cambio (si `falsos.py` se queda atrás, fallan las pruebas).
+
+| Alarma | Métrica (espacio · nombre · dimensiones) | Estadística · periodo · periodos | Condición |
+|---|---|---|---|
+| `campus-locator-dev-api-5xx` | `AWS/ApiGateway` · `5xx` · `ApiId` = la de `campus-locator-dev-api` (`fuzq99kddb`) | `Sum` · 300 s · 1 | `GreaterThanThreshold` 5 |
+| `campus-locator-dev-ingesta-dlq` | `AWS/SQS` · `ApproximateNumberOfMessagesVisible` · `QueueName = campus-locator-dev-ingesta-dlq` | `Maximum` · 60 s · 1 | `GreaterThanOrEqualToThreshold` 1 |
+| `campus-locator-dev-purga-dlq` | igual con `QueueName = campus-locator-dev-purga-dlq` | `Maximum` · 60 s · 1 | `GreaterThanOrEqualToThreshold` 1 |
+| `campus-locator-dev-embedding-encendida` | `AWS/ECS` · `CPUUtilization` · `ClusterName = campus-locator-dev`, `ServiceName = embedding` | `SampleCount` · 3600 s · 10 | `GreaterThanThreshold` 0 (hubo muestras en cada una de las 10 últimas horas; 10 × 3600 s cabe en el día que admite una alarma) |
+| `campus-locator-dev-rds-almacenamiento` | `AWS/RDS` · `FreeStorageSpace` · `DBInstanceIdentifier = campus-locator-dev-db` | `Minimum` · 300 s · 1 | `LessThanThreshold` 4294967296 |
+| `campus-locator-dev-rds-creditos-cpu` | `AWS/RDS` · `CPUCreditBalance` · `DBInstanceIdentifier = campus-locator-dev-db` | `Minimum` · 300 s · 1 | `LessThanThreshold` 20 |
+
+Valores medidos el 2026-10-26 antes del `apply` (para saber que ninguna avisará al crearse): DLQ con 0 mensajes; RDS con
+288 créditos (el máximo de `db.t4g.micro`) y ~18,4 GB libres; 1 respuesta 5xx en las últimas 24 h.
+
+**Regla `campus-locator-dev-tarea-detenida`** (bus `default`, `ENABLED`). Patrón exacto (las listas son «cualquiera de»):
+```json
+{
+  "source": ["aws.ecs"],
+  "detail-type": ["ECS Task State Change"],
+  "detail": {
+    "clusterArn": ["arn:aws:ecs:us-east-1:648617469176:cluster/campus-locator-dev"],
+    "lastStatus": ["STOPPED"],
+    "stopCode": ["EssentialContainerExited", "TaskFailedToStart"],
+    "group": ["service:api", "service:embedding", "service:worker"]
+  }
+}
+```
+Un destino, id `sns-alertas`, el topic, sin transformador de entrada ni rol (EventBridge publica con la política del
+topic). Cambiar el patrón es editar este bloque, `modules/observabilidad/main.tf`, `patron_esperado` de
+`validate31.py` y `patron_bien()` de `tests/ops/falsos.py` en el mismo cambio. Cambiar la política del topic es editar
+la tabla de §5.6, `data "aws_iam_policy_document" "alertas"` de `modules/observabilidad/main.tf`, `c1b_regla` de
+`validate31.py` (exige `events.amazonaws.com` con una condición que nombre la regla, y `cloudwatch.amazonaws.com` o la
+declaración de la cuenta) y `politica_bien()` de `tests/ops/falsos.py`, también en el mismo cambio.
 
 ### 5.11 Validadores de lotes (contrato común a las cuatro carpetas)
 
@@ -801,8 +892,14 @@ falla porque faltan credenciales, herramientas o variables da **3**, no 2: el 2 
 
 **Validadores de esta carpeta**
 - Credenciales: el perfil de AWS de la persona (`AWS_PROFILE`), con lectura sobre la cuenta y escritura sobre los
-  recursos de prueba (objetos `dataset/validacion-…`, mensajes en `ingesta`, ejecución de la tarea de validación). El
-  script se niega a correr si la cuenta no es `648617469176`.
+  recursos de prueba (objetos `dataset/validacion-…`, mensajes en `ingesta` y, desde INF-3.1, en las DLQ, ejecución
+  de la tarea de validación). El script se niega a correr si la cuenta no es `648617469176`.
+- La tarea de validación también sirve para provocar una parada inocua: `validate31.py` la lanza con
+  `group = service:worker` (`run-task --group`), `startedBy = validacion-3-1` y el comando de `app` sobrescrito a
+  `["sh", "-c", "echo 'validacion-3-1: sale con error a proposito'; exit 3"]`, para que la regla de §3.8 la cuente como
+  tarea de un servicio sin detener ninguno (ADR-INF-16). Escribe esa línea en `/campus-locator/dev/validacion`
+  (stream `validacion/app/<id-de-la-tarea>`) y se detiene sola con `stopCode = EssentialContainerExited` y código 3
+  (lo esperado; sin comprobar en `dev` hasta `validate31.py`).
 - Lee los outputs con `terraform -chdir=bootstrap output -json` (lotes INF-0.x) y
   `terraform -chdir=envs/dev output -json` (el resto).
 - Las comprobaciones sobre GitHub (INF-0.1 y INF-0.2) usan la CLI `gh` autenticada.
@@ -830,6 +927,7 @@ tabla basta para escribir uno nuevo sin leer el código. Si cambian, la tabla se
 | `terraform_outputs(directorio)` → `dict`; `terraform_state_pull(directorio)` → `dict` | `terraform -chdir=…`; sin `init` o sin credenciales → `ErrorConfiguracion`. El estado nunca se imprime |
 | `sesion_aws()`; `comprobar_cuenta(sesion)` → ARN | boto3 en `us-east-1` con `AWS_PROFILE`; `comprobar_cuenta` devuelve el ARN de quien llama y se niega a seguir si la cuenta no es `648617469176` |
 | `errores_aws(accion)` (bloque `with`), `error_aws(exc, accion)`, `codigo_error_aws(exc)` | Traducen errores de boto3: permisos o credenciales → `ErrorConfiguracion`; el resto → `Falla` |
+| `LectorCola(sqs, url, nombre, clasificar, ocultar_s=120)` (desde INF-3.1; antes estaba en `validate21.py`) | Borra de una cola los mensajes de prueba sin estropear los ajenos. `clasificar(cuerpo)` → `"propio"`, `"resto"` (de otra ejecución ya abandonada) o `"ajeno"`. `leer(segundos, objetivo=None)` recibe de 10 en 10 (espera larga de 2 s, visibilidad `ocultar_s`) hasta que pasen `segundos`, haya borrado `objetivo` o una lectura venga vacía; borra propios y restos (`DeleteMessageBatch`) y deja ocultos los ajenos; `devolver()` los hace visibles con visibilidad 0 (no lanza excepciones: sirve al limpiar). Así cada ajeno se recibe como mucho una vez por lectura (cuenta para el `maxReceiveCount` de su cola). Atributos `borrados` y `ajenos`. Errores como `errores_aws` |
 | `avisar(mensaje)`, `resumir(texto, limite)`, `commit_actual()` | Progreso a stderr (stdout queda para `[PASA] …`); recorte de mensajes; commit con `-dirty` |
 | `CUENTA`, `REGION`, `PROYECTO`, `DIR_INFORMES` | Constantes (`PROYECTO` y `DIR_INFORMES` son rutas: `project/` y `project/.validacion/`) |
 | `PATRON_CREDENCIALES_TERRAFORM`, `PATRON_SIN_INIT` | Expresiones regulares que reconocen en la salida de Terraform un fallo de credenciales (→ código 3) o una copia sin `init` |
@@ -848,7 +946,39 @@ y ejecuta las comprobaciones en el orden del documento de validación.
 falta)`; `servicio(nombre)`, `objetivo(nombre)`, `alarma(nombre)`, `cola("ingesta"|"purga")` (visibles, en vuelo,
 retrasados) y `acciones_noche()` leen; `registrar(nombre, maximo)` y `poner(nombre, replicas)` cambian el rango o
 `desiredCount`; `t_latido` es el momento de la última muestra de `EmbeddingEncendidos`. Lanza `comun.Bloqueo` si falta
-INF-1.3 o INF-2.1 y traduce los errores de AWS como `comun.errores_aws`. `validate21.py` es el ejemplo.
+INF-1.3 o INF-2.1 y traduce los errores de AWS como `comun.errores_aws`. `validate21.py` es el ejemplo. Del módulo
+también se usan (`validate21.py` y `validate31.py`): las constantes `PREFIJO` y `CLUSTER` (`campus-locator-dev`),
+`COLAS` (`ingesta`/`purga` → nombre) y `ESCALADOS`; `recurso(servicio)` → `service/campus-locator-dev/<servicio>`;
+`llamar(accion, fn, *codigos_ausente)`, que ejecuta `fn()` dentro de `comun.errores_aws(accion)` y devuelve `None` si
+el error es uno de `codigos_ausente`; y `hora_bogota(momento=None)`, la hora en `America/Bogota` (UTC−5 si falta la
+base de zonas).
+
+**Pruebas locales de los validadores (`project/tests/ops/`, desde INF-3.1).** `uv run --group ops --group pruebas
+pytest tests/ops -q` desde `project/` (el grupo `pruebas` del `pyproject.toml` trae pytest; `pythonpath = src/ops`).
+No tocan AWS: `tests/ops/falsos.py` es un AWS falso con reloj falso que otro validador puede extender:
+
+| Elemento de `falsos.py` | Qué hace |
+|---|---|
+| `Mundo()` | Estado (alarmas, historia de alarmas, regla, destinos, política del topic, suscripciones, colas, tareas, métricas) y reloj. `dormir(s)` avanza de 5 en 5 s y simula: una DLQ con mensajes visibles pasa su alarma a `ALARM` tras `retraso_alarma` s (y vuelve a `OK` vacía); el paso a `ALARM` escribe las entradas `StateUpdate` y `Action` y publica en el topic; una tarea se detiene a los `dura_tarea` s con `stop_code` y, si casa con el patrón de la regla, cuenta `MatchedEvents` e `Invocations` (o `FailedInvocations` sin permiso en la política) y publica; SNS entrega si la suscripción no está `pendiente`. Las métricas aparecen a los `retraso_metricas` s |
+| Interruptores del `Mundo` | `retraso_alarma`, `alarma_dispara`, `accion_ok`, `retraso_metricas`, `pendiente`, `stop_code`, `dura_tarea`, `ecs_acepta_group`, `ecs_respeta_group`, `cuenta`, y los datos `apis`, `acciones_noche`, `alarmas`, `regla`, `destinos`, `politica`, `suscripciones`, `colas` (URL → mensajes) |
+| `Sesion(mundo)` / `Reloj(mundo)` | Sustitutos de la sesión de boto3 (clientes falsos de `sts`, `apigatewayv2`, `application-autoscaling`, `cloudwatch`, `events`, `sns`, `sqs` y `ecs`, solo con las operaciones que usan los validadores) y del módulo `time` (`monotonic`, `sleep`) |
+| `alarmas_bien()`, `politica_bien()`, `patron_bien()`, `salidas(**cambios)` | Lo que deja el `apply` de INF-3.1 y los outputs de `envs/dev` (con `None`, un output falta). Duplican §5.10 y §5.6: se cambian con ellos (§5.10) |
+| Registro | `enviados` (`(url, cuerpo)`), `borrados` (cuerpos), `run_task_args` (argumentos de cada `run_task`), `tareas` (ARN → tarea) |
+| Constantes y ayudas | `CUENTA`, `REGION`, `P` (`campus-locator-dev`), `TOPIC_ARN`, `REGLA`, `REGLA_ARN`, `CLUSTER_ARN`, `API_ID` (`fuzq99kddb`), `URL_COLA` (prefijo de las URL de SQS), `CORREO` (`persona@example.com`); `error(codigo, operacion)` crea un `ClientError` de boto3; `coincide(patron, evento)` evalúa un patrón de EventBridge de listas y objetos anidados. El reloj del `Mundo` empieza el 2026-10-28 a las 15:00 UTC (`t`) con `mono = 1000` |
+| Límites (lo que no simula) | Sin paginación (`NextToken` se ignora); `get_metric_statistics` solo casa las dimensiones exactas y agrega por minuto con `Sum`, `Maximum`, `Minimum` o `SampleCount`; SQS ignora `WaitTimeSeconds` y recibir no avanza el reloj; el único esperador de ECS es `tasks_stopped`; `stop_task` deja `stopCode = UserInitiated`; las alarmas solo cambian las de las DLQ (por mensajes visibles) |
+
+Las pruebas parchean con `monkeypatch` `comun.time`, `validate31.time`, `comun.ahora_utc`, `comun.sesion_aws`,
+`comun.commit_actual`, `comun.terraform_outputs` y `validate31.leer_correo`, y corren `validate31.main()` con
+`--informe` en un directorio temporal. En `test_validate31.py`, el *fixture* `mundo` hace esos parches y deja los
+outputs en `mundo.salidas`; `correr(mundo, monkeypatch, *argumentos)` → `(código, informe)`; `estados(informe)` →
+`{id: estado}` de precondiciones y comprobaciones; `detalle(informe, id)`; `cuerpo_propio(sello)`. `test_comun.py`
+prueba `comun.LectorCola` y su uso desde `validate21.py`. Trampa: `import falsos` funciona porque pytest añade
+`tests/ops/` a `sys.path` al importar pruebas sin `__init__.py`; si se añade un `__init__.py`, hay que cambiar los
+imports (o añadir `tests/ops` a `pythonpath`). Los validadores anteriores a INF-3.1 se probaron con simulaciones que
+no están en el repositorio (CHANGELOG de cada uno).
+
+Lint de los validadores y sus pruebas (no lo corre CI): `uvx ruff@0.14.0 check --line-length 120 src/ops tests/ops`
+desde `project/`, sin avisos. Las líneas del código de esta carpeta llegan hasta 120 columnas.
 
 Desde la consola: `uv run --group ops python src/ops/embedding.py {encender|apagar|estado}` (desde `project/`, con
 `AWS_PROFILE`; `--sin-esperar` en `encender` y `apagar` no espera a que quede sano o sin tareas, aunque `encender`
@@ -878,14 +1008,14 @@ Lo que un lote necesita saber para añadir infraestructura sin leer el código e
 
 | Nombre | Qué es |
 |---|---|
-| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno`; `var.cidr_vpc`, `var.az_computo`, `var.az_secundaria` (INF-1.1); `var.rds_clase`, `var.rds_gb`, `var.rds_gb_max`, `var.pg_version` (INF-1.2); `var.imagen_inicial_tag` (INF-1.3); `var.apagado_embedding` (INF-2.1) | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos) |
+| `var.aws_account_id`, `var.region`, `var.proyecto`, `var.entorno`; `var.cidr_vpc`, `var.az_computo`, `var.az_secundaria` (INF-1.1); `var.rds_clase`, `var.rds_gb`, `var.rds_gb_max`, `var.pg_version` (INF-1.2); `var.imagen_inicial_tag` (INF-1.3); `var.apagado_embedding` (INF-2.1); `var.correo_alertas` (INF-3.1) | Variables de §5.3 (`aws_account_id` se valida como 12 dígitos; `correo_alertas`, como dirección de correo) |
 | `local.prefijo` | `"${var.proyecto}-${var.entorno}"` = `campus-locator-dev`, sin guion final: el prefijo de §5.1. Está en `main.tf` (INF-1.1); los módulos lo reciben como variable `prefijo` |
 | `local.metrica_localize` | `{ espacio = "${var.proyecto}/${var.entorno}", nombre = "LocalizePeticiones" }` (INF-2.1): la métrica del filtro de `borde`, que lee la alarma de inactividad de `computo`. Se define aquí y se pasa a los dos módulos, así ninguno referencia al otro por ella |
 | `data.aws_caller_identity.actual` | Cuenta de las credenciales (`.account_id`); alimenta el output `cuenta_id` |
 | `data.terraform_remote_state.bootstrap` | Outputs de `bootstrap` (backend S3, clave `bootstrap/terraform.tfstate` del bucket de estado; los dos roles de CI pueden leer todo el bucket). Hoy solo se usa `.outputs.limite_roles_arn` (INF-1.3) |
 | `data.aws_default_tags.actuales` | Etiquetas efectivas del proveedor; nada lo referencia (lleva `# tflint-ignore: terraform_unused_declarations`) porque solo sirve para que los validadores lean las etiquetas del estado |
-| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); `module.datos`, `module.secretos` y `module.computo`, lo que dicen sus tablas más abajo (INF-1.2, INF-1.3); `module.borde`, lo que dice su tabla más abajo (INF-1.4); desde INF-2.1, `module.computo` recibe además `metrica_localize` y `apagado_embedding`, y `module.borde`, `metrica_localize`; `module.observabilidad`, todavía sin argumentos: su lote (§4) le añade entradas y salidas |
-| Outputs de `envs/dev` | `cuenta_id` (INF-0.2); `subredes_tareas` = `[module.red.subred_tareas]` y `sg_migrate` = `module.red.grupos_seguridad["api"]` (INF-1.1); `bucket_dataset`, `sqs_ingesta_url`, `sqs_purga_url`, `sqs_ingesta_dlq_url` y `sqs_purga_dlq_url` (de `module.datos.colas[…].url`), `rds_endpoint` = `module.datos.rds_direccion` y `secretos` = `module.secretos.arns` (INF-1.2); `ecr_backend_url` y `ecr_embedding_url` (de `module.computo.ecr_urls[…]`), `ecs_cluster`, `ecs_servicios`, `familias_tarea` y `embedding_dns` (INF-1.3); `api_base_url` = `module.borde.api_base_url` (INF-1.4) |
+| `module.red`, `module.datos`, `module.secretos`, `module.computo`, `module.borde`, `module.observabilidad` | Llamadas a `../../modules/<nombre>`. `module.red` recibe `prefijo`, `region`, `cidr_vpc`, `az_computo` y `az_secundaria` (INF-1.1); `module.datos`, `module.secretos` y `module.computo`, lo que dicen sus tablas más abajo (INF-1.2, INF-1.3); `module.borde`, lo que dice su tabla más abajo (INF-1.4); desde INF-2.1, `module.computo` recibe además `metrica_localize` y `apagado_embedding`, y `module.borde`, `metrica_localize`; `module.observabilidad` (INF-3.1), lo que dice su tabla más abajo |
+| Outputs de `envs/dev` | `cuenta_id` (INF-0.2); `subredes_tareas` = `[module.red.subred_tareas]` y `sg_migrate` = `module.red.grupos_seguridad["api"]` (INF-1.1); `bucket_dataset`, `sqs_ingesta_url`, `sqs_purga_url`, `sqs_ingesta_dlq_url` y `sqs_purga_dlq_url` (de `module.datos.colas[…].url`), `rds_endpoint` = `module.datos.rds_direccion` y `secretos` = `module.secretos.arns` (INF-1.2); `ecr_backend_url` y `ecr_embedding_url` (de `module.computo.ecr_urls[…]`), `ecs_cluster`, `ecs_servicios`, `familias_tarea` y `embedding_dns` (INF-1.3); `api_base_url` = `module.borde.api_base_url` (INF-1.4); `sns_alertas_arn` = `module.observabilidad.sns_alertas_arn` (INF-3.1) |
 | Última línea de `main.tf`: `# validacion-0-2 <AAAAMMDD-HHMMSS>` | La escribe y sustituye `validate02.py` (C2 la fusiona en `main`). No se borra ni hace falta moverla: el validador quita la anterior y añade la nueva al final |
 
 **Módulos (`modules/<nombre>/`)**
@@ -946,9 +1076,10 @@ ruta nueva es un `aws_route`) y los grupos tampoco llevan reglas en línea (§5.
 | Salida | Valor | La usa |
 |---|---|---|
 | `rds_direccion` | endpoint sin puerto | `secretos` (`db_host`); output `rds_endpoint`; `computo` (`DB_HOST`, INF-1.3) |
+| `rds_identificador` | `campus-locator-dev-db` (`identifier` de la instancia; desde INF-3.1) | `observabilidad` (dimensión `DBInstanceIdentifier` de las alarmas de RDS) |
 | `rds_puerto`, `rds_base`, `rds_usuario` | `5432`, `campus_locator`, `campus_app` | `secretos`; `computo` (`DB_PORT`, `DB_NAME`, `DB_USER`) |
 | `bucket_dataset`, `bucket_dataset_arn` | nombre y ARN del bucket | output `bucket_dataset`; `computo` (`S3_BUCKET_DATASET` y políticas de §5.8) |
-| `colas` | mapa `{ ingesta, purga, ingesta_dlq, purga_dlq }` → `{ nombre, url, arn }` | outputs `sqs_*_url`; `computo` (`SQS_URL_*` y políticas de §5.8); alarmas de INF-2.1 e INF-3.1 (`nombre`) |
+| `colas` | mapa `{ ingesta, purga, ingesta_dlq, purga_dlq }` → `{ nombre, url, arn }` | outputs `sqs_*_url`; `computo` (`SQS_URL_*` y políticas de §5.8; alarmas de INF-2.1, `nombre`); `observabilidad` (alarmas de las DLQ, `nombre`, INF-3.1) |
 
 Por dentro: `aws_db_subnet_group.principal`, `aws_db_parameter_group.principal` (con `create_before_destroy`),
 `aws_db_instance.principal`, `aws_s3_bucket.dataset` y sus `aws_s3_bucket_ownership_controls`,
@@ -998,8 +1129,9 @@ Por dentro: `random_password.db`, `random_bytes.jwt`, `random_password.admin_ini
 | Salida | Valor | La usa |
 |---|---|---|
 | `ecr_urls` | `{ backend, embedding }` → `repositoryUri` | outputs `ecr_backend_url` y `ecr_embedding_url` |
-| `cluster` | `campus-locator-dev` | output `ecs_cluster` |
-| `servicios` | `{ api, worker, embedding }` → nombre | output `ecs_servicios` |
+| `cluster` | `campus-locator-dev` | output `ecs_cluster`; `observabilidad` (dimensión `ClusterName`) |
+| `cluster_arn` | `arn:aws:ecs:us-east-1:648617469176:cluster/campus-locator-dev` (desde INF-3.1) | `observabilidad` (`clusterArn` del patrón de la regla) |
+| `servicios` | `{ api, worker, embedding }` → nombre | output `ecs_servicios`; `observabilidad` (`group` de la regla, `ServiceName` de la alarma de `embedding`) |
 | `familias_tarea` | `{ api, worker, embedding, migrate, validacion }` → familia | output `familias_tarea` |
 | `embedding_dns` | `embedding.campus-locator.local` | output `embedding_dns` |
 | `cloud_map_api_arn` | ARN del servicio de Cloud Map `api` (SRV) | `borde` (`integration_uri`, INF-1.4) |
@@ -1071,6 +1203,7 @@ cambio. Con 7 métricas, la de inactividad está cerca del máximo de 10 por ala
 | Salida | Valor | La usa |
 |---|---|---|
 | `api_base_url` | `ApiEndpoint` de la API (`https://<id>.execute-api.us-east-1.amazonaws.com`, sin barra final) | output `api_base_url` |
+| `api_id` | `ApiId` de la API (`fuzq99kddb`; desde INF-3.1) | `observabilidad` (dimensión `ApiId` de la alarma de 5xx) |
 
 Por dentro: `aws_cloudwatch_log_group.apigw`, `aws_apigatewayv2_vpc_link.principal`, `aws_apigatewayv2_api.principal`
 (con `prevent_destroy`), `aws_apigatewayv2_integration.api`, `aws_apigatewayv2_route.rutas["ANY /{proxy+}"|"POST /v1/auth/login"]`
@@ -1090,6 +1223,51 @@ Detalles que explican un `plan`:
   `LINEAS_PRUEBA` de `validate21.py`. Una tercera ruta `POST /v1/localize` (con *throttling* propio, R10) se descartó
   en ADR-INF-15. CloudWatch admite alarmas sobre métricas que todavía no existen: no hace falta orden entre el filtro y
   la alarma.
+
+**Módulo `observabilidad` (INF-3.1)**
+
+| Entrada | Tipo | Valor que le pasa `envs/dev` |
+|---|---|---|
+| `prefijo` | `string` | `local.prefijo` (topic `<prefijo>-alertas`, alarmas `<prefijo>-<clave>`, regla `<prefijo>-tarea-detenida`) |
+| `region` | `string` | `var.region` (`aws:SourceArn` de las alarmas en la política del topic) |
+| `cuenta_id` | `string` de 12 dígitos | `var.aws_account_id` (condiciones de la política) |
+| `correo_alertas` | `string`, validado como dirección de correo | `var.correo_alertas` |
+| `api_id` | `string` | `module.borde.api_id` |
+| `cluster`, `cluster_arn` | `string` | `module.computo.cluster`, `module.computo.cluster_arn` |
+| `servicios` | `map(string)` con `api`, `worker` y `embedding` (si no, falla la validación) | `module.computo.servicios` |
+| `colas` | mapa de `{ nombre, url, arn }` con `ingesta_dlq` y `purga_dlq` (si no, falla la validación) | `module.datos.colas` |
+| `rds_identificador` | `string` | `module.datos.rds_identificador` |
+
+| Salida | Valor | La usa |
+|---|---|---|
+| `sns_alertas_arn` | ARN del topic | output `sns_alertas_arn` |
+
+Por dentro: `aws_sns_topic.alertas`, `aws_sns_topic_policy.alertas` (de `data "aws_iam_policy_document" "alertas"`),
+`aws_sns_topic_subscription.correo`, `aws_cloudwatch_metric_alarm.alarmas["api-5xx"|"ingesta-dlq"|"purga-dlq"|
+"embedding-encendida"|"rds-almacenamiento"|"rds-creditos-cpu"]` (un `for_each` sobre `local.alarmas`, cuyas claves
+son el nombre sin el prefijo), `aws_cloudwatch_event_rule.tarea_detenida` y `aws_cloudwatch_event_target.tarea_detenida`:
+11 recursos, más el `data`. Detalles que explican un `plan` o un comportamiento:
+- Cada entrada de `local.alarmas` es `{ descripcion, espacio, metrica, dimensiones (mapa nombre → valor), estadistica,
+  periodo, periodos, comparacion, umbral }`. `periodos` va a `evaluation_periods` y a `datapoints_to_alarm`;
+  `treat_missing_data = "notBreaching"` y `alarm_actions = [topic]` son fijos para todas. Añadir una alarma es añadir
+  una entrada (su clave es el nombre sin el prefijo) y seguir la regla de §5.10.
+- Antes de un `apply` que cree el módulo (o lo recree tras un `destroy`), comprobar que los nombres de §5.1 del topic,
+  las alarmas y la regla están libres (`validation-3-1` §5, paso 1): `CreateTopic`, `PutMetricAlarm` y `PutRule` no
+  fallan con un nombre que ya existe, lo sobrescriben, y Terraform se quedaría con un recurso ajeno sin avisar.
+- El `plan` de INF-3.1 son 11 altas, ninguna modificación ni baja, y el output nuevo (`+ sns_alertas_arn`). Los outputs
+  nuevos de `borde`, `computo` y `datos` no cambian ningún recurso. El `data` de la política se lee en el `apply`
+  (depende del ARN del topic y de la regla).
+- El patrón se escribe con `jsonencode` (ordena las claves) y la lista de `group` sale de `servicios` en orden fijo
+  (`api`, `embedding`, `worker`). Su texto exacto está en §5.10.
+- El destino depende de la política (`depends_on`): sin ella, la primera invocación fallaría.
+- La suscripción `email` se crea «pendiente de confirmación» (el proveedor la guarda con su ARN y
+  `pending_confirmation = true`); confirmarla solo cambia atributos calculados, así que el `plan` siguiente queda vacío
+  (a comprobar tras el `apply`, `validation-3-1` §5). El enlace de confirmación vale 2 días (documentación de
+  `sns:Subscribe`). Si la suscripción desaparece (baja desde el enlace de un aviso), el `plan` la vuelve a crear.
+- Las descripciones de las alarmas y de la regla van sin tildes ni `§` (como las de §5.7) y dicen qué revisar: llegan
+  en el correo.
+- Las alarmas no se superponen con las de escalado de INF-2.1 (nombres de §5.1 distintos; las de INF-2.1 viven en
+  `computo/escalado.tf` y no avisan).
 
 **Proveedores y lock**
 - `envs/dev/.terraform.lock.hcl` fija hoy `hashicorp/aws` 6.70.0 y, desde INF-1.2, `hashicorp/random` (3.x) con
@@ -1123,13 +1301,38 @@ Terraform 1.15 `terraform console` ya no lo toma. Si otro validador las necesita
 la tabla de §5.11.
 
 **Ayudas propias de `validate21.py`** (no están en `comun.py`; si otro validador las necesita, se mueven allí y se
-añaden a §5.11): `LectorCola`, que borra de una cola los mensajes de prueba (propios y restos de otra ejecución con más
-de 15 min) y deja ocultos los ajenos hasta devolverlos con visibilidad 0, para que cada ajeno se reciba como mucho una
-vez por lectura; `clasificar(cuerpo, sello)` («propio», «resto» o «ajeno») según el `RequestId` `validacion-2-1-…` de
+añaden a §5.11): `lector(ctx, clave)`, un `comun.LectorCola` (§5.11; hasta INF-3.1 la clase estaba aquí) con
+visibilidad de 120 s y el clasificador de abajo, que borra los propios y los restos de otra ejecución con más de 15 min;
+`clasificar(cuerpo, sello)` («propio», «resto» o «ajeno») según el `RequestId` `validacion-2-1-…` de
 los mensajes con forma de `s3:TestEvent`; `vaciar`, que borra los propios, espera a que SQS cuente 0 y devuelve el
 último uso; `actividad_de` y `actividad_esperada`, que buscan en `describe-scaling-activities` la actividad cuya
 `Cause` cita una alarma o política por su nombre completo (`worker-cola` es prefijo de otros nombres), aceptando
 `Pending`, `InProgress` o `Successful`; y el diccionario `T` con todos los tiempos de espera.
+
+**Ayudas propias de `validate31.py`** (no están en `comun.py`; las mismas reglas): `alarmas_esperadas(api_id)` y
+`patron_esperado()` (lo de §5.10, para comparar con AWS); `clasificar(cuerpo, sello)` de los mensajes de prueba de
+las DLQ (`{"validacion": "validacion-3-1-<sello>"}`; «resto» si son de otra ejecución con más de 1 h) y `lector(ctx,
+clave)`, su `comun.LectorCola`; `suscripcion(ctx)`, que exige una suscripción `email` a `correo_alertas` confirmada
+(`ListSubscriptionsByTopic` + `GetSubscriptionAttributes`) y devuelve su descripción con el correo enmascarado
+(`enmascarar`: «fr…@gmail.com»; ningún validador imprime el correo entero); `puntos`, `suma` y `maximos`, valores por
+minuto de una métrica con `GetMetricStatistics` desde el minuto de un momento; `esperar_entregas(ctx, desde, que)`,
+que espera ≥ 1 `NumberOfNotificationsDelivered` del topic y falla con la causa probable (sin publicaciones, o
+publicadas sin entregar: suscripción sin confirmar); `metrica_regla`, que lee las métricas de `AWS/Events` de la regla
+con la dimensión `RuleName` (como las publica hoy la cuenta para el bus por defecto) y también con `EventBusName` +
+`RuleName`, y toma la mayor; `paso_a_alarm` y `accion_publicada`, que leen la historia de una alarma (`StateUpdate`
+«… to ALARM» y `Action`; una acción con «fail» en el resumen es un fallo de publicación) desde un momento menos
+`TOLERANCIA_RELOJ` (60 s, por si el reloj local va adelantado respecto al de AWS); `elegir_dlq`, que toma la primera
+DLQ (`ingesta`, luego `purga`) sin mensajes visibles, en vuelo ni retrasados y con su alarma fuera de `ALARM`, espera
+hasta `T["ok"]` a que una vacía en `ALARM` vuelva a `OK` y, si las dos tienen mensajes, falla sin enviar nada;
+`limpiar_restos` (al empezar: en cada DLQ con entre 1 y 10 visibles y ninguno en vuelo, una lectura con `lector`),
+`borrar_propios` (borra los mensajes propios que quedan, contados en `Contexto.pendientes`; falla si no los encuentra)
+y `detener_tareas` (`StopTask` de las tareas `RUNNING` con `startedBy = validacion-3-1`); `lanzar_tarea`, que lanza una
+sola vez la tarea de prueba (C3a y C3b la comparten) y guarda el error si falla; y el diccionario `T` con los tiempos
+(`ok` 10 min, `alarma` 20, `accion` 2, `sns` 10, `tarea` 10, `eventos` 10, `leer` 60 s, `sondeo` 30 s).
+Trampa: `leer_correo` saca `correo_alertas` de `envs/dev/terraform.tfvars` con la expresión
+`^correo_alertas\s*=\s*"([^"]+)"`: la asignación tiene que estar al principio de una línea y con comillas dobles (como
+hoy); con otro formato, C1c, C2a y C3b fallan con «no tiene correo_alertas». Lo mismo vale para `apagado_embedding` y
+`leer_tfvars` de `validate21.py`.
 
 `validate11.py` tiene su propia `terraform_plan()`: lanza `terraform` en otra sesión de procesos (otro grupo en
 Windows) con la salida en archivos temporales y, con Ctrl+C, le reenvía la interrupción (SIGINT; CTRL_BREAK en Windows)
@@ -1288,6 +1491,20 @@ Se descartaron una Lambda programada (más código, permisos y otro rol con el *
 de las alarmas y 0,6 por las dos métricas propias (§3.10); los tiempos dependen del retraso con que SQS y ECS publican
 (§3.4): la subida de `worker` puede tardar de 2 a 15 min y el apagado llega a los 45 min ± 2.
 
+**ADR-INF-16 — Alertas por correo con un topic SNS sin cifrar; la regla manda el evento tal cual (aceptada; INF-3.1).**
+HU-22 pide enterarse de los fallos sin mirar la consola, con 1–3 personas y sin presupuesto para herramientas.
+*Decisión:* un solo topic con una suscripción por correo; las alarmas de §5.10 avisan solo al pasar a `ALARM` (un correo
+por incidente; volver a `OK` no avisa) y tratan la falta de datos como «no incumple»; la regla de EventBridge publica
+el evento completo, sin transformador de entrada (nada que mantener ni dato que se pierda; a cambio, el correo es un
+JSON); el topic no se cifra (con `aws/sns`, CloudWatch y EventBridge no pueden publicar; una clave de KMS propia cuesta
+1 USD/mes y los avisos no llevan datos sensibles), y su política repite la declaración por defecto de AWS y añade a
+CloudWatch y a la regla. Se descartaron Chatbot/Slack (otra integración que mantener) y avisos al volver a `OK` (el
+doble de correos). Para validar la regla sin detener `api`, `worker` ni `embedding`, `validate31.py` lanza la tarea de
+validación con `group = service:worker` (`worker` suele estar en 0; con `service:api` o `service:embedding`, una tarea
+falsa podría confundirse con las reales en `ListTasks` o en las métricas de la alarma de subida de `worker`, sin
+comprobar). *Consecuencias:* 0,6 USD/mes (§3.10); hay que confirmar la suscripción tras el primer `apply` (y tras
+cualquier cambio de `correo_alertas`); cualquiera que reciba un aviso puede darse de baja desde el correo (R14).
+
 ---
 
 ## 7. Riesgos
@@ -1306,7 +1523,8 @@ de las alarmas y 0,6 por las dos métricas propias (§3.10); los tiempos depende
 | R10 | `/v1/localize` es público: abuso que dispara costos; `/v1/auth/login` admite fuerza bruta | Baja | Medio | *Throttling* (aproximado: frena volumen, no intentos sueltos, §3.3); alarma de 5xx; en `prod`, WAF o clave de app. Límite de intentos de inicio de sesión: lo tiene que poner el backend (`BACKEND_FASTAPI`; propuesta en CHANGELOG 0.12.0). Si limita por IP, la cabecera con la IP del cliente está sin verificar (§5.13) |
 | R11 | Recursos de un intento anterior (oct-2026) siguen en la cuenta: cuestan y pueden chocar con nombres de §5.1 (sobre todo el *namespace* de Cloud Map `campus-locator.local`, con INF-1.3) | Alta | Medio | Revisado el 2026-10-24: no había otra VPC `campus-locator-dev-vpc` (C2a de INF-1.1) ni nada que choque con INF-1.2 (el bucket del dataset ya no existe; sin instancias, *snapshots*, grupos de parámetros ni de subredes de RDS; sin colas; `campus-locator-dev/jwt-secret` está en borrado programado y su nombre no choca). Antes de INF-1.3, inventariar y limpiar el resto: clúster y servicios de ECS, ECR `campus-locator-dev/*`, *namespace* de Cloud Map, *target group*, *log groups* `/ecs/…`, roles `campus-locator-dev-backend-*` y `-embedding-*` y los buckets `campus-locator-dev-scans-648617469176` y `4uproject-eafit-tfstate` (CHANGELOG 0.3.0). Revisado de nuevo antes de INF-1.3 (`.validacion/inventario-r11b.txt`): ya no quedan roles `campus-locator-dev-*` ni buckets del intento anterior; antes del `apply` de INF-1.3 se confirma que no hay *namespace* `campus-locator.local`, clúster `campus-locator-dev` ni repositorios `campus-locator/*` (`servicediscovery list-namespaces`, `ecs describe-clusters`, `ecr describe-repositories`) |
 | R12 | El repositorio es público: los logs de Actions y los comentarios del `plan` los puede leer cualquiera | Alta | Bajo | Terraform oculta los valores `sensitive` (contraseñas, secretos) en el `plan` y en los logs; ningún paso imprime el estado ni credenciales; todo output con un dato sensible se declara `sensitive`; los PR desde *forks* no ejecutan el `plan`. Lo que queda visible (IDs, ARN, URL) no da acceso por sí solo |
-| R13 | El apagado automático de `embedding` falla y queda encendido (~2,5 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas) y presupuesto con avisos. El apagado por inactividad y el escalado están configurados y revisados (`validate21.py` C2a y C3a), pero observarlos en `dev` es opcional desde 0.13.1: la alarma de INF-3.1 avisa si falla |
+| R13 | El apagado automático de `embedding` falla y queda encendido (~2,5 USD/día) | Baja | Medio | Apagado por inactividad y a las 22:00, alarma `campus-locator-dev-embedding-encendida` (> 10 h seguidas; INF-3.1, con código desde 0.14.0, sin aplicar todavía) y presupuesto con avisos. El apagado por inactividad y el escalado están configurados y revisados (`validate21.py` C2a y C3a), pero observarlos en `dev` es opcional desde 0.13.1: la alarma de INF-3.1 avisa si falla |
+| R14 | Los avisos no llegan: suscripción sin confirmar, alguien se da de baja desde el enlace de un correo, o el correo cae en spam | Media | Medio | `validate31.py` C1c comprueba la suscripción confirmada y C2/C3 que SNS entrega; una suscripción borrada la vuelve a crear el siguiente `plan`/`apply` (hay que confirmarla otra vez); la primera vez, marcar el remitente `no-reply@sns.amazonaws.com` como «no es spam». Si el correo deja de servir, se cambia `correo_alertas` en los dos `terraform.tfvars` (§5.3) |
 
 ---
 

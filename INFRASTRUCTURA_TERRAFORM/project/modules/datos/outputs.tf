@@ -3,6 +3,11 @@ output "rds_direccion" {
   value       = aws_db_instance.principal.address
 }
 
+output "rds_identificador" {
+  description = "Identificador de la instancia (campus-locator-dev-db): dimension DBInstanceIdentifier de las alarmas de RDS (INF-3.1)."
+  value       = aws_db_instance.principal.identifier
+}
+
 output "rds_puerto" {
   description = "Puerto de la instancia (5432)."
   value       = aws_db_instance.principal.port

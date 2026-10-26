@@ -8,6 +8,11 @@ output "cluster" {
   value       = aws_ecs_cluster.principal.name
 }
 
+output "cluster_arn" {
+  description = "ARN del cluster de ECS: clusterArn de la regla de EventBridge (modulo observabilidad, INF-3.1)."
+  value       = aws_ecs_cluster.principal.arn
+}
+
 output "servicios" {
   description = "Nombres de los servicios de ECS: { api, worker, embedding }."
   value       = { for clave, servicio in aws_ecs_service.servicios : clave => servicio.name }

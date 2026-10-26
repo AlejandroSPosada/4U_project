@@ -324,6 +324,63 @@ def errores_aws(accion: str) -> Iterator[None]:
         raise error_aws(exc, accion) from exc
 
 
+class LectorCola:
+    """Borra de una cola SQS los mensajes de prueba sin estropear los ajenos (contrato de colas de §5.11).
+
+    `clasificar(cuerpo)` devuelve «propio» (de esta ejecución), «resto» (de otra ejecución del mismo validador, ya
+    abandonada) o «ajeno» (todo lo demás, incluido lo que no se entiende). `leer` borra los propios y los restos; los
+    ajenos recibidos quedan ocultos (`ocultar_s`) hasta `devolver`, que los hace visibles de nuevo con visibilidad 0:
+    así cada ajeno se recibe como mucho una vez por lectura (cada recepción cuenta para el `maxReceiveCount` de su
+    cola). Los errores de AWS se traducen como `errores_aws`."""
+
+    def __init__(
+        self, sqs: Any, url: str, nombre: str, clasificar: Callable[[str], str], *, ocultar_s: int = 120
+    ) -> None:
+        self.sqs, self.url, self.nombre, self.clasificar, self.ocultar_s = sqs, url, nombre, clasificar, ocultar_s
+        self.ajenos: dict[str, str] = {}  # MessageId → ReceiptHandle
+        self.borrados = 0
+
+    def leer(self, segundos: float, objetivo: int | None = None) -> None:
+        """Lee hasta que pasen `segundos`, hasta haber borrado `objetivo` mensajes o hasta una lectura vacía."""
+        limite = time.monotonic() + segundos
+        while time.monotonic() < limite and (objetivo is None or self.borrados < objetivo):
+            with errores_aws(f"leer {self.nombre} (sqs:ReceiveMessage)"):
+                mensajes = self.sqs.receive_message(
+                    QueueUrl=self.url, MaxNumberOfMessages=10, WaitTimeSeconds=2, VisibilityTimeout=self.ocultar_s
+                ).get("Messages", [])
+            if not mensajes:
+                return
+            borrar = []
+            for m in mensajes:
+                if self.clasificar(m.get("Body", "")) == "ajeno":
+                    self.ajenos[m["MessageId"]] = m["ReceiptHandle"]
+                else:
+                    borrar.append(m)
+            if borrar:
+                entradas = [{"Id": str(i), "ReceiptHandle": m["ReceiptHandle"]} for i, m in enumerate(borrar)]
+                with errores_aws(f"borrar mensajes de prueba de {self.nombre} (sqs:DeleteMessageBatch)"):
+                    respuesta = self.sqs.delete_message_batch(QueueUrl=self.url, Entries=entradas)
+                self.borrados += len(respuesta.get("Successful", []))
+                for fallo in respuesta.get("Failed", []):
+                    avisar(f"no se pudo borrar un mensaje de prueba de {self.nombre}: {fallo.get('Code')}")
+
+    def devolver(self) -> None:
+        """Hace visibles de nuevo los ajenos recibidos. No lanza excepciones (se usa también al limpiar)."""
+        pendientes = list(self.ajenos.values())
+        self.ajenos.clear()
+        for inicio in range(0, len(pendientes), 10):
+            entradas = [
+                {"Id": str(i), "ReceiptHandle": r, "VisibilityTimeout": 0}
+                for i, r in enumerate(pendientes[inicio : inicio + 10])
+            ]
+            try:
+                self.sqs.change_message_visibility_batch(QueueUrl=self.url, Entries=entradas)
+            except Exception as exc:  # noqa: BLE001 — limpieza: avisar y seguir
+                avisar(f"no se pudieron devolver mensajes ajenos a {self.nombre}: {resumir(str(exc), 200)}")
+        if pendientes:
+            avisar(f"{len(pendientes)} mensaje(s) ajeno(s) devuelto(s) a {self.nombre}")
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Validador: registro de precondiciones y comprobaciones, limpieza e informe
 # ---------------------------------------------------------------------------------------------------------------------

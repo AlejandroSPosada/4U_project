@@ -109,6 +109,17 @@ module "borde" {
 
 module "observabilidad" { # INF-3.1
   source = "../../modules/observabilidad"
+
+  prefijo           = local.prefijo
+  region            = var.region
+  cuenta_id         = var.aws_account_id
+  correo_alertas    = var.correo_alertas
+  api_id            = module.borde.api_id
+  cluster           = module.computo.cluster
+  cluster_arn       = module.computo.cluster_arn
+  servicios         = module.computo.servicios
+  colas             = module.datos.colas
+  rds_identificador = module.datos.rds_identificador
 }
 
 # validacion-0-2 20261024-140400

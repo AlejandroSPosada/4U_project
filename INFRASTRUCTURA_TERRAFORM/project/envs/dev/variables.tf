@@ -77,3 +77,14 @@ variable "apagado_embedding" {
   })
   description = "Apagado automatico de embedding (§5.3): zona IANA y cron de la accion nocturna (null = sin ella) y minutos sin uso antes de apagarlo."
 }
+
+# INF-3.1
+variable "correo_alertas" {
+  type        = string
+  description = "Correo suscrito al topic de alarmas (§5.3); el mismo de bootstrap/terraform.tfvars (presupuesto)."
+
+  validation {
+    condition     = can(regex("^[^@\\s<>]+@[^@\\s<>]+\\.[^@\\s<>]+$", var.correo_alertas))
+    error_message = "correo_alertas debe ser una dirección de correo (ARCHITECTURE §5.3)."
+  }
+}

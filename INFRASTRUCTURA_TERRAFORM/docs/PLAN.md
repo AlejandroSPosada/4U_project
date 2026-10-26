@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.13.1**.
+Alineado con `ARCHITECTURE.md` **v0.14.0**.
 
 ---
 
@@ -190,8 +190,13 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 
 #### INF-3.1 — Observabilidad y alarmas
 - **Objetivo:** enterarse de los fallos sin mirar la consola.
-- **Entregables:** módulo `observabilidad` (topic SNS, suscripción, alarmas de §5.10, regla de EventBridge de §3.8) y
-  output `sns_alertas_arn`.
+- **Entregables:** módulo `observabilidad` (topic SNS sin cifrar con su política, suscripción por correo a
+  `correo_alertas`, las 6 alarmas de §5.10 y la regla de EventBridge de §3.8 con el topic como destino; entradas,
+  salidas y recursos en §5.12); outputs de módulo `api_id` (`borde`), `cluster_arn` (`computo`) y `rds_identificador`
+  (`datos`); en `envs/dev`, la variable `correo_alertas` (§5.3) y el output `sns_alertas_arn` (§5.2); `LectorCola`
+  movida de `validate21.py` a `comun.py` (§5.11); `src/ops/validate31.py` y sus pruebas en `tests/ops/` con el grupo
+  `pruebas` del `pyproject.toml` (§3.8, §3.10, §5.1, §5.6, §5.10, §5.11, §5.12, ADR-INF-16). Después del `apply`, la
+  persona dueña de `correo_alertas` confirma la suscripción desde el correo de SNS.
 - **Criterios de cierre:**
   - C1. Existen todas las alarmas de §5.10 apuntando al topic, con los nombres de §5.1, y la suscripción por correo
     está confirmada.
@@ -222,7 +227,7 @@ falta un contenedor se usa una **imagen de prueba** que responde `GET /v1/health
 | INF-1.3 | 1 | Hecho | [1-3](./validation/validation-1-3.md) | `a0f2dc5` 2026-10-24 | 0.10.0 | `apply` por `infra.yml` (30 recursos) y `plan` vacío después; imagen `bootstrap` publicada a mano en los dos repositorios. La primera ejecución destapó un error del validador (C5 esperaba `t`; `boolean \|\| text` da `true`), corregido en `a0f2dc5`. `embedding` en Fargate con 2 vCPU (ADR-INF-14) |
 | INF-1.4 | 1 | Hecho | [1-4](./validation/validation-1-4.md) | `13d80fe` 2026-10-24 | 0.11.1 | `apply` por `infra.yml` (7 recursos) y `plan` vacío después. La primera ejecución falló en C2b (1 de 100 con 429 a 5 req/s, con la etapa bien configurada): el *throttling* de API Gateway es aproximado; C2b pasó a 20 req/s con ≥ 10 % de 429 (0.11.1) |
 | INF-2.1 | 2 | Hecho | [2-1](./validation/validation-2-1.md) | `684f233` 2026-10-25 | 0.13.1 | `apply` por `infra.yml` sobre `6b6b8e7` (12 recursos) y `plan` vacío después; rol vinculado de Application Auto Scaling creado a mano. Cerrado con C1, C2a y C3a (`--solo C1,C2a,C3a`; C1a sano en 5,7 min): el apagado automático y el escalado están configurados, pero observarlos en `dev` (C2b, C3b y C4) es opcional desde 0.13.1 |
-| INF-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | |
+| INF-3.1 | 3 | En curso | [3-1](./validation/validation-3-1.md) | — | — | Código, `plan` (`11 to add, 0 to change, 0 to destroy`: solo el módulo nuevo y `sns_alertas_arn`) y 37 pruebas locales del validador contra un AWS falso, sobre `e037904` (rama `fuera/inf-3-1`). Falta: el `apply` por `infra.yml` (no el 2026-10-27, día de campo), confirmar la suscripción por correo y `validate31.py` en `dev` con las capturas de C2b y C3c |
 | INF-6.1 | 6 | Diferido | — | — | — | |
 
 ---

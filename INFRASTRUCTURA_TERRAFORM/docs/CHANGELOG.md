@@ -20,6 +20,76 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.14.0] — 2026-10-26
+
+- **Lote que la motivó:** INF-3.1 (observabilidad y alarmas).
+- **Qué cambió:**
+  - Código: módulo `observabilidad` con 11 recursos (topic `campus-locator-dev-alertas` sin cifrar, su política y la
+    suscripción por correo; las 6 alarmas de §5.10 con acción solo en `ALARM`; la regla
+    `campus-locator-dev-tarea-detenida` y su destino); outputs nuevos de módulo `borde.api_id`, `computo.cluster_arn` y
+    `datos.rds_identificador` (sin cambiar recursos); en `envs/dev`, la variable `correo_alertas`, la llamada a
+    `module.observabilidad` con sus entradas y el output `sns_alertas_arn`. `src/ops/validate31.py`, y las primeras
+    pruebas versionadas de un validador de esta carpeta: `tests/ops/` (`falsos.py`, un AWS falso con reloj;
+    `test_validate31.py`; `test_comun.py`) con el grupo `pruebas` (pytest) en `pyproject.toml` y `uv.lock`.
+  - `LectorCola` pasa de `validate21.py` a `comun.py` con un clasificador como parámetro, como pedía §5.12 («si otro
+    validador las necesita, se mueven allí»): `validate21.py` la usa con su `clasificar` y la misma visibilidad (120 s);
+    su comportamiento no cambia.
+  - Nueva ADR-INF-16: un topic con suscripción por correo; avisar solo al pasar a `ALARM`; la regla manda el evento
+    tal cual; topic sin cifrar (con `aws/sns` CloudWatch y EventBridge no pueden publicar); y C3 se valida con la tarea
+    de validación lanzada con `group = service:worker`, sin detener ningún servicio.
+  - §3.8: cómo avisan (un correo por paso a `ALARM`, `notBreaching`), qué trae cada correo, política del topic y
+    trampas (los 500 de API Gateway con `api` en 0 y los 503 de `/v1/localize` con `embedding` apagado cuentan como
+    5xx; la alarma de `embedding` mira horas de reloj; la baja desde el enlace de un aviso) y lo que queda sin comprobar
+    (*health checks*, eventos repetidos, DLQ inactiva; y hasta `validate31.py` en `dev`: el `group` en `run-task`, la
+    condición `aws:SourceArn` para EventBridge y el texto de la historia `Action`).
+    §3.10: fila propia de INF-3.1 (0,6 USD/mes) y CloudWatch en 3,2; el total no cambia. §4: árbol (módulo y
+    `tests/ops/`) y fila de INF-3.1. R13 y nuevo R14 (los avisos no llegan).
+  - §5.1: suscripción y destino `sns-alertas`. §5.2: valor de `sns_alertas_arn` y quién lo usa. §5.3: `correo_alertas`
+    en `envs/dev`. §5.6: política del topic. §5.10: tabla exacta de las 6 alarmas, patrón de la regla, valores medidos
+    antes del `apply` y qué editar a la vez al cambiar una alarma, el patrón o la política (Terraform, `validate31.py` y
+    `tests/ops/falsos.py`). §5.11: `comun.LectorCola`, lo que se usa de `embedding.py` (`llamar`, `hora_bogota`,
+    constantes), el comando de la tarea de prueba de C3, las pruebas locales con `falsos.py` (elementos, constantes,
+    límites, ayudas de `test_validate31.py` y la trampa de `import falsos`) y el lint con `ruff --line-length 120`.
+    §5.12: entradas, salidas, recursos y detalles del módulo `observabilidad` (forma de `local.alarmas` y la trampa de
+    los nombres ocupados, que `CreateTopic`, `PutMetricAlarm` y `PutRule` sobrescriben), las salidas nuevas de `borde`,
+    `computo` y `datos`, y las ayudas propias de `validate31.py` (con sus tiempos y la trampa del formato de
+    `correo_alertas` en `terraform.tfvars`).
+  - `validation-3-1.md` reescrito con el script: C1 en C1a (alarmas), C1b (regla y política) y C1c (suscripción); C3a
+    y C3b antes que C2a (C3 tarda ~5 min; C2, hasta 30); §5 con Variables, Preparación y Ejecución. PLAN: entregables de
+    INF-3.1 y su fila de §3 en «En curso».
+  - Corrige contradicciones: (1) §5.6 decía que AWS Budgets publica en el topic; Budgets escribe directamente al correo
+    (§3.8 y `bootstrap/presupuesto.tf`). (2) §3.10 contaba las 6 alarmas de INF-3.1 dentro de «CloudWatch … 10 alarmas»
+    sin decirlo; ahora tienen su fila. (3) El comentario de `modules/observabilidad/main.tf` preveía *log groups* en el
+    módulo; los crean `computo` y `borde` (§3.8). (4) `validation-3-1` C3a lanzaba la definición de `api` con
+    `group = service:api` y un ejecutable inexistente: el `ENTRYPOINT` de la imagen real del backend no es de esta
+    carpeta (el comando podría no ejecutarse como se espera), la tarea leería los secretos de `api` y una tarea falsa en
+    el grupo de `api` podría confundirse con la real; ahora usa la tarea de validación (`postgres:17-alpine`, comando
+    `sh -c '… exit 3'`, como `validate13.py`) con `group = service:worker`.
+- **Contratos tocados (§5):** §5.1, §5.2, §5.3 (variable nueva en `envs/dev`), §5.6, §5.10, §5.11 (`comun.py`) y §5.12
+  (módulos). Compatible: sube la menor.
+- **Cómo se verificó:** en local, con Terraform 1.16.6 en WSL sobre `e037904` (rama `fuera/inf-3-1`): `terraform fmt
+  -check -recursive` y `validate` de `envs/dev` sin errores; `plan -lock=false` contra `dev`: `Plan: 11 to add, 0 to
+  change, 0 to destroy.`, las 11 altas en `module.observabilidad`, 102 recursos sin cambios (los 12 de INF-2.1
+  incluidos), `+ sns_alertas_arn` y el lock sin cambios; antes del cambio, el mismo `plan` daba `No changes`.
+  Lecturas de AWS (sin cambios): ningún nombre del lote existe (alarmas, topic, regla); DLQ con 0 mensajes; RDS con 288
+  créditos y ~18,4 GB libres; 5xx de la API con dimensiones `ApiId` y `ApiId, Stage`; métricas de `AWS/Events` de la
+  cuenta con la dimensión `RuleName` sola. `pytest tests/ops`: 37 pruebas contra el AWS falso (todo bien; `--solo`;
+  `--sin-limpieza`; otra cuenta, sin API, sin INF-2.1 o sin el output, con su código; alarmas, regla y política mal
+  configuradas; suscripción pendiente o a otro correo; DLQ con ajenos, las dos con ajenos, en `ALARM` vacía, restos
+  viejos y recientes; alarma que no dispara o que no puede avisar; métricas con 8 min de retraso; parada que no es error,
+  ECS que ignora o rechaza el `group`, regla sin permiso en el topic, tarea que no se detiene; y `comun.LectorCola` con
+  `validate21.py`). `ruff check --line-length 120` sin avisos en `validate31.py`, `comun.py`, `validate21.py` y
+  `tests/ops`. TFLint no se pudo ejecutar en local (lo corre `infra.yml`); se revisó a mano lo que exige (tipos,
+  descripciones, nada sin usar, `required_providers` del módulo). En `dev`: pendiente (`apply`, confirmar la suscripción
+  y `validate31.py`).
+- **Pendiente:** el `apply` por `infra.yml` (lo coordina el maestro; no el 2026-10-27, día de campo), confirmar la
+  suscripción desde el correo y `validate31.py` en `dev` con la evidencia de C2b y C3c. Sin comprobar hasta entonces:
+  que ECS acepte `run-task --group service:worker` y no confunda esa tarea con las del servicio, que EventBridge publique
+  con la condición `aws:SourceArn` de la política, el texto exacto de la historia «Action» de una alarma y que el `plan`
+  quede vacío tras confirmar la suscripción. Lo de 0.12.0: §5.13 con la imagen de BE-1.1 y la propuesta de R10.
+
+---
+
 ## [0.13.1] — 2026-10-25
 
 - **Lote que la motivó:** INF-2.1, antes de validarlo. Decisión del equipo: observar en `dev` el apagado automático y

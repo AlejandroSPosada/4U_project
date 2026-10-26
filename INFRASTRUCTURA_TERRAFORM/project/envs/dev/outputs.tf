@@ -87,3 +87,9 @@ output "api_base_url" {
   description = "URL base de la API publica, sin barra final (la app le anade /v1)."
   value       = module.borde.api_base_url
 }
+
+# INF-3.1
+output "sns_alertas_arn" {
+  description = "ARN del topic campus-locator-dev-alertas (alarmas y regla de EventBridge, §3.8)."
+  value       = module.observabilidad.sns_alertas_arn
+}
