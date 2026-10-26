@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.6.0**. Este archivo contiene además el **catálogo único de historias de usuario**
+Alineado con `ARCHITECTURE.md` **v0.6.1**. Este archivo contiene además el **catálogo único de historias de usuario**
 del proyecto (§5), que los planes de las otras carpetas referencian.
 
 ---
@@ -61,11 +61,12 @@ prototipo ya construido sobre datos locales y *stubs*.
 | FE-2.1 | Subida de recorridos y Resumen de video (7.5) | FE-1.2 | FE-1.2, FE-2.3, BE-2.1, BE-2.2 | [`validation-2-1`](./validation/validation-2-1.md) |
 | FE-2.2 | Panel con datos reales | FE-2.1 | FE-2.1, BE-2.3 | [`validation-2-2`](./validation/validation-2-2.md) |
 | FE-2.3 | Pruebas en dispositivo y robustez de la recolección | FE-0.11, FE-0.12 | — | [`validation-2-3`](./validation/validation-2-3.md) |
-| FE-3.1 | Lugares y alertas públicas con caché local | FE-1.1 | FE-1.1, BE-3.1 | [`validation-3-1`](./validation/validation-3-1.md) |
+| FE-3.1 | Lugares públicos y entrada al mapa | FE-1.1 | FE-1.1, BE-3.1 | [`validation-3-1`](./validation/validation-3-1.md) |
 | FE-3.2 | Ubicación real y Resultado (6.3) | FE-3.1 | FE-3.1, BE-3.2 | [`validation-3-2`](./validation/validation-3-2.md) |
-| FE-3.3 | Alertas de administración sincronizadas (7.8–7.10) | FE-1.2 | FE-1.2, BE-3.1 | [`validation-3-3`](./validation/validation-3-3.md) |
+| FE-3.3 | Alertas de administración sincronizadas (7.8–7.10) | FE-1.2 | FE-1.2, BE-3.3 | [`validation-3-3`](./validation/validation-3-3.md) |
 | FE-3.4 | Lugares de administración (7.6, 7.7) | FE-1.2 | FE-1.2, BE-3.1 | [`validation-3-4`](./validation/validation-3-4.md) |
 | FE-3.5 | Accesibilidad y voz del flujo público | FE-3.2 | FE-3.2 | [`validation-3-5`](./validation/validation-3-5.md) |
+| FE-3.6 | Alertas públicas | FE-3.1, FE-3.2 | FE-3.1, FE-3.2, BE-3.3 | [`validation-3-6`](./validation/validation-3-6.md) |
 | FE-4.1 | Videos e imágenes contra el backend (7.11–7.14) | FE-2.1 | FE-2.1, BE-4.1 | [`validation-4-1`](./validation/validation-4-1.md) |
 | FE-4.2 | Ajustes (6.7) | — | — | [`validation-4-2`](./validation/validation-4-2.md) |
 | FE-4.3 | Limpieza y deuda técnica | — | — | [`validation-4-3`](./validation/validation-4-3.md) |
@@ -151,27 +152,27 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
   - C5. Con la app en segundo plano, `PdrTracker` deja de leer sensores.
 - **Historias:** HU-12, HU-13.
 
-#### FE-3.1 — Lugares y alertas públicas con caché local
+#### FE-3.1 — Lugares públicos y entrada al mapa
+Desde el 2026-10-25 no lleva alertas: el usuario decidió «No necesitamos las alertas por el momento» y lo de alertas
+públicas pasó a FE-3.6 (como en el backend, donde BE-3.1 queda con lugares y las alertas pasan a BE-3.3).
 - **Entregables:** `RemoteLugaresRepository` (`GET /v1/places`, con distancias reales cuando hay posición; ordenar por
   popularidad queda para cuando exista BE-5.2); fotos de los lugares cuando el backend las tenga (hoy se muestra el
-  ícono de la categoría si no hay `imagenUrl`); caché de alertas en Room con sincronización por diferencias y sus
-  disparadores (§5.10, «Alertas sin conexión»); caso de uso `DetectarAlertasCercanas` (radio + incertidumbre, una vez
-  por aproximación, prioridad alta interrumpe; 2.5); entrada a la ruta pública `mapa` de `MapaPublicoScreen` (la ruta
-  ya existe desde FE-2.3, que solo la abre con un extra del `Intent` en depuración; falta llegar desde Inicio, con el
-  comando de voz «mapa» y la acción de TalkBack «Ver mapa»), donde se anuncian las alertas mientras se camina.
+  ícono de la categoría si no hay `imagenUrl`); entrada a la ruta pública `mapa` de `MapaPublicoScreen` (la ruta ya
+  existe desde FE-2.3, que solo la abre con un extra del `Intent` en depuración; falta llegar desde Inicio, con el
+  comando de voz «mapa» y la acción de TalkBack «Ver mapa»; no depende de las alertas, que se anunciarán ahí en FE-3.6).
 - **Criterios de cierre:**
   - C1. Selección de destino muestra los lugares de `GET /v1/places`.
-  - C2. Una alerta creada en el backend llega al teléfono en la siguiente sincronización, y al borrarla desaparece.
-  - C3. En modo avión, tras una sincronización previa, se anuncia una alerta al entrar en su radio.
-  - C4. `DetectarAlertasCercanasTest` cubre radio, incertidumbre, una vez por aproximación y vigencia.
-- **Historias:** HU-03, HU-05.
+  - C2. Desde Inicio se abre el mapa público con el comando de voz «mapa» y con la acción de TalkBack «Ver mapa», y
+    Atrás vuelve a Inicio.
+- **Historias:** HU-03.
 
 #### FE-3.2 — Ubicación real y Resultado (6.3)
 - **Entregables:**
   - `EscaneoBackend` real: `POST /v1/localize` con fotos re-codificadas y rumbos en norte verdadero (§5.10); guardar el
     acimut de cada foto; `EscaneoEvento.Completado` con el resultado.
   - Decisión abierta 15 para el flujo público (`SesionDeNavegacion` u otra), y actualizar ARCHITECTURE §5.8.
-  - `ResultadoUbicacionScreen` (vista 6.3) con referencias relativas, confianza, alertas cercanas y acciones.
+  - `ResultadoUbicacionScreen` (vista 6.3) con referencias relativas, confianza y acciones. Las alertas cercanas de
+    6.3 son de FE-3.6 (desde el 2026-10-25).
   - Destino elegido en 6.4 que llega a 6.5 tras el escaneo (hoy `AppNav` lo descarta, §5.8).
   - Mensaje hablado para `503 EMBEDDING_NO_DISPONIBLE`.
   - `CONSERVAR_FOTOS = false` (decisión abierta 12): las fotos del escaneo se borran al recibir la respuesta,
@@ -197,6 +198,7 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
   - C2. Crear y borrar una alerta antes de sincronizar no produce errores ni deja rastro en el backend.
   - C3. La vista 7.10 lista las alertas del backend y abre su edición.
 - **Historias:** HU-16.
+- Desde el 2026-10-25 la administración de alertas del backend es BE-3.3 (antes BE-3.1), fuera del núcleo como FE-3.6.
 
 #### FE-3.4 — Lugares de administración (7.6, 7.7)
 - **Entregables:** vistas 7.6 y 7.7 contra el backend; unificar `Lugar` y `LugarDestino` (§5.6); habilitar «Marcar
@@ -224,6 +226,25 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
   - C3. El recorrido Inicio → Ubicarme → Resultado → Destino se completa solo con voz y solo con TalkBack, sin voces
     superpuestas, probado por al menos una persona usuaria de lector de pantalla.
 - **Historias:** HU-08.
+
+#### FE-3.6 — Alertas públicas
+Fuera del núcleo: el 2026-10-25 el usuario decidió «No necesitamos las alertas por el momento». Reúne lo de alertas
+públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y en FE-3.2 (alertas cercanas en 6.3).
+- **Entregables:**
+  - Caché de alertas en Room con sincronización por diferencias y sus disparadores (§5.10, «Alertas sin conexión»;
+    `GET /v1/alerts` de BE-3.3).
+  - Caso de uso `DetectarAlertasCercanas` (radio + incertidumbre, una vez por aproximación, prioridad alta interrumpe;
+    2.5).
+  - Anunciar las alertas en el mapa público (ruta `mapa`, `MapaPublicoScreen`, posición por PDR) mientras se camina.
+  - Alertas cercanas en `ResultadoUbicacionScreen` (6.3): se muestran y se leen después de la ubicación. Salen de la
+    caché local y de la posición estimada: `POST /v1/localize` no trae alertas (backend §5.3).
+- **Criterios de cierre:**
+  - C1. Una alerta creada en el backend llega al teléfono en la siguiente sincronización, y al borrarla desaparece.
+  - C2. En modo avión, tras una sincronización previa, se anuncia una alerta al entrar en su radio.
+  - C3. `DetectarAlertasCercanasTest` cubre radio, incertidumbre, una vez por aproximación y vigencia.
+  - C4. En el Resultado (6.3), una alerta activa dentro del radio de la posición estimada se muestra y se lee después
+    de la ubicación.
+- **Historias:** HU-05.
 
 #### FE-4.1 — Videos e imágenes contra el backend (7.11–7.14)
 - **Entregables:** `RemoteVideoRepository` (desaparece `EdicionesLocales`) y lo pendiente de cada vista:
@@ -327,9 +348,10 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
 | FE-2.3 | 2 | En curso | [2-3](./validation/validation-2-3.md) | — | — | Local (`files/recoleccion/`, `campus_calibracion`); no usa el backend | Código y pruebas listos (ARCHITECTURE 0.6.0, §4.3): C1 con las cuatro clases en Gradle (13, 11, 10 y 6 casos; `CalibracionPasoTest` y `StepDetectorTest` no existían), C2 sin cambios de código, retomar tras matar el proceso (C4) y `PdrTracker` que sigue el ciclo de vida del proceso (C5); ruta `mapa` de prueba (`--es ruta mapa`). `validate23.py --entorno local` con código 0 (2026-10-25). Falta `--entorno dev` con el teléfono y la evidencia de C3 (campo), C4 y C5 en `evidencia/fe-2-3/` |
 | FE-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | | |
 | FE-3.2 | 3 | Pendiente | [3-2](./validation/validation-3-2.md) | — | — | | Requiere decidir la decisión abierta 15 |
-| FE-3.3 | 3 | Pendiente | [3-3](./validation/validation-3-3.md) | — | — | | |
+| FE-3.3 | 3 | Pendiente | [3-3](./validation/validation-3-3.md) | — | — | | Para validar espera BE-3.3 (alertas del backend, fuera del núcleo) |
 | FE-3.4 | 3 | Pendiente | [3-4](./validation/validation-3-4.md) | — | — | | |
 | FE-3.5 | 3 | Pendiente | [3-5](./validation/validation-3-5.md) | — | — | | Requiere decidir la decisión abierta 18 |
+| FE-3.6 | 3 | Pendiente | [3-6](./validation/validation-3-6.md) | — | — | | Fuera del núcleo (decisión del usuario del 2026-10-25: «No necesitamos las alertas por el momento»). Sale de FE-3.1 y FE-3.2 |
 | FE-4.1 | 4 | Pendiente | [4-1](./validation/validation-4-1.md) | — | — | | |
 | FE-4.2 | 4 | Pendiente | [4-2](./validation/validation-4-2.md) | — | — | | Puede empezar ya |
 | FE-4.3 | 4 | Pendiente | [4-3](./validation/validation-4-3.md) | — | — | | Puede empezar ya (salvo lo que dependa de decisiones) |
@@ -347,7 +369,7 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
 | HU-02 Conocer mi ubicación y referencias | FE-3.2 | BE-3.1, BE-3.2, EMB-3.2 |
 | HU-03 Elegir destino por voz o lista | FE-0.3, FE-3.1 | BE-3.1 |
 | HU-04 Ser guiada hasta el destino | FE-5.1 | BE-5.3 |
-| HU-05 Avisos de obstáculos | FE-3.1, FE-5.1 | BE-3.1 |
+| HU-05 Avisos de obstáculos | FE-3.6, FE-5.1 | BE-3.3 |
 | HU-06 Seguimiento continuo de la posición | FE-0.9, FE-5.1 | BE-5.1, EMB-5.1 |
 | HU-07 Personalizar voz y avisos | FE-4.2 | — |
 | HU-08 Usar la app solo con voz o TalkBack | FE-0.1, FE-3.5, FE-4.3 | — |
@@ -358,7 +380,7 @@ Se hace **antes** de recolectar el dataset real (Fase 2), porque las coordenadas
 | HU-13 Recolectar fotos geoetiquetadas | FE-0.11, FE-2.3 | INF-1.2 |
 | HU-14 Subir un recorrido | FE-2.1 | BE-2.1, BE-2.2, EMB-2.1, INF-1.2, INF-2.1 |
 | HU-15 Gestionar lugares | FE-3.4 | BE-3.1 |
-| HU-16 Gestionar alertas en el mapa | FE-0.6, FE-3.3 | BE-3.1 |
+| HU-16 Gestionar alertas en el mapa | FE-0.6, FE-3.3 | BE-3.3 |
 | HU-17 Revisar y corregir imágenes | FE-0.7, FE-4.1 | BE-4.1 |
 | HU-18 Gestionar recorridos | FE-0.8, FE-4.1 | BE-4.1 |
 | HU-19 Ver estadísticas | FE-5.2 | BE-5.2 |

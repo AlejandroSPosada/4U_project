@@ -23,6 +23,34 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.6.1] — 2026-10-25
+
+- **Lote que la motivó:** ninguno; decisión del usuario del 2026-10-25, «No necesitamos las alertas por el momento»
+  (resuelve la decisión 1 de §6 de `PRIORITY.md`). En el backend, BE-3.1 queda solo con lugares y las alertas pasan al
+  lote nuevo BE-3.3.
+- **Qué cambió:**
+  - `PLAN.md`: lote nuevo **FE-3.6 — Alertas públicas** (fuera del núcleo; para construir FE-3.1 y FE-3.2, para
+    validar FE-3.1, FE-3.2 y BE-3.3) con lo de alertas que tenían FE-3.1 (caché en Room con sincronización por
+    diferencias, `DetectarAlertasCercanas`, anuncio en la ruta `mapa`: sus C2–C4 pasan a C1–C3) y FE-3.2 (alertas
+    cercanas en `ResultadoUbicacionScreen`, con un criterio nuevo C4). FE-3.1 pasa a «Lugares públicos y entrada al
+    mapa» (C1 lugares; C2 nuevo: abrir el mapa desde Inicio por voz y con TalkBack); FE-3.2 queda sin alertas (sus C1–C4
+    no cambian); FE-3.3 valida contra BE-3.3. §2.1, §2.2, §3 (fila FE-3.6 y nota de FE-3.3) y §4 (HU-05: FE-3.6 y
+    BE-3.3; HU-16: BE-3.3).
+  - Validaciones: `validation-3-6` nueva (C1a, C1b y C3 automáticas, C2 y C4 manuales; `validate36.py` sin escribir);
+    `validation-3-1` reescrita sin alertas (precondiciones en el orden del contrato común: máquina → 3, otros lotes →
+    2); `validation-3-2` (P1 sin alertas; P3 de la máquina, código 3); `validation-3-3` (P2 con BE-3.3).
+  - Documento: §2.5, §5.10 («Alertas sin conexión»: se anuncian desde FE-3.6; `POST /v1/localize` no trae alertas,
+    las de 6.3 salen de la caché) y §6.3 citan FE-3.6 en lugar de FE-3.1 y FE-3.2.
+- **Contratos tocados (§5):** ninguno; solo cambian los lotes que entregan cada pieza. Sube el parche.
+- **Cómo se verificó:** búsqueda de «FE-3.1», «FE-3.2», «BE-3.1», «alerta» y «DetectarAlertas» en `docs/`; contrato de
+  `POST /v1/localize` en backend §5.3 (no trae alertas). El PLAN del backend todavía no tiene BE-3.3 (lo escribe otro
+  lote): las referencias a BE-3.3 siguen la decisión del maestro.
+- **Pendiente:** cuando el backend publique BE-3.3, comprobar que sus rutas (`GET /v1/alerts`, `/v1/admin/alerts`,
+  `sincronizar`) siguen siendo las que citan §5.10, `validation-3-3` y `validation-3-6`. El `README.md` raíz (orden
+  entre carpetas, fase 3) todavía dice que FE-3.3 espera BE-3.1 y no nombra FE-3.6.
+
+---
+
 ## [0.6.0] — 2026-10-25
 
 - **Lote que la motivó:** FE-2.3 (pruebas en dispositivo y robustez de la recolección), más los huecos de

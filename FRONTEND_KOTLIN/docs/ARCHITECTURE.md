@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.6.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.6.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
 | Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); las pruebas en dispositivo (FE-2.3 C3) siguen pendientes. El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
@@ -193,7 +193,8 @@ usuario ciego cuando está cerca.
 | Estado | Activa / Inactiva (permite desactivar sin borrar, ej. obras temporales) |
 | Vigencia (opcional) | Fecha de inicio/fin para obstáculos temporales |
 
-**Cómo funciona en el flujo público:**
+**Cómo funciona en el flujo público** (lote FE-3.6, fuera del núcleo desde el 2026-10-25: «No necesitamos las alertas
+por el momento»; en el backend, BE-3.3):
 - La app descarga las alertas (`GET /v1/alerts`, por diferencias; §5.10) y las **guarda en local** para que funcionen sin conexión.
 - Durante la **navegación guiada** (y opcionalmente al mostrar el resultado de ubicación),
   se compara la posición estimada del usuario con las alertas: si entra al radio de una
@@ -2110,8 +2111,10 @@ tras volver a entrar.
 `completo = true`, se reemplaza la caché; si no, se actualiza, se quitan las que llegan con `activa = false` y se
 borran los ids de `eliminadas`. **Cuándo sincroniza:** al arrancar la app (Inicio), al volver la conexión y como mucho
 una vez cada 5 minutos mientras está en primer plano. La vigencia se evalúa al anunciar. **Dónde se anuncian:** en el
-mapa público (`MapaPublicoScreen`, ruta `mapa`, posición por PDR) desde FE-3.1; en el Resultado (6.3) desde FE-3.2;
-en la navegación (6.5) con FE-5.1.
+mapa público (`MapaPublicoScreen`, ruta `mapa`, posición por PDR) y en el Resultado (6.3) desde FE-3.6 (antes del
+2026-10-25 se repartían entre FE-3.1 y FE-3.2); en la navegación (6.5) con FE-5.1. Todo esto es de FE-3.6, que no
+está en el núcleo: hasta entonces la app no descarga ni anuncia alertas. `POST /v1/localize` **no** trae alertas
+(backend §5.3: `lugar_cercano` y `referencias`): las de 6.3 salen de esta caché y de la posición estimada.
 
 **Editor de alertas (7.8)**: los UUID siguen generándose en la app. «Guardar / Sincronizar» envía los pendientes
 con `POST /v1/admin/alerts/sincronizar`; cada id sale de «pendientes» solo si su resultado es `ok`. Para no perder la
@@ -2458,7 +2461,7 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 - **Mapa del campus** con el punto del usuario, flecha de orientación y puntos de interés
   cercanos.
 - **Indicador de confianza** (alta/media/baja) en texto simple.
-- **Alertas cercanas** (si hay alguna dentro del radio): se muestran y se leen después de la ubicación, ej. *"Ten cuidado, hay un lago alrededor de la biblioteca"*.
+- **Alertas cercanas** (si hay alguna dentro del radio): se muestran y se leen después de la ubicación, ej. *"Ten cuidado, hay un lago alrededor de la biblioteca"*. Lote FE-3.6 (fuera del núcleo; FE-3.2 hace la vista sin ellas); salen de la caché local de alertas (§5.10), no de `POST /v1/localize`.
 - Botón **"Repetir en voz alta"**.
 - Botón **"Ir a un lugar desde aquí"** (→ Selección de destino, con posición ya fijada).
 - Botón **"Volver a ubicarme"** (si la confianza es baja o el usuario no está de acuerdo).

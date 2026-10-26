@@ -17,7 +17,7 @@ Si alguna no se cumple, el script termina con código 2 y el lote queda `Bloquea
 | ID | Qué debe cumplirse | Cómo lo comprueba el script |
 |---|---|---|
 | P1 | `FE-1.2` en «Hecho»: login de admin contra `dev` | Fila de `FE-1.2` en `PLAN.md` §3 = `Hecho`; `POST /v1/auth/login` con las credenciales de admin responde 200 (con `401`: código 3) |
-| P2 | `BE-3.1` en «Hecho»: administración de alertas | Fila en `BACKEND_FASTAPI/docs/PLAN.md` §3 = `Hecho`; `GET /v1/admin/alerts` con token responde 200 y `POST /v1/admin/alerts/sincronizar` con `{"cambios": []}` responde 200 |
+| P2 | `BE-3.3` en «Hecho»: administración de alertas (antes de 2026-10-25 era parte de BE-3.1) | Fila en `BACKEND_FASTAPI/docs/PLAN.md` §3 = `Hecho`; `GET /v1/admin/alerts` con token responde 200 y `POST /v1/admin/alerts/sincronizar` con `{"cambios": []}` responde 200 |
 | P3 | Dispositivo físico y Gradle | `adb devices` con uno en estado `device` (el de `ANDROID_SERIAL` si hay varios), `ro.kernel.qemu` distinto de `1` y `./gradlew --version` con salida 0 |
 
 ## 2. Comprobaciones automáticas

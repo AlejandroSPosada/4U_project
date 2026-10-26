@@ -10,13 +10,17 @@
 Contrato común de los validadores: `INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.md` §5.11. Lo propio de esta carpeta:
 `ARCHITECTURE.md` §5.11.
 
+Desde el 2026-10-25 el Resultado (6.3) de este lote no muestra alertas cercanas: pasaron a FE-3.6
+([`validation-3-6`](./validation-3-6.md), C4). Los criterios C1–C4 no cambian.
+
 ## 1. Precondiciones
 
-Si alguna no se cumple, el script termina con código 2 y el lote queda `Bloqueado`.
+Si P1 o P2 no se cumplen (otros lotes), el script termina con código 2 y el lote queda `Bloqueado`; P3 es de la
+máquina (código 3, contrato común).
 
 | ID | Qué debe cumplirse | Cómo lo comprueba el script |
 |---|---|---|
-| P1 | `FE-3.1` en «Hecho»: lugares y alertas reales en la app | Fila de `FE-3.1` en `PLAN.md` §3 = `Hecho` |
+| P1 | `FE-3.1` en «Hecho»: lugares reales en la app | Fila de `FE-3.1` en `PLAN.md` §3 = `Hecho` |
 | P2 | `BE-3.2` en «Hecho»: localización con dataset del campus | Fila en `BACKEND_FASTAPI/docs/PLAN.md` §3 = `Hecho`; `POST /v1/localize` con `metadatos` y sin fotos responde `400 FOTOS_INVALIDAS` (existe y no procesa nada); `GET /v1/admin/stats` (con token de admin) da `total_fotos` > 0 |
 | P3 | Dispositivo físico y Gradle | `adb devices` con uno en estado `device` (el de `ANDROID_SERIAL` si hay varios), `ro.kernel.qemu` distinto de `1` y `./gradlew --version` con salida 0 |
 
