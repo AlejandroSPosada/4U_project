@@ -121,6 +121,12 @@ def instruccion_c2(contexto: str) -> str:
 def main(argv: list[str] | None = None) -> int:
     def argumentos(p) -> None:
         p.add_argument("--video", default=None, help="nombre exacto del recorrido real subido (obligatorio en dev)")
+        p.add_argument(
+            "--minimo-fotos",
+            type=int,
+            default=MINIMO_FOTOS,
+            help=f"fotos registradas mínimas para C1 (por defecto {MINIMO_FOTOS}, PLAN §2.2)",
+        )
 
     v = comun.Validador(
         lote="FE-2.1",
@@ -341,8 +347,9 @@ def main(argv: list[str] | None = None) -> int:
                 )
             comun.avisar(f"C1: estado {estado}; {describir_conteo(c)}; nueva consulta en {PAUSA_PROCESADO_S} s")
             comun.dormir(PAUSA_PROCESADO_S)
-        if registradas < MINIMO_FOTOS:
-            raise comun.Falla(f"procesado, pero con {registradas} fotos (mínimo {MINIMO_FOTOS})")
+        minimo = getattr(v.args, "minimo_fotos", None) or MINIMO_FOTOS
+        if registradas < minimo:
+            raise comun.Falla(f"procesado, pero con {registradas} fotos (mínimo {minimo})")
         if c["procesada"] != registradas:
             raise comun.Falla(f"procesado, pero procesada {c['procesada']} de {registradas}")
         segundos = comun.reloj() - inicio

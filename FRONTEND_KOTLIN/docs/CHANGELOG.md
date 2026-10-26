@@ -23,6 +23,17 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.7.1] — 2026-10-26
+- Lote que la motivó: FE-2.1 (validación) y FE-2.3 (C3), por decisión del usuario del 2026-10-26: validar en casa,
+  no en el campus.
+- Qué cambió: `validate21.py` acepta `--minimo-fotos N` (por defecto 50, `MINIMO_FOTOS`) para correr C1 con el
+  recorrido de prueba de 10 fotos `validacion-21-casa`, que se borra del backend al terminar (`limpiar-validacion`,
+  prefijo `validacion-`). El recorrido real del campus sigue con 50. §5.11 (detalles de `validate21`) al día.
+- Contratos tocados (§5): ninguno (solo el validador).
+- Cómo se verificó: `pytest` (129 casos, uno nuevo: `test_dev_minimo_fotos_rebaja_el_umbral_de_c1`), `ruff`.
+- Pendiente: la calibración real de 7.3b en un tramo medido, con el teléfono que se use para grabar el dataset (FE-2.3
+  C3 se validó en casa solo en lo que se pudo comprobar: el detector cuenta los pasos).
+
 ## [0.7.0] — 2026-10-25
 
 - **Lote que la motivó:** FE-2.1 (subida de recorridos y Resumen de video, 7.5).

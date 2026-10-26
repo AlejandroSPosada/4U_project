@@ -95,7 +95,11 @@ cd FRONTEND_KOTLIN/project
 uv run --group ops python src/ops/validate21.py --entorno dev --video "Entrada norte"
 ```
 
-Argumento propio: `--video <nombre exacto del recorrido>` (obligatorio en `dev`; en `local` se ignora).
+Argumentos propios: `--video <nombre exacto del recorrido>` (obligatorio en `dev`; en `local` se ignora) y
+`--minimo-fotos N` (por defecto 50). Validación del 2026-10-26, por decisión del usuario: en casa, con el recorrido de
+prueba `validacion-21-casa` de 10 fotos (`--minimo-fotos 10`), que el maestro borra del backend al terminar con
+`limpiar-validacion` (no debe quedar en el dataset); la evidencia de C2c son capturas de 7.5 y 7.13 (el teléfono, un
+Redmi Note 15 Pro, no tenía depuración USB). El recorrido real del campus sigue con 50 fotos.
 
 **Variables** (detalle en `ARCHITECTURE.md` §5.11). En la máquina del equipo el validador corre en WSL, usa el Gradle de
 Windows (ARCHITECTURE §4.1) y la CLI `aws` de WSL:

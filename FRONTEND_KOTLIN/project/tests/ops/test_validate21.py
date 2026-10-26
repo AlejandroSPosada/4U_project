@@ -347,6 +347,17 @@ def test_dev_pocas_fotos_o_duplicadas(tmp_path, monkeypatch):
     assert _estados(datos)["C2b"] == "falla"
 
 
+def test_dev_minimo_fotos_rebaja_el_umbral_de_c1(tmp_path, monkeypatch):
+    m = Mundo(tmp_path, n_fotos=10, estados=("procesado",))
+    m.total_fotos = 10
+    m.instalar(monkeypatch)
+    codigo, datos = _correr(tmp_path, "--entorno", "dev", "--video", "Entrada norte", "--minimo-fotos", "10")
+    assert codigo == 0, datos
+    assert "10 fotos, procesada 10" in _detalle(datos, "C1")
+    codigo, datos = _correr(tmp_path, "--entorno", "dev", "--video", "Entrada norte", "--minimo-fotos", "11")
+    assert codigo == 1 and "10 fotos (mínimo 11)" in _detalle(datos, "C1")
+
+
 def test_dev_espera_15_min_y_falla_si_sigue_pendiente(tmp_path, monkeypatch):
     m = Mundo(tmp_path, estados=("pendiente",))
     m.instalar(monkeypatch)
