@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.14.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.15.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.4, BE-3.1 y BE-3.3 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`; BE-3.3, alertas, fuera del núcleo, con `validate33.py` sobre `4885ad6`, §4.11), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. Lo de los demás lotes es diseño propuesto |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.4, BE-3.1 y BE-3.3 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`; BE-3.3, alertas, fuera del núcleo, con `validate33.py` sobre `4885ad6`, §4.11), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales; y de BE-4.1 (administración de videos e imágenes y purga, `validate41.py`, §4.12), probado en local sin base y **sin validar en `dev`** (sus pruebas con base corren en el CI de un PR). Lo de los demás lotes es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -98,7 +98,7 @@ BACKEND_FASTAPI/
 └── project/                     todo el código
     ├── src/
     │   ├── app/
-    │   │   ├── main.py          crear_app(): routers, middleware, manejadores de error, la purga diaria de *tombstones* de alertas (BE-3.3, §4.11) y (BE-4.1) el reconciliador
+    │   │   ├── main.py          crear_app(): routers, middleware, manejadores de error, la purga diaria de *tombstones* de alertas (BE-3.3, §4.11) y el reconciliador de purgas (BE-4.1, §4.12); `crear_app(ajustes, almacen=, colas=)`
     │   │   ├── config.py        Settings (pydantic-settings): lee las variables de infra §5.4 y los parámetros de §5.10
     │   │   ├── logs.py          Logs JSON por línea (§5.10) y `request_id` de la petición en curso
     │   │   ├── middleware.py    X-Request-Id, evento `peticion` y 500 ante fallos no previstos (§4.2)
@@ -106,14 +106,14 @@ BACKEND_FASTAPI/
     │   │   ├── api/
     │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_cola_hash (BE-1.3, §4.4); obtener_almacen (BE-2.1, §4.5)
     │   │   │   ├── cuerpo.py    leer_cuerpo: el cuerpo de la petición en memoria, con tope (BE-2.4, §4.8)
-    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9), localizar (BE-3.2: `router` en /v1, público, §4.10), admin_estadisticas (BE-2.3: `router` en RUTAS_ADMIN, §4.7), alertas (BE-3.3: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.11); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: admin_* (BE-4.1)
-    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizacion (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7); alertas (BE-3.3, §4.11)
+    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9), localizar (BE-3.2: `router` en /v1, público, §4.10), admin_estadisticas (BE-2.3: `router` en RUTAS_ADMIN, §4.7), alertas (BE-3.3: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.11), admin_videos con `PATCH`/`DELETE` y admin_imagenes (BE-4.1, en RUTAS_ADMIN, §4.12); __init__.py monta /admin y /collect con requiere_admin (§4.4)
+    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizacion (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7); alertas (BE-3.3, §4.11); videos.py crece con BE-4.1 (§4.12)
     │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); multipart.py y fotos.py (BE-2.4, §4.8); lugares.py y geo.py (BE-3.1, §4.9); localizacion.py (BE-3.2: el algoritmo, con la corrección de rumbo, §4.10); alertas.py (BE-3.3, §4.11)
-    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7); alertas (BE-3.3, §4.11). Después: purgar (BE-4.1)
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7); alertas (BE-3.3, §4.11); imagenes y purga (BE-4.1: la purga del `worker` y el reconciliador de `api`, §4.12), y renombrar/borrar en videos
     │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas.py (la búsqueda de vecinos, BE-2.4, §4.8)
-    │   │   ├── clientes/        embedding.py (httpx: `esta_listo` desde BE-1.1, `vectorizar` desde BE-2.2); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5; `descargar` y `escribir` desde BE-2.2); sqs.py (BE-2.2, §4.6)
+    │   │   ├── clientes/        embedding.py (httpx: `esta_listo` desde BE-1.1, `vectorizar` desde BE-2.2); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5; `descargar` y `escribir` desde BE-2.2); sqs.py (BE-2.2, §4.6; `enviar` y `Colas` desde BE-4.1); s3 `firmar_get` desde BE-4.1
     │   │   ├── seguridad/       hash.py (argon2id, §4.3), tokens.py (JWT, §5.2) y dependencias.py (requiere_admin), BE-1.3 (§4.4)
-    │   │   ├── worker.py        Bucle de consumo de `ingesta` (python -m app.worker, BE-2.2, §4.6); `purga` llega con BE-4.1
+    │   │   ├── worker.py        Bucle de consumo de `ingesta` (python -m app.worker, BE-2.2, §4.6) y de `purga` (BE-4.1, §4.12)
     │   │   └── cli.py           python -m app.cli: migrar y verificar-esquema (BE-1.2), crear-usuario y desactivar-usuario (BE-1.3), limpiar-validacion (BE-2.1)
     │   └── ops/                 validate<fase><n>.py y comun.py: validadores de los lotes BE-x.y (§5.11)
     ├── migrations/              Alembic: env.py y versions/ (SQL explícito; 0001 = esquema inicial de §5.7)
@@ -149,8 +149,8 @@ por ruido.
 **`worker` provisional (hasta BE-2.2).** `backend.yml` despliega `api` y `worker` con la misma imagen (infra §5.9).
 Para que una tarea de `worker` no fallara al arrancar, en BE-1.1 `python -m app.worker` solo registraba un latido cada
 60 s (`evento = latido`, `modo = sin_consumo`) y terminaba limpio con SIGTERM, sin consumir las colas. Desde BE-2.2
-consume `ingesta` (§4.6); ese modo queda solo para cuando falta configuración (§4.6, «Arranque»). La purga llega con
-BE-4.1 (§4.12): hasta entonces los mensajes de `purga` siguen en la cola.
+consume `ingesta` (§4.6); ese modo queda solo para cuando falta configuración (§4.6, «Arranque»). Desde BE-4.1 consume
+también `purga` (§4.12).
 
 **Despliegue con `backend.yml`** (`.github/workflows/` de la raíz del monorepo). Sigue la secuencia de infra §5.9; el
 paso `migrate`, desde BE-1.2, está en §4.3. Lo propio del backend:
@@ -468,8 +468,8 @@ código de AWS, no la URL).
 (`count(*)` con los mismos filtros) y la página (`videos` con el nombre del creador y el conteo por estado, de una
 subconsulta agrupada de `imagenes`); los `eliminado` no salen. El detalle hace otras dos: el resumen y sus fotos. `q` busca en `nombre` sin distinguir
 mayúsculas (`ILIKE`, con `%`, `_` y `\` escapados: son literales). Los `real` de la base (`distancia_m`, rumbos) se
-devuelven con las menos cifras que los representan como float32 (`real_legible`: 340.3 y no 340.29998779296875). Las
-URLs de foto y miniatura de `ImagenAdmin` son `null` hasta BE-4.1 (§5.5).
+devuelven con las menos cifras que los representan como float32 (`real_legible`: 340.3 y no 340.29998779296875). Desde
+BE-4.1 el detalle firma las URLs GET de foto y miniatura (`videos.con_urls`, §4.12).
 
 **Limpieza de datos de prueba.** `python -m app.cli limpiar-validacion` (§5.9, `servicios/limpieza.py`) borra de
 forma definitiva —filas de `videos` (y en cascada `imagenes` y `embeddings`) y sus objetos de `dataset/{id}/` y
@@ -499,9 +499,9 @@ fila de la imagen a partir de la clave sin otra consulta (`dominio.recoleccion.i
 | `app.servicios.recoleccion.bloquear_video(conexion, video_id)` → `EstadoVideo \| None` | `SELECT estado … FOR UPDATE` de la fila del video en la transacción en curso: su estado, o `None` si no existe. No lanza por `eliminado` (quien llama decide: la recolección responde 409; el `worker` descarta el mensaje). **Primer bloqueo de toda transacción que cambie fotos** (orden video → imágenes) |
 | `app.servicios.recoleccion.recalcular_estado(conexion, video_id)` → `(EstadoVideo, Conteo)` | Cuenta las fotos por estado, deriva el estado del video y lo guarda si cambió (`eliminado` no cambia; `VideoNoEncontrado` si no existe). Va **dentro** de la transacción que cambió las fotos, que ya llamó a `bloquear_video`. BE-2.2, por cada foto: `async with sesion.transaccion(motor) as c:` → `bloquear_video(c, video_id)` (si `None` o `eliminado`, descarta) → `UPDATE imagenes …` → `recalcular_estado(c, video_id)` |
 | `app.servicios.recoleccion` (casos de uso) | `crear_video(motor, usuario_id=, datos=VideoCrear)` → `(VideoResumen, creado)`; `registrar_imagenes(motor, almacen, ajustes, video_id=, imagenes=[ImagenRegistro])` → `ImagenesRegistradas`; `completar_subida(motor, almacen, video_id=)` → `SubidaCompletada`; `validar_lote(imagenes, ajustes)`. `almacen` puede ser `None`: se exige después de comprobar el video. Excepciones: `VideoNoEncontrado`, `VideoEliminado` (de `servicios.videos`), `AlmacenNoConfigurado` (→ `500`), `DatosNoValidos(campos)` (→ `422`, `campos` = `detalle.campos`) y `FalloS3` al firmar |
-| `app.servicios.videos` | `listar(motor, q=, orden=, direccion=, pagina=, por_pagina=)` → `Pagina[VideoResumen]`; `detalle(motor, video_id)` → `VideoDetalle` (`VideoNoEncontrado` si no existe o está `eliminado`); `resumen(conexion, video_id)` → `VideoResumen \| None` (también de un eliminado) y `contar(conexion, video_id)` → `Conteo`, dentro de una transacción abierta. BE-4.1 añade aquí renombrar y borrar, y rellena `url`, `url_miniatura` y `url_expira_en` de `ImagenAdmin` en `detalle` |
+| `app.servicios.videos` | `listar(motor, q=, orden=, direccion=, pagina=, por_pagina=)` → `Pagina[VideoResumen]`; `detalle(motor, video_id)` → `VideoDetalle` (`VideoNoEncontrado` si no existe o está `eliminado`); `resumen(conexion, video_id)` → `VideoResumen \| None` (también de un eliminado) y `contar(conexion, video_id)` → `Conteo`, dentro de una transacción abierta. Desde BE-4.1, `detalle(motor, video_id, almacen=, ttl_s=)` rellena `url`, `url_miniatura` y `url_expira_en`, y están `renombrar`, `borrar`, `con_urls`, `imagen_de_fila` y `enviar` (§4.12) |
 | `app.servicios.limpieza.limpiar_validacion(motor, almacen, video_ids=None, *, simular=False)` → `ResultadoLimpieza` | Lo que hace `limpiar-validacion` (arriba): `ResultadoLimpieza(videos, objetos, video_ids, simulada, restos_s3, motivo_restos)`. `video_ids=None` = todos los de validación; `[]` = nada. Lanza `LimpiezaRechazada(inexistentes, sin_prefijo)`, `FalloS3` (primera pasada, o el recuento al simular) y los errores de la base. La purga de BE-4.1 puede copiar su orden (S3 → filas → S3) |
-| `app.clientes.s3` | `AlmacenS3(bucket, region="us-east-1", cliente=None, reloj=…)` (síncrono): `firmar_put(clave, ttl_s)` → `UrlFirmada(url, expira_en)`; `consultar(clave)` (HEAD) → `ObjetoS3(bytes, etag)` o `None` si 404/403; `borrar_prefijo(prefijo)` → objetos borrados (lista y borra de 1000 en 1000); `contar_prefijo(prefijo)` → objetos bajo el prefijo (solo lista). Todo error → `FalloS3` (mensaje sin URL). Desde código asíncrono: `await firmar_puts(almacen, claves, ttl_s)` → `{clave: UrlFirmada}` (un hilo) y `await consultar_varios(almacen, claves, concurrencia=8)` → `{clave: ObjetoS3 \| FalloS3 \| None}` (nunca lanza por una clave). `crear_cliente(region)` da el cliente de boto3 configurado. Desde BE-2.2, `descargar(clave, max_bytes)` y `escribir(clave, datos, content_type="image/jpeg")` (§4.6; se llama `escribir`, no `subir` como se había previsto, para no chocar con `almacen_falso.subir`). **Falta** (se añade aquí, con su prueba con `Stubber`): para BE-4.1 (URLs GET de 1 h) y, cuando un lote defina la subida de la foto de un lugar (BE-3.1 no la incluye, §4.9), `firmar_get(clave, ttl_s)` |
+| `app.clientes.s3` | `AlmacenS3(bucket, region="us-east-1", cliente=None, reloj=…)` (síncrono): `firmar_put(clave, ttl_s)` → `UrlFirmada(url, expira_en)`; `consultar(clave)` (HEAD) → `ObjetoS3(bytes, etag)` o `None` si 404/403; `borrar_prefijo(prefijo)` → objetos borrados (lista y borra de 1000 en 1000); `contar_prefijo(prefijo)` → objetos bajo el prefijo (solo lista). Todo error → `FalloS3` (mensaje sin URL). Desde código asíncrono: `await firmar_puts(almacen, claves, ttl_s)` → `{clave: UrlFirmada}` (un hilo) y `await consultar_varios(almacen, claves, concurrencia=8)` → `{clave: ObjetoS3 \| FalloS3 \| None}` (nunca lanza por una clave). `crear_cliente(region)` da el cliente de boto3 configurado. Desde BE-2.2, `descargar(clave, max_bytes)` y `escribir(clave, datos, content_type="image/jpeg")` (§4.6; se llama `escribir`, no `subir` como se había previsto, para no chocar con `almacen_falso.subir`). Desde BE-4.1, `firmar_get(clave, ttl_s)` → `UrlFirmada` (GET sin encabezados firmados: `X-Amz-SignedHeaders=host`) y `await firmar_gets(almacen, claves, ttl_s)` (un hilo, claves sin repetir); los usará también la foto de un lugar cuando un lote la defina (§4.9) |
 | `app.api.dependencias.obtener_almacen(request)` → `AlmacenS3`; `almacen_o_none(request)`; `sin_almacen(request)` → `ErrorApi` | El de `app.state.almacen`; sin él, `obtener_almacen` lanza el `500 ERROR_INTERNO` de `sin_almacen` (que registra `configuracion_incompleta`). La recolección usa `almacen_o_none` y traduce `AlmacenNoConfigurado` con `sin_almacen`, para responder antes el 404/409 del video |
 | `app.main.crear_app(ajustes=None, *, almacen=None)` | `almacen` sustituye al cliente de S3 (las pruebas pasan un doble); sin él, el ciclo de vida lo crea si hay `S3_BUCKET_DATASET` |
 | `app.esquemas.comun` | `FechaUtc` (fecha de **salida**: UTC con `Z` y sin fracciones), `FechaConZona` (de **entrada**: con zona, devuelta en UTC; sin zona, o fuera de los años 1–9999 al pasarla a UTC —p. ej. `0001-01-01T00:00:00+05:00`—, → `422`; sin esa conversión asyncpg lanzaba `OverflowError` al guardarla y la API respondía `500`), `Referencia` (`{id, nombre}`), `Pagina[T]` (`items`, `total`, `pagina`, `por_pagina`; PEP 695: `Pagina[VideoResumen]`) y `texto_admitido(valor)` (la regla de §4.4 en un `field_validator`). BE-3.1 usa `FechaUtc` y `texto_admitido` en `esquemas.lugares` (sus listas no se paginan: `ListaLugares`, §4.9); `Referencia` la usará `AlertaAdmin` (`creado_por`, BE-3.3) |
@@ -652,7 +652,7 @@ purga de BE-4.1 también.
 | `app.clientes.embedding.esta_listo(ajustes, transporte=None)` → `bool` | (BE-1.1) `GET /health/ready` en `EMBEDDING_CONNECT_TIMEOUT_S` |
 | `app.clientes.s3.AlmacenS3.descargar(clave, max_bytes)` → `ObjetoDescargado(datos, etag) \| None` | `GetObject`; `None` si 404; `ObjetoDemasiadoGrande(bytes)` si `ContentLength` > `max_bytes` (no lo lee); otro error, también 403 → `FalloS3` |
 | `app.clientes.s3.AlmacenS3.escribir(clave, datos, content_type="image/jpeg")` | `PutObject` con `ContentType`. (La foto de un lugar, `lugares/{id}.jpg`, la sube la app con URL prefirmada según infra §5.5, Fase 4: no pasa por aquí; BE-3.1 no la incluye, §4.9) |
-| `app.clientes.sqs.ColaSqs(url, region="us-east-1", cliente=None)` | Síncrona (boto3; llamarla con `anyio.to_thread`): `recibir(maximo, espera_s)` → `list[MensajeSqs(id, recibo, cuerpo, recepciones)]` (topes 10 y 20 s; `MessageSystemAttributeNames=["ApproximateReceiveCount"]`), `borrar(recibo)`, `devolver(recibo)` (visibilidad 0). Todo error → `FalloSqs`. `crear_cliente(region)` usa `read_timeout` 30 s (más que la espera larga). Para enviar (`api`: `reprocesar_imagen` de BE-4.1, `purgar_*`) falta `enviar(cuerpo)`; el rol `tarea-api` tiene `sqs:SendMessage` en `ingesta` y `purga` |
+| `app.clientes.sqs.ColaSqs(url, region="us-east-1", cliente=None)` | Síncrona (boto3; llamarla con `anyio.to_thread`): `recibir(maximo, espera_s)` → `list[MensajeSqs(id, recibo, cuerpo, recepciones)]` (topes 10 y 20 s; `MessageSystemAttributeNames=["ApproximateReceiveCount"]`), `borrar(recibo)`, `devolver(recibo)` (visibilidad 0). Todo error → `FalloSqs`. `crear_cliente(region)` usa `read_timeout` 30 s (más que la espera larga). Para enviar, desde BE-4.1, `enviar(cuerpo)` → `MessageId` (`FalloSqs` si falla) y `Colas(ingesta, purga)` / `crear_colas(url_ingesta, url_purga, region)` (un cliente para las dos); el rol `tarea-api` tiene `sqs:SendMessage` en `ingesta` y `purga` |
 | `app.dominio.imagenes.preparar(datos, *, max_bytes, lado_min, lado_miniatura, calidad_miniatura, lado_embedding)` → `ImagenPreparada(ancho, alto, miniatura, reducida)` | Lo de arriba; `ImagenNoValida(motivo)` con los motivos de la tabla. `motivo_demasiado_grande(n, max)`. BE-2.4/BE-3.2 validan las fotos de consulta con otras reglas (`dominio.fotos`, §4.8: tipo, tamaño ≤ `LOC_MAX_BYTES_FOTO` y firma JPEG, sin decodificar) y no necesitan miniatura |
 | `app.dominio.mensajes.interpretar(cuerpo)` → `EventosS3(objetos, ignorados) \| Reprocesar(imagen_id) \| PruebaS3() \| NoReconocido(motivo)` | Los mensajes de `ingesta` de §5.8; `ObjetoSubido(clave, etag, bytes)`. `VERSIONES_REPROCESAR = {1}`. BE-4.1 añade aquí los de `purga` (`purgar_video`, `purgar_imagen`) |
 | `app.servicios.ingesta.procesar_lote(Dependencias(motor, almacen, ajustes, vectorizar=None), mensajes)` → `list[Decision(mensaje, borrar, unidades)]` | El lote de arriba. `vectorizar` sustituye a `embedding.vectorizar` (las pruebas pasan un doble). `Unidad.resultado` ∈ `Resultado` (`procesada`, `error`, `descartado`, `transitorio`) |
@@ -1034,7 +1034,7 @@ Detalles (0.11.1):
   con `POST /v1/admin/places` y nombre `validacion-<lote>-<ts> …`, los borra con `comun.borrar_lugares` y barre restos
   con `comun.borrar_lugares_restos` en su `preparacion` (§5.11, ayudas de BE-3.1); nunca toca lugares reales.
 
-**Guía para BE-4.1** (imágenes con lugar): un `PATCH` de imagen con `lugar_id` bloquea video → imagen (§4.5) y la FK
+**Guía para BE-4.1** (imágenes con lugar; aplicada en 0.15.0, §4.12): un `PATCH` de imagen con `lugar_id` bloquea video → imagen (§4.5) y la FK
 toma `KEY SHARE` del lugar al escribir: compatible con el orden de `borrar` de arriba y con el `FOR NO KEY UPDATE` de
 `reemplazar`. Un `lugar_id` que no existe (o que se borra a la vez) llega como violación de FK (23503) y hay que
 traducirlo; `total_fotos` de `LugarAdmin` ya cuenta esas fotos.
@@ -1389,7 +1389,7 @@ anterior al corte de cualquier `desde` que se responde por diferencias (el resto
   el resto del flujo de la app (caché en Room, anuncio por voz, pendientes por operación) es del frontend y está sin
   probar contra este backend.
 
-**Guía para BE-4.1** (el reconciliador de purgas también corre en `api`, §4.12): copiar el patrón de la purga de
+**Guía para BE-4.1** (aplicada tal cual en 0.15.0: `servicios.purga.reconciliador`, §4.12; el reconciliador de purgas también corre en `api`): copiar el patrón de la purga de
 *tombstones*. En `servicios/`, una función `async def bucle(motor, …, *, espera_inicial_s, intervalo_s, dormir=asyncio.sleep,
 <accion>=None)` que espera, ejecuta la acción en un `try` (`sesion.BaseNoDisponible` → evento `WARNING`; cualquier otra
 excepción → `ERROR` con `exc_info=True`; nunca `BaseException`, para que la cancelación salga) y vuelve a esperar; en el
@@ -1420,16 +1420,192 @@ Trampas:
   de §5.5 va después de la de lugares y no lleva bloques `json`.
 
 ### 4.12 BE-4.1 — Administración de videos e imágenes, y purga
-- Listado, detalle (con URLs prefirmadas GET de 1 h para foto y miniatura), renombrar, re-procesar y edición de
-  imágenes (coordenada, lugar, calidad, notas). Corregir la coordenada **no** exige recalcular el vector: el vector
-  solo depende de los píxeles.
-- **Borrar un video** (ADR-BE-07): en una sola transacción, el video pasa a `eliminado`, se borran los vectores de sus
-  imágenes (salen de la búsqueda **de inmediato**) y se escribe la auditoría; después se encola `purgar_video`. El
-  `worker` borra los objetos de `dataset/` y `thumbs/` y las filas de `imagenes`, y marca `purgado_en`. El video
-  queda como registro histórico. Cualquier admin puede borrar cualquier video; queda quién y cuándo.
-- **Borrar una imagen**: mismo patrón (`purgar_imagen`).
-- **Reconciliador** en `api`: cada 10 min re-encola las purgas de videos borrados hace más de 10 min sin `purgado_en`
-  (cubre un fallo al enviar a SQS justo después del commit).
+`PATCH`/`DELETE /v1/admin/videos/{id}`, las rutas de `/v1/admin/images` (lista, detalle, editar, borrar, lote y
+re-procesar), las URLs GET de las fotos, la purga de lo borrado en el `worker` y el reconciliador en `api` (contratos
+en §5.5 y §5.8; auditoría en §5.7; decisiones en ADR-BE-07 y ADR-BE-20). Lo usa la app en las vistas 7.11–7.14
+(FE-4.1) y la comparación de variantes de EMB-3.2 (las `url` del detalle de un video).
+
+**Construido (0.15.0), sin validar en `dev`.** Pruebas: `tests/unit/test_purga.py` (mensajes de `purga` y cuerpos que
+envía `api`, `firmar_get` y `enviar` con `Stubber`, el turno de `purga` del `worker`, el bucle con y sin embeddings y
+el reconciliador), `tests/contrato/test_contrato_admin.py` (§5.5–§5.10 contra esquemas, mensajes, `Settings` y el
+OpenAPI: C5), `tests/ops/test_validate41.py` (el validador contra un mundo falso) y `tests/base/test_admin_videos_base.py`
+(12 pruebas contra PostgreSQL: endpoints, purga con `almacen_falso`, reconciliador). Las pruebas con base **no se
+ejecutaron** en la máquina donde se construyó (Docker Desktop no arranca): corren en el CI de `backend.yml` de un PR.
+Sin migración: `videos.eliminado_en`, `eliminado_por`, `purgado_en` e `imagenes.calidad`, `lugar_id`, `notas` existen
+desde `0001`. Sin cambios de infra: `SQS_URL_PURGA` ya llega a `api` y `worker` (comprobado en `dev` con `ecs
+describe-task-definition` de `campus-locator-dev-api` y `-worker`, 2026-10-26; los permisos, según infra §5.8, sin
+comprobar), `tarea-api` tiene `sqs:SendMessage` en
+las dos colas y `s3:GetObject` (firmar GET) y `tarea-worker` tiene `s3:DeleteObject` y `s3:ListBucket` con
+`s3:prefix` (infra §5.4, §5.8). Las sentencias de abajo son las que compila SQLAlchemy con el dialecto asyncpg
+(impresas).
+
+**Borrar un video** (`servicios.videos.borrar`; ADR-BE-07). Una transacción: `recoleccion.bloquear_video` (orden video →
+imágenes); inexistente → 404; ya `eliminado` → la misma respuesta, con `fotos_retiradas` leído de la fila de auditoría
+`video.eliminar` (`detalle->>'fotos_retiradas'`; sin ella, las fotos que queden), sin escribir ni encolar. Si no:
+falta la cola → `ColaNoConfigurada` (500, nada escrito); `count(*)` de sus fotos; `DELETE FROM embeddings WHERE
+imagen_id IN (SELECT id FROM imagenes WHERE video_id = :v)` (desde el `COMMIT`, ni `vecinos` ni `localize` las
+encuentran: la búsqueda solo mira `embeddings`, §4.8); `UPDATE videos SET estado = 'eliminado', eliminado_en = now(),
+eliminado_por = :admin, actualizado_en = now()`; `video.eliminar` en `auditoria`. **Después** del `COMMIT`, `enviar`
+`purgar_video` a `purga`; si SQS falla, evento `purga_no_encolada` y la respuesta sigue siendo `202` (lo reenvía el
+reconciliador). Las fotos conservan su fila y su estado hasta la purga (no salen en ningún listado: el video está
+`eliminado`).
+
+**Renombrar** (`videos.renombrar`): `SELECT nombre, estado … FOR UPDATE`; `eliminado` o inexistente → 404; el mismo
+nombre no escribe; si cambia, `UPDATE` con `actualizado_en = now()` y `video.renombrar`.
+
+**URLs GET** (`videos.con_urls(imagenes, almacen, ttl_s)`, también en `GET /v1/admin/images[/{id}]` y en el `PATCH` de
+imagen): original si la foto no está `pendiente_subida`, miniatura solo si está `procesada`, todas firmadas en **un**
+hilo (`firmar_gets`); `url_expira_en` = el vencimiento más temprano de las dos. Sin `almacen` (falta
+`S3_BUCKET_DATASET`) o si firmar falla (`s3_fallido`, `operacion = firmar_get`, `WARNING`) quedan en `null` y la
+respuesta sigue: el detalle del video lo usa la barra de progreso de la app (FE-2.1) y no debe romperse por S3. Firmar
+no usa la red (salvo para renovar credenciales): 200 fotos son 400 firmas locales.
+
+**Imágenes** (`servicios/imagenes.py`). Toda escritura bloquea con `_bloquear(conexion, imagen_id)`: lee el `video_id`
+sin bloqueo, `bloquear_video`, y después la imagen `FOR UPDATE` (con el mismo `video_id`); si no existe o su video está
+`eliminado` → `ImagenNoEncontrada` (404). Detalles:
+- `listar`: dos sentencias (el `count(*)` y la página) con `JOIN videos` y `videos.estado != 'eliminado'`; `q` con
+  `ILIKE` escapado sobre `videos.nombre` **o** `imagenes.notas`; orden `videos.creado_en DESC, videos.numero DESC,
+  imagenes.orden`.
+- `detalle`: la fila (con `lugar_nombre`, `video_numero`, `video_nombre`, `video_estado`) y el vector de
+  `EMBEDDING_VERSION_VECTOR` (`version_vector`, `creado_en`).
+- `editar` (`_editar` + relectura): `CAMPOS_EDITABLES` = `lat`, `lng`, `lugar_id`, `calidad`, `notas` (el orden de
+  `detalle.cambios`); compara con la fila bloqueada y solo escribe lo distinto (`actualizado_en = now()`,
+  `imagen.editar`). `lugar_id` se comprueba antes (`SELECT EXISTS`) y, si el lugar se borra a la vez, la violación de
+  la FK (`IntegrityError`) también se traduce a `LugarNoExiste` (422). El router exige `lat` y `lng` juntos y rechaza
+  `null` en `lat`, `lng` y `calidad` (usa `model_fields_set` para distinguir ausente de `null`).
+- `eliminar`: en la transacción, `DELETE FROM imagenes` (en cascada su vector), `imagen.eliminar`,
+  `recalcular_estado` del video y **`enviar` `purgar_imagen` antes del `COMMIT`** (ADR-BE-20): si SQS falla, todo se
+  deshace (500, repetir es seguro).
+- `reprocesar`: `pendiente_subida` → `ImagenNoSubida` (409); si no, `estado = 'subida'`, `error = NULL`,
+  `imagen.reprocesar`, `recalcular_estado` y `enviar` `reprocesar_imagen` a `ingesta` antes del `COMMIT`. El vector
+  anterior sigue en la búsqueda hasta que el `worker` lo renueva (BE-2.2, §4.6: `ON CONFLICT … DO UPDATE`; si queda en
+  `error`, lo borra). El `worker` lee la foto, bloquea el video (espera al `COMMIT` de `api`) y la procesa.
+- `lote`: comprueba antes la cola (eliminar) o el lugar (reasignar); después cada id (sin repetir) en su propia
+  transacción con `eliminar` u `_editar({"lugar_id": …}, origen="lote")`; `fallidas` con `NO_ENCONTRADO`,
+  `VALIDACION` (lugar borrado a mitad) o `ERROR_INTERNO` (SQS, con `cola_fallida`). 200 ids ≈ 200 transacciones y 200
+  envíos a SQS en serie (sin medir en `dev`; por debajo de los 30 s de API Gateway si cada uno tarda < 150 ms).
+
+**Purga en el `worker`** (`servicios/purga.py`, `procesar_purga(DependenciasPurga(motor, almacen), mensajes)` →
+`list[DecisionPurga(mensaje, borrar)]`, un mensaje detrás de otro; mensajes de §5.8 con
+`dominio.mensajes.interpretar_purga`):
+1. `purgar_video`: lee `estado, purgado_en … FOR UPDATE` (transacción corta). Existe y no está `eliminado` →
+   `purga_descartada` (`video_no_eliminado`), se borra el mensaje sin tocar nada. Si no: primera pasada por S3
+   (`borrar_prefijo` de `dataset/{id}/` y `thumbs/{id}/`), una transacción con `bloquear_video` y `DELETE FROM
+   imagenes WHERE video_id` (en cascada `embeddings`), segunda pasada por S3 y, si `purgado_en` era nulo, `UPDATE …
+   SET purgado_en = now() WHERE purgado_en IS NULL`. Sin fila de video (la borró `limpiar-validacion`), solo las dos
+   pasadas. Evento `video_purgado` (`objetos`, `imagenes`, `existia`, `ya_purgado`).
+2. `purgar_imagen`: transacción con `bloquear_video(video_id del mensaje)` —espera a que confirme la transacción de
+   `api` que lo envió— y `SELECT id FROM imagenes WHERE id`. Si la fila existe (el `DELETE` se deshizo después de
+   enviar) → `purga_descartada` (`imagen_existe`). Si no, `borrar_prefijo(clave)` de cada una de sus `s3_keys` (como
+   prefijo exacto: el rol del `worker` solo lista con `s3:prefix` `dataset/*` o `thumbs/*`). Evento `imagen_purgada`.
+3. `NoReconocido` → `mensaje_no_reconocido` (`cola = purga`), se borra. `FalloS3` o `BaseNoDisponible` →
+   `purga_transitoria` (`WARNING`), el mensaje se queda; cualquier otra excepción, igual con `ERROR` y la traza.
+
+**El bucle del `worker`** (`worker.py`, BE-2.2 + BE-4.1). `consumir(…, purga=None)` es el de BE-2.2 tal cual si no se
+le pasa `purga`; `_principal` se la pasa si hay `SQS_URL_PURGA` (una `ColaSqs` que comparte el cliente de boto3 de la
+de `ingesta`; si falta, `configuracion_incompleta` `WARNING` y solo ingiere). Con `purga`: sin embeddings listo, en
+lugar de la pausa de `WORKER_ESPERA_EMBEDDING_S` hace `turno_purga` con esa espera (15 s de espera larga en `purga`: la
+purga no necesita embeddings); con embeddings listo, antes de cada recepción de `ingesta` hace `turno_purga` con
+`ESPERA_PURGA_S` = 1 s (con 0, SQS solo consulta algunos servidores). `turno_purga(detener, ajustes, *, cola, deps,
+espera_s)`: recibe hasta `WORKER_MAX_MENSAJES`, `procesar_purga`, borra los terminados, `lote_purga`; un error de SQS
+→ `cola_fallida` (`cola = purga`) y una pausa. Purga e ingesta van **en serie** en el mismo bucle: una miniatura que la
+ingesta escribe no puede caer en medio de la purga de su video (con un solo `worker`; `limpiar-validacion` sigue
+pudiendo cruzarse, §4.5). `worker_iniciado` lleva `purga` (`true`/`false`).
+
+**Reconciliador en `api`** (`purga.reconciliador(motor, cola, minutos, *, espera_inicial_s=60, intervalo_s=None,
+dormir, accion)`, tarea `reconciliador-purgas` del ciclo de vida de `main.py`, creada solo con motor y cola `purga` y
+cancelada antes de cerrar el motor, como la purga de alertas de §4.11). Espera 60 s y, cada `RECONCILIADOR_CADA_MIN`
+(10 min), `reencolar_pendientes(motor, cola, minutos)`:
+```sql
+SELECT videos.id, videos.eliminado_por FROM videos
+WHERE videos.estado = 'eliminado' AND videos.purgado_en IS NULL
+  AND videos.eliminado_en < now() - make_interval(0, 0, 0, 0, 0, :minutos)
+ORDER BY videos.eliminado_en, videos.id LIMIT 100
+```
+y envía un `purgar_video` por fila (`solicitado_por` = `eliminado_por`). No sabe si ya hay un mensaje en la cola (`api`
+no tiene `sqs:GetQueueAttributes`): con el `worker` apagado, cada pasada añade un duplicado por video pendiente (6 por
+hora; los procesa sin daño al volver: con `purgado_en` puesto solo repasa S3). Eventos `purgas_reencoladas` (`INFO`
+con pendientes, `DEBUG` sin ellos) y `reconciliador_fallido`.
+
+**Colas en `api`** (`main._crear_colas`): `clientes.sqs.crear_colas(SQS_URL_INGESTA, SQS_URL_PURGA, AWS_REGION)` en un
+hilo al arrancar, un cliente de boto3 para las dos (`app.state.colas`, `Colas(ingesta, purga)`, cada una `None` sin su
+variable; si crear el cliente falla, `cola_fallida` `operacion = crear_cliente` y `Colas()`). Las rutas las toman con
+`api.dependencias.obtener_colas(request)` y responden la falta con `sin_cola(variable)` (500 y
+`configuracion_incompleta`). `crear_app(…, colas=…)` las sustituye en las pruebas.
+
+**Nombres internos** (para depurar o extender sin abrir el código):
+- `servicios/videos.py`: `ColaNoConfigurada(variable)`, `enviar(cola, cuerpo)` (en un hilo), `imagen_de_fila(fila)`,
+  `_claves_de(foto)`, `con_urls`, `detalle`, `renombrar`, `_fotos_retiradas`, `borrar`.
+- `servicios/imagenes.py`: `ImagenNoEncontrada`, `LugarNoExiste`, `ImagenNoSubida`, `CAMPOS_EDITABLES`,
+  `CODIGO_NO_ENCONTRADO`, `CODIGO_VALIDACION`, `CODIGO_ERROR_INTERNO`; `_consulta()`, `_leer`, `_bloquear`,
+  `_exigir_lugar`, `_distinto`, `_editar`; `listar(motor, almacen, ttl_s, *, video_id, lugar_id, estado, calidad, q,
+  pagina, por_pagina)`, `detalle(motor, almacen, ajustes, imagen_id)`, `editar(motor, almacen, ajustes, *,
+  usuario_id, imagen_id, cambios)`, `eliminar(motor, cola, *, usuario_id, imagen_id, origen="delete")`,
+  `reprocesar(motor, cola, *, usuario_id, imagen_id)`, `lote(motor, cola, *, usuario_id, accion, ids, lugar_id)`.
+- `servicios/purga.py`: `DependenciasPurga(motor, almacen)`, `DecisionPurga(mensaje, borrar)`, `purgar_video`,
+  `purgar_imagen`, `procesar_purga`, `sql_pendientes(minutos)`, `Reencolado(pendientes, enviados)`,
+  `reencolar_pendientes`, `reconciliador`; `ESPERA_RECONCILIADOR_S` (60), `LIMITE_RECONCILIADOR` (100),
+  `VIDEO_NO_ELIMINADO`, `IMAGEN_EXISTE`. Sus eventos del `worker` salen con `logger = app.worker`.
+- `dominio/mensajes.py`: `TIPO_PURGAR_VIDEO`, `TIPO_PURGAR_IMAGEN`, `VERSIONES_PURGA` (`{1}`), `PurgarVideo(video_id)`,
+  `PurgarImagen(imagen_id, video_id, s3_keys)`, `interpretar_purga(cuerpo)`, `cuerpo_reprocesar(imagen_id,
+  solicitado_por, ahora=None)`, `cuerpo_purgar_video(video_id, solicitado_por, ahora=None)`,
+  `cuerpo_purgar_imagen(imagen_id, video_id, solicitado_por, ahora=None)` (JSON compacto).
+- `esquemas/videos.py`: `VideoRenombrar`, `VideoBorrado`, `ImagenEditar`, `ImagenesLote`, `FallidaLote`,
+  `LoteResultado`, `ReferenciaVideo`, `VectorImagen`, `ImagenDetalle`; `NOTAS_MAX` (500), `LOTE_IMAGENES_MAX` (200).
+- `api/v1/admin_videos.py`: `renombrar_video`, `borrar_video`, `error_cola(exc, cola)` (500 con `cola_fallida`);
+  `api/v1/admin_imagenes.py`: `router` (`/images`, etiqueta `imagenes`; `/lote` va antes que `/{imagen_id}`),
+  `listar_imagenes`, `lote_imagenes`, `detalle_imagen`, `editar_imagen`, `borrar_imagen`, `reprocesar_imagen`; el
+  parámetro de ruta es `imagen_id`.
+- `worker.py`: `ESPERA_PURGA_S` (1), `turno_purga`. `errores.MENSAJE_POR_CODIGO["IMAGEN_NO_SUBIDA"]`.
+
+**Para los lotes siguientes: qué ofrece BE-4.1 al código.**
+
+| Elemento | Qué hace |
+|---|---|
+| `app.servicios.videos.borrar` / `renombrar` | Los casos de uso de arriba; un lote que borre videos desde otro sitio llama a `borrar` (retira vectores y encola) |
+| `app.servicios.videos.con_urls(imagenes, almacen, ttl_s)` | Rellena las URLs GET de cualquier lista de `ImagenAdmin` (o subclase) |
+| `app.servicios.videos.enviar(cola, cuerpo)` | `ColaSqs.enviar` en un hilo |
+| `app.servicios.imagenes` | Los casos de uso de `/v1/admin/images` (arriba) |
+| `app.servicios.purga` | Purga (`procesar_purga`) y reconciliador (`reencolar_pendientes`, `reconciliador`) |
+| `app.dominio.mensajes.cuerpo_*` / `interpretar_purga` | Los mensajes de §5.8 que envía `api` y su lectura en el `worker` |
+| `app.clientes.s3.AlmacenS3.firmar_get`, `firmar_gets`; `app.clientes.sqs.ColaSqs.enviar`, `Colas`, `crear_colas` | Arriba y §4.5, §4.6 |
+| `app.api.dependencias.obtener_colas(request)`, `sin_cola(variable)` | Las colas de `api` y el 500 por falta de una |
+| Fixtures de prueba | `almacen_falso.firmar_get` (`firmadas_get`; `fallar_firma` también la rompe) y `ColaFalsa` (`enviar` → `enviados`, `mensajes()` con el JSON leído, `fallar` → `FalloSqs`) con la fixture `colas_falsas` (`Colas(ingesta=…, purga=…)`), en `tests/conftest.py`. `tests/base/test_admin_videos_base.py`: `video(ajustes, *estados, nombre=)` → `(video_id, [imagen_id…])` (SQL: video del admin con `subida_completa_en` y una foto por estado; las `procesada` con un vector de la versión activa), `lugar(ajustes)`, `auditoria(ajustes, accion, entidad_id)`, `vectores(ajustes, video_id)`, `purgar(ajustes, almacen, *cuerpos)` (corre `procesar_purga` con un motor de pool 2) y `subir_objetos(almacen, video_id, ids)` |
+
+**Para la app (FE-4.1)** (lo que espera el backend; el frontend lo lee desde aquí):
+- `DELETE /v1/admin/videos/{id}` → `202` y el video ya no sale en ninguna lista ni en la búsqueda; repetirlo es seguro
+  (misma respuesta). La purga de S3 es asíncrona y no se ve desde la app. `fotos_retiradas` sirve para el aviso.
+- `PATCH /v1/admin/videos/{id}` solo cambia `nombre`; vacío es `422` (a diferencia de crear, que pone `video_<n>`).
+- Las URLs GET (`url`, `url_miniatura`) valen `PRESIGN_GET_TTL_S` (1 h; `url_expira_en`): Coil las carga tal cual; al
+  caducar (S3 `403`), volver a pedir el detalle o la página. `url_miniatura` solo existe para fotos `procesada`.
+- `DELETE /v1/admin/images/{id}` repetido da `404` (no es idempotente): la app trata el `404` de un borrado como hecho.
+  El lote sí es idempotente por id (`NO_ENCONTRADO` en `fallidas`).
+- `reasignar` necesita `lugar_id` explícito (`null` = quitar el lugar); los lugares salen de `GET /v1/admin/places`.
+- `reprocesar` de una foto `pendiente_subida` es `409 IMAGEN_NO_SUBIDA`; con `embedding` apagado en `dev` la foto se
+  queda en `subida` (el video, `procesando`) hasta que se encienda.
+- No hay endpoint para re-procesar o reintentar la subida de un video entero (7.13): la app lo hace foto a foto con
+  `reprocesar` (o reanudando la cola de subida, FE-2.1). `GET /v1/admin/images/{id}` no trae `dispositivo` (7.12 lo
+  pide; tampoco está en `VideoResumen`): ver «Pendiente» en el CHANGELOG 0.15.0.
+
+**Guía para el validador** (`validate41.py`, §5.11): C3 suspende el escalado de `worker` y lo pone en 0 (sin
+`worker` no hay purga ni ingesta); la limpieza siempre reanuda el escalado y le devuelve las réplicas anotadas.
+
+Trampas:
+- La purga necesita el `worker`, que solo escala con `embedding` encendido (infra §5.10): con `embedding` apagado los
+  `purgar_*` esperan en `purga` (4 días) y el reconciliador añade duplicados cada 10 min. Al encender `embedding` se
+  vacía. Mientras tanto los objetos de un video borrado siguen en S3, pero ya no salen en ninguna búsqueda ni lista.
+- Un `purgar_imagen` que llega a la DLQ (5 fallos de S3 o de la base) deja sus 2 objetos huérfanos: el reconciliador
+  solo cubre videos. Se borran cuando se borre el video (la purga del video borra el prefijo entero) o a mano.
+- Un mensaje de `purga` con `s3_keys` ajenas a la imagen se descarta sin tocar S3 (nunca se borra algo que no sea de
+  esa imagen); `purgar_video` solo borra los prefijos de **su** video.
+- `vecinos` y `localize` dejan de ver las fotos al confirmar el `DELETE` (no por la purga): C1 lo comprueba en la
+  petición siguiente.
+- `test_contrato_admin.py` lee §5.5 como texto: un bloque `json` en la subsección de §5.5 de `PATCH` y `DELETE` de videos
+  (`VideoBorrado`) y dos en la de imágenes, hasta la de lugares (`ImagenDetalle`, `LoteResultado`); una sola
+  fila de la tabla de §5.5 por cada ruta de BE-4.1; la tabla «filas de BE-4.1» de §5.7 hasta «La purga del `worker`»;
+  los dos ejemplos de la cola `purga` y el de re-procesado de §5.8. Las subsecciones nuevas van **antes** de la de
+  lugares porque `test_contrato_lugares.py` lee desde ahí hasta el diagnóstico. **No copiar** antes de §5.5 el texto
+  exacto de sus encabezados de cuarto nivel: la prueba busca su primera aparición.
 
 ### 4.13 Lotes diferidos (Fase 5)
 - **BE-5.1** `POST /v1/localize/frame`: una foto + posición previa; restringe la búsqueda a un radio alrededor de esa
@@ -1839,10 +2015,13 @@ lo haya llamado o quede alguna foto `pendiente_subida`; si no, `procesando` si q
 }
 ```
 `estado` de la imagen ∈ {`pendiente_subida`, `subida`, `procesada`, `error`}; `calidad` ∈ {`alta`, `normal`, `baja`};
-`url` y `url_miniatura` son prefirmadas GET de 1 h (`null` mientras no existan). **Hasta BE-4.1, `url`,
-`url_miniatura` y `url_expira_en` son siempre `null`** (BE-2.1 entrega el detalle para la barra de progreso; las URLs
-GET llegan con BE-4.1, PLAN §2.2). `error` es el motivo cuando `estado = "error"` (si no, `null`); `lugar` es `null`
-si la foto no tiene lugar asignado.
+`url` y `url_miniatura` son prefirmadas GET de `PRESIGN_GET_TTL_S` (1 h), desde BE-4.1 (ARCHITECTURE 0.15.0): `url`
+(el JPEG original, `dataset/…`) va si la foto no está `pendiente_subida`; `url_miniatura` (`thumbs/…`, 320 px) solo
+si está `procesada`; `url_expira_en` es su vencimiento (UTC, sin fracciones; `null` si no hay ninguna). Las tres son
+`null` si `api` no tiene S3 configurado o la firma falló (el resto de la respuesta no cambia). Una URL no comprueba que
+el objeto exista: si no está, S3 responde `403`/`404` al descargarla. La app las usa tal cual (`GET` sin encabezados)
+y, si caducan, vuelve a pedir el detalle. `error` es el motivo cuando `estado = "error"` (si no, `null`); `lugar` es
+`null` si la foto no tiene lugar asignado. `notas`: texto de hasta 500 caracteres o `null`.
 
 `LugarAdmin` = `LugarPublico` sin `distancia_m`, más `creado_en`, `actualizado_en` y `total_fotos`.
 
@@ -1858,14 +2037,14 @@ imágenes, BE-4.1.
 | `GET /v1/admin/stats` | — | `200` `{"total_fotos": 2842, "total_lugares": 48, "alertas_activas": 3, "ultimo_video": {"numero": 12, "creado_en": "…"} \| null}`. `total_fotos` = imágenes `procesada` de videos no eliminados; `alertas_activas` = alertas `activa` sin borrar (las escribe BE-3.3) (detalle abajo) |
 | `GET /v1/admin/videos` | `?q=&orden=fecha\|nombre\|fotos&dir=desc\|asc&pagina&por_pagina` | Página de `VideoResumen` (detalle abajo) |
 | `GET /v1/admin/videos/{id}` | — | `VideoResumen` + `"fotos": [ImagenAdmin…]` en orden (detalle abajo) |
-| `PATCH /v1/admin/videos/{id}` | `{"nombre": "Entrada norte"}` (1–40 tras recortar) | `200` `VideoResumen` |
-| `DELETE /v1/admin/videos/{id}` | — | `202` `{"id": "…", "estado": "eliminado", "fotos_retiradas": 120, "purga": "programada"}`. Repetir da la misma respuesta |
-| `GET /v1/admin/images` | `?video_id&lugar_id&estado&calidad&q&pagina&por_pagina` | Página de `ImagenAdmin`, por video (más reciente primero) y `orden` |
+| `PATCH /v1/admin/videos/{id}` | `{"nombre": "Entrada norte"}` (1–40 tras recortar) | `200` `VideoResumen` (detalle abajo) |
+| `DELETE /v1/admin/videos/{id}` | — | `202` `{"id": "…", "estado": "eliminado", "fotos_retiradas": 120, "purga": "programada"}`. Repetir da la misma respuesta (detalle abajo) |
+| `GET /v1/admin/images` | `?video_id&lugar_id&estado&calidad&q&pagina&por_pagina` | Página de `ImagenAdmin`, por video (más reciente primero) y `orden` (detalle abajo) |
 | `GET /v1/admin/images/{id}` | — | `ImagenAdmin` + `"video": {id, numero, nombre}` + `"vector": {"version_vector", "creado_en"} \| null` |
 | `PATCH /v1/admin/images/{id}` | Cualquiera de: `lat`+`lng` (juntos), `lugar_id` (o `null`), `calidad`, `notas` (≤ 500) | `200` `ImagenAdmin` |
-| `DELETE /v1/admin/images/{id}` | — | `204`. Retira el vector al instante y encola `purgar_imagen` |
+| `DELETE /v1/admin/images/{id}` | — | `204`. Retira el vector al instante y encola `purgar_imagen`. Si ya no existe, `404` |
 | `POST /v1/admin/images/lote` | `{"accion": "eliminar" \| "reasignar", "ids": [≤ 200], "lugar_id": "…" \| null}` | `200` `{"procesadas": 10, "fallidas": [{"id": "…", "codigo": "NO_ENCONTRADO"}]}` |
-| `POST /v1/admin/images/{id}/reprocesar` | — | `202`; la imagen vuelve a `subida` y se encola `reprocesar_imagen` |
+| `POST /v1/admin/images/{id}/reprocesar` | — | `202` sin cuerpo; la imagen vuelve a `subida` y se encola `reprocesar_imagen`. `409 IMAGEN_NO_SUBIDA` si sigue `pendiente_subida` |
 | `GET /v1/admin/places` | `?q=&categoria=` | `{"items": [LugarAdmin…], "total": n}` (detalle abajo) |
 | `POST /v1/admin/places` | `LugarEntrada` | `201` `LugarAdmin` |
 | `PUT /v1/admin/places/{id}` | `LugarEntrada` | `200` `LugarAdmin` |
@@ -1942,8 +2121,87 @@ Parámetros, todos opcionales:
 
 #### `GET /v1/admin/videos/{id}` (BE-2.1)
 `200` → `VideoResumen` + `"fotos": [ImagenAdmin…]` ordenadas por `orden` (todas, sin paginar: como mucho 200). Su
-`conteo` es el mismo que devolvería `complete` en ese momento. Errores: `404 NO_ENCONTRADO` (no existe o está
-`eliminado`), `422 VALIDACION` (`id` no es un UUID), `503 BASE_NO_DISPONIBLE` y los de §5.2.
+`conteo` es el mismo que devolvería `complete` en ese momento. Desde BE-4.1 cada foto trae sus URLs GET (`ImagenAdmin`,
+arriba): todas se firman en la misma llamada. Errores: `404 NO_ENCONTRADO` (no existe o está `eliminado`), `422
+VALIDACION` (`id` no es un UUID), `503 BASE_NO_DISPONIBLE` y los de §5.2.
+
+#### Videos: `PATCH` y `DELETE /v1/admin/videos/{id}` (BE-4.1)
+Desde BE-4.1 (ARCHITECTURE 0.15.0; cómo funciona, §4.12; decisiones, ADR-BE-07 y ADR-BE-20).
+- `PATCH`: `{"nombre": "…"}`, de 1 a 40 caracteres tras recortar (vacío o solo espacios → `422`; sin NUL); los demás
+  campos se ignoran. `200` con el `VideoResumen` guardado. El mismo nombre no escribe nada (ni auditoría). Errores, en
+  este orden: los de §5.2, `422 VALIDACION` (cuerpo o `id` que no es un UUID), `404 NO_ENCONTRADO` (no existe o está
+  `eliminado`), `503 BASE_NO_DISPONIBLE`. Queda en `auditoria` (`video.renombrar`, §5.7).
+- `DELETE`: borrado **definitivo** (sin papelera): en una transacción, el video pasa a `eliminado` y los vectores de
+  sus fotos se borran, así que **desde la petición siguiente** sus fotos no salen en `POST /v1/admin/diagnostico/vecinos`
+  ni en `POST /v1/localize`; desaparece de `GET /v1/admin/videos`, de `GET /v1/admin/images` y de `GET
+  /v1/admin/stats`, y su detalle da `404`. Los objetos de S3 y las filas de sus fotos los borra después la purga del
+  `worker` (§5.8): con `embedding` apagado en `dev` el `worker` no corre y la purga espera (infra §5.10). `202`:
+
+```json
+{ "id": "9c1d…", "estado": "eliminado", "fotos_retiradas": 120, "purga": "programada" }
+```
+- `fotos_retiradas` = fotos que tenía el video al borrarlo (en cualquier estado). Repetir el `DELETE` da la misma
+  respuesta (`202`, el mismo número, aunque la purga ya haya borrado las filas) sin escribir ni encolar nada. `purga`
+  vale siempre `programada`. Cualquier admin puede borrar cualquier video; queda quién y cuándo (`eliminado_por`,
+  `eliminado_en` y `auditoria` `video.eliminar`).
+- Errores: los de §5.2, `422 VALIDACION` (`id`), `404 NO_ENCONTRADO` (no existe), `500 ERROR_INTERNO` (falta
+  `SQS_URL_PURGA` en `api`, sin escribir nada), `503 BASE_NO_DISPONIBLE`. Si SQS falla justo después de confirmar, la
+  respuesta sigue siendo `202`: el reconciliador reenvía la purga (§4.12).
+- Un video borrado conserva su fila (registro histórico, con `purgado_en` cuando termina la purga). Volver a crear un
+  video con el mismo `ref_cliente` del mismo admin da `409 VIDEO_ELIMINADO` (§5.4): la app usa otro `ref_cliente`.
+
+#### Imágenes: `/v1/admin/images` (BE-4.1)
+Desde BE-4.1 (ARCHITECTURE 0.15.0; cómo funciona, §4.12). Las imágenes de un video `eliminado` no existen para estas
+rutas (`404`, y no salen en la lista).
+- `GET /v1/admin/images`: filtros opcionales `video_id`, `lugar_id` (UUID), `estado` (`ImagenAdmin.estado`), `calidad` y
+  `q` (≤ 100 caracteres, sin NUL: contenido del nombre del video **o** de `notas`, sin distinguir mayúsculas; `%`, `_`
+  y `\` literales; vacío = sin filtro); `pagina` y `por_pagina` como en `GET /v1/admin/videos`. `200` → página de
+  `ImagenAdmin` (§5.1) ordenada por video (`creado_en` del video descendente, a igualdad `numero` descendente) y, dentro
+  de cada video, por `orden`; con sus URLs GET. Errores: `422` (un parámetro, con su nombre en `campo`), `503` y §5.2.
+- `GET /v1/admin/images/{id}`: `ImagenAdmin` más `video` y `vector`:
+
+```json
+{
+  "id": "a91f…", "video_id": "9c1d…", "orden": 7,
+  "lat": 6.2003, "lng": -75.5788, "rumbo": 182.0, "capturada_en": "2026-10-20T14:01:10Z",
+  "estado": "procesada", "error": null, "calidad": "normal",
+  "lugar": { "id": "3f2a…", "nombre": "Biblioteca Central" }, "notas": null,
+  "url": "https://…", "url_miniatura": "https://…", "url_expira_en": "2026-10-23T16:04:05Z",
+  "video": { "id": "9c1d…", "numero": 12, "nombre": "Entrada norte" },
+  "vector": { "version_vector": "dinov2-vits14/pp-v1", "creado_en": "2026-10-20T14:09:30Z" }
+}
+```
+  `vector` es el de la versión activa (`EMBEDDING_VERSION_VECTOR`) o `null` (sin procesar, en `error` o recién
+  re-procesada sin terminar). Errores: `404`, `422` (`id`), `503` y §5.2.
+- `PATCH /v1/admin/images/{id}`: cualquiera de `lat` + `lng` (los dos juntos, WGS84; uno solo → `422` con el campo que
+  falta), `lugar_id` (un lugar que existe, o `null` para quitarlo; uno que no existe → `422` con `campo` = `lugar_id`),
+  `calidad` (`alta`, `normal`, `baja`) y `notas` (≤ 500 tras recortar; vacío o `null` = sin notas). Lo que no se envía
+  no cambia; `null` en `lat`, `lng` o `calidad` → `422`; los demás campos se ignoran. `200` con la `ImagenAdmin`
+  guardada; sin cambios, no escribe. Corregir la coordenada **no** recalcula el vector (solo depende de los píxeles).
+  Errores, en este orden: §5.2, `422`, `404`, `503`. Queda en `auditoria` (`imagen.editar`).
+- `DELETE /v1/admin/images/{id}`: `204` sin cuerpo. La fila y su vector se borran (sale de la búsqueda desde la
+  petición siguiente) y se encola `purgar_imagen` (borra el original y la miniatura). **No es idempotente**: repetirlo
+  da `404`. Errores: §5.2, `422` (`id`), `404`, `500 ERROR_INTERNO` (falta `SQS_URL_PURGA`, o SQS no aceptó el mensaje:
+  en ese caso **nada cambia** y se puede repetir), `503`. El estado del video se recalcula (§5.5; borrar la última foto
+  pendiente puede dejarlo `procesado`).
+- `POST /v1/admin/images/lote`: `accion` `eliminar` o `reasignar`; `ids` de 1 a 200 UUID (los repetidos cuentan una
+  vez); `lugar_id` solo con `reasignar`, y entonces **obligatorio** (un id o `null` = quitar el lugar). Un cuerpo que no
+  cumple, o `reasignar` a un lugar que no existe → `422` y nada se aplica. Si no, cada id por separado y en orden, como
+  el `DELETE` o como un `PATCH` de `lugar_id`; `200`:
+
+```json
+{ "procesadas": 2, "fallidas": [{ "id": "5b0e…", "codigo": "NO_ENCONTRADO" }] }
+```
+  `codigo` ∈ {`NO_ENCONTRADO` (no existe o su video está eliminado), `VALIDACION` (el lugar se borró a mitad del lote),
+  `ERROR_INTERNO` (SQS no aceptó la purga de esa imagen: no cambió)}. Reasignar al lugar que ya tiene cuenta como
+  procesada. Si la base falla a mitad: `503`, lo aplicado queda y repetir es seguro (lo ya borrado da
+  `NO_ENCONTRADO`). Errores: §5.2, `422`, `500` (falta `SQS_URL_PURGA` al eliminar), `503`.
+- `POST /v1/admin/images/{id}/reprocesar`: `202` sin cuerpo. La imagen pasa a `subida` (sin `error`), el video se
+  recalcula (normalmente a `procesando`) y se encola `reprocesar_imagen` en `ingesta` (§5.8); el `worker` la vuelve a
+  procesar cuando `embedding` esté encendido (renueva el vector; mientras tanto el anterior sigue en la búsqueda, y si
+  queda en `error` se borra). Errores: §5.2, `422` (`id`), `404`, `409 IMAGEN_NO_SUBIDA` (sigue `pendiente_subida`:
+  no hay nada que procesar), `500` (falta `SQS_URL_INGESTA` o SQS no aceptó el mensaje: nada cambia), `503`.
+- Cada cambio queda en `auditoria` (`imagen.editar`, `imagen.eliminar`, `imagen.reprocesar`, §5.7).
 
 #### Lugares: `/v1/admin/places` (BE-3.1)
 `POST /v1/admin/places` (y `PUT /v1/admin/places/{id}`, con el mismo cuerpo) recibe un `LugarEntrada`:
@@ -1974,8 +2232,8 @@ y responde un `LugarAdmin`:
 - `GET /v1/admin/places`: `q` (opcional, ≤ 100 caracteres, sin NUL) se compara sin tildes, mayúsculas ni espacios de
   más (la regla de `LugarEntrada`) y se busca **contenido** en el nombre; `%`, `_` y `\` son literales; vacío o solo
   espacios = sin filtro. `categoria` filtra. Orden por nombre (como `GET /v1/places`), sin paginar; `total` = número de
-  `items`. `total_fotos` = imágenes con ese lugar de videos no eliminados, en cualquier estado (hasta BE-4.1, que
-  asigna lugares a las fotos, es 0). Errores: `422` (`q` o `categoria`), `503` y los de §5.2.
+  `items`. `total_fotos` = imágenes con ese lugar de videos no eliminados, en cualquier estado (las asigna BE-4.1:
+  `PATCH /v1/admin/images/{id}` y `reasignar`). Errores: `422` (`q` o `categoria`), `503` y los de §5.2.
 - Cada cambio queda en `auditoria` (`lugar.crear`, `lugar.editar`, `lugar.eliminar`, §5.7).
 
 #### Alertas: `/v1/admin/alerts` (BE-3.3)
@@ -2065,9 +2323,10 @@ Errores, en este orden (el primero que aplica):
 | 403 | `SIN_PERMISOS` | Token válido de un usuario activo sin rol `admin` (§5.2) |
 | 404 | `NO_ENCONTRADO` | Recurso inexistente (o video eliminado en rutas de lectura); también una ruta que no existe |
 | 405 | `SOLICITUD_INVALIDA` | Método no permitido en una ruta que existe; `detalle.metodos_permitidos` (p. ej. `["GET"]`) y encabezado `Allow` |
+| 409 | `IMAGEN_NO_SUBIDA` | `POST /v1/admin/images/{id}/reprocesar` de una foto que sigue `pendiente_subida` (BE-4.1, §5.5; `detalle: null`) |
 | 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido al crear o editar (BE-3.1, §5.5; `detalle: null`) · registrar fotos, completar la subida o volver a crear (mismo `ref_cliente`) un video borrado (§5.4) · `PUT /v1/admin/alerts/{id}` con `If-Match` que no coincide con la `version` de la alerta o de una alerta que no existe (BE-3.3, §5.5; `detalle: null`) |
 | 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]`. En `/v1/localize` (BE-3.2), la parte `metadatos`: `campo` = `metadatos` o `metadatos.<campo>`. Un encabezado no válido lleva su nombre: `If-Match` (alertas, BE-3.3) |
-| 500 | `ERROR_INTERNO` | Fallo no previsto (el `X-Request-Id` permite encontrarlo en los logs); también configuración que falta en `api` (`JWT_SECRET`, §5.2; `S3_BUCKET_DATASET` en las rutas de §5.4 que usan S3) |
+| 500 | `ERROR_INTERNO` | Fallo no previsto (el `X-Request-Id` permite encontrarlo en los logs); también configuración que falta en `api` (`JWT_SECRET`, §5.2; `S3_BUCKET_DATASET` en las rutas de §5.4 que usan S3; desde BE-4.1, `SQS_URL_PURGA`/`SQS_URL_INGESTA` en las rutas de §5.5 que encolan) y, en `DELETE /v1/admin/images/{id}` y `reprocesar` (BE-4.1), SQS que no aceptó el mensaje (nada cambia) |
 | 501 | `NO_IMPLEMENTADO` | Endpoints reservados |
 | 503 | `EMBEDDING_NO_DISPONIBLE` · `BASE_NO_DISPONIBLE` | Dependencia caída, apagada o lenta. `BASE_NO_DISPONIBLE`, en cualquier endpoint que use la base (desde BE-1.3, §4.4) |
 | 503 | `SERVICIO_OCUPADO` | `POST /v1/auth/login` con la cola de verificaciones llena o sin turno a tiempo (§5.3); lleva `Retry-After` |
@@ -2285,6 +2544,18 @@ lote):
 | `alerta.upsert` | `PUT` o `upsert` que creó, restauró o cambió la alerta (sin cambios no hay fila) | `{"operacion": "crear" \| "editar" \| "restaurar", "version": <nueva>, "cambios": [<campos distintos, en el orden lat, lng, mensaje, tipo, prioridad, radio_m, activa, vigencia_desde, vigencia_hasta; al crear, los 9>], "origen": …}` y, al crear o restaurar, `"mensaje": "<mensaje guardado>"` |
 | `alerta.eliminar` | `DELETE` o `eliminar` de una alerta viva (un id desconocido o ya borrado no deja fila) | `{"version": <nueva>, "mensaje": "<mensaje>", "origen": …}` |
 
+**`auditoria`: filas de BE-4.1** (`actor_id` = el admin del token; en la misma transacción que el cambio):
+
+| `accion` | `entidad` / `entidad_id` | Cuándo | `detalle` |
+|---|---|---|---|
+| `video.renombrar` | `video` / el video | `PATCH /v1/admin/videos/{id}` que cambió el nombre (el mismo nombre no deja fila) | `{"anterior": "<nombre>", "nuevo": "<nombre>"}` |
+| `video.eliminar` | `video` / el video | Primer `DELETE /v1/admin/videos/{id}` (repetirlo no deja otra) | `{"nombre", "numero", "fotos_retiradas": <fotos del video>, "vectores": <filas de embeddings borradas>}`; un `DELETE` repetido lee de aquí `fotos_retiradas` |
+| `imagen.editar` | `imagen` / la imagen | `PATCH /v1/admin/images/{id}` o `reasignar` del lote que cambió algo | `{"cambios": [<campos en el orden lat, lng, lugar_id, calidad, notas>], "video_id": "…", "origen": "patch" \| "lote"}` |
+| `imagen.eliminar` | `imagen` / la imagen | `DELETE /v1/admin/images/{id}` o `eliminar` del lote | `{"video_id": "…", "orden": n, "estado": "<estado que tenía>", "origen": "delete" \| "lote"}` |
+| `imagen.reprocesar` | `imagen` / la imagen | `POST /v1/admin/images/{id}/reprocesar` con `202` | `{"video_id": "…", "estado_anterior": "<estado>"}` |
+
+La purga del `worker` no escribe en `auditoria` (no tiene actor; queda `videos.purgado_en` y su evento).
+
 ### 5.8 Mensajes de las colas
 
 Entrega «al menos una vez»: todo consumidor es idempotente. Colas, visibilidad y DLQ: infra §5.6.
@@ -2331,6 +2602,23 @@ sin hacer nada.
 - Un cambio incompatible en un mensaje sube `version`; el `worker` acepta la versión actual y la anterior durante un
   despliegue.
 
+Desde BE-4.1 (ARCHITECTURE 0.15.0; §4.12, ADR-BE-20):
+- Los envía `api`: `purgar_video` tras confirmar el `DELETE` del video (y el reconciliador, cada
+  `RECONCILIADOR_CADA_MIN`, para los videos `eliminado` hace más de ese tiempo sin `purgado_en`: puede haber
+  **duplicados**); `purgar_imagen`, dentro de la transacción del `DELETE` de la imagen (antes del `COMMIT`); y
+  `reprocesar_imagen` (a `ingesta`), dentro de la de `reprocesar`. JSON compacto en UTF-8; `solicitado_por` es el id
+  del admin (o `null`), `solicitado_en` la hora de `api` en UTC con `Z` y sin fracciones.
+- El `worker` exige `tipo`, `version` = 1 (entero) y `video_id` (UUID); `purgar_imagen`, además `imagen_id` y
+  `s3_keys` = una lista no vacía con **solo** `dataset/{video_id}/{imagen_id}.jpg` y/o `thumbs/{video_id}/{imagen_id}.jpg`
+  (cualquier otra clave → mensaje no reconocido, que se borra sin tocar S3). `solicitado_por` y `solicitado_en` son
+  informativos.
+- `purgar_video` solo actúa si el video está `eliminado` (si existe y no lo está, se descarta: un `DELETE` que no llegó
+  a confirmarse); si el video ya no existe (lo borró `limpiar-validacion`), solo borra los objetos. `purgar_imagen`
+  espera a que confirme la transacción que lo envió (bloquea el video) y solo borra si la fila de la imagen ya no
+  existe (si existe, se descarta: el `DELETE` se deshizo).
+- Fallo de S3 o de la base → el mensaje se queda (vuelve tras los 300 s de visibilidad de `purga`; a la sexta
+  recepción va a la DLQ y la alarma avisa; el reconciliador vuelve a enviar los `purgar_video`).
+
 ### 5.9 Procesos de la imagen
 
 Una sola imagen (`campus-locator/backend`, `project/Dockerfile`, Python 3.12, usuario sin privilegios). Contiene solo
@@ -2347,7 +2635,7 @@ y `tests/` quedan fuera. El contenedor se llama `app` (infra §5.1).
 | Proceso | Comando | Puerto | Salud |
 |---|---|---|---|
 | `api` (por defecto, `CMD` de la imagen) | `uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --no-server-header` | 8000 | `GET /v1/health` |
-| `worker` | `python -m app.worker` | — | proceso vivo; registra un latido cada 60 s. Desde BE-2.2 consume `ingesta` (§4.6); sin `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` o `DB_*`, solo latidos (`modo = sin_consumo`) y `configuracion_incompleta`, sin salir |
+| `worker` | `python -m app.worker` | — | proceso vivo; registra un latido cada 60 s. Desde BE-2.2 consume `ingesta` (§4.6); sin `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` o `DB_*`, solo latidos (`modo = sin_consumo`) y `configuracion_incompleta`, sin salir. Desde BE-4.1 consume también `purga` (§4.12) si tiene `SQS_URL_PURGA` (si no, `configuracion_incompleta` `WARNING` y solo ingiere) |
 | `migrate` | `python -m app.cli migrar` (§4.3) | — | código de salida 0 = migrado y admin inicial en orden; 1 = falló una migración o el admin inicial, o esperó más de 5 min a otro `migrar`; 2 y 3, abajo |
 | Verificación de esquema (tarea suelta con la definición de `migrate`) | `python -m app.cli verificar-esquema` (compara la base con §5.7 en una transacción de solo lectura) | — | código de salida 0 = coincide; 1 = difiere (un evento `esquema_diferencia` por diferencia); 2 = no se pudo verificar (base no disponible o error al leer el catálogo); 3, abajo |
 | Usuarios (tarea suelta con la definición de `migrate`; BE-1.3) | `python -m app.cli crear-usuario --correo X --nombre Y [--rol admin\|user]`. Si el correo existe, actualiza nombre, contraseña y, si se pasa `--rol`, rol (sin `--rol` conserva el suyo), y lo reactiva; un usuario nuevo sin `--rol` es `user`. Resultado: evento `usuario_guardado` (`resultado` = `creado` \| `actualizado`) | — | 0 = hecho; 1 = dejaría sin ningún admin activo (`usuario_rechazado`) u otro error de la base (`comando_fallido`); 2 y 3, abajo |
@@ -2429,12 +2717,12 @@ que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que 
 | `LOC_LUGAR_CERCANO_M` / `LOC_REFERENCIAS_M` / `LOC_REFERENCIAS_MAX` | 60 / 150 / 3 | `lugar_cercano` a ≤ 60 m; hasta 3 `referencias` a ≤ 150 m sin repetirlo (§4.10, paso 9) |
 | `REC_MAX_FOTOS_VIDEO` / `REC_MAX_LOTE` | 200 / 50 | 200 coincide con `MAX_FOTOS_VIDEO` de la app. `images` (BE-2.1) rechaza con `422` un `orden` > `min(REC_MAX_FOTOS_VIDEO, 200)` (200 es el `CHECK` de §5.7) y un lote de más de `REC_MAX_LOTE` |
 | `REC_MAX_BYTES_FOTO` / `REC_LADO_MIN_PX` | 4 194 304 (4 MB) / 320 | `images` rechaza un `bytes` declarado mayor (`422`); el tamaño real (sin descargar lo que pasa del máximo) y el lado menor tras EXIF los valida el `worker` (BE-2.2, §4.6; una URL PUT no limita tamaño) |
-| `PRESIGN_PUT_TTL_S` / `PRESIGN_GET_TTL_S` | 900 / 3600 | Vida de las URL `PUT` de `images` (BE-2.1) y de las GET (BE-4.1). C3a de la validación espera 900 s + 10 s |
+| `PRESIGN_PUT_TTL_S` / `PRESIGN_GET_TTL_S` | 900 / 3600 | Vida de las URL `PUT` de `images` (BE-2.1) y de las GET de `ImagenAdmin` (BE-4.1: `url`, `url_miniatura`). C3a de la validación espera 900 s + 10 s |
 | `MINIATURA_LADO_PX` / `MINIATURA_CALIDAD` | 320 / 80 | Lado mayor y calidad JPEG de `thumbs/…` (BE-2.2, §4.6) |
 | `WORKER_MAX_MENSAJES` / `WORKER_LOTE_EMBEDDING` | 10 / 4 | Mensajes por `ReceiveMessage` (máx. de SQS: 10) e imágenes por `POST /v1/embed`. Embeddings admite hasta 8; se usan 4 para no retrasar la localización (el código acota a 1–8) |
 | `WORKER_LADO_EMBEDDING_PX` | 1024 | Copia reducida que se envía al modelo (el original y la miniatura no cambian) |
 | `WORKER_ESPERA_EMBEDDING_S` | 15 | Pausa entre comprobaciones de `/health/ready` con `embedding` no listo, tras un error de SQS y tras un lote con mensajes retenidos |
-| `RECONCILIADOR_CADA_MIN` | 10 | Purgas pendientes |
+| `RECONCILIADOR_CADA_MIN` | 10 | Purgas pendientes (BE-4.1, §4.12): cada 10 min (la primera pasada, 60 s después de arrancar `api`) reenvía `purgar_video` de los videos `eliminado` hace más de 10 min sin `purgado_en` (como mucho 100 por pasada) |
 | `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api`. La de *tombstones* existe desde BE-3.3 (§4.11): la primera, 60 s después de arrancar `api`, y después cada 24 h (constantes, no parámetros); también decide desde cuándo `GET /v1/alerts?desde=` responde la foto completa (§5.3). La de `eventos_localizacion` sigue sin código (BE-3.2 escribe la tabla pero no la limpia) |
 | `PAGINA_POR_DEFECTO` / `PAGINA_MAX` | 24 / 100 | 24 coincide con `FOTOS_POR_PAGINA` de la Galería. Los usa `GET /v1/admin/videos` desde BE-2.1 |
 | `DB_POOL_API` / `DB_POOL_API_DESBORDE` / `DB_POOL_WORKER` | 5 / 5 / 2 | `db.t4g.micro` admite ~100 conexiones |
@@ -2456,22 +2744,22 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `error_no_controlado` | `api` | `metodo`, `ruta` (y la traza en `excepcion`) | Excepción que llega al middleware (`ERROR`); la respuesta es `500 ERROR_INTERNO` |
 | `error_api` | `api` | `estado`, `codigo` | Un error de §5.6 con estado ≥ 500 (`ERROR`) |
 | `api_iniciada` / `api_detenida` | `api` | `version`, `commit`, `entorno` (solo al iniciar) | Arranque y parada de la aplicación |
-| `worker_iniciado` / `latido` / `worker_detenido` | `worker` | Al iniciar: `version`, `commit`, `entorno`, `modo`; en cada latido: `modo` y, en `ingesta`, `embedding_listo` (`null` antes de la primera comprobación) | Arranque, cada 60 s y parada. `modo` = `ingesta` desde BE-2.2, o `sin_consumo` si falta configuración (§4.6) |
+| `worker_iniciado` / `latido` / `worker_detenido` | `worker` | Al iniciar: `version`, `commit`, `entorno`, `modo` y (BE-4.1) `purga` (`true` si consume `purga`); en cada latido: `modo` y, en `ingesta`, `embedding_listo` (`null` antes de la primera comprobación) | Arranque, cada 60 s y parada. `modo` = `ingesta` desde BE-2.2, o `sin_consumo` si falta configuración (§4.6) |
 | `embedding_listo` / `embedding_no_listo` | `worker` | — | `GET /health/ready` de embeddings pasa a responder 200 / deja de hacerlo (solo al cambiar). Sin `embedding`, el `worker` no recibe mensajes (BE-2.2) |
 | `lote_ingesta` | `worker` | `mensajes`, `borrados`, `retenidos`, `duracion_ms` | Tras procesar cada recepción con mensajes (BE-2.2) |
 | `mensajes_devueltos` | `worker` | `mensajes` | `embedding` dejó de estar listo durante la espera larga (o el proceso se detiene): devueltos con visibilidad 0 |
 | `imagen_procesada` | `worker` | `origen` (`s3` \| `reprocesar`), `imagen_id`, `video_id`, `version_vector`, `ancho`, `alto`, `bytes`, `duracion_ms` | Foto `procesada` con su vector (BE-2.2) |
 | `imagen_con_error` | `worker` | `origen`, `imagen_id`, `video_id`, `motivo` (los de §4.6) | Error permanente: foto en `error`, mensaje borrado (`WARNING`) |
 | `mensaje_descartado` | `worker` | `motivo` (`prueba_s3`, `clave_no_reconocida`, `video_no_existe`, `video_eliminado`, `imagen_no_existe`, `duplicado`, `objeto_no_existe`), `origen`, `imagen_id`, `video_id` (o `mensaje_id` en los dos primeros) | Nada que procesar; el mensaje se borra (`INFO`) |
-| `mensaje_no_reconocido` | `worker` | `motivo`, `mensaje_id` | Cuerpo que no es ninguno de §5.8; se borra (`WARNING`) |
+| `mensaje_no_reconocido` | `worker` | `motivo`, `mensaje_id` y, en `purga` (BE-4.1), `cola = purga` | Cuerpo que no es ninguno de §5.8; se borra (`WARNING`) |
 | `ingesta_transitoria` | `worker` | `motivo` (`s3: …`, `base: …`, `embedding: …`, `version_vector distinta…`, `imprevisto: …`), `origen`, `imagen_id`, `video_id` (y la traza en `excepcion` si es imprevista) | Fallo transitorio: el mensaje se queda (`WARNING`; `ERROR` si es imprevisto o una respuesta no válida de embeddings) |
 | `version_vector_distinta` | `worker`, `api` | `esperada`, `recibida` | `/v1/embed` devolvió otra `version_vector` que `EMBEDDING_VERSION_VECTOR`: el `worker` no guarda nada; en `api` (`vecinos` desde BE-2.4, `localize` desde BE-3.2), `503 EMBEDDING_NO_DISPONIBLE` sin buscar (`ERROR`) |
-| `cola_fallida` | `worker` | `operacion` (`recibir` \| `borrar`), `motivo` | Error de SQS; el bucle sigue (`WARNING`) |
+| `cola_fallida` | `worker`, `api` | `operacion` (`recibir` \| `borrar` \| `enviar` \| `crear_cliente`), `motivo` y, desde BE-4.1, `cola` (`purga` \| `ingesta`; sin ella, `ingesta` en el `worker`) | `worker`: error de SQS; el bucle sigue (`WARNING`). `api` (BE-4.1): SQS no aceptó un mensaje de `DELETE /v1/admin/images/{id}`, del lote o de `reprocesar` (`ERROR`; responde `500` o `ERROR_INTERNO` en `fallidas`), o no se pudo crear el cliente al arrancar (`ERROR`) |
 | `vecinos_consultados` | `api` | `k`, `devueltos`, `similitud_max` (`null` sin vecinos), `bytes` (de la foto), `embedding_ms`, `busqueda_ms`, `latencia_ms` | `POST /v1/admin/diagnostico/vecinos` con `200` (BE-2.4, `INFO`). Nunca ids, bytes ni nada de la foto salvo su tamaño |
 | `embedding_no_disponible` | `api` | `motivo` (p. ej. `sin EMBEDDING_URL`, `sin respuesta en 5 s`, `503 SATURADO`, `respuesta no válida: …`) | Una llamada de `api` a `/v1/embed` falló: `vecinos` (BE-2.4) y `localize` (BE-3.2) responden `503 EMBEDDING_NO_DISPONIBLE` (`WARNING`; `ERROR` si la respuesta no cumple el contrato). Va seguido de `error_api` |
 | `localizacion_calculada` | `api` | `resultado`, `nivel_confianza` (`null` con `sin_coincidencias`), `confianza`, `fotos_usadas`, `fotos_con_coincidencia`, `coincidencias` (vecinos sobre `LOC_SIM_MIN`), `grupos`, `similitud_max` (6 decimales o `null`), `bytes` (de todas las fotos), `embedding_ms`, `busqueda_ms`, `latencia_ms` | `POST /v1/localize` con `200` (BE-3.2, `INFO`). Nunca la posición, ids, rumbos ni nada de las fotos salvo su tamaño total |
 | `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` y, desde BE-1.3, en cualquier endpoint que la use (`WARNING`; responde `503`); en `migrate` (toda la CLI, también `limpiar-validacion`), la CLI termina con 2 (`ERROR`) |
-| `configuracion_incompleta` | `migrate`, `api`, `worker` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, falta o no vale la contraseña de `crear-usuario`, o falta `S3_BUCKET_DATASET` en `limpiar-validacion` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida; desde BE-2.1, falta `S3_BUCKET_DATASET` (o no se pudo crear el cliente de S3) en `images` o `complete` (`ERROR`; responde `500`). En `worker` (BE-2.2), al arrancar sin `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` o `DB_*` (`faltan`; `motivo = la ingesta no puede empezar`), y sigue con latidos sin consumir (`ERROR`) |
+| `configuracion_incompleta` | `migrate`, `api`, `worker` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, falta o no vale la contraseña de `crear-usuario`, o falta `S3_BUCKET_DATASET` en `limpiar-validacion` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida; desde BE-2.1, falta `S3_BUCKET_DATASET` (o no se pudo crear el cliente de S3) en `images` o `complete` (`ERROR`; responde `500`). En `worker` (BE-2.2), al arrancar sin `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` o `DB_*` (`faltan`; `motivo = la ingesta no puede empezar`), y sigue con latidos sin consumir (`ERROR`); desde BE-4.1, sin `SQS_URL_PURGA` (`motivo = la purga no puede empezar`, `WARNING`: solo ingiere). En `api` (BE-4.1), falta `SQS_URL_PURGA` o `SQS_URL_INGESTA` en una ruta que encola (`ERROR`; responde `500`) |
 | `video_creado` | `api` | `video_id`, `numero`, `nuevo` (`false` si ya existía con ese `ref_cliente`) | `POST /v1/collect/videos` con `201` o `200` (BE-2.1) |
 | `lugar_guardado` | `api` | `operacion` (`crear` \| `editar`), `lugar_id`, `cambios` (campos que cambiaron; al crear, los 7 de `LugarEntrada`) | `POST /v1/admin/places` con `201`, o `PUT` que cambió algo (BE-3.1, `INFO`). Sin el nombre |
 | `lugar_eliminado` | `api` | `lugar_id`, `existia`, `fotos_sin_lugar` | `DELETE /v1/admin/places/{id}` con `204` (BE-3.1, `INFO`), también de un id que no existía (`existia = false`) |
@@ -2480,9 +2768,23 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `alertas_sincronizadas` | `api` | `cambios`, `ok`, `errores` (los `VALIDACION`) | `POST /v1/admin/alerts/sincronizar` con `200` (BE-3.3, `INFO`); antes, un `alerta_guardada` o `alerta_eliminada` por cambio aplicado |
 | `alertas_purgadas` | `api` | `borradas` (filas), `dias` (`ALERTAS_TOMBSTONE_DIAS`), `duracion_ms` | Cada purga diaria de *tombstones* (BE-3.3, `INFO`), también con 0 |
 | `limpieza_fallida` | `api` | `tarea` (`tombstones_alertas`), `motivo` (y la traza en `excepcion` si no es de la base) | Una purga diaria falló (BE-3.3): `WARNING` si la base no respondió, `ERROR` si fue otra cosa; la siguiente, en 24 h |
+| `video_renombrado` | `api` | `video_id`, `cambiado` | `PATCH /v1/admin/videos/{id}` con `200` (BE-4.1, `INFO`). Sin el nombre |
+| `video_eliminado` | `api` | `video_id`, `fotos_retiradas`, `repetido` (`true` si ya estaba eliminado), `encolada` (`true`/`false`; `null` si repetido) | `DELETE /v1/admin/videos/{id}` con `202` (BE-4.1, `INFO`) |
+| `purga_no_encolada` | `api` | `video_id`, `motivo` | SQS no aceptó `purgar_video` tras borrar el video, o en una pasada del reconciliador (BE-4.1, `WARNING`): lo reenvía el reconciliador |
+| `imagen_editada` | `api` | `imagen_id`, `cambios`, `origen` (`patch` \| `lote`) | `PATCH /v1/admin/images/{id}` o `reasignar` que cambió algo (BE-4.1, `INFO`) |
+| `imagen_eliminada` | `api` | `imagen_id`, `video_id`, `origen` (`delete` \| `lote`) | Imagen borrada y `purgar_imagen` encolado (BE-4.1, `INFO`) |
+| `imagen_reprocesada` | `api` | `imagen_id`, `video_id` | `reprocesar` con `202` (BE-4.1, `INFO`) |
+| `imagenes_lote` | `api` | `accion`, `pedidas`, `procesadas`, `fallidas` | `POST /v1/admin/images/lote` con `200` (BE-4.1, `INFO`) |
+| `purgas_reencoladas` | `api` | `pendientes`, `enviados`, `minutos`, `duracion_ms` | Cada pasada del reconciliador (BE-4.1): `INFO` si había videos pendientes, `DEBUG` si no (en `dev`, `LOG_LEVEL = INFO`: solo se ven las pasadas con trabajo) |
+| `reconciliador_fallido` | `api` | `motivo` (y la traza en `excepcion` si no es de la base) | Una pasada del reconciliador falló (BE-4.1): `WARNING` si la base no respondió, `ERROR` si otra cosa; la siguiente, en `RECONCILIADOR_CADA_MIN` |
+| `lote_purga` | `worker` | `mensajes`, `borrados`, `retenidos`, `duracion_ms` | Tras procesar cada recepción de `purga` con mensajes (BE-4.1, `INFO`) |
+| `video_purgado` | `worker` | `video_id`, `objetos` (borrados de S3 en las dos pasadas), `imagenes` (filas borradas), `existia`, `ya_purgado`, `duracion_ms` | `purgar_video` terminado (BE-4.1, `INFO`) |
+| `imagen_purgada` | `worker` | `imagen_id`, `video_id`, `objetos` | `purgar_imagen` terminado (BE-4.1, `INFO`) |
+| `purga_descartada` | `worker` | `motivo` (`video_no_eliminado` \| `imagen_existe`), `tipo`, `video_id` (e `imagen_id`) | El mensaje no corresponde a un borrado confirmado: se borra sin tocar nada (BE-4.1, `INFO`) |
+| `purga_transitoria` | `worker` | `motivo` (`s3: …`, `base: …`, `imprevisto: …`), `video_id` (e `imagen_id`) | Fallo de S3, de la base o imprevisto: el mensaje se queda (BE-4.1, `WARNING`; `ERROR` con la traza si es imprevisto) |
 | `imagenes_registradas` | `api` | `video_id`, `recibidas`, `nuevas`, `actualizadas` (pendientes con metadatos nuevos y URL), `marcadas_subida` (pendientes que el `HEAD` encontró en S3), `sin_cambios` (ya `subida`, `procesada` o `error`), `urls` | `POST …/images` con `200` (BE-2.1). Nunca las URL |
 | `subida_completada` | `api` | `video_id`, `comprobadas` (pendientes con `HEAD`), `encontradas`, `fallidas`, `estado`, `conteo` | `POST …/complete` con `200` (BE-2.1) |
-| `s3_fallido` | `api`, `migrate` | `operacion` (`firmar` \| `head` \| `borrar` \| `listar` \| `crear_cliente`), `motivo` (clase y código de AWS, nunca la URL); en `head`, `video_id` y `claves` (cuántas fallaron); en `firmar`, `video_id` | `firmar`: `images` responde `500` (`ERROR`). `head`: alguna foto queda pendiente y la respuesta sigue (`WARNING`). `borrar` (primera pasada) o `listar` (`--simular`): `limpiar-validacion` termina con 1 (`ERROR`). `crear_cliente`: al arrancar `api` (`ERROR`) |
+| `s3_fallido` | `api`, `migrate` | `operacion` (`firmar` \| `firmar_get` \| `head` \| `borrar` \| `listar` \| `crear_cliente`), `motivo` (clase y código de AWS, nunca la URL); en `head`, `video_id` y `claves` (cuántas fallaron); en `firmar`, `video_id` | `firmar`: `images` responde `500` (`ERROR`). `head`: alguna foto queda pendiente y la respuesta sigue (`WARNING`). `borrar` (primera pasada) o `listar` (`--simular`): `limpiar-validacion` termina con 1 (`ERROR`). `crear_cliente`: al arrancar `api` (`ERROR`) |
 | `limpieza_validacion` | `migrate` | `videos`, `objetos`, `video_ids` | `limpiar-validacion` terminó con 0 (BE-2.1). Después imprime `LIMPIEZA {"videos": n, "objetos": m}` |
 | `limpieza_rechazada` | `migrate` | `inexistentes`, `sin_prefijo` (ids), `motivo` | `limpiar-validacion --video …` (con o sin `--simular`) con algún id inexistente o sin el prefijo `validacion-` en `nombre` y `ref_cliente` (`ERROR`); no borra nada y termina con 1 |
 | `limpieza_simulada` | `migrate` | `videos`, `objetos`, `video_ids` (lo que borraría) | `limpiar-validacion --simular` terminó con 0 (no borró nada). Después imprime `SIMULACION {"videos": n, "objetos": m}` |
@@ -2922,6 +3224,49 @@ las alertas vivas (la siguiente ejecución las barre). El s0 de C5 no es la cifr
 (C4), que siguen vivas y activas hasta la limpieza (en `dev`, 2026-10-26: 2 → 3 con 0 alertas reales); con `--solo C5`
 parte de las reales. Cada ejecución completa deja 6 *tombstones* (A, D y las 4 de la limpieza).
 
+**`validate41.py`** (validation-4-1, BE-4.1; solo `dev`; **sin ejecutar en `dev`**). Es el ejemplo de un validador que
+borra con la API y para el `worker`. Usa `Validador`, `EmbeddingDev` (también `aws(...)` para `application-autoscaling`
+y `poner`), `ClienteApi`, `EntornoBackend.sql`, `RecorridoPrueba`, `pedir_vecinos`, `jpeg_patron`, `claves_s3`,
+`mensajes_cola`, `mensajes_log`, `videos_validacion`, `borrar_lugares_restos`, `borrar_lugares`, `comprobar_bucket`,
+`red_tareas`, `lote_hecho`, `hora_bogota`, `embedding_en_api`, `recurso_ecs` y `_errores_aws`. Lo que tiene y no está
+en `comun.py`:
+- Orden: P1 credenciales → P2 BE-2.2 y BE-2.4 «Hecho» (2), hora antes de las 21:00 en Bogotá (3) y `/v1/health/ready`
+  con `"db": "ok"` → P3 login de admin (`401` es 3) y BE-4.1 desplegado (`GET /v1/admin/images?por_pagina=1` → `200`;
+  `404` es 2) → P4 outputs `bucket_dataset`, `sqs_purga_url` y `sqs_purga_dlq_url`, `comprobar_bucket`, red de tareas,
+  `campus-locator-dev-validacion`, `campus-locator-dev-worker` con la imagen de `api` (si no, 2), lectura de `purga`,
+  `comprobar_inf21` y el objetivo escalable de `worker` → P5 `embedding` (como `validate24.py`). Preparación: reanuda el
+  escalado de `worker` si quedó suspendido, borra con `DELETE` los videos `validacion-` (`videos_validacion`) y los
+  lugares `validacion-`, y anota la DLQ de `purga`. Comprobaciones en orden: C5b, C4a, C1a, C1b, C4b, C5a, C2, C3.
+- Constantes: `FOTOS_V1` (1–6), `FOTOS_V2` (1–2), `VECINOS_C1` (1–3), `K_C1` (5), `HORA_LIMITE` (21),
+  `LIMITE_PROCESADO_S` (20 min), `LIMITE_PURGA_S` (10 min), `LIMITE_RECONCILIADOR_S` (21 min),
+  `LIMITE_WORKER_PARADO_S` (5 min), `PAUSA_SONDEO_S` (15 s), `PAUSA_PURGA_S` (30 s), `MARGEN_LOGS_S` (60 s),
+  `CAMPOS_VIDEO`, `CAMPOS_IMAGEN`, `CAMPOS_PAGINA`, `CAMPOS_BORRADO`, `ESTADOS_VIDEO`, `ESTADOS_IMAGEN` (copias de
+  §5.5), `SUSPENDIDO`/`REANUDADO` (`SuspendedState`). Prefijo: `validacion-41-<AAAAMMDD-HHMMSS>`; coordenada
+  `1.0 + (semilla % 997) · 0,001, −100.0` (distinta en cada ejecución).
+- `Contexto`: los métodos que tocan AWS van aparte para que las pruebas los sustituyan (`claves(prefijo)`,
+  `mensajes_purga()`, `mensajes_dlq()`, `sql(consulta)` → filas partidas por `|`, `eventos_api(evento, desde)` (líneas
+  JSON de `/campus-locator/dev/api`), `escalado_worker_suspendido()`, `suspender_escalado_worker(bool)`, `worker()`,
+  `descargar(url)` → `(código, content-type)`); datos: `recorrido(clave, fotos)` (`RecorridoPatrones`, V1 o V2),
+  `fotos(clave)`, `asegurar_procesadas(clave, fotos)` (sube, `complete` y sondea hasta `procesada`), `asegurar_lugar()`,
+  `borrar_video(clave)` (exige `202`; apunta en `borrados`), `esperar_purga(clave)` (S3 vacío y `purgado_en`);
+  `preparacion()`, `limpiar()` (reanuda el escalado y las réplicas de `worker` si las tocó —`escalado_suspendido_por_mi`
+  se marca **antes** de suspender—, deja `embedding` como estaba y borra con `DELETE` los videos que no borró y el
+  lugar). `respuestas` guarda el detalle de V1, el `PATCH` y el `DELETE` para C5a.
+- C3: anota las réplicas de `worker`, suspende su escalado y lo pone en 0, espera `runningCount = 0`, borra V2 (C3a:
+  ≥ 1 mensaje visible en `purga`), espera hasta 21 min un `purgas_reencoladas` con `enviados` ≥ 1 en el log de `api`
+  con los objetos de V2 aún en S3 (C3b; el contador de la cola solo se informa: es aproximado), reanuda el escalado,
+  pone 1 réplica y espera la purga de V2 (C3c) con la DLQ de `purga` sin mensajes nuevos.
+- Pruebas: `tests/ops/test_validate41.py` (sin base ni AWS): `Mundo` (API en memoria con §5.5, S3 en un dict, cola
+  `purga`, un `worker` que procesa al subir y purga cuando está en marcha, un reconciliador que emite el evento cada
+  10 min de reloj falso, auditoría) y `ContextoFalso` (sustituye los métodos de AWS); `EmbFalso` y `BackendFalso`.
+  Interruptores: `no_retira` (C1b), `no_purga` (C2), `sin_reconciliador` (C3; la limpieza reanuda el escalado),
+  `sin_auditoria` (C4b), `campo_de_mas` (C5a), `desplegado` (P3 → 2).
+
+Trampas de BE-4.1: C1 y C2 suponen que nadie más borra videos en `dev` mientras corre; C3b lee el evento del
+reconciliador sin ids (otro video borrado a la vez también lo produciría). Mientras dura C3 no hay ingesta ni purga en
+`dev`. `--sin-limpieza` deja el escalado de `worker` como esté (si C3 se interrumpió, suspendido: lo reanuda la
+preparación de la siguiente ejecución) y `embedding` como esté. C4b depende de C1b (con `--solo C4b`, falla).
+
 **Trampa del arranque de `embedding`: Cloud Map sin configuración de salud (0.9.1 y 0.9.2).** El servicio de Cloud
 Map de `embedding` (`srv-josm7lql7ddxgzm6`, `embedding.campus-locator.local`, registro A con TTL 10 s) **no tiene
 `HealthCheckConfig` ni `HealthCheckCustomConfig`** (comprobado en `dev` con `servicediscovery get-service`,
@@ -2985,7 +3330,7 @@ para las pruebas de permisos.
 | Lugares | `DELETE /v1/admin/places/{id}` (BE-3.1; `comun.borrar_lugares`); al empezar, `comun.borrar_lugares_restos` |
 | Alertas | `DELETE /v1/admin/alerts/{id}` (BE-3.3; `comun.borrar_alertas`); al empezar, `comun.borrar_alertas_restos`. Queda su *tombstone* `ALERTAS_TOMBSTONE_DIAS` (sin contenido; no se puede quitar antes) y su auditoría |
 | Videos de prueba, antes de BE-4.1 | `limpiar-validacion --video <id> …` en una tarea suelta con la definición `campus-locator-dev-worker` (§5.9) |
-| Videos de prueba, con BE-4.1 hecho | `DELETE /v1/admin/videos/{id}`; su purga limpia S3 |
+| Videos de prueba, con BE-4.1 hecho | `DELETE /v1/admin/videos/{id}`; su purga limpia S3 (cuando corre el `worker`, es decir, con `embedding` encendido). Así lo hace `validate41.py` (BE-4.1, también con los restos de otros lotes); los validadores anteriores siguen con `limpiar-validacion` hasta que se cambien |
 | Usuario `validacion+user@campus.edu.co` | Lo crea o reactiva `crear-usuario --rol user` (contraseña aleatoria en `CREAR_USUARIO_PASSWORD`, nunca impresa) y lo desactiva `desactivar-usuario` al terminar, ambos en una tarea suelta de `migrate` (en `local`, con `docker compose run`): `crear_usuario_validacion` y `desactivar_usuario_validacion` de `comun.py`. La fila queda inactiva entre ejecuciones; reactivarla devuelve la validez a sus tokens sin vencer (§5.2), que solo tuvo el validador |
 
 Al empezar, cada validador que crea videos borra los `validacion-` que haya dejado una ejecución interrumpida
@@ -3222,6 +3567,34 @@ cambio por cambio y purga en `api` (aceptada, BE-3.3; aprobadas por el maestro e
   `DELETE` no da error; los *tombstones* de las pruebas viven 90 días; la purga no corre si `api` se reinicia más a
   menudo que cada 60 s (no pasa).
 
+**ADR-BE-20 — Purga construida: video tras el `COMMIT` con reconciliador, imagen dentro de la transacción, en serie
+con la ingesta (aceptada, BE-4.1; sin aprobación del usuario todavía: decisión del lote, a confirmar por el maestro).**
+Fija lo que ADR-BE-07, §4.12 anterior y §5.8 no decían:
+- **`purgar_video` se envía después del `COMMIT`** (como pedía ADR-BE-07): el `DELETE` no falla si SQS falla, porque
+  el video queda marcado (`eliminado` sin `purgado_en`) y el reconciliador lo reenvía; los vectores ya salieron.
+- **`purgar_imagen` (y `reprocesar_imagen`) se envían antes del `COMMIT`**: la fila de la imagen se borra en la
+  petición, así que después nada recordaría que faltan sus objetos y un reconciliador no tendría qué buscar. Si SQS
+  falla, la transacción se deshace (500, repetir es seguro); si el `COMMIT` falla después de enviar, el `worker`
+  bloquea el video (espera a que la transacción de `api` termine) y, al encontrar la fila, descarta el mensaje.
+  *Alternativas descartadas:* una columna o tabla de «imágenes por purgar» (migración nueva, fuera del lote); enviar
+  después del `COMMIT` sin más (un fallo de SQS dejaría los objetos huérfanos sin rastro).
+- **El reconciliador reenvía sin mirar la cola**: `api` no tiene `sqs:GetQueueAttributes` y la purga es idempotente;
+  los duplicados (6 por hora y video con el `worker` apagado) cuestan una lectura y dos listados cada uno.
+- **La purga va en el mismo bucle que la ingesta, en serie**: con un solo `worker` (infra §5.10), una miniatura que
+  la ingesta escribe no puede caer después de la segunda pasada por S3 de la purga de su video. Sin embeddings, la
+  pausa del bucle es una espera larga en `purga` (la purga no necesita embeddings); con embeddings, una recepción de
+  1 s antes de la de `ingesta`. *Alternativa descartada:* una tarea de asyncio aparte para `purga` (dejaba intacto el
+  bucle de BE-2.2, pero la purga podía cruzarse con la ingesta del mismo video).
+- **Mensajes acotados**: `purgar_imagen` solo puede borrar las dos claves de su imagen y `purgar_video` solo actúa
+  sobre un video `eliminado`; un mensaje mal formado o ajeno se descarta sin tocar S3.
+- **`DELETE` de video repetido = misma respuesta** (`fotos_retiradas` sale de la auditoría, porque después de la
+  purga las filas de las fotos ya no existen); **`DELETE` de imagen repetido = `404`** (lo que ya pedía
+  `validation-4-1`); **`reprocesar` de una foto sin subir = `409 IMAGEN_NO_SUBIDA`** (código nuevo: el `worker` no
+  tendría objeto que descargar y la foto quedaría en `subida` para siempre).
+- **URLs GET que no rompen el detalle**: sin S3 o con la firma rota, `null` (la barra de progreso de la app sigue).
+- *Consecuencias:* sin `embedding` encendido no hay `worker` y la purga espera (los objetos siguen en S3, fuera de toda
+  búsqueda); un `purgar_imagen` que llegue a la DLQ deja 2 objetos huérfanos hasta que se borre su video (R18).
+
 ---
 
 ## 7. Riesgos
@@ -3244,4 +3617,5 @@ cambio por cambio y purga en `api` (aceptada, BE-3.3; aprobadas por el maestro e
 | R15 | Un fallo transitorio repetido (embeddings saturado, `version_vector` distinta, S3 o base caídos) manda a la DLQ eventos de fotos válidas | Baja | Medio | El `worker` no recibe sin `embedding` listo (§4.6); un mensaje retenido vuelve cada 180 s y va a la DLQ a la sexta recepción (~15 min de fallos seguidos); la alarma de DLQ avisa (infra §5.10). Se re-encola con *redrive* de la DLQ o, con BE-4.1, `POST /v1/admin/images/{id}/reprocesar`. La foto queda en `subida` (no en `error`) |
 | R14 | boto3 en `api` (0,25 vCPU, 0,5 GB): memoria y tiempo de arranque | Media | Bajo | El cliente se crea una vez, en un hilo, al arrancar (§4.5); argon2id ya usa hasta 128 MiB (R12). Sin medir en `dev`: anotar la memoria de la tarea tras desplegar BE-2.1 |
 | R16 | La búsqueda HNSW es aproximada: con muchos vectores, algún vecino exacto puede faltar en `vecinos` y en `/v1/localize`; con pocos, PostgreSQL puede no usar el índice (§4.8) | Media | Bajo | `ef_search` = 64 ≥ `k` (§4.8); la herramienta de evaluación de embeddings compara con fuerza bruta (`SERVICE_EMBEDDING/docs/ARCHITECTURE.md` §4.5); si el *recall* no alcanza, subir `LOC_EF_SEARCH` (variable de §5.10). `EXPLAIN` en `dev` con un dataset real: a verificar |
+| R18 | Purga pendiente u objetos huérfanos en S3 (BE-4.1): sin `embedding` no hay `worker` y la purga espera; un `purgar_imagen` que acaba en la DLQ (5 fallos de S3 o de la base) no lo reenvía nadie | Media | Bajo | Los vectores salen en la transacción del `DELETE` (la búsqueda nunca ve lo borrado); el reconciliador reenvía los `purgar_video` cada 10 min; la alarma de la DLQ de `purga` avisa (infra §5.10) y se re-envía con *redrive*; borrar el video purga su prefijo entero (también lo que dejó una imagen). Sin medir en `dev` |
 | R17 | Sincronización de alertas por marca de tiempo: un cambio cuya transacción confirma más de 60 s después de empezar no sale en ninguna diferencia, y la app no lo ve hasta pedir otra foto completa | Baja | Medio | Margen de 60 s en `desde` (ADR-BE-19, §4.11); las transacciones de alertas duran milisegundos. Si un día pasara, la app lo arregla con una foto completa (sin `desde`) |

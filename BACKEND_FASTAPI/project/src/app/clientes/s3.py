@@ -3,7 +3,8 @@
 `AlmacenS3(bucket, region)` es síncrono (boto3); los servicios asíncronos lo llaman en hilos con `firmar_puts` y
 `consultar_varios`. Lo usan `api` (firmar `PUT` y `HEAD`, con el rol `tarea-api`), la CLI `limpiar-validacion`
 (listar y borrar, con el rol `tarea-worker`; infra §5.8) y, desde BE-2.2, el `worker` (`descargar` el original y
-`escribir` la miniatura, con el rol `tarea-worker`).
+`escribir` la miniatura, con el rol `tarea-worker`). BE-4.1: `firmar_get` (URLs de 1 h del panel, en `api`) y
+`borrar_prefijo` en la purga del `worker`.
 
 Reglas:
 - Nunca se registra una URL prefirmada (§4.1). Los motivos de `FalloS3` llevan la clase y el código del error de AWS,
@@ -109,6 +110,18 @@ class AlmacenS3:
             raise FalloS3(f"firmar: {_motivo(exc)}") from None
         return UrlFirmada(url=url, expira_en=inicio + timedelta(seconds=ttl_s))
 
+    def firmar_get(self, clave: str, ttl_s: int) -> UrlFirmada:
+        """BE-4.1: URL prefirmada `GET` de `clave` (sin encabezados firmados), para ver una foto o su miniatura (§5.5).
+        No comprueba que el objeto exista: si no está, S3 responde 403/404 al descargarla."""
+        inicio = self.reloj().astimezone(UTC).replace(microsecond=0)
+        try:
+            url = self.cliente.generate_presigned_url(
+                "get_object", Params={"Bucket": self.bucket, "Key": clave}, ExpiresIn=ttl_s, HttpMethod="GET"
+            )
+        except Exception as exc:
+            raise FalloS3(f"firmar: {_motivo(exc)}") from None
+        return UrlFirmada(url=url, expira_en=inicio + timedelta(seconds=ttl_s))
+
     def consultar(self, clave: str) -> ObjetoS3 | None:
         """HEAD de `clave`: el objeto, o `None` si no está (404 o 403). Otro error → `FalloS3`."""
         from botocore.exceptions import ClientError
@@ -208,6 +221,14 @@ async def firmar_puts(almacen: AlmacenS3, claves: Iterable[str], ttl_s: int) -> 
     if not lista:
         return {}
     return await anyio.to_thread.run_sync(lambda: {clave: almacen.firmar_put(clave, ttl_s) for clave in lista})
+
+
+async def firmar_gets(almacen: AlmacenS3, claves: Iterable[str], ttl_s: int) -> dict[str, UrlFirmada]:
+    """BE-4.1: URLs `GET` de varias claves en un solo hilo (como `firmar_puts`)."""
+    lista = list(dict.fromkeys(claves))
+    if not lista:
+        return {}
+    return await anyio.to_thread.run_sync(lambda: {clave: almacen.firmar_get(clave, ttl_s) for clave in lista})
 
 
 async def consultar_varios(

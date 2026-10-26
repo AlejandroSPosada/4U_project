@@ -20,6 +20,7 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.clientes.s3 import AlmacenS3
+from app.clientes.sqs import Colas
 from app.config import Settings
 from app.db import sesion
 from app.errores import ErrorApi
@@ -60,6 +61,19 @@ def sin_almacen(request: Request) -> ErrorApi:
         faltan=["S3_BUCKET_DATASET"] if not request.app.state.ajustes.s3_bucket_dataset else [],
         invalidas=[],
         motivo=getattr(request.app.state, "motivo_sin_almacen", "falta S3_BUCKET_DATASET"),
+    )
+    return ErrorApi(500, "ERROR_INTERNO")
+
+
+def obtener_colas(request: Request) -> Colas:
+    """BE-4.1: las colas de `app.state.colas` (`Colas(ingesta, purga)`; cada una `None` sin su variable)."""
+    return getattr(request.app.state, "colas", None) or Colas()
+
+
+def sin_cola(variable: str) -> ErrorApi:
+    """BE-4.1: `500 ERROR_INTERNO` por falta de `SQS_URL_PURGA` o `SQS_URL_INGESTA` en `api`, con su evento."""
+    registrar(
+        log, "configuracion_incompleta", logging.ERROR, faltan=[variable], invalidas=[], motivo=f"falta {variable}"
     )
     return ErrorApi(500, "ERROR_INTERNO")
 

@@ -1,4 +1,6 @@
-"""Peticiones y respuestas de recolección y de videos (ARCHITECTURE §5.4 y §5.5), BE-2.1.
+"""Peticiones y respuestas de recolección y de videos (ARCHITECTURE §5.4 y §5.5), BE-2.1; desde BE-4.1, también las de
+administración de videos e imágenes (`VideoRenombrar`, `VideoBorrado`, `ImagenEditar`, `ImagenesLote`,
+`LoteResultado`, `ImagenDetalle`).
 
 Las peticiones ignoran los campos de más (`extra="ignore"`) y pasan todo texto por `texto_admitido` (§4.4). Los límites
 que son parámetros de §5.10 (`REC_MAX_LOTE`, `REC_MAX_FOTOS_VIDEO`, `REC_MAX_BYTES_FOTO`, `PAGINA_MAX`) no están aquí:
@@ -203,7 +205,8 @@ class VideoResumen(BaseModel):
 
 
 class ImagenAdmin(BaseModel):
-    """`url`, `url_miniatura` y `url_expira_en` son `null` hasta BE-4.1 (§5.5)."""
+    """Desde BE-4.1, `url` (original) y `url_miniatura` son prefirmadas GET de `PRESIGN_GET_TTL_S` (`null` si el objeto
+    aún no existe o no se pudo firmar) y `url_expira_en` es su vencimiento (`null` sin ninguna URL), §5.5."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -226,3 +229,97 @@ class ImagenAdmin(BaseModel):
 
 class VideoDetalle(VideoResumen):
     fotos: list[ImagenAdmin]
+
+
+# --- Administración de videos e imágenes (BE-4.1, §5.5) -----------------------------------------------------------
+NOTAS_MAX = 500  # `imagenes.notas` (§5.7)
+LOTE_IMAGENES_MAX = 200
+
+
+class VideoRenombrar(BaseModel):
+    """`PATCH /v1/admin/videos/{id}`: `nombre` de 1 a 40 caracteres tras recortar (aquí vacío no vale)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    nombre: str
+
+    @field_validator("nombre")
+    @classmethod
+    def _nombre(cls, valor: str) -> str:
+        return _recortado(valor, NOMBRE_VIDEO_MAX, obligatorio=True)  # type: ignore[return-value]
+
+
+class VideoBorrado(BaseModel):
+    """`DELETE /v1/admin/videos/{id}` → `202`. Repetir da la misma respuesta (`fotos_retiradas`, de la auditoría)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    estado: Literal["eliminado"] = "eliminado"
+    fotos_retiradas: int
+    purga: Literal["programada"] = "programada"
+
+
+class ImagenEditar(BaseModel):
+    """`PATCH /v1/admin/images/{id}`: cualquiera de `lat`+`lng` (juntos), `lugar_id` (o `null`), `calidad`, `notas`
+    (≤ 500 tras recortar; vacío o `null` = sin notas). Lo que no se envía no cambia; el router usa `model_fields_set`
+    para distinguir «ausente» de `null`."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    lat: float | None = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    lng: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
+    lugar_id: uuid.UUID | None = None
+    calidad: CalidadImagen | None = None
+    notas: str | None = None
+
+    @field_validator("notas")
+    @classmethod
+    def _notas(cls, valor: str | None) -> str | None:
+        return None if valor is None else _recortado(valor, NOTAS_MAX, obligatorio=False)
+
+
+class ImagenesLote(BaseModel):
+    """`POST /v1/admin/images/lote`. `reasignar` exige la clave `lugar_id` (un id o `null` = quitar el lugar)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    accion: Literal["eliminar", "reasignar"]
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=LOTE_IMAGENES_MAX)
+    lugar_id: uuid.UUID | None = None
+
+
+class FallidaLote(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    codigo: str
+
+
+class LoteResultado(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    procesadas: int
+    fallidas: list[FallidaLote]
+
+
+class ReferenciaVideo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    numero: int
+    nombre: str
+
+
+class VectorImagen(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version_vector: str
+    creado_en: FechaUtc
+
+
+class ImagenDetalle(ImagenAdmin):
+    """`GET /v1/admin/images/{id}`: `ImagenAdmin` + `video` + `vector` (el de `EMBEDDING_VERSION_VECTOR`, o `null`)."""
+
+    video: ReferenciaVideo
+    vector: VectorImagen | None
