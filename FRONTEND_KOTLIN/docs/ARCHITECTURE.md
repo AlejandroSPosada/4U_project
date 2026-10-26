@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.7.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.7.2** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
 | Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); las pruebas en dispositivo (FE-2.3 C3) siguen pendientes. Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4); la prueba en el campus (FE-2.1 C1 y C2) sigue pendiente. El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |

@@ -203,8 +203,13 @@ def main(argv: list[str] | None = None) -> int:
 
     def p4_fe23() -> str:
         texto = comun.PLAN_APP.read_text(encoding="utf-8")
-        fila = next((linea for linea in texto.splitlines() if linea.strip().startswith("| FE-2.3 |")), "")
-        celdas = [c.strip() for c in fila.strip().strip("|").split("|")]
+        # La fila de estado (§3) es `| FE-2.3 | <fase> | <estado> | …`; la de §2.1 tiene el nombre en la 2.ª celda.
+        filas = (
+            [c.strip() for c in linea.strip().strip("|").split("|")]
+            for linea in texto.splitlines()
+            if linea.strip().startswith("| FE-2.3 |")
+        )
+        celdas = next((c for c in filas if len(c) >= 5 and c[1].isdigit()), [])
         if len(celdas) < 5 or celdas[2] != "Hecho" or celdas[4] in ("", "—"):
             raise comun.Bloqueo("FE-2.3 no está «Hecho» con «Última validación» en PLAN.md §3 (el PDR sin probar)")
         return f"FE-2.3 Hecho ({celdas[4]})"

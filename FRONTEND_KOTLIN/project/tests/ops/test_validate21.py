@@ -15,6 +15,8 @@ ADMIN = ("admin@campus.edu.co", "Clave-Secreta-1")
 TOKEN = "eyJ-token-secreto"
 VIDEO_ID = "6f1c2d3e-0000-4000-8000-000000000001"
 PLAN_APP = (
+    # Como el PLAN real: la fila de §2.1 (nombre, dependencias) va antes que la de estado de §3.
+    "| FE-2.3 | Pruebas en dispositivo y robustez de la recolección | FE-0.11, FE-0.12 | — | [`validation-2-3`](x) |\n"
     "| FE-1.2 | 1 | Hecho | [1-2](x) | `4d578c5` 2026-10-25 | 0.5.0 | | |\n"
     "| FE-2.3 | 2 | Hecho | [2-3](x) | `abc1234` 2026-10-26 | 0.7.0 | | |\n"
 )

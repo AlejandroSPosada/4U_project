@@ -23,6 +23,16 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.7.2] — 2026-10-26
+- Lote que la motivó: FE-2.1 (validación en `dev`).
+- Qué cambió: `validate21.py` P4 tomaba la **primera** fila que empieza por `| FE-2.3 |` del PLAN, que es la de §2.1
+  (nombre y dependencias), no la de estado de §3, y bloqueaba con código 2 aunque FE-2.3 estuviera «Hecho». Ahora
+  busca la fila cuya segunda celda es la fase (un número). Las pruebas usan un PLAN con las dos filas, como el real.
+  Trampa para otros validadores: para leer el estado de un lote, usar `comun.lote_hecho` o filtrar por la fase.
+- Contratos tocados (§5): ninguno.
+- Cómo se verificó: `pytest` (129 casos) y `ruff`; `validate21.py --entorno dev` sobre el commit siguiente.
+- Pendiente: —
+
 ## [0.7.1] — 2026-10-26
 - Lote que la motivó: FE-2.1 (validación) y FE-2.3 (C3), por decisión del usuario del 2026-10-26: validar en casa,
   no en el campus.
