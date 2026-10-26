@@ -1503,7 +1503,8 @@ sin bloqueo, `bloquear_video`, y después la imagen `FOR UPDATE` (con el mismo `
 
 **El bucle del `worker`** (`worker.py`, BE-2.2 + BE-4.1). `consumir(…, purga=None)` es el de BE-2.2 tal cual si no se
 le pasa `purga`; `_principal` se la pasa si hay `SQS_URL_PURGA` (una `ColaSqs` que comparte el cliente de boto3 de la
-de `ingesta`; si falta, `configuracion_incompleta` `WARNING` y solo ingiere). Con `purga`: sin embeddings listo, en
+de `ingesta`; si falta, `configuracion_incompleta` `WARNING` y solo ingiere). Sin la configuración de la ingesta
+(modo `sin_consumo`, §4.6) tampoco purga: solo latidos. Con `purga`: sin embeddings listo, en
 lugar de la pausa de `WORKER_ESPERA_EMBEDDING_S` hace `turno_purga` con esa espera (15 s de espera larga en `purga`: la
 purga no necesita embeddings); con embeddings listo, antes de cada recepción de `ingesta` hace `turno_purga` con
 `ESPERA_PURGA_S` = 1 s (con 0, SQS solo consulta algunos servidores). `turno_purga(detener, ajustes, *, cola, deps,
@@ -2177,7 +2178,7 @@ rutas (`404`, y no salen en la lista).
   falta), `lugar_id` (un lugar que existe, o `null` para quitarlo; uno que no existe → `422` con `campo` = `lugar_id`),
   `calidad` (`alta`, `normal`, `baja`) y `notas` (≤ 500 tras recortar; vacío o `null` = sin notas). Lo que no se envía
   no cambia; `null` en `lat`, `lng` o `calidad` → `422`; los demás campos se ignoran. `200` con la `ImagenAdmin`
-  guardada; sin cambios, no escribe. Corregir la coordenada **no** recalcula el vector (solo depende de los píxeles).
+  guardada; sin cambios (también un cuerpo `{}`), no escribe. Corregir la coordenada **no** recalcula el vector (solo depende de los píxeles).
   Errores, en este orden: §5.2, `422`, `404`, `503`. Queda en `auditoria` (`imagen.editar`).
 - `DELETE /v1/admin/images/{id}`: `204` sin cuerpo. La fila y su vector se borran (sale de la búsqueda desde la
   petición siguiente) y se encola `purgar_imagen` (borra el original y la miniatura). **No es idempotente**: repetirlo
@@ -3568,7 +3569,7 @@ cambio por cambio y purga en `api` (aceptada, BE-3.3; aprobadas por el maestro e
   menudo que cada 60 s (no pasa).
 
 **ADR-BE-20 — Purga construida: video tras el `COMMIT` con reconciliador, imagen dentro de la transacción, en serie
-con la ingesta (aceptada, BE-4.1; sin aprobación del usuario todavía: decisión del lote, a confirmar por el maestro).**
+con la ingesta (aceptada, BE-4.1; aprobada por el maestro el 2026-10-26, decisiones 1–8 del lote).**
 Fija lo que ADR-BE-07, §4.12 anterior y §5.8 no decían:
 - **`purgar_video` se envía después del `COMMIT`** (como pedía ADR-BE-07): el `DELETE` no falla si SQS falla, porque
   el video queda marcado (`eliminado` sin `purgado_en`) y el reconciliador lo reenvía; los vectores ya salieron.
