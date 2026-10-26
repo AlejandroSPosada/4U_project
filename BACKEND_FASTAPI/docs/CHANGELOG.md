@@ -20,6 +20,51 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.13.0] — 2026-10-26
+
+- **Lote que la motivó:** BE-2.3 (Resumen del panel), construcción; la ejecución en `dev` la hace el maestro tras el
+  push. Lo consume FE-2.2 (panel de la app), que se construye en paralelo contra §5.5.
+- **Qué cambió:**
+  - **`GET /v1/admin/stats` construido** (§4.7 reescrita): router `api/v1/admin_estadisticas.py` (en `RUTAS_ADMIN`),
+    `servicios/estadisticas.py` (**una** sentencia con cinco subconsultas escalares en una transacción corta: las cifras
+    salen de la misma instantánea) y `esquemas/estadisticas.py` (`ResumenPanel`, `UltimoVideo`). Sin migración, sin
+    evento de log propio y sin auditoría. `GET /v1/admin/stats/uso` (BE-5.2) sigue respondiendo `501`.
+  - §4.7 con el SQL, qué cuenta cada cifra, nombres internos, «qué ofrece BE-2.3 al código», una guía para BE-3.3
+    (`alertas_activas` ya cuenta bien si BE-3.3 escribe `alertas` como dice §5.7; su C5 con `comun.resumen_panel`) y
+    trampas. §4.1 al día.
+  - Ayudas nuevas en `comun.py` (`RUTA_STATS`, `CAMPOS_RESUMEN`, `CAMPOS_ULTIMO_VIDEO`, `PATRON_FECHA_UTC`,
+    `resumen_panel`) y `validate23.py` nuevo (P1–P5, C1a–C1c); §5.11 con su tabla, la descripción del validador, su
+    mundo falso y sus trampas. `validation-2-3.md` reescrito con su §5 completo (Variables, Preparación y Ejecución).
+  - Contradicciones corregidas en `validation-2-3.md`: P2 comprobaba BE-2.1 (con un `POST …/images` a un video
+    inexistente), pero PLAN §2.1 pide para validar BE-2.2 y BE-3.1 (BE-2.1 ya lo implica BE-2.2); la hora límite era
+    21:30, con un encendido de hasta 10 min y un procesado de hasta 20 min (ahora 21:00, como BE-2.4 y BE-3.2, y solo
+    si C1a está incluida); P3 juntaba BE-2.2 y el encendido de `embedding`, que cambia algo, antes de comprobar el resto
+    (ahora el encendido es P5, la última); C1a leía s1 «tras C1b», así que C1a dependía de C1b (ahora cada
+    comprobación lee sus cifras antes y después de crear sus datos); la limpieza no decía qué hacer con `embedding`;
+    §5 no tenía Preparación ni la salida esperada.
+- **Contratos tocados (§5):** §5.5 `GET /v1/admin/stats`: subsección nueva con el ejemplo y el detalle, **sin cambiar
+  la forma** de la respuesta de la fila de la tabla (los mismos cuatro campos y tipos). Se fija lo que la fila no
+  decía: «último video» = el no eliminado con el `creado_en` más reciente y, a igualdad, `numero` mayor (el primero de
+  `GET /v1/admin/videos` por defecto), cualquier video aunque no tenga fotos, `null` sin videos; `creado_en` del
+  registro en el backend, en UTC con `Z` y sin fracciones; `alertas_activas` sin mirar la vigencia; las cifras de la
+  misma instantánea; errores (los de §5.2 y `503 BASE_NO_DISPONIBLE`); parámetros de la URL ignorados. §5.11: ayudas y
+  validador de BE-2.3.
+- **Cómo se verificó:** en local (WSL), `ruff check` y `ruff format --check` en verde; `pytest` **sin**
+  `PRUEBAS_DB_URL`: 643 pasan y 231 se omiten (todas las `base`). Docker Desktop no arrancó en la máquina (se cerraba
+  con un error sobre un socket viejo en `%LOCALAPPDATA%\Docker\run`), así que no hubo PostgreSQL local: las pruebas con
+  base, también las 11 nuevas, **quedan sin ejecutar** (paso 1 de `validation-2-3.md` §5). Nuevas:
+  `tests/base/test_estadisticas_base.py` (base vacía → ceros y `null`; solo `procesada` de videos no eliminados; todos
+  los lugares, también al crear y borrar por la API; alertas activas sin borrar y sin mirar la vigencia; último video
+  por `creado_en` con desempate por `numero` y sin los eliminados; coherencia con `POST /v1/collect/videos` y con el
+  primero de `GET /v1/admin/videos`; parámetros ignorados, `401`, `403` con un token `user`, `/stats/` → `404` y
+  `/stats/uso` → `501`), `tests/contrato/test_contrato_estadisticas.py` (el ejemplo y la fila de §5.5 contra
+  `ResumenPanel` y el OpenAPI) y `tests/ops/test_validate23.py` (mundo falso con interruptores, cola de `ingesta` con
+  una foto ajena, `--solo`, horario, restos y `comun.resumen_panel`), estas dos en verde. El SQL de §4.7 es el que
+  compila SQLAlchemy con el dialecto de PostgreSQL. Nada ejecutado en `dev`.
+- **Pendiente:** las pruebas con base (las nuevas y las de siempre) contra el `db` del compose;
+  `validate23.py --entorno dev` con código 0 sobre un commit de `main` desplegado (lo corre el maestro,
+  `validation-2-3.md` §5), y entonces la fila BE-2.3 de PLAN §3 a «Hecho».
+
 ## [0.12.1] — 2026-10-26
 
 - **Lote que la motivó:** BE-3.2 (sigue «En curso»), y FE-3.2, que consume `POST /v1/localize`.

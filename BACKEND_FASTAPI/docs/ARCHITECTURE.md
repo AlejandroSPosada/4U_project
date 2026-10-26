@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.12.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.13.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-26 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.2, BE-2.4 y BE-3.1 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. Lo de los demás lotes es diseño propuesto; las alertas pasaron a BE-3.3, fuera del núcleo y sin código (§4.9) |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.2, BE-2.4 y BE-3.1 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`); de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales; y de BE-2.3 (`GET /v1/admin/stats` y `validate23.py`, §4.7), probado en local sin base (sus pruebas con base, sin ejecutar) y **sin validar en `dev`**. Lo de los demás lotes es diseño propuesto; las alertas pasaron a BE-3.3, fuera del núcleo y sin código (§4.9) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -106,10 +106,10 @@ BACKEND_FASTAPI/
     │   │   ├── api/
     │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_cola_hash (BE-1.3, §4.4); obtener_almacen (BE-2.1, §4.5)
     │   │   │   ├── cuerpo.py    leer_cuerpo: el cuerpo de la petición en memoria, con tope (BE-2.4, §4.8)
-    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9), localizar (BE-3.2: `router` en /v1, público, §4.10); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: alerts (BE-3.3), admin_*
-    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizacion (BE-3.2, §4.10)
+    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9), localizar (BE-3.2: `router` en /v1, público, §4.10), admin_estadisticas (BE-2.3: `router` en RUTAS_ADMIN, §4.7); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: alerts (BE-3.3), admin_*
+    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizacion (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7)
     │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); multipart.py y fotos.py (BE-2.4, §4.8); lugares.py y geo.py (BE-3.1, §4.9); localizacion.py (BE-3.2: el algoritmo, con la corrección de rumbo, §4.10)
-    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar (BE-3.2, §4.10); purgar, alertas (BE-3.3), estadisticas
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7). Después: purgar (BE-4.1), alertas (BE-3.3)
     │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas.py (la búsqueda de vecinos, BE-2.4, §4.8)
     │   │   ├── clientes/        embedding.py (httpx: `esta_listo` desde BE-1.1, `vectorizar` desde BE-2.2); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5; `descargar` y `escribir` desde BE-2.2); sqs.py (BE-2.2, §4.6)
     │   │   ├── seguridad/       hash.py (argon2id, §4.3), tokens.py (JWT, §5.2) y dependencias.py (requiere_admin), BE-1.3 (§4.4)
@@ -682,10 +682,97 @@ Trampas:
   `SQS_URL_INGESTA` o `DB_HOST` exportada cambia lo que devuelve `faltan_para_ingesta`.
 
 ### 4.7 BE-2.3 — Resumen del panel
-`GET /v1/admin/stats` agrega totales en una consulta (fotos procesadas, lugares, alertas activas, último video). Las
-«fotos pendientes de subir» del panel salen de la cola local de la app, no del backend. `alertas_activas` cuenta las
-filas de `alertas` con `activa` y sin `eliminada_en` (la tabla existe desde BE-1.2): da 0 mientras no exista BE-3.3,
-y su comprobación con datos es BE-3.3 C5, no BE-2.3 (decisión de 0.11.0, PLAN §2.2).
+`GET /v1/admin/stats` (§5.5) da los cuatro datos del resumen del panel (vista 7.2 de la app, FE-2.2): fotos
+procesadas, lugares, alertas activas y el último video, en **una** sentencia SQL. Las «fotos pendientes de subir» del
+panel salen de la cola local de la app, no del backend. `alertas_activas` cuenta las filas de `alertas` con `activa` y
+sin `eliminada_en` (la tabla existe desde BE-1.2): da 0 mientras no exista BE-3.3, y su comprobación con datos es
+BE-3.3 C5, no BE-2.3 (decisión de 0.11.0, PLAN §2.2).
+
+**Estado (0.13.0): construido, sin validar en `dev`.** Pruebas: `tests/base/test_estadisticas_base.py` (el endpoint
+contra la base; 11 pruebas, **sin ejecutar todavía**: Docker Desktop no arrancó en la máquina donde se construyó, así
+que no hubo PostgreSQL local), `tests/contrato/test_contrato_estadisticas.py` (§5.5 contra los esquemas y el OpenAPI) y
+`tests/ops/test_validate23.py` (el validador contra un mundo falso), estas dos en verde. Sin migración: las tablas
+existen desde `0001`. Falta ejecutar las pruebas con base (paso 1 de validation-2-3 §5) y `validate23.py --entorno dev`
+con código 0 (PLAN §3; lo corre el maestro tras el push). El SQL de abajo es el que compila SQLAlchemy con el dialecto
+de PostgreSQL (comprobado imprimiendo `sql_resumen()`); que PostgreSQL lo ejecute y dé las cifras esperadas lo dirán
+esas pruebas.
+
+**Una petición** (no hay más pasos):
+1. `requiere_admin` (router `/v1/admin`, §4.4): `401`/`403`/`503 BASE_NO_DISPONIBLE`.
+2. Router `api/v1/admin_estadisticas.resumen_panel` (`GET /stats` en `RUTAS_ADMIN`). No declara parámetros: los de la
+   URL se ignoran (FastAPI). `obtener_motor(request)` (sin motor, `503`).
+3. `servicios.estadisticas.resumen(motor)`: una transacción corta (`sesion.transaccion`) con **una** sentencia,
+   `sql_resumen()` (SQLAlchemy Core; los enumerados van como parámetros):
+   ```sql
+   SELECT
+     (SELECT count(*) FROM imagenes JOIN videos ON videos.id = imagenes.video_id
+       WHERE imagenes.estado = 'procesada' AND videos.estado != 'eliminado')       AS total_fotos,
+     (SELECT count(*) FROM lugares)                                                AS total_lugares,
+     (SELECT count(*) FROM alertas WHERE alertas.activa IS true
+       AND alertas.eliminada_en IS NULL)                                           AS alertas_activas,
+     (SELECT videos.numero FROM videos WHERE videos.estado != 'eliminado'
+       ORDER BY videos.creado_en DESC, videos.numero DESC LIMIT 1)                 AS ultimo_numero,
+     (SELECT videos.creado_en FROM videos WHERE videos.estado != 'eliminado'
+       ORDER BY videos.creado_en DESC, videos.numero DESC LIMIT 1)                 AS ultimo_creado_en
+   ```
+   Al ser una sola sentencia, las cinco subconsultas ven la misma instantánea (en `READ COMMITTED` cada sentencia
+   toma la suya): las cifras nunca mezclan dos momentos. `numero` es único, así que las dos últimas eligen el mismo
+   video. Nada se escribe; no hay evento de log propio (solo `peticion`, §5.10) ni fila de auditoría.
+4. `ResumenPanel` (`ultimo_video` = `None` si `ultimo_numero` es nulo); `creado_en` se serializa con `FechaUtc` (UTC,
+   `Z`, sin fracciones, §4.5).
+
+**Qué cuenta cada cifra** (lo mismo que §5.5):
+- `total_fotos`: imágenes `procesada` (con vector, §4.6) de videos que no están `eliminado`. Las `pendiente_subida`,
+  `subida` y `error` no cuentan. Hoy no hay videos `eliminado` en `dev` (el borrado lógico llega con BE-4.1;
+  `limpiar-validacion` borra filas), pero la regla ya está y la prueban las pruebas con base.
+- `total_lugares`: todas las filas de `lugares` (no tienen borrado lógico: `DELETE /v1/admin/places/{id}` borra la
+  fila). Es el `total` de `GET /v1/admin/places` sin filtros.
+- `alertas_activas`: `activa AND eliminada_en IS NULL`, **sin mirar la vigencia** (`vigencia_desde`/`vigencia_hasta`):
+  la vigencia la evalúa la app al anunciar (ADR-BE-10), así que una alerta activa de vigencia futura o pasada cuenta.
+- `ultimo_video`: el video no eliminado con el `creado_en` más reciente y, a igualdad, el `numero` mayor; es el primero
+  de `GET /v1/admin/videos` con su orden por defecto (`fecha`, `desc`, desempate `numero`, §5.5). Cuenta cualquier
+  video: también uno sin fotos o de validación (`validacion-…`). `creado_en` es la hora en que el backend registró el
+  video (`POST /v1/collect/videos`, `now()` de la transacción), no el `iniciado_en` de la app. Sin videos (o con todos
+  eliminados), `null`.
+
+Costo: tres `count(*)` y dos `ORDER BY … LIMIT 1` sobre `videos` (sin índice por `creado_en`: hay decenas o cientos de
+videos). Con miles de fotos, `count(*)` de `imagenes` es un recorrido de la tabla o de `imagenes_estado_idx`: sin medir
+en `dev`; si un día pesara, la salida es un índice o un contador, sin cambiar §5.5.
+
+**Nombres internos** (para depurar o extender sin abrir el código):
+- `api/v1/admin_estadisticas.py`: `router` (`APIRouter(prefix="/stats", tags=["panel"])`) y `resumen_panel`. Va en
+  `RUTAS_ADMIN` justo después de `reservados.router_admin` (`GET /stats/uso`, BE-5.2, sigue respondiendo `501`): son
+  rutas distintas y el orden no importa; `/v1/admin/stats/` (con barra) es `404` (§5.1).
+- `servicios/estadisticas.py`: `resumen(motor)` → `ResumenPanel`; `sql_resumen()` → `Select` con las columnas
+  `total_fotos`, `total_lugares`, `alertas_activas`, `ultimo_numero` y `ultimo_creado_en`; `_ultimo(columna)` (la
+  subconsulta escalar de `ultimo_*`).
+- `esquemas/estadisticas.py`: `UltimoVideo(numero: int, creado_en: FechaUtc)` y `ResumenPanel(total_fotos,
+  total_lugares, alertas_activas: int, ultimo_video: UltimoVideo | None)`; los dos prohíben campos de más.
+
+**Para los lotes siguientes: qué ofrece BE-2.3 al código.**
+
+| Elemento | Qué hace |
+|---|---|
+| `app.servicios.estadisticas.resumen(motor)` → `ResumenPanel` | Arriba. `BaseNoDisponible` si la base falla (→ `503`, §4.4) |
+| `app.servicios.estadisticas.sql_resumen()` | La sentencia, para leerla o reutilizar una cifra (`str(sql_resumen())` da el SQL) |
+| `app.esquemas.estadisticas` | `ResumenPanel`, `UltimoVideo` (§5.5) |
+| Pruebas con base | `tests/base/test_estadisticas_base.py`: `video(ajustes, eliminado=False, creado_en=None)` → `(id, numero)` (inserta por SQL un video `validacion-23` del primer usuario; eliminado = `estado`, `eliminado_en` y `eliminado_por` puestos), `fotos(ajustes, video_id, *estados)` (una foto por estado, `orden` 1, 2…; en `error` con su motivo), `lugar(ajustes, nombre)` (SQL, `nombre_normalizado` = `nombre`), `alerta(ajustes, activa=True, eliminada=False, desde=None)` (SQL, con `vigencia_desde` = `desde`), `sql(ajustes, sentencia, **parametros)` y la fixture `api` (admin con sesión). Son de un módulo de pruebas: para reutilizarlas, `importlib` (como `test_validate24.py`) |
+
+**Guía para BE-3.3** (alertas; su C5 es el antiguo criterio de alertas de BE-2.3):
+- `alertas_activas` ya cuenta lo que pide el contrato si BE-3.3 escribe `alertas` como dice §5.7: borrar fija
+  `eliminada_en` (*tombstone*) y desactivar pone `activa = false`. No hace falta tocar `servicios/estadisticas.py`; la
+  purga física de los *tombstones* de más de 90 días no cambia la cifra (ya no contaban).
+- Si BE-3.3 decidiera que la vigencia sí cuenta (hoy no), es un cambio de §5.5 (versión menor y aviso a FE-2.2) y un
+  `WHERE` más en la subconsulta `alertas` de `sql_resumen`.
+- C5 en `dev` (validation-3-3): `comun.resumen_panel(api, token)` (§5.11, ayudas de BE-2.3) antes y después de un
+  `PUT` de una alerta `activa: true` y otra `activa: false` (mensajes `validacion-33-…`): `s1.alertas_activas −
+  s0.alertas_activas = 1`. Con base: `alerta(...)` de las pruebas de arriba, o las filas que cree el propio BE-3.3.
+
+Trampas:
+- Las cifras son globales: incluyen los datos de validación que haya en la base en ese momento (el validador compara
+  diferencias, §5.11).
+- `ultimo_video` puede ser un video de validación o uno sin fotos: es «el último registrado», no «el último con fotos».
+- Una foto que pasa a `error` deja de contar aunque antes estuviera `procesada` (el `worker` borra su vector, §4.6).
 
 ### 4.8 BE-2.4 — Diagnóstico de búsqueda
 `POST /v1/admin/diagnostico/vecinos` (§5.5) muestra qué devuelve el índice para **una** foto, sin agrupar ni puntuar:
@@ -1540,7 +1627,7 @@ responden `404 NO_ENCONTRADO`, §4.9); el resto de videos y todas las de imágen
 
 | Método y ruta | Petición | Respuesta |
 |---|---|---|
-| `GET /v1/admin/stats` | — | `200` `{"total_fotos": 2842, "total_lugares": 48, "alertas_activas": 3, "ultimo_video": {"numero": 12, "creado_en": "…"} \| null}`. `total_fotos` = imágenes `procesada` de videos no eliminados; `alertas_activas` = alertas `activa` sin borrar (0 mientras BE-3.3 no exista, §4.7) |
+| `GET /v1/admin/stats` | — | `200` `{"total_fotos": 2842, "total_lugares": 48, "alertas_activas": 3, "ultimo_video": {"numero": 12, "creado_en": "…"} \| null}`. `total_fotos` = imágenes `procesada` de videos no eliminados; `alertas_activas` = alertas `activa` sin borrar (0 mientras BE-3.3 no exista, §4.7) (detalle abajo) |
 | `GET /v1/admin/videos` | `?q=&orden=fecha\|nombre\|fotos&dir=desc\|asc&pagina&por_pagina` | Página de `VideoResumen` (detalle abajo) |
 | `GET /v1/admin/videos/{id}` | — | `VideoResumen` + `"fotos": [ImagenAdmin…]` en orden (detalle abajo) |
 | `PATCH /v1/admin/videos/{id}` | `{"nombre": "Entrada norte"}` (1–40 tras recortar) | `200` `VideoResumen` |
@@ -1580,6 +1667,27 @@ BE-3.1, ARCHITECTURE 0.11.0):
 `normal`), `radio_m`
 (5–100, por defecto 15), `activa` (por defecto `true`), `vigencia_desde`, `vigencia_hasta` (si ambas,
 `hasta > desde`). En `sincronizar`, cada cambio es independiente: un error no revierte los demás.
+
+#### `GET /v1/admin/stats` (BE-2.3)
+Sin cuerpo ni parámetros (los de la URL se ignoran). Desde BE-2.3 (ARCHITECTURE 0.13.0), `200`:
+```json
+{
+  "total_fotos": 2842, "total_lugares": 48, "alertas_activas": 3,
+  "ultimo_video": { "numero": 12, "creado_en": "2026-10-20T14:08:32Z" }
+}
+```
+- Los cuatro campos van siempre; los tres totales son enteros ≥ 0. Salen de la misma instantánea de la base.
+- `total_fotos`: imágenes `procesada` (ya indexadas) de videos que no están `eliminado`. Las que faltan por subir, por
+  procesar o en `error` no cuentan.
+- `total_lugares`: todos los lugares (el `total` de `GET /v1/admin/places` sin filtros).
+- `alertas_activas`: alertas con `activa = true` y sin borrar, **sin mirar la vigencia** (cuentan también las de
+  vigencia futura o pasada; la vigencia la evalúa la app). 0 mientras BE-3.3 no exista (§4.9).
+- `ultimo_video`: `numero` y `creado_en` del video no eliminado registrado más recientemente (a igualdad de
+  `creado_en`, el de `numero` mayor): el primero de `GET /v1/admin/videos` con su orden por defecto. Cuenta cualquier
+  video, también uno sin fotos. `creado_en` es la hora en que el backend registró el video (`POST
+  /v1/collect/videos`), en UTC con `Z` y sin fracciones (§5.1), no su `iniciado_en`. `null` si no hay ningún video
+  sin eliminar.
+- Errores: los de §5.2 y `503 BASE_NO_DISPONIBLE`.
 
 #### `GET /v1/admin/videos` (BE-2.1)
 Parámetros, todos opcionales:
@@ -2349,6 +2457,52 @@ Trampas de BE-3.1: C2a supone que nadie más tiene un lugar en (0.001, 0.001) (a
 borra los `validacion-`). C2c compara el orden de **todos** los lugares con la copia de `normalizar_nombre`: si la
 regla de §5.5 cambia, cambian las dos (y la prueba que las compara). La limpieza no borra lugares sin el prefijo de la
 ejecución salvo los que apuntó.
+
+Ayudas de BE-2.3 (para los validadores que leen el resumen del panel; BE-3.3 C5 las reutiliza):
+
+| Elemento | Qué hace |
+|---|---|
+| `RUTA_STATS` (`/admin/stats`), `CAMPOS_RESUMEN`, `CAMPOS_ULTIMO_VIDEO` | La ruta (relativa a la URL con `/v1`) y los conjuntos exactos de campos de la respuesta de §5.5 y de su `ultimo_video` |
+| `PATRON_FECHA_UTC` | Expresión regular de una fecha de salida de §5.1 (`AAAA-MM-DDTHH:MM:SSZ`, sin fracciones) |
+| `resumen_panel(api, token, que="GET /v1/admin/stats")` → `dict` | `GET /v1/admin/stats`; `Falla` («`<que>`: …») si no es 200, si los campos no son exactamente `CAMPOS_RESUMEN` o si `total_fotos`, `total_lugares` o `alertas_activas` no es un entero ≥ 0 (un booleano o `2.0` tampoco valen). No mira `ultimo_video` por dentro |
+
+**`validate23.py`** (validation-2-3, BE-2.3; solo `dev`; **sin ejecutar todavía en `dev`**). Es el ejemplo de un
+validador que compara cifras globales antes y después de crear sus datos. Usa `Validador`, `EmbeddingDev`,
+`ClienteApi`, `EntornoBackend` (solo para `limpiar-validacion`), `RecorridoPrueba`, `borrar_restos`,
+`borrar_lugares_restos`, `lugares_validacion`, `borrar_lugares`, `limpiar_videos`, `mensajes_cola`, `comprobar_bucket`,
+`red_tareas`, `lote_hecho`, `hora_bogota`, `embedding_en_api` y las ayudas de BE-2.3. Lo que tiene y no está en
+`comun.py`:
+- Orden: P1 credenciales → P2 BE-2.2 y BE-3.1 «Hecho» (2), hora antes de las 21:00 en Bogotá (3; solo si C1a está
+  incluida) y `/v1/health/ready` con `"db": "ok"` → P3 login de admin (`401` es 3) y BE-2.3 desplegado (`GET
+  /v1/admin/stats` → `200`; `404` es 2) y `GET /v1/admin/places` → `200` → P4 outputs `bucket_dataset` y
+  `sqs_ingesta_url`, `comprobar_bucket`, lectura de `ingesta`, red de tareas, `campus-locator-dev-worker` con la imagen
+  de `api` (si no, 2) y, si C1a está incluida, `comprobar_inf21` → P5 `embedding` (como `validate24.py` P5; **solo si
+  C1a está incluida**: C1b y C1c no lo necesitan). Preparación: `borrar_restos` y `borrar_lugares_restos`.
+- Comprobaciones, en orden: C1a (espera a que `ingesta` esté vacía, hasta `LIMITE_COLA_S` = 15 min; s0; crea el video y
+  registra 2 fotos; `total_fotos` igual con las fotos `pendiente_subida`; sube las 2; sondea cada 15 s hasta
+  `procesada`, hasta `LIMITE_PROCESADO_S` = 20 min; s1 − s0 = 2), C1b (crea `<prefijo> a` y `<prefijo> b`: +2; borra b:
+  −1) y C1c (`ultimo_video` = `{numero, creado_en}` del `VideoResumen` que devolvió `POST /v1/collect/videos`, con
+  formato `PATRON_FECHA_UTC`; `alertas_activas` entero ≥ 0). Cada una lee sus propias cifras «antes» justo antes de
+  crear sus datos. Con `--solo C1c` crea el video sin fotos.
+- Constantes: `ORDENES` (1, 2), `LAT`, `LNG` (1.0, −100.0: videos **y** lugares, para no tocar el punto (0.001, 0.001)
+  que usa `validate31.py` C2a), `LIMITE_COLA_S`, `LIMITE_PROCESADO_S`, `PAUSA_SONDEO_S` (15 s), `HORA_LIMITE` (21),
+  `PLAN_BACKEND`. Prefijo de los datos: `validacion-23-<AAAAMMDD-HHMMSS>` (`Contexto.prefijo`).
+- `Contexto`: `resumen(que)` (`comun.resumen_panel`), `esperar_ingesta_vacia()`, `asegurar_video()` (un
+  `RecorridoPrueba` de 2 fotos con `jpeg_sintetico`), `estados()`, `esperar_procesadas()`, `crear_lugar(sufijo)` (apunta
+  el id en `lugares` en cuanto da 201), `asegurar_embedding()`, `preparacion()` y `limpiar()` (deja `embedding` como
+  estaba, borra el video con `limpiar-validacion --video` y los lugares con el prefijo de la ejecución más los
+  apuntados; un fallo en una parte no impide las otras).
+- Pruebas: `tests/ops/test_validate23.py` carga el mundo falso de `test_validate22.py` con `importlib` y lo extiende con
+  `creado_en` en los videos, `GET /v1/admin/stats` (sobre 40 fotos, 5 lugares, 1 alerta y un video número 7 previos),
+  `/v1/admin/places` y `foto_ajena_en_cola()` (un mensaje de `ingesta` de otra foto que el `worker` procesa).
+  Interruptores de backend defectuoso: `desplegado` (P3 → 2), `cuenta_pendientes` (C1a), `lugares_fijos` (C1b),
+  `ultimo_viejo` y `fecha_con_fracciones` (C1c), `campo_de_mas` (C1a). También prueba `comun.resumen_panel`.
+
+Trampas de BE-2.3: las cifras son globales y el validador compara diferencias, así que supone que nadie sube fotos,
+crea o borra videos o lugares en `dev` mientras corre (si no, falla con los valores leídos para descartarlo). Por eso
+C1a espera a que `ingesta` se vacíe antes de leer s0: con `embedding` encendido, el `worker` procesaría fotos ajenas
+pendientes (p. ej. un recorrido real subido con `embedding` apagado) y `total_fotos` subiría de más. Los contadores de
+SQS son aproximados y llegan con ~1 min de retraso. `--sin-limpieza` deja `embedding` como esté.
 
 **`validate32.py`** (validation-3-2, BE-3.2; solo `dev`; **sin ejecutar todavía en `dev`**). Es el ejemplo de un
 validador que localiza con el conjunto de EMB-3.2 y usa ECS Exec. No añade ayudas a `comun.py`: usa `Validador`,

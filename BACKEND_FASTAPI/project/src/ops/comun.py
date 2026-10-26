@@ -25,7 +25,7 @@ Reglas (§5.11): nunca imprimir secretos, tokens ni URLs prefirmadas; ser idempo
 Además (tabla completa en backend §5.11): tareas sueltas de ECS (BE-1.2) y, desde BE-1.3, secretos y credenciales del
 admin, `ClienteApi` (login con pausa y reintentos de 429 de API Gateway), `EntornoBackend` (`python -m app.cli` y SQL
 en `local` o `dev`) y el usuario de prueba `validacion+user@campus.edu.co`; recolección (BE-2.1), `embedding` y colas
-(BE-2.2), vecinos (BE-2.4) y lugares de prueba (BE-3.1).
+(BE-2.2), vecinos (BE-2.4), lugares de prueba (BE-3.1) y el resumen del panel (BE-2.3).
 """
 
 from __future__ import annotations
@@ -1878,3 +1878,29 @@ def borrar_lugares_restos(api: ClienteApi, token: str) -> str:
     if not restos:
         return "sin lugares validacion- de ejecuciones anteriores"
     return f"lugares validacion- borrados: {borrar_lugares(api, token, [str(lugar['id']) for lugar in restos])}"
+
+
+# --- Resumen del panel (BE-2.3; ARCHITECTURE §5.5 y §5.11) -----------------------------------------------------------
+RUTA_STATS = "/admin/stats"
+#: Campos exactos de la respuesta de `GET /v1/admin/stats` y de su `ultimo_video` (§5.5).
+CAMPOS_RESUMEN = frozenset({"total_fotos", "total_lugares", "alertas_activas", "ultimo_video"})
+CAMPOS_ULTIMO_VIDEO = frozenset({"numero", "creado_en"})
+#: Fecha de salida de §5.1: UTC con `Z` y sin fracciones.
+PATRON_FECHA_UTC = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
+
+
+def resumen_panel(api: ClienteApi, token: str, que: str = "GET /v1/admin/stats") -> dict[str, Any]:
+    """`GET /v1/admin/stats` → el cuerpo. `Falla` (con `que` en el mensaje) si no es 200, si los campos no son
+    exactamente `CAMPOS_RESUMEN` o si un total no es un entero ≥ 0. No mira `ultimo_video` por dentro (cada validador
+    sabe qué espera). Lo usan `validate23.py` (C1) y BE-3.3 C5 (`alertas_activas`)."""
+    respuesta = api.pedir("GET", RUTA_STATS, token=token)
+    exigir(respuesta.status_code == 200, f"{que}: {describir_respuesta(respuesta)}, se esperaba 200")
+    cuerpo = respuesta.json()
+    exigir(isinstance(cuerpo, dict) and set(cuerpo) == CAMPOS_RESUMEN, f"{que}: campos {sorted(cuerpo or {})}")
+    for campo in ("total_fotos", "total_lugares", "alertas_activas"):
+        valor = cuerpo[campo]
+        exigir(
+            isinstance(valor, int) and not isinstance(valor, bool) and valor >= 0,
+            f"{que}: {campo} = {valor!r}, se esperaba un entero ≥ 0",
+        )
+    return cuerpo
