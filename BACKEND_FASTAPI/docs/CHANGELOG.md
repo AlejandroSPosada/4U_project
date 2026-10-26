@@ -20,6 +20,34 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.13.1] — 2026-10-26
+
+- **Lote que la motivó:** BE-2.3 (cierre: `validate23.py --entorno dev` con código 0 sobre `012e0ae`, PLAN §3).
+- **Qué cambió:**
+  - Encabezado y §4.7: BE-2.3 validado en `dev`, con lo medido (`embedding` encendido en 325 s; las 2 fotos de prueba
+    en `procesada` en 4,6 min con el `worker` desde 0; `total_fotos` 0 → 0 con las fotos registradas sin subir → 2;
+    `total_lugares` 0 → 2 → 1; `ultimo_video` = el video de prueba; `alertas_activas` = 0). Las pruebas con base, que
+    0.13.0 dejaba sin ejecutar porque Docker Desktop no arrancó en la máquina, corrieron en el CI de `backend.yml` del
+    PR 9 (run 40374138268: 874 pruebas, ninguna omitida): quitados los «sin ejecutar» de §4.7 y del encabezado.
+  - §4.7, lo que faltaba para no abrir `project/`: dos trampas de las pruebas (la de contrato lee §5.5 como texto —qué
+    encabezados busca, qué bloque `json` y qué fila exige, y qué del OpenAPI— y la que cuenta 6 `SELECT` en
+    `sql_resumen()`); en «Nombres internos», los componentes del OpenAPI (`ResumenPanel`, `UltimoVideo`, etiqueta
+    `panel`, sin `parameters`); en la fila «Pruebas con base», la fixture `ajustes_st`, `_resumen(api)`, `RUTA`,
+    `VACIO`, `FECHA_UTC` y qué deja `alerta()` en la fila (para el C5 de BE-3.3 con base).
+  - §5.11, `validate23.py`: ejecutado en `dev`; `incluida(solo, id_)` y qué decide; el estado del `Contexto` y lo que
+    sustituyen las pruebas; el mundo falso de `test_validate23.py` en detalle (valores previos, cómo responde cada ruta,
+    `foto_ajena_en_cola`, `_HttpFijo` y `BUENO`) y cómo extenderlo para el validador de alertas.
+  - `validation-2-3.md` §5 paso 1: cómo aislar el compose con otro proyecto y otro puerto (sin comprobar) y, si Docker
+    no arranca, correr las pruebas con base en el CI de un PR (sin desplegar). PLAN: fila BE-2.3 «Hecho» y «Alineado
+    con v0.13.1».
+- **Contratos tocados (§5):** ninguno (versión de parche; §5.11 solo describe el validador).
+- **Cómo se verificó:** `validate23.py --entorno dev` con código 0 sobre `012e0ae` sin `-dirty` (2026-10-26, 18:22–18:26
+  UTC, informe `.validacion/BE-2.3-20261026-182628.json`; ejecutado por el maestro tras el despliegue de `backend.yml`
+  run 40374740872): P1–P5 y C1a, C1b, C1c en verde; limpieza: `embedding` apagado (lo encendió el validador), video
+  borrado (`{"videos": 1, "objetos": 4}`) y lugar borrado. CI del PR 9 (run 40374138268): `ruff` limpio y 874 pruebas
+  con base, ninguna omitida. El resto, solo documentación.
+- **Pendiente:** nada de BE-2.3. `alertas_activas` con datos: C5 de BE-3.3.
+
 ## [0.13.0] — 2026-10-26
 
 - **Lote que la motivó:** BE-2.3 (Resumen del panel), construcción; la ejecución en `dev` la hace el maestro tras el

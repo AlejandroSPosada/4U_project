@@ -126,7 +126,23 @@ uv run ruff check . && uv run ruff format --check .
 PRUEBAS_DB_URL=postgresql://campus_app:local-solo-desarrollo@localhost:5432/campus_locator PRUEBAS_DB_OBLIGATORIA=1 uv run --group ops pytest -q
 ```
 
-Esperado: `All checks passed!`, `… files already formatted` y `… passed` sin fallos ni omitidas.
+Esperado: `All checks passed!`, `… files already formatted` y `… passed` sin fallos ni omitidas (874 en `012e0ae`).
+
+Si el puerto 5432 está ocupado por el compose de otra copia, se aísla con otro proyecto y otro puerto (sin tocar el
+`docker-compose.yml`), y al terminar se baja solo ese proyecto (sin comprobar: Docker no arrancó al construir BE-2.3;
+`COMPOSE_PROJECT_NAME` tiene prioridad sobre el `name:` del archivo según la documentación de Docker Compose):
+
+```bash
+COMPOSE_PROJECT_NAME=fuera-be23 DB_PUERTO_LOCAL=55432 docker compose up -d --wait db
+PRUEBAS_DB_URL=postgresql://campus_app:local-solo-desarrollo@localhost:55432/campus_locator PRUEBAS_DB_OBLIGATORIA=1 uv run --group ops pytest -q
+COMPOSE_PROJECT_NAME=fuera-be23 docker compose down
+```
+
+Si Docker no arranca en la máquina (como al construir BE-2.3: Docker Desktop se cerraba con un error sobre un socket
+viejo en `%LOCALAPPDATA%\Docker\run`), las pruebas con base se corren en el CI: un PR con la rama dispara `backend.yml`,
+que en un PR ejecuta `ruff` y `pytest` con un PostgreSQL 17 + pgvector efímero y `PRUEBAS_DB_OBLIGATORIA=1` **sin
+desplegar** (ARCHITECTURE §4.2 y §4.3). Esperado: el job de pruebas en verde con `… passed` sin omitidas (así se
+comprobó BE-2.3: PR 9, run 40374138268, 874 pasan).
 
 2. Llevar el commit a `main`. `backend.yml` pasa las pruebas, publica `…/campus-locator/backend:<SHA>`, ejecuta
 `migrate` (sin migraciones nuevas: `aplicada = false`) y actualiza `api` y `worker`. Esperado: el workflow en verde.
