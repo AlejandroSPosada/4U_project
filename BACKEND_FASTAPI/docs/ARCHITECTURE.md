@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.10.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.11.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-25 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.2 y de BE-2.4 (`project/`), todo validado en `dev`; lo de los demás lotes es diseño propuesto |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.2, BE-2.4 y BE-3.1 (`project/`); todo validado en `dev` salvo BE-3.1 (probado en `local`, sin validar en `dev`). Lo de los demás lotes es diseño propuesto; las alertas pasaron a BE-3.3, fuera del núcleo y sin código (§4.9) |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -106,10 +106,10 @@ BACKEND_FASTAPI/
     │   │   ├── api/
     │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_cola_hash (BE-1.3, §4.4); obtener_almacen (BE-2.1, §4.5)
     │   │   │   ├── cuerpo.py    leer_cuerpo: el cuerpo de la petición en memoria, con tope (BE-2.4, §4.8)
-    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: localize, places, alerts, admin_*
-    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8)
-    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); multipart.py y fotos.py (BE-2.4, §4.8); localizacion.py, geo.py, rumbo.py
-    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); localizar, purgar, alertas, lugares, estadisticas
+    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9); __init__.py monta /admin y /collect con requiere_admin (§4.4). Después: localize, alerts (BE-3.3), admin_*
+    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9)
+    │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); multipart.py y fotos.py (BE-2.4, §4.8); lugares.py y geo.py (BE-3.1, §4.9); localizacion.py, rumbo.py
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar, purgar, alertas (BE-3.3), estadisticas
     │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas.py (la búsqueda de vecinos, BE-2.4, §4.8)
     │   │   ├── clientes/        embedding.py (httpx: `esta_listo` desde BE-1.1, `vectorizar` desde BE-2.2); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5; `descargar` y `escribir` desde BE-2.2); sqs.py (BE-2.2, §4.6)
     │   │   ├── seguridad/       hash.py (argon2id, §4.3), tokens.py (JWT, §5.2) y dependencias.py (requiere_admin), BE-1.3 (§4.4)
@@ -501,10 +501,10 @@ fila de la imagen a partir de la clave sin otra consulta (`dominio.recoleccion.i
 | `app.servicios.recoleccion` (casos de uso) | `crear_video(motor, usuario_id=, datos=VideoCrear)` → `(VideoResumen, creado)`; `registrar_imagenes(motor, almacen, ajustes, video_id=, imagenes=[ImagenRegistro])` → `ImagenesRegistradas`; `completar_subida(motor, almacen, video_id=)` → `SubidaCompletada`; `validar_lote(imagenes, ajustes)`. `almacen` puede ser `None`: se exige después de comprobar el video. Excepciones: `VideoNoEncontrado`, `VideoEliminado` (de `servicios.videos`), `AlmacenNoConfigurado` (→ `500`), `DatosNoValidos(campos)` (→ `422`, `campos` = `detalle.campos`) y `FalloS3` al firmar |
 | `app.servicios.videos` | `listar(motor, q=, orden=, direccion=, pagina=, por_pagina=)` → `Pagina[VideoResumen]`; `detalle(motor, video_id)` → `VideoDetalle` (`VideoNoEncontrado` si no existe o está `eliminado`); `resumen(conexion, video_id)` → `VideoResumen \| None` (también de un eliminado) y `contar(conexion, video_id)` → `Conteo`, dentro de una transacción abierta. BE-4.1 añade aquí renombrar y borrar, y rellena `url`, `url_miniatura` y `url_expira_en` de `ImagenAdmin` en `detalle` |
 | `app.servicios.limpieza.limpiar_validacion(motor, almacen, video_ids=None, *, simular=False)` → `ResultadoLimpieza` | Lo que hace `limpiar-validacion` (arriba): `ResultadoLimpieza(videos, objetos, video_ids, simulada, restos_s3, motivo_restos)`. `video_ids=None` = todos los de validación; `[]` = nada. Lanza `LimpiezaRechazada(inexistentes, sin_prefijo)`, `FalloS3` (primera pasada, o el recuento al simular) y los errores de la base. La purga de BE-4.1 puede copiar su orden (S3 → filas → S3) |
-| `app.clientes.s3` | `AlmacenS3(bucket, region="us-east-1", cliente=None, reloj=…)` (síncrono): `firmar_put(clave, ttl_s)` → `UrlFirmada(url, expira_en)`; `consultar(clave)` (HEAD) → `ObjetoS3(bytes, etag)` o `None` si 404/403; `borrar_prefijo(prefijo)` → objetos borrados (lista y borra de 1000 en 1000); `contar_prefijo(prefijo)` → objetos bajo el prefijo (solo lista). Todo error → `FalloS3` (mensaje sin URL). Desde código asíncrono: `await firmar_puts(almacen, claves, ttl_s)` → `{clave: UrlFirmada}` (un hilo) y `await consultar_varios(almacen, claves, concurrencia=8)` → `{clave: ObjetoS3 \| FalloS3 \| None}` (nunca lanza por una clave). `crear_cliente(region)` da el cliente de boto3 configurado. Desde BE-2.2, `descargar(clave, max_bytes)` y `escribir(clave, datos, content_type="image/jpeg")` (§4.6; se llama `escribir`, no `subir` como se había previsto, para no chocar con `almacen_falso.subir`). **Falta** (se añade aquí, con su prueba con `Stubber`): para BE-4.1 (URLs GET de 1 h) y BE-3.1 (foto de lugar), `firmar_get(clave, ttl_s)` |
+| `app.clientes.s3` | `AlmacenS3(bucket, region="us-east-1", cliente=None, reloj=…)` (síncrono): `firmar_put(clave, ttl_s)` → `UrlFirmada(url, expira_en)`; `consultar(clave)` (HEAD) → `ObjetoS3(bytes, etag)` o `None` si 404/403; `borrar_prefijo(prefijo)` → objetos borrados (lista y borra de 1000 en 1000); `contar_prefijo(prefijo)` → objetos bajo el prefijo (solo lista). Todo error → `FalloS3` (mensaje sin URL). Desde código asíncrono: `await firmar_puts(almacen, claves, ttl_s)` → `{clave: UrlFirmada}` (un hilo) y `await consultar_varios(almacen, claves, concurrencia=8)` → `{clave: ObjetoS3 \| FalloS3 \| None}` (nunca lanza por una clave). `crear_cliente(region)` da el cliente de boto3 configurado. Desde BE-2.2, `descargar(clave, max_bytes)` y `escribir(clave, datos, content_type="image/jpeg")` (§4.6; se llama `escribir`, no `subir` como se había previsto, para no chocar con `almacen_falso.subir`). **Falta** (se añade aquí, con su prueba con `Stubber`): para BE-4.1 (URLs GET de 1 h) y, cuando un lote defina la subida de la foto de un lugar (BE-3.1 no la incluye, §4.9), `firmar_get(clave, ttl_s)` |
 | `app.api.dependencias.obtener_almacen(request)` → `AlmacenS3`; `almacen_o_none(request)`; `sin_almacen(request)` → `ErrorApi` | El de `app.state.almacen`; sin él, `obtener_almacen` lanza el `500 ERROR_INTERNO` de `sin_almacen` (que registra `configuracion_incompleta`). La recolección usa `almacen_o_none` y traduce `AlmacenNoConfigurado` con `sin_almacen`, para responder antes el 404/409 del video |
 | `app.main.crear_app(ajustes=None, *, almacen=None)` | `almacen` sustituye al cliente de S3 (las pruebas pasan un doble); sin él, el ciclo de vida lo crea si hay `S3_BUCKET_DATASET` |
-| `app.esquemas.comun` | `FechaUtc` (fecha de **salida**: UTC con `Z` y sin fracciones), `FechaConZona` (de **entrada**: con zona, devuelta en UTC; sin zona, o fuera de los años 1–9999 al pasarla a UTC —p. ej. `0001-01-01T00:00:00+05:00`—, → `422`; sin esa conversión asyncpg lanzaba `OverflowError` al guardarla y la API respondía `500`), `Referencia` (`{id, nombre}`), `Pagina[T]` (`items`, `total`, `pagina`, `por_pagina`; PEP 695: `Pagina[VideoResumen]`) y `texto_admitido(valor)` (la regla de §4.4 en un `field_validator`). BE-3.1 los usa para `LugarAdmin`, `AlertaAdmin` (`creado_por`) y sus listados |
+| `app.esquemas.comun` | `FechaUtc` (fecha de **salida**: UTC con `Z` y sin fracciones), `FechaConZona` (de **entrada**: con zona, devuelta en UTC; sin zona, o fuera de los años 1–9999 al pasarla a UTC —p. ej. `0001-01-01T00:00:00+05:00`—, → `422`; sin esa conversión asyncpg lanzaba `OverflowError` al guardarla y la API respondía `500`), `Referencia` (`{id, nombre}`), `Pagina[T]` (`items`, `total`, `pagina`, `por_pagina`; PEP 695: `Pagina[VideoResumen]`) y `texto_admitido(valor)` (la regla de §4.4 en un `field_validator`). BE-3.1 usa `FechaUtc` y `texto_admitido` en `esquemas.lugares` (sus listas no se paginan: `ListaLugares`, §4.9); `Referencia` la usará `AlertaAdmin` (`creado_por`, BE-3.3) |
 | `app.esquemas.videos` | Los modelos de §5.4 y §5.5: `VideoCrear`, `InicioRecorrido`, `ImagenRegistro`, `ImagenesRegistrar`, `SubidaPut`, `ImagenRegistrada`, `ImagenesRegistradas`, `ConteoFotos`, `SubidaCompletada`, `VideoResumen`, `ImagenAdmin`, `VideoDetalle`; constantes `NOMBRE_VIDEO_MAX` (40), `REF_CLIENTE_MAX` (40), `DISPOSITIVO_MAX` (200), `APP_VERSION_MAX` (40), `ENTERO_MAX`, `Q_MAX` (100) y `LOTE_TOPE` (50: `ImagenesRegistrar.imagenes` tiene `max_length` fijo, así Pydantic no valida cuerpos enormes; `REC_MAX_LOTE` solo puede bajarlo). Las peticiones ignoran campos de más; las respuestas los prohíben |
 | Fixtures de prueba | `almacen_falso` (`tests/conftest.py`): doble de `AlmacenS3` con los objetos en memoria; `subir(clave, n_bytes=1234, datos=None)` simula el `PUT` de la app y devuelve el ETag (`etag0`, `etag1`… distinto en cada subida; con `datos`, guarda esos bytes y `n_bytes = len(datos)`), `fallar_head` y `fallar_firma` provocan `FalloS3`, `contar_prefijo` cuenta, `consultadas` y `firmadas` registran las llamadas y sus URL llevan `FIRMA_FALSA` para comprobar que no llegan a los logs. Desde BE-2.2: `descargar`/`escribir` como los reales, `datos` (bytes por clave), `descargadas`, `escritas`, `fallar_descarga` (claves) y `fallar_escritura`. Para la CLI: `monkeypatch.setattr(cli, "crear_almacen", lambda ajustes: almacen_falso)`. Ejemplos en `tests/base/test_recoleccion_base.py` y `test_limpieza_base.py`; botocore simulado con `Stubber` en `tests/unit/test_s3.py` |
 
@@ -651,7 +651,7 @@ purga de BE-4.1 también.
 | `app.clientes.embedding.vectorizar(ajustes, imagenes, *, prioridad="baja", transporte=None, request_id=None)` → `Vectores` | `POST {EMBEDDING_URL}/v1/embed` con cada `bytes` como parte `imagenes` (`image/jpeg`) y `X-Prioridad`; `Vectores(version_vector, dim, vectores, tiempos_ms)` en el orden de las imágenes (comprueba que haya uno por imagen y `dim` componentes). Plazo `EMBEDDING_TIMEOUT_S` (conexión `EMBEDDING_CONNECT_TIMEOUT_S`); un reintento solo si la conexión fue **rechazada** (`ConnectionRefusedError` en la cadena). Excepciones: `EmbeddingNoDisponible` (sin URL, sin conexión, sin respuesta, `5xx`: en `api` corresponde a `503 EMBEDDING_NO_DISPONIBLE`, §5.3), `ImagenRechazada(indice, codigo)` (`400`/`413`/`415` con `detalle.indice`; `api` la responde `400 FOTOS_INVALIDAS` con ese índice desde BE-2.4, §5.5) y `RespuestaNoValida` (otro `4xx` o un `200` mal formado). **BE-2.4** la llama con `prioridad="baja"` (§4.8) y **BE-3.2** con `"alta"` (§4.10); los dos comparan `version_vector` con `EMBEDDING_VERSION_VECTOR` en cada respuesta (BE-2.4 ya lo hace, §4.8; la regla de §5.10 para `api`, «primera llamada y cada 10 min» con `GET /v1/info`, sigue sin código). `transporte` (un `httpx.MockTransport`) es para las pruebas: ejemplos en `tests/unit/test_cliente_embedding.py`. Detalles: cada parte va como `("imagenes", ("<i>.jpg", bytes, "image/jpeg"))`; `request_id` añade `X-Request-Id` (embeddings lo respeta, §5.1 de su documento: `api` debería pasar el de la petición para correlacionar); `ValueError` si `prioridad` no es `alta`/`baja` o la lista está vacía; **no** comprueba el máximo de 8 imágenes ni los 4 MB/16 MB de embeddings (§5.2 de su documento): lo hace quien llama (si no, `413` → `ImagenRechazada` o `RespuestaNoValida`). Abre un `httpx.AsyncClient` por llamada con `trust_env=False` (sin proxies del entorno). `httpx.Timeout(EMBEDDING_TIMEOUT_S, connect=EMBEDDING_CONNECT_TIMEOUT_S)` limita **cada fase** (escritura, lectura, espera del pool), no el total: una respuesta que llega a trozos puede tardar más; para un tope total de la petición (p. ej. los 30 s de API Gateway en BE-3.2), quien llama la envuelve en `anyio.fail_after` |
 | `app.clientes.embedding.esta_listo(ajustes, transporte=None)` → `bool` | (BE-1.1) `GET /health/ready` en `EMBEDDING_CONNECT_TIMEOUT_S` |
 | `app.clientes.s3.AlmacenS3.descargar(clave, max_bytes)` → `ObjetoDescargado(datos, etag) \| None` | `GetObject`; `None` si 404; `ObjetoDemasiadoGrande(bytes)` si `ContentLength` > `max_bytes` (no lo lee); otro error, también 403 → `FalloS3` |
-| `app.clientes.s3.AlmacenS3.escribir(clave, datos, content_type="image/jpeg")` | `PutObject` con `ContentType`. BE-3.1 puede usarlo para `lugares/{id}.jpg` (el rol `tarea-api` tiene `s3:PutObject` en `lugares/*`, infra §5.8) |
+| `app.clientes.s3.AlmacenS3.escribir(clave, datos, content_type="image/jpeg")` | `PutObject` con `ContentType`. (La foto de un lugar, `lugares/{id}.jpg`, la sube la app con URL prefirmada según infra §5.5, Fase 4: no pasa por aquí; BE-3.1 no la incluye, §4.9) |
 | `app.clientes.sqs.ColaSqs(url, region="us-east-1", cliente=None)` | Síncrona (boto3; llamarla con `anyio.to_thread`): `recibir(maximo, espera_s)` → `list[MensajeSqs(id, recibo, cuerpo, recepciones)]` (topes 10 y 20 s; `MessageSystemAttributeNames=["ApproximateReceiveCount"]`), `borrar(recibo)`, `devolver(recibo)` (visibilidad 0). Todo error → `FalloSqs`. `crear_cliente(region)` usa `read_timeout` 30 s (más que la espera larga). Para enviar (`api`: `reprocesar_imagen` de BE-4.1, `purgar_*`) falta `enviar(cuerpo)`; el rol `tarea-api` tiene `sqs:SendMessage` en `ingesta` y `purga` |
 | `app.dominio.imagenes.preparar(datos, *, max_bytes, lado_min, lado_miniatura, calidad_miniatura, lado_embedding)` → `ImagenPreparada(ancho, alto, miniatura, reducida)` | Lo de arriba; `ImagenNoValida(motivo)` con los motivos de la tabla. `motivo_demasiado_grande(n, max)`. BE-2.4/BE-3.2 validan las fotos de consulta con otras reglas (`dominio.fotos`, §4.8: tipo, tamaño ≤ `LOC_MAX_BYTES_FOTO` y firma JPEG, sin decodificar) y no necesitan miniatura |
 | `app.dominio.mensajes.interpretar(cuerpo)` → `EventosS3(objetos, ignorados) \| Reprocesar(imagen_id) \| PruebaS3() \| NoReconocido(motivo)` | Los mensajes de `ingesta` de §5.8; `ObjetoSubido(clave, etag, bytes)`. `VERSIONES_REPROCESAR = {1}`. BE-4.1 añade aquí los de `purga` (`purgar_video`, `purgar_imagen`) |
@@ -683,7 +683,9 @@ Trampas:
 
 ### 4.7 BE-2.3 — Resumen del panel
 `GET /v1/admin/stats` agrega totales en una consulta (fotos procesadas, lugares, alertas activas, último video). Las
-«fotos pendientes de subir» del panel salen de la cola local de la app, no del backend.
+«fotos pendientes de subir» del panel salen de la cola local de la app, no del backend. `alertas_activas` cuenta las
+filas de `alertas` con `activa` y sin `eliminada_en` (la tabla existe desde BE-1.2): da 0 mientras no exista BE-3.3,
+y su comprobación con datos es BE-3.3 C5, no BE-2.3 (decisión de 0.11.0, PLAN §2.2).
 
 ### 4.8 BE-2.4 — Diagnóstico de búsqueda
 `POST /v1/admin/diagnostico/vecinos` (§5.5) muestra qué devuelve el índice para **una** foto, sin agrupar ni puntuar:
@@ -817,22 +819,116 @@ Trampas:
 - La herramienta de evaluación de embeddings y `validate24.py` mandan la foto como `consulta.jpg` con `image/jpeg`
   (`comun.pedir_vecinos`); el nombre de archivo no se mira.
 
-### 4.9 BE-3.1 — Lugares y alertas (lectura pública y administración)
-**Lectura pública.** `GET /v1/places` devuelve todos los lugares (decenas, sin paginación) con la distancia a la
-posición si se envía.
-`GET /v1/alerts` alimenta la caché local de la app, que debe funcionar sin conexión: sin `desde` entrega la foto
-completa de alertas activas (incluidas las de vigencia futura, para que lleguen antes de empezar; la app filtra por
-vigencia al anunciar); con `desde` entrega solo lo cambiado y los identificadores borrados
-(*tombstones*, 90 días). La app guarda `generado_en` y lo envía como `desde` la próxima vez.
+### 4.9 BE-3.1 — Lugares (las alertas pasaron a BE-3.3, sin implementar)
+`GET /v1/places` (público) da todos los lugares, con la distancia a una posición si se envía; `/v1/admin/places`
+(admin) los crea, reemplaza, borra y lista para el panel (contratos en §5.3 y §5.5). Los usan la app (Selección de
+destino 6.4 y lugares de administración 7.6–7.7: FE-3.1 y FE-3.4) y BE-3.2 (lugar cercano y referencias, §4.10 paso 9).
 
-**Administración.**
-- Lugares: CRUD con nombre único sin distinguir mayúsculas ni tildes. Al borrar un lugar, sus imágenes quedan sin
-  lugar.
-- Alertas: el editor de la app trabaja local primero y genera los UUID. `PUT /v1/admin/alerts/{id}` crea o reemplaza
+**Construido (ADR-BE-17).** Probado en local con PostgreSQL 17.11 y pgvector 0.8.7 (`db` del compose):
+`tests/base/test_lugares_base.py` (endpoints contra la base), `tests/unit/test_lugares.py` (nombre normalizado,
+geometría, `LugarEntrada`), `tests/contrato/test_contrato_lugares.py` (ejemplos de §5 contra los esquemas) y
+`validate31.py --entorno local` contra el compose (validation-3-1 §5). **Sin validar en `dev`** (PLAN §3). Sin
+migración: la tabla `lugares` y sus restricciones existen desde `0001` (§5.7).
+
+**Lectura pública** (`GET /v1/places`, router `api/v1/lugares.router_publico`, sin `requiere_admin`: ignora
+`Authorization`, también un token no válido):
+1. FastAPI valida `lat` ([−90, 90]), `lng` ([−180, 180]), sin `NaN` ni infinitos, y `categoria` (`CategoriaLugar`):
+   si no, `422 VALIDACION` con `detalle.campos`.
+2. Si llega uno de `lat`/`lng` sin el otro: `422 VALIDACION` con el campo que falta (`lat y lng van juntos: falta
+   este.`).
+3. `servicios.lugares.listar_publico`: una transacción corta lee todas las filas de `lugares` (con `WHERE categoria`
+   si se pide). Son decenas: no hay paginación ni índice por posición.
+4. En Python: sin posición, orden por `nombre_normalizado` y, a igualdad, `id`; con posición, `distancia_m =
+   geo.distancia_m(lat, lng, lugar)` (haversine, radio medio 6 371 008,8 m) y orden por esa distancia **sin
+   redondear**, después `nombre_normalizado` e `id`. La distancia se devuelve redondeada a 1 decimal. El orden de los
+   nombres es el de los puntos de código (como `COLLATE "C"`), no el de la intercalación de la base, por eso se ordena
+   en Python.
+5. `{"items": […], "total": len(items)}`. `imagen_url` es siempre `null` (abajo, «Foto del lugar»).
+
+**Panel** (`GET /v1/admin/places`, `listar_admin`): `q` (≤ 100 caracteres, sin NUL) se normaliza como un nombre y se
+busca contenido en `nombre_normalizado` con `LIKE` (`%`, `_` y `\` escapados: son literales); vacío o solo espacios
+= sin filtro. No busca en `alias`. `total_fotos` sale de una subconsulta agrupada: imágenes con ese `lugar_id` cuyo
+video no está `eliminado`, en cualquier estado. Mismo orden por nombre.
+
+**Escrituras** (`crear`, `reemplazar`, `borrar`; el admin es el `UsuarioActual` de `requiere_admin`, §4.4). Cada
+cambio va en una transacción con su fila de `auditoria` (§5.7, «filas de BE-3.1») y, tras confirmar, su evento
+(`lugar_guardado` o `lugar_eliminado`, §5.10; sin el nombre):
+- **Crear**: `INSERT … ON CONFLICT ON CONSTRAINT lugares_nombre_normalizado_key DO NOTHING RETURNING …`; sin fila
+  devuelta → `409 NOMBRE_DUPLICADO` (nada escrito). `creado_en` = `actualizado_en` = `now()` de la transacción;
+  `creado_por` = el admin.
+- **Reemplazar** (`PUT`, todos los campos de `LugarEntrada`: lo que no se envía vuelve a su valor por defecto):
+  `SELECT … FOR NO KEY UPDATE` del lugar (no existe → `404`); compara campo a campo (`CAMPOS`); **sin cambios no
+  escribe** (ni `actualizado_en`, ni auditoría, ni evento) y devuelve el lugar como está; si el nombre normalizado
+  cambia y otro lugar ya lo tiene → `409`; si no, `UPDATE` con `actualizado_en = now()`. El mismo nombre con otras
+  mayúsculas o tildes no es un duplicado de sí mismo. Si dos `PUT` a la vez ponen el mismo nombre, la comprobación
+  previa no ve al otro y gana la restricción única: el `IntegrityError` de `lugares_nombre_normalizado_key` también
+  se responde `409` (`_es_nombre_duplicado`, que mira `constraint_name` en la cadena de causas de asyncpg).
+- **Borrar**: orden de bloqueo **videos de sus fotos (por id) → lugar → fotos**: lee sin bloqueo los `video_id` de
+  las imágenes del lugar, los bloquea con `recoleccion.bloquear_video` en orden, bloquea el lugar `FOR UPDATE`, pone
+  `lugar_id = NULL` y `actualizado_en = now()` en sus imágenes (la FK `ON DELETE SET NULL` haría lo primero, pero no
+  lo segundo ni el recuento) y borra la fila. Un id que no existe da `204` sin auditoría (evento con `existia =
+  false`): el `DELETE` es idempotente, así un reintento tras perder la respuesta no da error (ADR-BE-17).
+
+**Nombre normalizado** (`dominio.lugares.normalizar_nombre`, ADR-BE-17): Unicode NFKD, sin marcas combinantes
+(tildes, diéresis y la virgulilla de la ñ), `casefold()` y los espacios de cualquier clase reducidos a uno, sin
+espacios alrededor. «Café  Norte», «CAFE NORTE» y «cafe norte» → `cafe norte`; «Baño» → `bano`; «Straße» →
+`strasse`; «ﬁ» → `fi`. Es lo que guarda `lugares.nombre_normalizado` (único) y lo que se compara con `q`. `nombre` se
+guarda como llega, recortado (sin tocar los espacios internos). Un nombre que queda vacío al normalizar (solo marcas
+combinantes) es `422`.
+
+**Foto del lugar: fuera de BE-3.1.** §5.5 no tiene un endpoint para subirla, así que `lugares.imagen_key` queda
+siempre nulo e `imagen_url` es siempre `null` (como `ImagenAdmin.url` hasta BE-4.1); la app ya muestra el ícono de la
+categoría sin foto (FE-3.1). Infra reserva el prefijo `lugares/{lugar_id}.jpg` para la Fase 4, subido por la app con
+URL prefirmada (infra §5.5), y da a `tarea-api` `s3:PutObject` y `s3:GetObject` en `lugares/*` (infra §5.8; sin
+comprobar en `dev`). El lote que la añada (sin asignar en PLAN) define primero el endpoint en §5.5 y usa
+`AlmacenS3.firmar_put` y un `firmar_get` que falta (§4.5).
+
+**Para los lotes siguientes: qué ofrece BE-3.1 al código.**
+
+| Elemento | Qué hace |
+|---|---|
+| `app.dominio.lugares` | `normalizar_nombre(texto)` (arriba; puede dar `""`); límites de `LugarEntrada`: `NOMBRE_MIN` (2), `NOMBRE_MAX` (80), `ALIAS_MAX_ELEMENTOS` (20), `ALIAS_MAX` (60), `DESCRIPCION_MAX` (300, también `referencias`), `Q_MAX` (100) y `DECIMALES_DISTANCIA` (1) |
+| `app.dominio.geo` | `distancia_m(lat1, lng1, lat2, lng2)` (haversine, `RADIO_TIERRA_M` = 6 371 008,8; a cientos de metros, < 0,5 % de error frente al elipsoide) y `rumbo_grados(lat1, lng1, lat2, lng2)` (rumbo inicial del 1 al 2 en [0, 360), 0 = norte verdadero, horario; 0 entre puntos iguales). Python puro. BE-3.2 los usa para `lugar_cercano.distancia_m` y `referencias[].rumbo_grados` (§4.10 paso 9) |
+| `app.esquemas.lugares` | `LugarEntrada` (ignora campos de más; recorta textos; `alias` ausente o `null` → `[]`; `descripcion`/`referencias` vacías → `null`; todo texto por `texto_admitido`), `LugarPublico`, `LugarAdmin` (prohíben campos de más) y `ListaLugares[T]` (`items`, `total`) |
+| `app.servicios.lugares` | `listar_publico(motor, *, lat=None, lng=None, categoria=None)` → `list[LugarPublico]`; `listar_admin(motor, *, q=None, categoria=None)` → `list[LugarAdmin]`; `crear(motor, *, usuario_id, datos)` → `LugarAdmin`; `reemplazar(motor, *, usuario_id, lugar_id, datos)` → `LugarAdmin`; `borrar(motor, *, usuario_id, lugar_id)` → `Borrado(existia, fotos_sin_lugar)`. Excepciones `NombreDuplicado` y `LugarNoEncontrado`. `leer_todos(conexion, categoria=None)` → `list[LugarRef(id, nombre, categoria, lat, lng)]` por nombre normalizado, **dentro de una transacción abierta** (para BE-3.2). `RESTRICCION_NOMBRE` (`lugares_nombre_normalizado_key`), `CAMPOS` (los 7 de `LugarEntrada` que guarda la tabla) |
+| `app.api.v1.lugares` | `router_publico` (`/places`, montado en `router_v1`) y `router_admin` (`/places`, en `RUTAS_ADMIN`) |
+| `app.errores.MENSAJE_POR_CODIGO["NOMBRE_DUPLICADO"]` | «Ya existe un lugar con ese nombre (sin distinguir mayúsculas ni tildes).» |
+| Pruebas con base | `tests/base/test_lugares_base.py`: `entrada(nombre, **cambios)` (un `LugarEntrada` completo), `crear(api, nombre, **cambios)` → `LugarAdmin` (exige 201), `foto_con_lugar(ajustes, lugar_id, eliminado=False)` → `imagen_id` (inserta por SQL un video `validacion-31` y una foto con ese `lugar_id`: lo que hará `PATCH` de BE-4.1), `auditoria(ajustes, accion)`, `sql(ajustes, sentencia, **parametros)` y la fixture `api` (admin con sesión, sin S3) |
+
+**Guía para BE-3.2** (paso 9 de §4.10, que este lote no toca): en la transacción de la búsqueda (o en otra corta),
+`await lugares.leer_todos(conexion)`; con la posición calculada, `geo.distancia_m` a cada lugar para el más cercano a
+≤ `LOC_LUGAR_CERCANO_M` y las referencias a ≤ `LOC_REFERENCIAS_M`, y `geo.rumbo_grados(posición → lugar)` para
+`referencias[].rumbo_grados`. Para probarlo sin dataset real, `crear` de las pruebas de arriba (coordenadas propias).
+
+**Guía para BE-4.1** (imágenes con lugar): un `PATCH` de imagen con `lugar_id` bloquea video → imagen (§4.5) y la FK
+toma `KEY SHARE` del lugar al escribir: compatible con el orden de `borrar` de arriba y con el `FOR NO KEY UPDATE` de
+`reemplazar`. Un `lugar_id` que no existe (o que se borra a la vez) llega como violación de FK (23503) y hay que
+traducirlo; `total_fotos` de `LugarAdmin` ya cuenta esas fotos.
+
+Trampas:
+- La normalización junta la ñ con la n («Año» = «Ano») y la ß con «ss»: es a propósito (quien busca escribe sin
+  tildes), pero dos lugares reales que solo se distingan así darían `409`.
+- `GET /v1/admin/places?q=` no busca en `alias` ni en `descripcion`.
+- `DELETE` de un id que no existe da `204`: un id equivocado no da error (comprobar con `GET` si hace falta).
+- `GET /v1/places` lee la tabla entera en cada llamada: con decenas de lugares no importa; si llegaran a miles,
+  habría que paginar o filtrar en SQL (cambio de §5.3).
+- Con el `TestClient` de las pruebas, `GET /v1/places?lat=nan` también es `422` (`allow_inf_nan=False` en `Query`).
+
+**Alertas (BE-3.3, sin implementar).** Decisión del usuario (2026-10-25): las alertas salen del núcleo y de BE-3.1
+a un lote propio, BE-3.3 (PLAN §2.2). Su contrato de §5.3 y §5.5 queda documentado y marcado «sin implementar
+(BE-3.3)»; hoy esas rutas no existen y responden `404 NO_ENCONTRADO` (ruta inexistente, §5.6), también
+`/v1/admin/alerts/*` sin token (no hay ruta que proteger). La tabla `alertas` existe desde `0001` (§5.7) y
+`GET /v1/admin/stats` (BE-2.3) la cuenta. Diseño para BE-3.3 (ADR-BE-10):
+- `GET /v1/alerts` alimenta la caché local de la app, que debe funcionar sin conexión: sin `desde` entrega la foto
+  completa de alertas activas (incluidas las de vigencia futura, para que lleguen antes de empezar; la app filtra por
+  vigencia al anunciar); con `desde` entrega solo lo cambiado y los identificadores borrados (*tombstones*, 90 días,
+  `ALERTAS_TOMBSTONE_DIAS`, con su limpieza diaria desde `api`). La app guarda `generado_en` y lo envía como `desde`
+  la próxima vez.
+- El editor de la app trabaja local primero y genera los UUID. `PUT /v1/admin/alerts/{id}` crea o reemplaza
   (idempotente); `DELETE` de un id desconocido responde `204` (así, una alerta creada y borrada antes de sincronizar
   no da error). `POST /v1/admin/alerts/sincronizar` aplica una lista de cambios independientes y devuelve el resultado
   de cada uno: la app quita de «pendientes» solo los que salieron `ok`. Control de concurrencia opcional con
-  `If-Match: <version>`.
+  `If-Match: <version>` (`409 CONFLICTO_VERSION`).
 
 ### 4.10 BE-3.2 — Localización (`POST /v1/localize`)
 Algoritmo v1 (ADR-BE-08), con los parámetros de §5.10:
@@ -938,7 +1034,7 @@ fotos, embeddings §5.7), búsquedas < 100 ms; objetivo p95 en el servidor ≤ 1
 | `POST /v1/auth/login` | Login (7.1) | BE-1.3 |
 | `POST /v1/localize` | Escaneo 360° → Resultado (6.2, 6.3) | BE-3.2 |
 | `GET /v1/places` | Selección de destino (6.4) | BE-3.1 |
-| `GET /v1/alerts` | Caché local de alertas (2.5, 6.3, 6.5) | BE-3.1 |
+| `GET /v1/alerts` | Caché local de alertas (2.5, 6.3, 6.5) | BE-3.3 — **sin implementar** (hoy `404`, §4.9) |
 | `POST /v1/localize/frame` | Corrección visual en navegación (6.5) | BE-5.1 (hasta entonces `501`) |
 | `GET /v1/route` | Ruta a un destino (6.5) | BE-5.3 (hasta entonces `501`) |
 | `POST /v1/eventos` | Estadísticas de uso (7.15) | BE-5.2 (hasta entonces `501`) |
@@ -1033,9 +1129,19 @@ Errores: `400 FOTOS_INVALIDAS` (cantidad, tipo, tamaño o `rumbos` de distinto l
 foto), `503 EMBEDDING_NO_DISPONIBLE` (apagado, caído o sin respuesta en `EMBEDDING_TIMEOUT_S`), `503 BASE_NO_DISPONIBLE`.
 
 #### `GET /v1/places`
-Parámetros opcionales: `lat`, `lng` (ambos o ninguno), `categoria`.
+Público: no pide token e ignora `Authorization` (también uno no válido). Parámetros opcionales: `lat`, `lng` (ambos o
+ninguno), `categoria`.
 
 `200` → `{"items": [LugarPublico…], "total": 6}`, ordenado por `distancia_m` si se envió posición; si no, por nombre.
+Desde BE-3.1 (ARCHITECTURE 0.11.0):
+- `lat` ∈ [−90, 90] y `lng` ∈ [−180, 180] (números, sin `NaN`); `categoria`, uno de los valores de abajo (filtra).
+- Todos los lugares que cumplen el filtro, sin paginar; `total` = número de `items`.
+- «Por nombre» = por el nombre normalizado (sin tildes ni mayúsculas, §5.5 `LugarEntrada`) en orden de puntos de
+  código, y a igualdad por `id`. Con posición, por la distancia sin redondear y, a igualdad, por nombre.
+- `distancia_m`: distancia de círculo máximo (haversine, radio medio de la Tierra 6 371 008,8 m) desde (`lat`, `lng`)
+  hasta el lugar, en metros con 1 decimal.
+- Errores: `422 VALIDACION` (`detalle.campos` con `lat`, `lng` o `categoria`; con uno de `lat`/`lng` sin el otro,
+  el campo que falta) y `503 BASE_NO_DISPONIBLE`.
 
 `LugarPublico`:
 ```json
@@ -1048,9 +1154,14 @@ Parámetros opcionales: `lat`, `lng` (ambos o ninguno), `categoria`.
 ```
 `categoria` ∈ {`biblioteca`, `cafeteria`, `bano`, `bloque`, `auditorio`, `deportes`, `administracion`, `entrada`}
 (los mismos valores que `CategoriaLugar` de la app, en minúsculas). `distancia_m` es `null` sin posición.
-`imagen_url` es una URL prefirmada de 1 h o `null`.
+`imagen_url` es una URL prefirmada de 1 h o `null`; **hoy siempre `null`**: ningún endpoint sube todavía la foto de un
+lugar (§4.9, «Foto del lugar»). `alias` es siempre una lista (vacía si no hay); `descripcion` y `referencias` pueden
+ser `null`.
 
 #### `GET /v1/alerts`
+> **Sin implementar (BE-3.3).** Las alertas salieron del núcleo (decisión del usuario, 2026-10-25; §4.9): este
+> contrato se conserva para BE-3.3, pero hoy la ruta no existe y responde `404 NO_ENCONTRADO`.
+
 Parámetro opcional: `desde` (fecha ISO-8601 tomada de un `generado_en` anterior).
 
 `200`:
@@ -1227,14 +1338,16 @@ si la foto no tiene lugar asignado.
 
 `LugarAdmin` = `LugarPublico` sin `distancia_m`, más `creado_en`, `actualizado_en` y `total_fotos`.
 
-`AlertaAdmin` = `Alerta` más `creado_en`, `creado_por` y `actualizado_por` (`{id, nombre}`).
+`AlertaAdmin` = `Alerta` más `creado_en`, `creado_por` y `actualizado_por` (`{id, nombre}`). **Sin implementar
+(BE-3.3).**
 
 Lote que entrega cada grupo: `GET /v1/admin/videos` y `GET /v1/admin/videos/{id}`, BE-2.1; `GET /v1/admin/stats`,
-BE-2.3; diagnóstico, BE-2.4; lugares y alertas, BE-3.1; el resto de videos y todas las de imágenes, BE-4.1.
+BE-2.3; diagnóstico, BE-2.4; lugares, BE-3.1; alertas, BE-3.3 (**sin implementar**: hoy esas rutas no existen y
+responden `404 NO_ENCONTRADO`, §4.9); el resto de videos y todas las de imágenes, BE-4.1.
 
 | Método y ruta | Petición | Respuesta |
 |---|---|---|
-| `GET /v1/admin/stats` | — | `200` `{"total_fotos": 2842, "total_lugares": 48, "alertas_activas": 3, "ultimo_video": {"numero": 12, "creado_en": "…"} \| null}`. `total_fotos` = imágenes `procesada` de videos no eliminados |
+| `GET /v1/admin/stats` | — | `200` `{"total_fotos": 2842, "total_lugares": 48, "alertas_activas": 3, "ultimo_video": {"numero": 12, "creado_en": "…"} \| null}`. `total_fotos` = imágenes `procesada` de videos no eliminados; `alertas_activas` = alertas `activa` sin borrar (0 mientras BE-3.3 no exista, §4.7) |
 | `GET /v1/admin/videos` | `?q=&orden=fecha\|nombre\|fotos&dir=desc\|asc&pagina&por_pagina` | Página de `VideoResumen` (detalle abajo) |
 | `GET /v1/admin/videos/{id}` | — | `VideoResumen` + `"fotos": [ImagenAdmin…]` en orden (detalle abajo) |
 | `PATCH /v1/admin/videos/{id}` | `{"nombre": "Entrada norte"}` (1–40 tras recortar) | `200` `VideoResumen` |
@@ -1245,21 +1358,32 @@ BE-2.3; diagnóstico, BE-2.4; lugares y alertas, BE-3.1; el resto de videos y to
 | `DELETE /v1/admin/images/{id}` | — | `204`. Retira el vector al instante y encola `purgar_imagen` |
 | `POST /v1/admin/images/lote` | `{"accion": "eliminar" \| "reasignar", "ids": [≤ 200], "lugar_id": "…" \| null}` | `200` `{"procesadas": 10, "fallidas": [{"id": "…", "codigo": "NO_ENCONTRADO"}]}` |
 | `POST /v1/admin/images/{id}/reprocesar` | — | `202`; la imagen vuelve a `subida` y se encola `reprocesar_imagen` |
-| `GET /v1/admin/places` | `?q=&categoria=` | `{"items": [LugarAdmin…], "total": n}` |
+| `GET /v1/admin/places` | `?q=&categoria=` | `{"items": [LugarAdmin…], "total": n}` (detalle abajo) |
 | `POST /v1/admin/places` | `LugarEntrada` | `201` `LugarAdmin` |
 | `PUT /v1/admin/places/{id}` | `LugarEntrada` | `200` `LugarAdmin` |
-| `DELETE /v1/admin/places/{id}` | — | `204`; sus imágenes quedan con `lugar = null` |
-| `GET /v1/admin/alerts` | `?q=&tipo=&prioridad=&activa=` | `{"items": [AlertaAdmin…], "total": n}` (sin borradas) |
-| `PUT /v1/admin/alerts/{id}` | `AlertaEntrada`; opcional `If-Match: <version>` | `201` si se creó, `200` si se reemplazó; cuerpo `AlertaAdmin` |
-| `DELETE /v1/admin/alerts/{id}` | — | `204`, también si no existe |
-| `POST /v1/admin/alerts/sincronizar` | `{"cambios": [{"op": "upsert", "alerta": {"id": "…", …AlertaEntrada}}, {"op": "eliminar", "id": "…"}]}` (≤ 100) | `200` `{"generado_en": "…", "resultados": [{"id": "…", "op": "upsert", "estado": "ok" \| "error", "codigo": null \| "VALIDACION"}]}` |
+| `DELETE /v1/admin/places/{id}` | — | `204`; sus imágenes quedan con `lugar = null`. También `204` si no existe |
+| `GET /v1/admin/alerts` (BE-3.3, sin implementar) | `?q=&tipo=&prioridad=&activa=` | `{"items": [AlertaAdmin…], "total": n}` (sin borradas) |
+| `PUT /v1/admin/alerts/{id}` (BE-3.3, sin implementar) | `AlertaEntrada`; opcional `If-Match: <version>` | `201` si se creó, `200` si se reemplazó; cuerpo `AlertaAdmin` |
+| `DELETE /v1/admin/alerts/{id}` (BE-3.3, sin implementar) | — | `204`, también si no existe |
+| `POST /v1/admin/alerts/sincronizar` (BE-3.3, sin implementar) | `{"cambios": [{"op": "upsert", "alerta": {"id": "…", …AlertaEntrada}}, {"op": "eliminar", "id": "…"}]}` (≤ 100) | `200` `{"generado_en": "…", "resultados": [{"id": "…", "op": "upsert", "estado": "ok" \| "error", "codigo": null \| "VALIDACION"}]}` |
 | `GET /v1/admin/stats/uso` | — | BE-5.2 (hasta entonces `501`) |
 | `POST /v1/admin/diagnostico/vecinos` | `multipart/form-data` con una foto; `?k=` | Ver abajo (BE-2.4) |
 
 `LugarEntrada`: `nombre` (2–80), `categoria`, `lat`, `lng`, `alias` (≤ 20 textos de ≤ 60), `descripcion` (≤ 300),
-`referencias` (≤ 300). Nombre único sin distinguir mayúsculas ni tildes → `409 NOMBRE_DUPLICADO`.
+`referencias` (≤ 300). Nombre único sin distinguir mayúsculas ni tildes → `409 NOMBRE_DUPLICADO`. En detalle (desde
+BE-3.1, ARCHITECTURE 0.11.0):
+- Obligatorios: `nombre`, `categoria` (valores de `LugarPublico`), `lat` y `lng` (WGS84, números sin `NaN`).
+- Las longitudes son en caracteres **tras recortar** los espacios de alrededor, y así se guardan. `alias` ausente o
+  `null` = `[]`; cada alias, de 1 a 60 tras recortar (uno vacío es `422`). `descripcion` y `referencias` vacías o
+  solo espacios = `null`. Ningún texto admite el carácter NUL ni un sustituto suelto (§4.4). Los campos de más se
+  ignoran (también `id`, `imagen_url`, `distancia_m`…).
+- «Sin distinguir mayúsculas ni tildes»: dos nombres son el mismo si coinciden tras descomponer Unicode (NFKD), quitar
+  las marcas (tildes, diéresis, la virgulilla de la ñ), pasar a minúsculas (`casefold`) y reducir los espacios
+  internos a uno. «Café  Norte» = «CAFE NORTE» = «cafe norte»; «Baño» = «Bano» (ADR-BE-17). Un nombre que queda vacío
+  así es `422`.
+- `409 NOMBRE_DUPLICADO` lleva `detalle: null`.
 
-`AlertaEntrada`: `lat`, `lng`, `mensaje` (1–200 tras recortar), `tipo` (por defecto `otro`), `prioridad` (por defecto
+`AlertaEntrada` (**sin implementar, BE-3.3**): `lat`, `lng`, `mensaje` (1–200 tras recortar), `tipo` (por defecto `otro`), `prioridad` (por defecto
 `normal`), `radio_m`
 (5–100, por defecto 15), `activa` (por defecto `true`), `vigencia_desde`, `vigencia_hasta` (si ambas,
 `hasta > desde`). En `sincronizar`, cada cambio es independiente: un error no revierte los demás.
@@ -1282,6 +1406,39 @@ Parámetros, todos opcionales:
 `200` → `VideoResumen` + `"fotos": [ImagenAdmin…]` ordenadas por `orden` (todas, sin paginar: como mucho 200). Su
 `conteo` es el mismo que devolvería `complete` en ese momento. Errores: `404 NO_ENCONTRADO` (no existe o está
 `eliminado`), `422 VALIDACION` (`id` no es un UUID), `503 BASE_NO_DISPONIBLE` y los de §5.2.
+
+#### Lugares: `/v1/admin/places` (BE-3.1)
+`POST /v1/admin/places` (y `PUT /v1/admin/places/{id}`, con el mismo cuerpo) recibe un `LugarEntrada`:
+```json
+{
+  "nombre": "Biblioteca Central", "categoria": "biblioteca", "lat": 6.2009, "lng": -75.5783,
+  "alias": ["biblioteca", "la biblioteca"], "descripcion": "Edificio de tres pisos…", "referencias": "Frente al lago…"
+}
+```
+y responde un `LugarAdmin`:
+```json
+{
+  "id": "3f2a…", "nombre": "Biblioteca Central", "categoria": "biblioteca",
+  "lat": 6.2009, "lng": -75.5783, "alias": ["biblioteca", "la biblioteca"],
+  "descripcion": "Edificio de tres pisos…", "referencias": "Frente al lago…",
+  "imagen_url": null, "creado_en": "2026-10-25T20:11:00Z", "actualizado_en": "2026-10-25T20:11:00Z", "total_fotos": 0
+}
+```
+- `POST`: `201`. `creado_en` = `actualizado_en`. Errores, en este orden: los de §5.2, `422 VALIDACION`
+  (`detalle.campos`), `409 NOMBRE_DUPLICADO`, `503 BASE_NO_DISPONIBLE`. Un `409` no escribe nada.
+- `PUT`: reemplaza **todos** los campos de `LugarEntrada` (lo que no se envía toma su valor por defecto: `alias` = `[]`,
+  `descripcion` y `referencias` = `null`); no cambia `id`, `creado_en`, `imagen_url` ni las fotos. `200` con el lugar
+  guardado. Si nada cambia, no escribe: `actualizado_en` sigue igual. El mismo nombre con otras mayúsculas, tildes o
+  espacios no es un duplicado de sí mismo. Errores, en este orden: los de §5.2, `422 VALIDACION` (cuerpo, o `id` que no
+  es un UUID), `404 NO_ENCONTRADO`, `409 NOMBRE_DUPLICADO` (otro lugar tiene ese nombre), `503`.
+- `DELETE`: `204` sin cuerpo; las imágenes del lugar quedan con `lugar = null` (y su `actualizado_en` cambia). Un id
+  que no existe también da `204` (idempotente). `422` si el id no es un UUID.
+- `GET /v1/admin/places`: `q` (opcional, ≤ 100 caracteres, sin NUL) se compara sin tildes, mayúsculas ni espacios de
+  más (la regla de `LugarEntrada`) y se busca **contenido** en el nombre; `%`, `_` y `\` son literales; vacío o solo
+  espacios = sin filtro. `categoria` filtra. Orden por nombre (como `GET /v1/places`), sin paginar; `total` = número de
+  `items`. `total_fotos` = imágenes con ese lugar de videos no eliminados, en cualquier estado (hasta BE-4.1, que
+  asigna lugares a las fotos, es 0). Errores: `422` (`q` o `categoria`), `503` y los de §5.2.
+- Cada cambio queda en `auditoria` (`lugar.crear`, `lugar.editar`, `lugar.eliminar`, §5.7).
 
 #### `POST /v1/admin/diagnostico/vecinos`
 `multipart/form-data` con una sola parte `foto` (`image/jpeg`, ≤ `LOC_MAX_BYTES_FOTO`, las mismas reglas que una foto
@@ -1336,7 +1493,7 @@ Errores, en este orden (el primero que aplica):
 | 403 | `SIN_PERMISOS` | Token válido de un usuario activo sin rol `admin` (§5.2) |
 | 404 | `NO_ENCONTRADO` | Recurso inexistente (o video eliminado en rutas de lectura); también una ruta que no existe |
 | 405 | `SOLICITUD_INVALIDA` | Método no permitido en una ruta que existe; `detalle.metodos_permitidos` (p. ej. `["GET"]`) y encabezado `Allow` |
-| 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido · registrar fotos, completar la subida o volver a crear (mismo `ref_cliente`) un video borrado (§5.4) · `If-Match` no coincide |
+| 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido al crear o editar (BE-3.1, §5.5; `detalle: null`) · registrar fotos, completar la subida o volver a crear (mismo `ref_cliente`) un video borrado (§5.4) · `If-Match` no coincide (alertas, BE-3.3: sin implementar) |
 | 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]` |
 | 500 | `ERROR_INTERNO` | Fallo no previsto (el `X-Request-Id` permite encontrarlo en los logs); también configuración que falta en `api` (`JWT_SECRET`, §5.2; `S3_BUCKET_DATASET` en las rutas de §5.4 que usan S3) |
 | 501 | `NO_IMPLEMENTADO` | Endpoints reservados |
@@ -1421,7 +1578,7 @@ valor por defecto), restricciones e índices con sus nombres, secuencias y la re
 | `version` | `integer` | | `1` | ≥ 1; +1 en cada cambio |
 | `creado_en`, `actualizado_en` | `timestamptz` | | `now()` | índice `alertas_actualizado_en_idx` |
 | `creado_por`, `actualizado_por` | `uuid` | | | FK `usuarios` |
-| `eliminada_en` | `timestamptz` | sí | | *tombstone*: borrar fija `eliminada_en` y `actualizado_en`, así `GET /v1/alerts?desde=` usa el mismo índice; las borradas hace más de 90 días se eliminan físicamente |
+| `eliminada_en` | `timestamptz` | sí | | *tombstone*: borrar fija `eliminada_en` y `actualizado_en`, así `GET /v1/alerts?desde=` usa el mismo índice; las borradas hace más de 90 días se eliminan físicamente (BE-3.3: hasta entonces nadie escribe en `alertas`) |
 
 **`videos`**
 
@@ -1525,6 +1682,15 @@ escrito):
 | `usuario.login` (cada intento en el que se comprobó la contraseña; no los rechazados antes, p. ej. `503 SERVICIO_OCUPADO`) | el usuario si entró; si no, nulo | el usuario si el correo existe; si no, nulo | `{"resultado": "exito"}` o `{"resultado": "fallo", "motivo": "correo_desconocido" \| "password_incorrecta" \| "usuario_inactivo"}` |
 | `usuario.crear`, `usuario.actualizar` (`crear-usuario`) | nulo | el usuario | `{"origen": "cli", "rol": …, "reactivado": true \| false}`, y `"rol_anterior"` al actualizar |
 | `usuario.desactivar` (`desactivar-usuario`) | nulo | el usuario | `{"origen": "cli", "ya_estaba_inactivo": true \| false}` |
+
+**`auditoria`: filas de BE-3.1** (`entidad = 'lugar'`, `actor_id` = el admin del token, `entidad_id` = el id del
+lugar; en la misma transacción que el cambio):
+
+| `accion` | Cuándo | `detalle` |
+|---|---|---|
+| `lugar.crear` | `POST /v1/admin/places` con `201` | `{"nombre": "<nombre guardado>", "categoria": "<categoria>"}` |
+| `lugar.editar` | `PUT /v1/admin/places/{id}` que cambió algo (sin cambios no hay fila) | `{"cambios": [<campos que cambiaron, en el orden nombre, categoria, lat, lng, alias, descripcion, referencias>]}` |
+| `lugar.eliminar` | `DELETE /v1/admin/places/{id}` de un lugar que existía (un id desconocido no deja fila) | `{"nombre": "<nombre>", "fotos_sin_lugar": <imágenes que quedaron sin lugar>}` |
 
 ### 5.8 Mensajes de las colas
 
@@ -1676,7 +1842,7 @@ que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que 
 | `WORKER_LADO_EMBEDDING_PX` | 1024 | Copia reducida que se envía al modelo (el original y la miniatura no cambian) |
 | `WORKER_ESPERA_EMBEDDING_S` | 15 | Pausa entre comprobaciones de `/health/ready` con `embedding` no listo, tras un error de SQS y tras un lote con mensajes retenidos |
 | `RECONCILIADOR_CADA_MIN` | 10 | Purgas pendientes |
-| `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api` |
+| `ALERTAS_TOMBSTONE_DIAS` / `EVENTOS_RETENCION_DIAS` | 90 / 180 | Limpieza diaria desde `api` (sin código todavía; la de *tombstones* es de BE-3.3, §4.9) |
 | `PAGINA_POR_DEFECTO` / `PAGINA_MAX` | 24 / 100 | 24 coincide con `FOTOS_POR_PAGINA` de la Galería. Los usa `GET /v1/admin/videos` desde BE-2.1 |
 | `DB_POOL_API` / `DB_POOL_API_DESBORDE` / `DB_POOL_WORKER` | 5 / 5 / 2 | `db.t4g.micro` admite ~100 conexiones |
 | `DB_CONNECT_TIMEOUT_S` | 5 | Tiempo máximo para abrir una conexión (asyncpg espera 60 s por defecto) y para el `SELECT 1` de `/v1/health/ready` |
@@ -1713,6 +1879,8 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` y, desde BE-1.3, en cualquier endpoint que la use (`WARNING`; responde `503`); en `migrate` (toda la CLI, también `limpiar-validacion`), la CLI termina con 2 (`ERROR`) |
 | `configuracion_incompleta` | `migrate`, `api`, `worker` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, falta o no vale la contraseña de `crear-usuario`, o falta `S3_BUCKET_DATASET` en `limpiar-validacion` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida; desde BE-2.1, falta `S3_BUCKET_DATASET` (o no se pudo crear el cliente de S3) en `images` o `complete` (`ERROR`; responde `500`). En `worker` (BE-2.2), al arrancar sin `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` o `DB_*` (`faltan`; `motivo = la ingesta no puede empezar`), y sigue con latidos sin consumir (`ERROR`) |
 | `video_creado` | `api` | `video_id`, `numero`, `nuevo` (`false` si ya existía con ese `ref_cliente`) | `POST /v1/collect/videos` con `201` o `200` (BE-2.1) |
+| `lugar_guardado` | `api` | `operacion` (`crear` \| `editar`), `lugar_id`, `cambios` (campos que cambiaron; al crear, los 7 de `LugarEntrada`) | `POST /v1/admin/places` con `201`, o `PUT` que cambió algo (BE-3.1, `INFO`). Sin el nombre |
+| `lugar_eliminado` | `api` | `lugar_id`, `existia`, `fotos_sin_lugar` | `DELETE /v1/admin/places/{id}` con `204` (BE-3.1, `INFO`), también de un id que no existía (`existia = false`) |
 | `imagenes_registradas` | `api` | `video_id`, `recibidas`, `nuevas`, `actualizadas` (pendientes con metadatos nuevos y URL), `marcadas_subida` (pendientes que el `HEAD` encontró en S3), `sin_cambios` (ya `subida`, `procesada` o `error`), `urls` | `POST …/images` con `200` (BE-2.1). Nunca las URL |
 | `subida_completada` | `api` | `video_id`, `comprobadas` (pendientes con `HEAD`), `encontradas`, `fallidas`, `estado`, `conteo` | `POST …/complete` con `200` (BE-2.1) |
 | `s3_fallido` | `api`, `migrate` | `operacion` (`firmar` \| `head` \| `borrar` \| `listar` \| `crear_cliente`), `motivo` (clase y código de AWS, nunca la URL); en `head`, `video_id` y `claves` (cuántas fallaron); en `firmar`, `video_id` | `firmar`: `images` responde `500` (`ERROR`). `head`: alguna foto queda pendiente y la respuesta sigue (`WARNING`). `borrar` (primera pasada) o `listar` (`--simular`): `limpiar-validacion` termina con 1 (`ERROR`). `crear_cliente`: al arrancar `api` (`ERROR`) |
@@ -1941,6 +2109,40 @@ valores para descartarlo). C2a no usa `GET /v1/admin/stats` (BE-2.3 no es depend
 `--sin-limpieza` deja también `embedding` como esté y el usuario de prueba activo (con una contraseña aleatoria que
 nadie conoce; la siguiente ejecución lo reactiva y lo desactiva).
 
+Ayudas de BE-3.1 (para los validadores que crean lugares de prueba; BE-2.3 y BE-4.1 las reutilizan):
+
+| Elemento | Qué hace |
+|---|---|
+| `RUTA_LUGARES` (`/places`), `RUTA_LUGARES_ADMIN` (`/admin/places`) | Rutas relativas a la URL con `/v1` |
+| `CAMPOS_LUGAR_PUBLICO`, `CAMPOS_LUGAR_ADMIN` | Los conjuntos exactos de campos de `LugarPublico` (§5.3) y `LugarAdmin` (§5.5), para comparar con `set(respuesta)` |
+| `normalizar_nombre(texto)` | La regla de nombres de §5.5 (NFKD sin marcas, `casefold`, espacios reducidos), **copiada** sin importar el backend; `tests/ops/test_validate31.py` comprueba que coincide con `app.dominio.lugares.normalizar_nombre` |
+| `lugares_validacion(api, token, prefijo=PREFIJO_VALIDACION)` → `list[dict]` | Los `LugarAdmin` cuyo nombre normalizado empieza por `prefijo` (`GET /v1/admin/places?q=<prefijo normalizado>`). No 200 → `Falla` |
+| `borrar_lugares(api, token, ids)` → `int` | `DELETE /v1/admin/places/{id}` de cada id sin repetir (cuenta los `DELETE`); otro código que 204 → `Falla`. Un id que ya no existe también da 204 |
+| `borrar_lugares_restos(api, token)` → detalle | La `preparacion` de quien crea lugares: borra **todos** los `validacion-` (de cualquier lote, como `borrar_restos` con los videos). Devuelve `sin lugares validacion- de ejecuciones anteriores` o `lugares validacion- borrados: n` |
+
+`validate31.py` (validation-3-1) es el ejemplo de un validador sin AWS más allá de las credenciales: corre igual en
+`local` (contra el compose) y en `dev`. Lo que tiene y no está en `comun.py`:
+- Constantes: `LAT`, `LNG` (0.001, 0.001: fuera del campus), `DISTANCIA_ESTE_M` (111,2: 0,001° de longitud a esa
+  latitud) y `TOLERANCIA_M` (0,5).
+- `_definiciones(prefijo)`: los cuerpos de los lugares de prueba A (`<prefijo> Biblioteca Lago`, con alias y textos),
+  B (`… Bloque Sur`, en la posición de consulta), C (`… Entrada Este`, 0,001° al este) y D (`… Cafe Norte`); el
+  `prefijo` es `validacion-31-<AAAAMMDD-HHMMSS>` (UTC, `Contexto.sello`).
+- `Contexto`: `token()` (el del login de P3), `pedir(metodo, ruta, con_token=True, **kwargs)`, `crear(cuerpo)` (`POST`;
+  con 201 apunta el id en `otros_ids`, por si un backend defectuoso crea lo que debía rechazar), `lugar(clave)` (el
+  `LugarAdmin` de A–D, creándolo si falta: así `--solo` funciona; apunta el id en `creados`), `publico(**params)`
+  (`GET /v1/places`, comprueba `{items, total}` y `total`), `admin_lista(q)`, `buscar_admin(id)` y `limpiar()` (borra
+  los que siguen existiendo con el prefijo de la ejecución más los apuntados; informa cuántos existían).
+- Pruebas: `tests/ops/test_validate31.py` corre el validador contra **el backend real** (la app con una base efímera,
+  marca `base`) usando un `TestClient` como el `http` de `ClienteApi`, en `local` y en `dev` (con `sesion_aws`,
+  `verificar_cuenta` y `outputs_terraform` sustituidos), y con backends defectuosos por `monkeypatch` (normalización
+  que distingue tildes → C3b falla; lista al revés → C2a falla; `GET /v1/places` con 404 → código 2; contraseña mala
+  → código 3). Un validador sin AWS puede copiar ese patrón en lugar de un mundo falso.
+
+Trampas de BE-3.1: C2a supone que nadie más tiene un lugar en (0.001, 0.001) (allí no hay campus; la preparación
+borra los `validacion-`). C2c compara el orden de **todos** los lugares con la copia de `normalizar_nombre`: si la
+regla de §5.5 cambia, cambian las dos (y la prueba que las compara). La limpieza no borra lugares sin el prefijo de la
+ejecución salvo los que apuntó.
+
 **Trampa del arranque de `embedding`: Cloud Map sin configuración de salud (0.9.1 y 0.9.2).** El servicio de Cloud
 Map de `embedding` (`srv-josm7lql7ddxgzm6`, `embedding.campus-locator.local`, registro A con TTL 10 s) **no tiene
 `HealthCheckConfig` ni `HealthCheckCustomConfig`** (comprobado en `dev` con `servicediscovery get-service`,
@@ -1993,14 +2195,16 @@ antes de tiempo, S3 lo aceptaría (200) y la foto quedaría subida. Por eso P4 m
 motivo. `expira_en` lo calcula `api` (Fargate, con hora de AWS), así que solo cuenta el reloj local.
 
 **Datos de prueba**: videos con `ref_cliente` y `nombre` que empiezan por `validacion-` (con coordenadas fuera del
-campus, para no mezclarse con el dataset real), lugares cuyo nombre empieza por `validacion-`, alertas cuyo mensaje
-empieza por `validacion-`, y un usuario `validacion+user@campus.edu.co` de rol `user` para las pruebas de permisos.
+campus, para no mezclarse con el dataset real), lugares cuyo nombre normalizado (§5.5) empieza por `validacion-`,
+alertas cuyo mensaje empieza por `validacion-` (BE-3.3), y un usuario `validacion+user@campus.edu.co` de rol `user`
+para las pruebas de permisos.
 
 **Limpieza**
 
 | Qué | Cómo se borra |
 |---|---|
-| Lugares y alertas | Con sus `DELETE` de §5.5 (BE-3.1) |
+| Lugares | `DELETE /v1/admin/places/{id}` (BE-3.1; `comun.borrar_lugares`); al empezar, `comun.borrar_lugares_restos` |
+| Alertas | `DELETE /v1/admin/alerts/{id}` (BE-3.3, sin implementar) |
 | Videos de prueba, antes de BE-4.1 | `limpiar-validacion --video <id> …` en una tarea suelta con la definición `campus-locator-dev-worker` (§5.9) |
 | Videos de prueba, con BE-4.1 hecho | `DELETE /v1/admin/videos/{id}`; su purga limpia S3 |
 | Usuario `validacion+user@campus.edu.co` | Lo crea o reactiva `crear-usuario --rol user` (contraseña aleatoria en `CREAR_USUARIO_PASSWORD`, nunca impresa) y lo desactiva `desactivar-usuario` al terminar, ambos en una tarea suelta de `migrate` (en `local`, con `docker compose run`): `crear_usuario_validacion` y `desactivar_usuario_validacion` de `comun.py`. La fila queda inactiva entre ejecuciones; reactivarla devuelve la validez a sus tokens sin vencer (§5.2), que solo tuvo el validador |
@@ -2064,6 +2268,7 @@ Permite indexar con un modelo o preprocesamiento nuevo en paralelo y cambiar de 
 
 **ADR-BE-10 — Alertas con id del cliente, `PUT` idempotente, *tombstones* y sincronización por diferencias
 (aceptada).** Encaja con el editor «local primero» de la app (7.8) y con la caché sin conexión del flujo público (2.5).
+Desde 0.11.0 se implementa en BE-3.3, fuera del núcleo (decisión del usuario, 2026-10-25; §4.9).
 
 **ADR-BE-11 — Cálculo de rutas diferido a Fase 5 (aceptada).** Decisión abierta 2 del frontend: el grafo de caminos
 no existe todavía. `GET /v1/route` queda reservado.
@@ -2153,6 +2358,24 @@ contrato obliga a convertir en un solo sitio (la app) y permite comparar rumbos 
 - *Consecuencias:* la API no decodifica la foto (una que no es JPEG pero empieza por `FF D8 FF` llega a embeddings y
   vuelve como `400`); el evento `vecinos_consultados` da latencias y similitud máxima sin datos de la foto; la búsqueda
   es aproximada (HNSW, R16).
+
+**ADR-BE-17 — Lugares: nombre normalizado por la aplicación, distancias y orden en Python, `DELETE` idempotente y sin
+foto (aceptada, BE-3.1).**
+- **Nombre único «sin mayúsculas ni tildes»** = igualdad tras NFKD sin marcas combinantes, `casefold()` y espacios
+  reducidos (`dominio.lugares.normalizar_nombre`), guardado en `lugares.nombre_normalizado` con su restricción única
+  (§5.7). La ñ cuenta como n: quien busca o dicta un destino suele escribir sin tildes. *Alternativas descartadas:*
+  la extensión `unaccent` de PostgreSQL con un índice por expresión (una extensión y un cambio de esquema más, y su
+  diccionario no es el mismo que el del validador); `lower()` sin quitar tildes (no cumple C3).
+- **Crear** con `ON CONFLICT … DO NOTHING` (sin excepción ni auditoría en el `409`); **reemplazar** con una
+  comprobación previa y, para las carreras, la restricción única traducida también a `409`.
+- **Distancia y orden en Python** (`geo.distancia_m`, haversine con el radio medio): los lugares son decenas, así no
+  hace falta PostGIS ni un índice espacial, y el orden por nombre no depende de la intercalación de la base (puntos de
+  código, igual en local, CI y RDS). *Consecuencia:* `GET /v1/places` lee la tabla entera (trampa en §4.9).
+- **`DELETE` de un lugar desconocido = `204`**, como el de alertas: un reintento tras perder la respuesta no es un
+  error. *Consecuencia:* un id equivocado tampoco da error.
+- **Sin foto del lugar en BE-3.1**: §5.5 no tenía cómo subirla (infra §5.5 reserva `lugares/` para la Fase 4);
+  `imagen_url` sigue siendo `null` hasta que un lote defina el endpoint (§4.9).
+- **Orden de bloqueo** de `borrar` (videos → lugar → fotos) para respetar el «video → imágenes» de §4.5.
 
 ---
 

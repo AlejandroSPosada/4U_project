@@ -24,7 +24,8 @@ Reglas (§5.11): nunca imprimir secretos, tokens ni URLs prefirmadas; ser idempo
 
 Además (tabla completa en backend §5.11): tareas sueltas de ECS (BE-1.2) y, desde BE-1.3, secretos y credenciales del
 admin, `ClienteApi` (login con pausa y reintentos de 429 de API Gateway), `EntornoBackend` (`python -m app.cli` y SQL
-en `local` o `dev`) y el usuario de prueba `validacion+user@campus.edu.co`.
+en `local` o `dev`) y el usuario de prueba `validacion+user@campus.edu.co`; recolección (BE-2.1), `embedding` y colas
+(BE-2.2), vecinos (BE-2.4) y lugares de prueba (BE-3.1).
 """
 
 from __future__ import annotations
@@ -1826,3 +1827,54 @@ def mensajes_log(logs: Any, grupo: str, desde: datetime) -> list[str]:
             argumentos["nextToken"] = siguiente
     except Exception as exc:
         raise _errores_aws(exc, f"logs filter-log-events {grupo}") from None
+
+
+# --- Lugares de prueba (BE-3.1; ARCHITECTURE §5.3, §5.5 y §5.11) ------------------------------------------------------
+RUTA_LUGARES = "/places"
+RUTA_LUGARES_ADMIN = "/admin/places"
+#: Campos exactos de `LugarPublico` (§5.3) y `LugarAdmin` (§5.5).
+CAMPOS_LUGAR_PUBLICO = frozenset(
+    {"id", "nombre", "categoria", "lat", "lng", "alias", "descripcion", "referencias", "imagen_url", "distancia_m"}
+)
+CAMPOS_LUGAR_ADMIN = (CAMPOS_LUGAR_PUBLICO - {"distancia_m"}) | {"creado_en", "actualizado_en", "total_fotos"}
+
+
+def normalizar_nombre(texto: str) -> str:
+    """La regla de §5.5 para comparar nombres de lugares (copia, sin importar el backend): NFKD sin marcas combinantes,
+    `casefold()` y los espacios reducidos a uno, sin espacios alrededor. «Café  Norte» → `cafe norte`."""
+    import unicodedata
+
+    sin_marcas = "".join(c for c in unicodedata.normalize("NFKD", texto) if not unicodedata.combining(c))
+    return " ".join(sin_marcas.casefold().split())
+
+
+def lugares_validacion(api: ClienteApi, token: str, prefijo: str = PREFIJO_VALIDACION) -> list[dict[str, Any]]:
+    """Los `LugarAdmin` cuyo nombre normalizado empieza por `prefijo` (por defecto `validacion-`), de
+    `GET /v1/admin/places?q=<prefijo>`. No 200 → `Falla`."""
+    clave = normalizar_nombre(prefijo)
+    respuesta = api.pedir("GET", RUTA_LUGARES_ADMIN, token=token, params={"q": clave})
+    exigir(respuesta.status_code == 200, f"GET /v1/admin/places respondió {describir_respuesta(respuesta)}")
+    items = respuesta.json().get("items", [])
+    return [lugar for lugar in items if normalizar_nombre(str(lugar.get("nombre", ""))).startswith(clave)]
+
+
+def borrar_lugares(api: ClienteApi, token: str, ids: Iterable[str]) -> int:
+    """`DELETE /v1/admin/places/{id}` de cada id (sin repetir). Devuelve cuántos; un código distinto de 204 →
+    `Falla` (204 también si ya no existía, §5.5)."""
+    vistos: list[str] = []
+    for lugar_id in ids:
+        if lugar_id in vistos:
+            continue
+        respuesta = api.pedir("DELETE", f"{RUTA_LUGARES_ADMIN}/{lugar_id}", token=token)
+        exigir(respuesta.status_code == 204, f"DELETE de un lugar de prueba respondió {describir_respuesta(respuesta)}")
+        vistos.append(lugar_id)
+    return len(vistos)
+
+
+def borrar_lugares_restos(api: ClienteApi, token: str) -> str:
+    """La `preparacion` de los validadores que crean lugares: borra los `validacion-` que haya dejado cualquier
+    ejecución interrumpida. Devuelve `sin lugares validacion- …` o `lugares validacion- borrados: n`."""
+    restos = lugares_validacion(api, token)
+    if not restos:
+        return "sin lugares validacion- de ejecuciones anteriores"
+    return f"lugares validacion- borrados: {borrar_lugares(api, token, [str(lugar['id']) for lugar in restos])}"

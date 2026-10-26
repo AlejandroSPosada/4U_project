@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.10.1**.
+Alineado con `ARCHITECTURE.md` **v0.11.0**.
 
 ---
 
@@ -44,8 +44,9 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 | BE-2.2 | Worker de ingesta | BE-2.1 (contrato de EMB-2.1) | BE-2.1, EMB-2.1, INF-2.1 | [`validation-2-2`](./validation/validation-2-2.md) |
 | BE-2.3 | Resumen del panel | BE-2.1 | BE-2.2, BE-3.1 | [`validation-2-3`](./validation/validation-2-3.md) |
 | BE-2.4 | Diagnóstico de búsqueda (vecinos) | BE-2.2 | BE-2.2 | [`validation-2-4`](./validation/validation-2-4.md) |
-| BE-3.1 | Lugares y alertas | BE-1.3 | BE-1.3 | [`validation-3-1`](./validation/validation-3-1.md) |
+| BE-3.1 | Lugares | BE-1.3 | BE-1.3 | [`validation-3-1`](./validation/validation-3-1.md) |
 | BE-3.2 | Localización | BE-2.4, BE-3.1 | BE-2.2, BE-2.4, BE-3.1, EMB-3.1, EMB-3.2 y un dataset real del campus (FE-2.1) | [`validation-3-2`](./validation/validation-3-2.md) |
+| BE-3.3 | Alertas (fuera del núcleo) | BE-1.3 | BE-1.3, BE-2.3 (para C5) | [`validation-3-3`](./validation/validation-3-3.md) |
 | BE-4.1 | Administración de videos e imágenes, y purga | BE-2.2 | BE-2.2, BE-2.4 | [`validation-4-1`](./validation/validation-4-1.md) |
 | BE-5.1 | Corrección visual (`/v1/localize/frame`) — diferido | BE-3.2 | — | — |
 | BE-5.2 | Eventos de uso y estadísticas — diferido | BE-3.2 | — | — |
@@ -118,9 +119,12 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 - **Historias:** HU-14.
 
 #### BE-2.3 — Resumen del panel
-- **Entregables:** `GET /v1/admin/stats` (§5.5).
+- **Entregables:** `GET /v1/admin/stats` (§5.5). `alertas_activas` cuenta la tabla `alertas` (0 mientras no exista
+  BE-3.3; ARCHITECTURE §4.7).
 - **Criterios de cierre:**
-  - C1. Los números coinciden con los datos de prueba creados por el validador.
+  - C1. `total_fotos`, `total_lugares` y `ultimo_video` coinciden con los datos de prueba creados por el validador.
+    `alertas_activas` se comprueba con datos en BE-3.3 (C5): las alertas salieron del núcleo (decisión del usuario,
+    2026-10-25).
 - **Historias:** HU-11.
 
 #### BE-2.4 — Diagnóstico de búsqueda
@@ -135,17 +139,41 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
   - C4. La foto de consulta no queda en S3 ni en los logs, y no se escribe ninguna fila en `eventos_localizacion`.
 - **Historias:** habilita HU-01 (calibración de EMB-3.2 y BE-3.2).
 
-#### BE-3.1 — Lugares y alertas
-- **Entregables:** `GET /v1/places`, `GET /v1/alerts` (completo y por diferencias), CRUD de lugares,
-  `PUT`/`DELETE` de alertas, `POST /v1/admin/alerts/sincronizar` (§5.3, §5.5); limpieza de *tombstones*.
+#### BE-3.1 — Lugares
+Desde ARCHITECTURE 0.11.0 solo lugares: las alertas pasaron a BE-3.3 (decisión del usuario, 2026-10-25: «no
+necesitamos las alertas por el momento»).
+- **Entregables:** `GET /v1/places` (§5.3) y el CRUD de lugares de `/v1/admin/places` (§5.5), con su auditoría (§5.7)
+  y lo que BE-3.2 necesita de ellos (`servicios.lugares.leer_todos`, `dominio.geo`; ARCHITECTURE §4.9).
+- **Criterios de cierre:**
+  - C1. Un lugar creado con `POST /v1/admin/places` aparece en `GET /v1/places` y en `GET /v1/admin/places` con los
+    campos de §5; editado con `PUT`, las dos lecturas dan los valores nuevos; borrado con `DELETE`, deja de aparecer,
+    `PUT` da `404` y repetir el `DELETE` da `204`.
+  - C2. Con posición, `GET /v1/places` ordena por `distancia_m` y un lugar guardado en esa posición sale primero con
+    `distancia_m` < 1; `categoria` filtra; sin posición, `distancia_m` es `null` y el orden es por nombre.
+  - C3. Un lugar con el mismo nombre en mayúsculas, con tildes o con espacios de más da `409 NOMBRE_DUPLICADO`, al
+    crear y al editar.
+  - C4. Las entradas fuera de §5.3/§5.5 dan `422 VALIDACION`; `/v1/admin/places` exige token (`401` sin él) y
+    `GET /v1/places` es público.
+  - Que las fotos de un lugar borrado queden con `lugar = null` lo cubren las pruebas con base
+    (`tests/base/test_lugares_base.py`): asignar un lugar a una foto llega con BE-4.1.
+- **Historias:** HU-15; habilita HU-02 y HU-03.
+
+#### BE-3.3 — Alertas (fuera del núcleo)
+Sale de BE-3.1 (ARCHITECTURE 0.11.0). Su contrato está en §5.3 y §5.5, marcado «sin implementar (BE-3.3)»; el diseño,
+en §4.9 y ADR-BE-10. Antes de empezar, revisar con el frontend (FE-3.1 y FE-3.3, que también llevan alertas).
+- **Entregables:** `GET /v1/alerts` (foto completa y por diferencias con `desde`), `GET /v1/admin/alerts`,
+  `PUT`/`DELETE /v1/admin/alerts/{id}` (con `If-Match`/versión y `409 CONFLICTO_VERSION`),
+  `POST /v1/admin/alerts/sincronizar` (§5.3, §5.5), auditoría `alerta.*` (§5.7) y la limpieza diaria de *tombstones*
+  (`ALERTAS_TOMBSTONE_DIAS`, §5.10).
 - **Criterios de cierre:**
   - C1. La secuencia «crear, editar, borrar» de una alerta, sincronizada por diferencias, deja la caché del cliente
     igual a la foto completa.
   - C2. `DELETE` de un id desconocido da 204.
-  - C3. Un lugar con el mismo nombre en mayúsculas o con tildes da `409 NOMBRE_DUPLICADO`.
-  - C4. Una alerta activa con vigencia futura aparece en la foto completa.
-  - C5. `sincronizar` aplica cada cambio por separado y devuelve su resultado.
-- **Historias:** HU-05, HU-15, HU-16; habilita HU-03.
+  - C3. Una alerta activa con vigencia futura aparece en la foto completa.
+  - C4. `sincronizar` aplica cada cambio por separado y devuelve su resultado.
+  - C5. `alertas_activas` de `GET /v1/admin/stats` sube en 1 con una alerta activa nueva y no cambia con una inactiva
+    (venía de BE-2.3 C1).
+- **Historias:** HU-05, HU-16.
 
 #### BE-3.2 — Localización
 - **Entregables:** `POST /v1/localize` con el algoritmo de §4.10, `eventos_localizacion`, parámetros calibrados.
@@ -208,8 +236,9 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 | BE-2.2 | 2 | Hecho | [2-2](./validation/validation-2-2.md) | `3b01b68` 2026-10-25 | 0.9.2 | `validate22.py --entorno dev` con código 0 (informe `.validacion/BE-2.2-20261026-005058.json`): P1–P6, C1a (fotos 1–3 en `procesada` en 5,4 min con el `worker` arrancando desde 0), C1b, C1c, C2, C4, C5, C3a y C3b; `embedding` encendido en 172 s y 202 s y apagado al final. Antes, P6 falló dos veces por el validador, no por la infra: `c5917bd` código 3 y `54fdf18` código 2 (`get-instances-health-status` siempre da `InstanceNotFound` porque el servicio de Cloud Map no tiene configuración de salud; 0.9.2 usa `list-instances` con la IP de la tarea) |
 | BE-2.3 | 2 | Pendiente | [2-3](./validation/validation-2-3.md) | — | — | |
 | BE-2.4 | 2 | Hecho | [2-4](./validation/validation-2-4.md) | `50d931d` 2026-10-25 | 0.10.0 | `validate24.py --entorno dev` con código 0 (informe `.validacion/BE-2.4-20261026-020153.json`; el informe registra `17b0acb`, que sobre `50d931d` solo añade docs del frontend; `api`, `migrate` y `worker` con la imagen `backend:50d931d`): P1–P5 (`embedding` encendido en 311 s), C1 (fotos 1–3 en `procesada` en 4,1 min; cada una es su primer vecino con similitud 0,9991, 0,9992 y 0,9996), C2a, C2b, C3a, C3b, C3c, C4a (6 claves nuevas, `eventos_localizacion` sin cambios) y C4b; al final `embedding` apagado, video de prueba borrado y `validacion+user` desactivado. Lo necesita EMB-3.2 |
-| BE-3.1 | 3 | Pendiente | [3-1](./validation/validation-3-1.md) | — | — | |
+| BE-3.1 | 3 | En curso | [3-1](./validation/validation-3-1.md) | — | — | Solo lugares desde 0.11.0 (las alertas pasaron a BE-3.3). Código y pruebas en local; `validate31.py --entorno local` con código 0 contra el compose (2026-10-25). Falta `validate31.py --entorno dev` sobre un commit de `main` desplegado |
 | BE-3.2 | 3 | Pendiente | [3-2](./validation/validation-3-2.md) | — | — | Umbrales de §5.10 provisionales hasta calibrar |
+| BE-3.3 | 3 | Pendiente | [3-3](./validation/validation-3-3.md) | — | — | Fuera del núcleo (decisión del usuario, 2026-10-25). Sin código; su validador (`validate33.py`) tampoco existe |
 | BE-4.1 | 4 | Pendiente | [4-1](./validation/validation-4-1.md) | — | — | |
 | BE-5.1 | 5 | Diferido | — | — | — | |
 | BE-5.2 | 5 | Diferido | — | — | — | |
@@ -222,26 +251,26 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 
 ● = el lote entrega la historia (total o parcialmente) · ○ = la habilita (otra carpeta la cierra).
 
-| Historia | 1.1 | 1.2 | 1.3 | 2.1 | 2.2 | 2.3 | 2.4 | 3.1 | 3.2 | 4.1 | 5.1 | 5.2 | 5.3 | 6.1 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| HU-01 Ubicarme con una vuelta | | | | | ○ | | ○ | | ● | | | | | |
-| HU-02 Conocer mi ubicación y referencias | | | | | | | | ○ | ● | | | | | |
-| HU-03 Elegir destino | | | | | | | | ○ | | | | | | |
-| HU-04 Ser guiada hasta el destino | | | | | | | | | | | | | ● | |
-| HU-05 Avisos de obstáculos | | | | | | | | ● | | | | | | |
-| HU-06 Seguimiento continuo | | | | | | | | | | | ● | | | |
-| HU-09 Saber si hay conexión | ● | | | | | | | | | | | | | |
-| HU-10 Iniciar sesión como admin | | ○ | ● | | | | | | | | | | | |
-| HU-11 Panel con resumen | | | | | | ● | | | | | | | | |
-| HU-13 Recolectar fotos | | ○ | | ○ | | | | | | | | | | |
-| HU-14 Subir un recorrido | | ○ | | ● | ● | | | | | | | | | |
-| HU-15 Gestionar lugares | | | | | | | | ● | | | | | | |
-| HU-16 Gestionar alertas | | | | | | | | ● | | | | | | |
-| HU-17 Revisar imágenes | | | | | | | | | | ● | | | | |
-| HU-18 Gestionar recorridos | | | | | | | | | | ● | | | | |
-| HU-19 Estadísticas | | | | | | | | | | | | ● | | |
-| HU-20 Desplegar automáticamente | ● | | | | | | | | | | | | | |
-| HU-22 Diagnosticar fallos | ● | | | | | | | | | | | | | ● |
-| HU-23 Privacidad de quien se ubica | | | | | | | | | ● | | | | | |
+| Historia | 1.1 | 1.2 | 1.3 | 2.1 | 2.2 | 2.3 | 2.4 | 3.1 | 3.2 | 3.3 | 4.1 | 5.1 | 5.2 | 5.3 | 6.1 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| HU-01 Ubicarme con una vuelta | | | | | ○ | | ○ | | ● | | | | | | |
+| HU-02 Conocer mi ubicación y referencias | | | | | | | | ○ | ● | | | | | | |
+| HU-03 Elegir destino | | | | | | | | ○ | | | | | | | |
+| HU-04 Ser guiada hasta el destino | | | | | | | | | | | | | | ● | |
+| HU-05 Avisos de obstáculos | | | | | | | | | | ● | | | | | |
+| HU-06 Seguimiento continuo | | | | | | | | | | | | ● | | | |
+| HU-09 Saber si hay conexión | ● | | | | | | | | | | | | | | |
+| HU-10 Iniciar sesión como admin | | ○ | ● | | | | | | | | | | | | |
+| HU-11 Panel con resumen | | | | | | ● | | | | | | | | | |
+| HU-13 Recolectar fotos | | ○ | | ○ | | | | | | | | | | | |
+| HU-14 Subir un recorrido | | ○ | | ● | ● | | | | | | | | | | |
+| HU-15 Gestionar lugares | | | | | | | | ● | | | | | | | |
+| HU-16 Gestionar alertas | | | | | | | | | | ● | | | | | |
+| HU-17 Revisar imágenes | | | | | | | | | | | ● | | | | |
+| HU-18 Gestionar recorridos | | | | | | | | | | | ● | | | | |
+| HU-19 Estadísticas | | | | | | | | | | | | | ● | | |
+| HU-20 Desplegar automáticamente | ● | | | | | | | | | | | | | | |
+| HU-22 Diagnosticar fallos | ● | | | | | | | | | | | | | | ● |
+| HU-23 Privacidad de quien se ubica | | | | | | | | | ● | | | | | | |
 
 (Columnas = `BE-1.1` … `BE-6.1`.)

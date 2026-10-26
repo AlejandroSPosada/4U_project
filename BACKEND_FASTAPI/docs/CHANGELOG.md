@@ -20,6 +20,58 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.11.0] — 2026-10-25
+
+- **Lote que la motivó:** BE-3.1 (Lugares), y la decisión del usuario del 2026-10-25 «no necesitamos las alertas por
+  el momento» (resuelve la decisión 1 de §6 de `PRIORITY.md`).
+- **Qué cambió:**
+  - **Alcance:** BE-3.1 queda solo con lugares. Las alertas pasan a un lote nuevo, **BE-3.3 — Alertas** (fuera del
+    núcleo, `Pendiente`, sin código), con los criterios de alertas que tenía BE-3.1 (C1, C2, C4 y C5 de antes, ahora
+    C1–C4) y el de `alertas_activas` que tenía BE-2.3 (ahora BE-3.3 C5); `validation/validation-3-3.md` nuevo (borrador,
+    sin `validate33.py`). BE-2.3 C1 ya no comprueba `alertas_activas` (su «para validar» sigue siendo BE-2.2 y BE-3.1);
+    `validation-2-3.md` sin alertas (el C1c de alertas se va; el antiguo C1d pasa a C1c). BE-3.2 no cambia: la
+    respuesta de `POST /v1/localize` (§5.3) no tiene alertas. PLAN: §2.1, §2.2 (BE-2.3, BE-3.1 con criterios C1–C4
+    nuevos, BE-3.3), §3 (BE-3.1 «En curso», fila BE-3.3) y §4 (columna 3.3: HU-05 y HU-16 pasan de 3.1 a 3.3).
+  - **Lugares construidos** (§4.9 reescrita; ADR-BE-17): `GET /v1/places` y `GET`/`POST /v1/admin/places`,
+    `PUT`/`DELETE /v1/admin/places/{id}` (`api/v1/lugares.py`, `servicios/lugares.py`, `esquemas/lugares.py`,
+    `dominio/lugares.py` con `normalizar_nombre` y `dominio/geo.py` con `distancia_m` y `rumbo_grados`). Nombre único
+    por `nombre_normalizado` (NFKD sin marcas, `casefold`, espacios reducidos); crear con `ON CONFLICT DO NOTHING`;
+    `PUT` sin cambios no escribe; `DELETE` con orden de bloqueo videos → lugar → fotos y `204` también si no existe;
+    distancia (haversine) y orden en Python; auditoría `lugar.*`; eventos `lugar_guardado` y `lugar_eliminado`. Sin
+    migración (la tabla existe desde `0001`). `MENSAJE_POR_CODIGO["NOMBRE_DUPLICADO"]`.
+  - §4.9 deja el diseño de las alertas para BE-3.3 y añade «qué ofrece BE-3.1 al código», guías para BE-3.2
+    (`leer_todos`, `geo`) y BE-4.1 (bloqueos y FK) y trampas. §4.1, §4.5, §4.6 y §4.7 al día.
+  - `validate31.py` (C1a–C4b, `dev` y `local`), ayudas nuevas en `comun.py` (`RUTA_LUGARES`, `RUTA_LUGARES_ADMIN`,
+    `CAMPOS_LUGAR_PUBLICO`, `CAMPOS_LUGAR_ADMIN`, `normalizar_nombre`, `lugares_validacion`, `borrar_lugares`,
+    `borrar_lugares_restos`) y §5.11 con su tabla, el ejemplo de `validate31.py` y sus trampas.
+    `validation-3-1.md` reescrito solo con lugares y su §5 completo (Variables, Preparación y Ejecución en `dev`, y
+    cómo correrlo en `local` contra el compose).
+  - Contradicciones corregidas: §4.5 y §4.6 decían que BE-3.1 firmaría y subiría la foto del lugar (`firmar_get`,
+    `escribir` en `lugares/{id}.jpg`), pero ni PLAN §2.2 ni §5.5 tenían un endpoint para subirla: queda fuera de
+    BE-3.1 y sin lote (`imagen_url` siempre `null`, §5.3). §5.10 decía «limpieza diaria desde `api`» de *tombstones* y
+    eventos sin que exista código: ahora lo dice («sin código todavía»). El `validation-3-1.md` anterior comprobaba la
+    API con `GET /v1/health` y los lugares necesitan la base: P2 usa `/v1/health/ready` con `"db": "ok"`.
+- **Contratos tocados (§5):** §5.3 `GET /v1/places` detallado sin cambiar lo que ya decía (rangos de `lat`/`lng`,
+  qué es «por nombre», fórmula y redondeo de `distancia_m`, `422` con el campo que falta, público aunque llegue un
+  token no válido; `imagen_url` hoy siempre `null`); `GET /v1/alerts` marcado «sin implementar (BE-3.3)» (hoy `404`).
+  §5.5: `LugarEntrada` en detalle (recortes, `alias` `null` = `[]`, regla de «sin mayúsculas ni tildes», `409` con
+  `detalle: null`), subsección nueva «Lugares: `/v1/admin/places`» con ejemplos de `LugarEntrada` y `LugarAdmin`, orden
+  de errores, `PUT` que reemplaza todo (lo que no se envía vuelve a su valor por defecto), `DELETE` de un id
+  desconocido = `204` (caso que no estaba definido), `q` sin tildes ni mayúsculas y `total_fotos`; rutas, objetos y
+  `AlertaEntrada` de alertas marcados «sin implementar (BE-3.3)»; `alertas_activas` de `GET /v1/admin/stats` = 0 hasta
+  BE-3.3. §5.6 (`NOMBRE_DUPLICADO` al crear o editar; `CONFLICTO_VERSION` es de BE-3.3). §5.7: filas de `auditoria` de
+  BE-3.1 (sin cambio de esquema). §5.10: eventos `lugar_guardado` y `lugar_eliminado`. §5.11: ayudas de BE-3.1.
+- **Cómo se verificó:** en local (WSL), `ruff check`, `ruff format --check` y `pytest` con `PRUEBAS_DB_URL` y
+  `PRUEBAS_DB_OBLIGATORIA=1` sobre el `db` del compose (PostgreSQL 17.11, pgvector 0.8.7): 719 pruebas, todas pasan.
+  Nuevas: `tests/base/test_lugares_base.py`, `tests/unit/test_lugares.py`, `tests/contrato/test_contrato_lugares.py` y
+  `tests/ops/test_validate31.py` (el validador contra la app real con base efímera, en `local` y en `dev` con AWS
+  simulado, y con backends defectuosos). `validate31.py --entorno local` contra el compose (`api` construida con este
+  código): código 0, las once comprobaciones `[PASA]`.
+- **Pendiente:** `validate31.py --entorno dev` sobre un commit de `main` desplegado (lo corre el maestro;
+  `validation-3-1.md` §5). Foto del lugar (endpoint de subida y `firmar_get`; infra §5.5 reserva `lugares/` para la
+  Fase 4) sin lote en PLAN. BE-3.3 entero. Docs de otras carpetas que nombran las alertas de BE-3.1 (`README.md`
+  raíz, fase 3; los ajusta el maestro).
+
 ## [0.10.1] — 2026-10-25
 
 - **Lote que la motivó:** BE-2.4 (cierre: `validate24.py --entorno dev` con código 0 sobre `50d931d`, PLAN §3).
