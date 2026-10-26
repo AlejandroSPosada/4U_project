@@ -23,6 +23,29 @@ re-indexar el dataset.
 
 ---
 
+## [0.9.1] — 2026-10-26
+
+- **Lote que la motivó:** EMB-3.2 (sigue «En curso»), al construirse BE-3.2 (backend 0.12.0, `c287989`).
+- **Qué cambió:**
+  - §4.5 (paso 3 de «Qué se recomienda»), §5.9 («Detalle del cálculo») y ADR-EMB-14: los dos supuestos de la
+    simulación, «a confirmar con BE-3.2» (centroide de grupo = media sin ponderar; `m = (p₁ − p₂) / p₁`), pasan a
+    remitir a backend **ADR-BE-18**, que los fijó igual; siguen a confirmar por el usuario y, si cambian, cambian a la
+    vez en el backend y en `metricas.py` (y hay que recalibrar).
+  - Se anota que el backend **trunca la confianza a 2 decimales y decide el nivel con el valor truncado** (backend
+    §4.10, paso 7), mientras que la simulación compara sin truncar: con cortes en la rejilla de 0,01 da el mismo nivel
+    salvo una confianza a menos de 5·10⁻⁷ de un corte (ADR-BE-18).
+  - §5.9: lo que la simulación no hace (radio y truncado, además de rumbo y contexto) y lo que coincide con el código
+    del backend, incluidos los desempates de ADR-BE-18 (orden de llegada a igual similitud, grupo creado antes a igual
+    puntuación, «primer grupo» y no el más cercano), comprobados leyendo `metricas.localizar` y `conjunto.haversine_m`
+    (mismo radio terrestre, 6 371 008,8 m). Las demás diferencias de ADR-BE-18 (`referencias` sin el lugar cercano,
+    evento solo con `200`, errores de `metadatos`) no afectan a la calibración.
+  - PLAN: alineado con 0.9.1.
+- **Contratos tocados (§5):** ninguno (aclaración de §5.9).
+- **Cómo se verificó:** lectura de backend ARCHITECTURE §4.10, ADR-BE-18 y CHANGELOG 0.12.0, y de
+  `tools/evaluacion/metricas.py` (`localizar`) y `conjunto.py` (`haversine_m`). Sin cambios de código.
+- **Pendiente:** la docstring de `metricas.localizar` todavía dice «a confirmar con BE-3.2»; se corrige con el próximo
+  cambio de código de EMB-3.2 (cambiarla sola dispararía `embedding.yml`). Confirmar ADR-BE-18 con el usuario.
+
 ## [0.9.0] — 2026-10-25
 
 - **Lote que la motivó:** EMB-3.2 (conjunto de evaluación y calibración), solo la parte que no necesita dataset. El

@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.9.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-25 |
+| Versión del documento | **0.9.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-26 |
 | Estado | En construcción: código de EMB-1.1 (servicio base e imagen), EMB-2.1 (vectorización por lotes), EMB-3.1 (benchmark y su validador; latencias de `dev` medidas en §5.7) y la parte de EMB-3.2 que no necesita dataset (protocolo de captura, `tools/evaluacion/` y `validate32.py`, probados con datos sintéticos; sin ejecutar en `dev`); el resto de lotes, pendiente |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
@@ -303,9 +303,14 @@ imágenes del dataset). Ningún número de calidad de recuperación de este docu
    `LOC_PESO_EXPONENTE` = 4 y los dos umbrales recomendados) sobre «consultas» de hasta 5 fotos: las de una misma
    `vuelta` del punto o, sin `vuelta`, las del mismo punto, día y franja. `corte_alta` = el menor valor en
    [0,50; 0,99] con el que ninguna consulta de nivel alta yerra > 30 m (BE-3.2 C2) y ≥ 90 % quedan a ≤ 15 m;
-   `corte_media` = el menor por debajo con ≥ 60 % a ≤ 15 m. Donde §4.10 no fija la fórmula, la simulación asume (a
-   confirmar con BE-3.2): centroide de grupo = media sin ponderar de sus miembros; `m = (p₁ − p₂) / p₁`, 1 con un solo
-   grupo. Los parámetros del backend están copiados en `metricas.py`: si cambian en backend §5.10, se cambian ahí.
+   `corte_media` = el menor por debajo con ≥ 60 % a ≤ 15 m. Los dos detalles que el §4.10 del backend no fijaba al
+   escribir esto los fijó igual BE-3.2 en backend **ADR-BE-18** (backend 0.12.0): centroide de grupo = media sin
+   ponderar de sus miembros, recalculada en cada alta; `m = (p₁ − p₂) / p₁`, 1 con un solo grupo. Siguen siendo
+   decisiones provisionales del maestro **a confirmar por el usuario**; si cambian, cambian a la vez en el backend y en
+   `metricas.py`, y hay que recalibrar. El backend **trunca la confianza a 2 decimales y decide el nivel con el valor
+   truncado** (backend §4.10, paso 7); la simulación compara la confianza sin truncar con cortes de la rejilla de 0,01,
+   que da el mismo nivel salvo una confianza pegada a un corte (a menos de 5·10⁻⁷, ADR-BE-18). Los parámetros del
+   backend están copiados en `metricas.py`: si cambian en backend §5.10, se cambian ahí.
 4. Los valores son una propuesta para C3: con ~50 fotos y ~10–20 consultas son ruidosos; la persona los revisa con
    `detalle_recomendacion` y `simulacion` antes de entregarlos.
 
@@ -909,7 +914,14 @@ API de los módulos (para enchufar otra fuente de vecinos o del dataset, o una v
   similitud⁴; `s` = (similitud máxima del grupo − `LOC_SIM_MIN`) / (`LOC_SIM_ALTA` − `LOC_SIM_MIN`) recortada a [0, 1]
   (1 si `LOC_SIM_ALTA` ≤ `LOC_SIM_MIN`); `c` = fotos con vecino en el grupo / fotos de la consulta (también las que no
   tienen ningún vecino); `m` = (p₁ − p₂)/p₁, 1 con un grupo; confianza = 0,5·s + 0,3·c + 0,2·m. Sin vecinos tras el
-  filtro → `sin_coincidencias` (confianza 0, error infinito). No simula la corrección de rumbo ni el contexto (pasos 8–10).
+  filtro → `sin_coincidencias` (confianza 0, error infinito). No simula el radio (paso 6), el truncado de la confianza
+  (paso 7) ni la corrección de rumbo y el contexto (pasos 8–10).
+- Frente al código del backend (backend §4.10 y ADR-BE-18, BE-3.2): centroide, margen, filtro con `≥ LOC_SIM_MIN`,
+  radio de grupo estrictamente menor, «primer grupo» (no el más cercano), una misma imagen que sale para dos fotos
+  cuenta dos veces, puntuación, posición ponderada y distancias (haversine, R = 6 371 008,8 m en los dos) coinciden.
+  Los desempates también: `metricas.localizar` ordena con `sorted` estable por similitud, así que a igualdad conserva
+  el orden de llegada (foto 0, 1… y, dentro de cada foto, el orden en que los devuelve el endpoint de vecinos), y el
+  mejor grupo a igual puntuación es el creado antes. Única diferencia en lo simulado: el truncado (§4.5, paso 3).
 - Cortes: para cada t, el subconjunto de consultas con confianza ≥ t; un subconjunto **vacío cuenta como que cumple**
   (por eso, si ninguna consulta llega a 0,50, `corte_alta` sale 0,50). `corte_alta` = primer t en [0,50; 0,99] que
   cumple (si ninguno, 0,99); `corte_media` = primer t en [0,05; `corte_alta` − 0,01] con ≥ 60 % a ≤ 15 m (si ninguno,
@@ -1071,8 +1083,9 @@ ver la distribución cruda, y deja eventos); `k = 5` como decía 0.8.0 (la simul
 localización; el *recall* usa los 5 primeros igual); un contenedor local para las variantes (mismas dependencias que
 `uv`, sin ventaja); optimizar umbrales con búsqueda sobre una métrica global (con ~50 fotos sobreajusta).
 *Consecuencias:* `evaluar` necesita `embedding` encendido; la simulación copia parámetros de backend §5.10 y supone dos
-detalles que §4.10 no fija (centroide de grupo y margen `m`): BE-3.2 debe confirmarlos; la comparación de variantes
-espera a BE-4.1 (URL de las imágenes).
+detalles que el §4.10 del backend no fijaba (centroide de grupo y margen `m`); BE-3.2 los fijó igual en backend
+ADR-BE-18 (0.12.0), aún a confirmar por el usuario, y trunca la confianza antes de decidir el nivel (diferencia
+despreciable, §4.5 paso 3); la comparación de variantes espera a BE-4.1 (URL de las imágenes).
 
 ---
 
