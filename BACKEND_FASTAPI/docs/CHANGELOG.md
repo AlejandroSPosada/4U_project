@@ -20,6 +20,24 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.15.1] — 2026-10-27
+
+- **Lote que la motivó:** BE-4.1 (cierre: `validate41.py --entorno dev` con código 0 sobre `c5f6517`, PLAN §3).
+- **Qué cambió:**
+  - Encabezado y §4.12: BE-4.1 validado en `dev`, con lo visto (tiempos de procesado y purga, similitudes de C1a,
+    reconciliador de C3) y dónde corrieron las pruebas con base (CI del PR 11 y de `main`).
+  - §5.11: `validate41.py` ejecutado en `dev`. `validation-4-1.md` §5, paso 2: la integración se hizo durante el día de
+    campo por decisión del usuario (la regla sigue: no durante una recolección activa). PLAN: fila BE-4.1 «Hecho» y
+    «Alineado con v0.15.1».
+- **Contratos tocados (§5):** ninguno (versión de parche).
+- **Cómo se verificó:** `validate41.py --entorno dev` con código 0 sobre `c5f6517` sin `-dirty` (2026-10-27,
+  18:53–19:23 UTC, informe `.validacion/BE-4.1-20261027-192259.json`; ejecutado por el maestro tras el despliegue de
+  `backend.yml` run 40562670663): P1–P5, C5b, C4a, C1a, C1b, C4b, C5a, C2 y C3 en verde; limpieza: escalado de
+  `worker` sin tocar, `embedding` encendido como estaba. Antes, pasos 3–5 de la guía: `/v1/health` con `c5f6517`,
+  `/v1/admin/images` → `401`, `api` y `worker` con la misma imagen, escalado sin suspender, `purga` y su DLQ en 0. El
+  rebase sobre `main` no tocó `BACKEND_FASTAPI` (el código es el de `8543dfe`, cuyo CI del PR 11 pasó con base).
+- **Pendiente:** nada de BE-4.1. Lo consume FE-4.1 (vistas 7.11–7.14).
+
 ## [0.15.0] — 2026-10-26
 
 - **Lote que la motivó:** BE-4.1 (Administración de videos e imágenes, y purga), construcción; la ejecución en `dev`

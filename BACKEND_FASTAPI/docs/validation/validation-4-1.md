@@ -111,7 +111,8 @@ uv run --group ops pytest -q
 Esperado: `All checks passed!`, `… files already formatted` y `778 passed, 274 skipped` (sin `PRUEBAS_DB_URL`). En el
 CI del PR: el job de pruebas en verde, ninguna omitida (las 12 de `tests/base/test_admin_videos_base.py` incluidas).
 
-2. Llevar el commit a `main` (**después** del día de campo del 2026-10-27: cambia el bucle del `worker`). `backend.yml`
+2. Llevar el commit a `main` (cambia el bucle del `worker`: no durante una recolección; el 2026-10-27 se integró en pleno
+   día de campo por decisión del usuario, con la ingesta en reposo, y no hubo problema). `backend.yml`
    pasa las pruebas, publica la imagen, ejecuta `migrate` (sin migraciones nuevas: `aplicada = false`) y actualiza
    `api` y `worker`. Esperado: el workflow en verde.
 

@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.15.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-26 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.4, BE-3.1 y BE-3.3 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`; BE-3.3, alertas, fuera del núcleo, con `validate33.py` sobre `4885ad6`, §4.11), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales; y de BE-4.1 (administración de videos e imágenes y purga, `validate41.py`, §4.12), probado en local sin base y **sin validar en `dev`** (sus pruebas con base corren en el CI de un PR). Lo de los demás lotes es diseño propuesto |
+| Versión del documento | **0.15.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-27 |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.4, BE-3.1 y BE-3.3 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`; BE-3.3, alertas, fuera del núcleo, con `validate33.py` sobre `4885ad6`, §4.11), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. BE-4.1 (administración de videos e imágenes y purga, §4.12) está validado en `dev` con `validate41.py` sobre `c5f6517` (2026-10-27). Lo de los demás lotes es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -1425,7 +1425,15 @@ re-procesar), las URLs GET de las fotos, la purga de lo borrado en el `worker` y
 en §5.5 y §5.8; auditoría en §5.7; decisiones en ADR-BE-07 y ADR-BE-20). Lo usa la app en las vistas 7.11–7.14
 (FE-4.1) y la comparación de variantes de EMB-3.2 (las `url` del detalle de un video).
 
-**Construido (0.15.0), sin validar en `dev`.** Pruebas: `tests/unit/test_purga.py` (mensajes de `purga` y cuerpos que
+**Construido (0.15.0) y validado en `dev` (0.15.1).** Lo visto en `dev` (2026-10-27, `validate41.py` sobre `c5f6517`,
+integrado durante el día de campo por decisión del usuario, con `embedding` ya encendido por los latidos de la
+recolección): V1 (6 fotos) procesado en 4,7 min; las fotos 1–3, su propio primer vecino con similitud ≈ 0,9995; tras
+`DELETE` (`202`, 4 fotos retiradas) ningún vecino de V1 en las 3 consultas siguientes; `dataset/` y `thumbs/` de V1
+vacíos en 0,8 min con `purgado_en`; en C3, V2 procesado en 0,3 min, `worker` en 0, 1 mensaje en `purga`, el
+reconciliador reenvió 1 (el contador de la cola dio 2 visibles) con los objetos aún en S3, y con el `worker` de vuelta
+V2 purgado en 1,9 min con la DLQ en 0. Las 12 pruebas con base de abajo pasaron en el CI del PR 11 (sobre `8543dfe`,
+mismo código que `c5f6517`) y en el de `main` antes del despliegue (`backend.yml` run 40562670663).
+Pruebas: `tests/unit/test_purga.py` (mensajes de `purga` y cuerpos que
 envía `api`, `firmar_get` y `enviar` con `Stubber`, el turno de `purga` del `worker`, el bucle con y sin embeddings y
 el reconciliador), `tests/contrato/test_contrato_admin.py` (§5.5–§5.10 contra esquemas, mensajes, `Settings` y el
 OpenAPI: C5), `tests/ops/test_validate41.py` (el validador contra un mundo falso) y `tests/base/test_admin_videos_base.py`
@@ -3225,7 +3233,8 @@ las alertas vivas (la siguiente ejecución las barre). El s0 de C5 no es la cifr
 (C4), que siguen vivas y activas hasta la limpieza (en `dev`, 2026-10-26: 2 → 3 con 0 alertas reales); con `--solo C5`
 parte de las reales. Cada ejecución completa deja 6 *tombstones* (A, D y las 4 de la limpieza).
 
-**`validate41.py`** (validation-4-1, BE-4.1; solo `dev`; **sin ejecutar en `dev`**). Es el ejemplo de un validador que
+**`validate41.py`** (validation-4-1, BE-4.1; solo `dev`; código 0 en `dev` sobre `c5f6517` el 2026-10-27, ~30 min con
+`embedding` ya encendido). Es el ejemplo de un validador que
 borra con la API y para el `worker`. Usa `Validador`, `EmbeddingDev` (también `aws(...)` para `application-autoscaling`
 y `poner`), `ClienteApi`, `EntornoBackend.sql`, `RecorridoPrueba`, `pedir_vecinos`, `jpeg_patron`, `claves_s3`,
 `mensajes_cola`, `mensajes_log`, `videos_validacion`, `borrar_lugares_restos`, `borrar_lugares`, `comprobar_bucket`,
