@@ -23,6 +23,22 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.13.1] — 2026-10-27
+- Lote que la motivó: FE-3.3 (cierre: `validate33.py --entorno dev` sobre `7b275b6`).
+- Qué cambió (solo documentos y la evidencia): encabezado (FE-3.3 validado en `dev`); §5.11, `validate33.py`: lo que
+  quedaba «sin comprobar en `dev`» (filas de 7.10, la hoja abierta, Atrás, `input text`) comprobado, el envoltorio de
+  `VALIDACION_GRADLE` de FE-3.4 sirvió tal cual y dónde se pone el nombre del recorrido en el paso guiado 1;
+  `validation-3-3` §3 con la captura de C3c (`evidencia/fe-3-3/c3c-lista-y-formulario.png`); PLAN: FE-3.3 «Hecho».
+- Contratos tocados (§5): ninguno (parche).
+- Cómo se verificó: `validate33.py --entorno dev` con código 0 a la primera sobre `7b275b6` sin `-dirty` (2026-10-27,
+  22:56–23:06 UTC, informe `FE-3.3-20261027-225637.json`, Xiaomi 23028RA60L con datos móviles): P1–P6, C1a (11/11 y 3/3),
+  C2a 8/8, C3a 9/9, C1b (c1 creada en 7.4 durante `rec_0014`, 25 fotos, a 2,2 m de la primera foto; 1 enviada, 1
+  aplicada), C2b (c2 creada y borrada antes de sincronizar: 1 enviada = 1 aplicada, no está en el backend) y C3b (7.10
+  con c1 y c3; c3 abre «Editar alerta» y se cierra sin guardar, versión 1) en verde; la manual C3c, con la captura. Los
+  pasos guiados los hizo el maestro por `adb` con la entrada en una FIFO. La limpieza borró las 3 alertas y el recorrido
+  de prueba del teléfono. CI de `main` (`frontend.yml`) en verde sobre `7b275b6`.
+- Pendiente: nada de FE-3.3.
+
 ## [0.13.0] — 2026-10-27
 
 - **Lote que la motivó:** FE-3.3 (Alertas de administración sincronizadas, 7.8–7.10, y las alertas de 7.4). Se

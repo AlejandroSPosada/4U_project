@@ -46,7 +46,7 @@ interfaz. C1b, C2b y C3b tienen un **paso guiado** cada una: el script escribe l
 
 | ID | Qué hace la persona | Evidencia en el PR |
 |---|---|---|
-| C3c | Durante C3b, capturas (por `adb exec-out screencap -p`) de 7.10 con «validacion-3-3» en el buscador y del formulario 7.9 abierto con `validacion-3-3-c3` | Capturas de 7.10 con `validacion-3-3-c1` y `validacion-3-3-c3` (creada solo en el backend) y del formulario 7.9 abierto con el mensaje de `validacion-3-3-c3`, sin datos privados |
+| C3c | Durante C3b, capturas (por `adb exec-out screencap -p`) de 7.10 con «validacion-3-3» en el buscador y del formulario 7.9 abierto con `validacion-3-3-c3` | Capturas de 7.10 con `validacion-3-3-c1` y `validacion-3-3-c3` (creada solo en el backend) y del formulario 7.9 abierto con el mensaje de `validacion-3-3-c3`, sin datos privados. 2026-10-27: [`evidencia/fe-3-3/c3c-lista-y-formulario.png`](./evidencia/fe-3-3/c3c-lista-y-formulario.png) (la lista con c3 y c1 y la hoja «Editar alerta» de c3 abriéndose) |
 
 ## 4. Datos de prueba y limpieza
 
