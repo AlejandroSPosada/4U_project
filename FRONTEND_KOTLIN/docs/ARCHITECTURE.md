@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.12.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.12.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-27 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; probado en la JVM y con `validate34.py` en local, **sin probar en el teléfono ni en `dev`**). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; validado en `dev` con el Xiaomi el 2026-10-27; la recarga del Panel, sin comprobar en el teléfono). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -1010,9 +1010,17 @@ compilador); en WSL `ruff check`, `ruff format --check` («20 files already form
 2026-10-27, tras quitar la hoja de 7.4 (arriba), el maestro repitió en Windows `testDebugUnitTest assembleDebug` →
 `BUILD SUCCESSFUL`, **272 casos, 0 fallos** (`FormularioLugarTest` 10); `pytest` sigue en 241. `validate34.py --entorno
 local` **no se repitió** tras ese cambio (C2a pide como mínimo 8 casos de `FormularioLugarTest`, así que debería seguir
-pasando con 10/10; lo cubre la ejecución en `dev`). **Sin probar en el teléfono ni en `dev`** (lo coordina el maestro):
-las vistas 7.6 y 7.7, la recarga del Panel y `lugar_mapa.js`, que no se ejecutó en ninguna parte (no hay `node` ni jsdom
-en la máquina; se revisó leyéndolo, con la misma estructura que `recoleccion_mapa.js`).
+pasando con 10/10; lo cubre la ejecución en `dev`).
+
+**Validado en `dev` (0.12.1, 2026-10-27, sobre `8317f56` sin `-dirty`, Xiaomi 23028RA60L):** una corrida completa
+(informe `FE-3.4-20261027-221328.json`) dio P1–P6, C1a 11/11, C2a 10/10, C3a 5/5, C1b, C2b y C3b en verde y C1c en
+falla porque la persona **contestó por voz** a la pregunta de Destino («validacion»: la app encontró el lugar nuevo y
+siguió al escaneo, así que el script ya no vio Destino); una corrida con `--solo C1b,C2b,C1c` (informe
+`FE-3.4-20261027-223100.json`) dio código 0. Visto en el teléfono: 7.6 y 7.7 contra el backend real, el mapa de
+`lugar_mapa.js` (tocar pone el alfiler; el pie dio «Punto: 6.201685, -75.579559» y el lugar quedó guardado ahí, con
+`distancia_m` 0,0), la fila nueva en Destino y el `409` con el texto bajo el nombre. En C3b la persona escribió
+«VALIDACION-3-4-DUP» **sin tilde** (el `409` se comprobó con mayúsculas; la tilde la cubren `ErroresLugarTest` y la regla
+del backend). Sin comprobar todavía en el teléfono: la recarga del Panel al volver de 7.6/7.7 (C1–C3 no la miran).
 
 ---
 
@@ -2757,7 +2765,8 @@ Lo cubre `RemoteLugaresAdminRepositoryTest` (11; MockWebServer y un `VigilanteSe
 como `RemoteAdminRepositoryTest`): listar con la petición exacta y todos los campos, descartes con su línea sin nombres
 y valores por defecto, `obtener`, crear con el cuerpo exacto (claves y coordenada sin cambios) y el aviso, `409` (sin
 campos y sin aviso), `422` con campos, `PUT` con el id, `404` del `PUT`, `DELETE` `204`, sin sesión (no llega al
-servidor), sin red y sin `items`. **Sin comprobar contra el backend real** (FE-3.4 en `dev`, `validate34.py`).
+servidor), sin red y sin `items`. Contra el backend real, `crear` y el `409` se comprobaron en `dev` con `validate34.py`
+(FE-3.4, 2026-10-27); `reemplazar` y `borrar` desde la app, no (el validador borra por la API).
 
 **Detalles internos del cliente (para no abrir `data/remote/`)**
 - Campos de los DTOs (propiedad Kotlin ← clave JSON; todos `T? = null` salvo el de la petición):
@@ -3638,10 +3647,20 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   lo reconoce. C1c necesita el micrófono para decir «dos» (permiso que concede `pm grant`) y escribe en el buscador de
   Destino con `input text` (solo ASCII: por eso busca `validacion-3-4`). C3b crea `validacion-3-4-dup` por la API y la
   persona escribe la variante con mayúsculas y tilde (`input text` no puede escribir la «Ó»). Crea y borra lugares en
-  `dev`: no correrlo a la vez que otro validador que cuente lugares (`validate22.py` C1b compara totales). **Sin comprobar
-  en `dev`** (la ejecución en `dev` la coordina el maestro): que uiautomator vuelque 7.7 con su `WebView` dentro del
-  desplazamiento (sin «could not get idle state»), que el toque en el texto «Guardar» pulse el botón (así funciona en
-  Login, FE-1.2), `input text` en el buscador de Destino en el Xiaomi y el `content-desc` de las filas de 7.6.
+  `dev`: no correrlo a la vez que otro validador que cuente lugares (`validate22.py` C1b compara totales). Comprobado en
+  `dev` (2026-10-27): uiautomator vuelca 7.7 con su `WebView`, el toque en «Guardar» pulsa el botón e `input text`
+  escribe en el buscador de Destino. Trampas vistas ese día:
+  - **C1c: tras decir «dos», no contestar** la pregunta hablada de Destino («¿A dónde quieres ir?»): si la persona
+    dice un lugar, la app lo elige y sale de Destino, y el script ya no la encuentra (falla con la pantalla del escaneo).
+  - **MIUI y la instalación:** con «Instalar vía USB» activada (`persist.security.adbinstall` = 1) el `installDebug`
+    de Gradle dio `INSTALL_FAILED_USER_RESTRICTED` («Install canceled by user») **sin mostrar ningún diálogo**, en el
+    Wi-Fi de visitantes sin salida y también con datos móviles; `adb install -r` del mismo APK unas veces pasó y otras
+    no, y apagar y volver a prender «Instalar vía USB» lo destrabó una vez. El maestro corrió el validador con
+    `VALIDACION_GRADLE` apuntando a un envoltorio fuera del repositorio que cambia `installDebug` por `assembleDebug` +
+    `adb install -r` (4 intentos) y no reinstala si el `base.apk` del teléfono ya tiene el mismo sha256 que el APK
+    local. Si se repite, ese es el camino (o pedirle a la persona que reactive la opción).
+  - El teléfono necesita **internet de verdad**: en el Wi-Fi «EAFIT_VISITANTES» el ping a 8.8.8.8 respondía, pero las
+    conexiones TCP a la API y a Google se rechazaban (la app mostraba «Sin conexión»); con datos móviles, bien.
 
 ---
 

@@ -167,7 +167,9 @@ admin y se detiene en cada **paso guiado** (líneas `· PASO GUIADO — …` por
    lugares) y comprobar que el pie dice «Punto: <números>». **No pulsar «Guardar»** (lo pulsa el script). Cerrar el
    teclado si tapa el pie y pulsar **Enter**. El script guarda y la app vuelve a la lista de lugares.
 2. **Paso guiado 2 (C1c)**: Atrás hasta el Panel → **«Volver al modo público»** → en Inicio, decir **«dos»**: se abre
-   Selección de destino. No tocar nada y pulsar **Enter** (el script escribe en el buscador).
+   Selección de destino. No tocar nada, **no contestar** la pregunta hablada de Destino («¿A dónde quieres ir?»: si se
+   dice un lugar, la app sale de Destino y C1c falla; pasó el 2026-10-27) y pulsar **Enter** (el script escribe en el
+   buscador).
 3. **Paso guiado 3 (C3b)**: el script vuelve a abrir la app y entra al Panel. **«Lugares»** → **«Nuevo lugar»** →
    Nombre **`VALIDACIÓN-3-4-DUP`** (con mayúsculas y tilde), cualquier categoría, tocar el mapa en cualquier punto. **No
    pulsar «Guardar»**; cerrar el teclado si tapa el pie y pulsar **Enter**. El script guarda y espera el mensaje del

@@ -23,6 +23,22 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.12.1] — 2026-10-27
+- Lote que la motivó: FE-3.4 (cierre: `validate34.py --entorno dev` sobre `8317f56`).
+- Qué cambió (solo documentos): encabezado y §4.8 con lo validado en `dev` y lo que sigue sin comprobar (la recarga del
+  Panel); §5.10 (`crear` y el `409` comprobados contra el backend real); §5.11, trampas de `validate34.py` vistas en el
+  teléfono: no contestar la pregunta hablada de Destino en C1c, MIUI rechazando `installDebug` sin diálogo (y el
+  envoltorio de `VALIDACION_GRADLE` que usó el maestro) y el Wi-Fi de visitantes sin salida; `validation-3-4` §5, paso
+  guiado 2; PLAN: FE-3.4 «Hecho».
+- Contratos tocados (§5): ninguno (parche).
+- Cómo se verificó: en `dev`, con el Xiaomi 23028RA60L y datos móviles, sobre `8317f56` sin `-dirty`: corrida completa
+  (informe `FE-3.4-20261027-221328.json`, código 1) con P1–P6, C1a 11/11, C2a 10/10, C3a 5/5, C1b, C2b y C3b en verde y
+  C1c en falla porque la persona contestó por voz en Destino; `--solo C1b,C2b,C1c` (informe
+  `FE-3.4-20261027-223100.json`) con código 0. Antes, dos intentos con código 3 (Wi-Fi sin salida;
+  `INSTALL_FAILED_USER_RESTRICTED`). Los pasos guiados los hizo el maestro por `adb` salvo la voz «dos» y el nombre de
+  C3b, que escribió la persona (quedó «VALIDACION-3-4-DUP», sin tilde).
+- Pendiente: probar en el teléfono la recarga del Panel al volver de 7.6/7.7.
+
 ## [0.12.0] — 2026-10-27
 
 - **Lote que la motivó:** FE-3.4 (Lugares de administración, 7.6 y 7.7). Además, el entregable que pidió el maestro al
