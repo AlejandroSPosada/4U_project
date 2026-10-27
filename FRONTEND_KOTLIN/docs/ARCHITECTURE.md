@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.10.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-26 |
+| Versión del documento | **0.11.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-27 |
 | Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
@@ -1834,7 +1834,8 @@ Cuidados:
 | Rumbo usado | `DescribirUbicacion.describir(ubicacion, rumboBrujula, destino)` con `rumboBrujula` = el último rumbo **verdadero** de la brújula en 6.3 o, sin lectura, `ubicacion.rumboAlTerminar` (el del final del escaneo); `describir` le suma `correccion_rumbo_grados`. |
 
 Pantalla (`ResultadoUbicacionContent`, `CampusColors`): columna con desplazamiento y `systemBarsPadding`; «Tu ubicación»
-(18 sp, encabezado), el título (30 sp, negrita, encabezado para TalkBack), el subtítulo de distancia (22 sp), una tarjeta
+(18 sp, encabezado), el título (30 sp, negrita, encabezado para TalkBack), con posición las `coordenadas` del punto
+estimado (14 sp, `TextoSecundario`; desde 0.11.0, para verificar en el campus), el subtítulo de distancia (22 sp), una tarjeta
 con los `detalles` (20 sp, una línea por frase), la confianza (20 sp; `Exito` o, con `sugerirRepetir`, `Peligro`) y los
 botones de 64 dp o más: con `sugerirRepetir` (confianza baja, `sin_coincidencias` o sin ubicación) «Volver a ubicarme»
 (relleno) → «Repetir en voz alta» → «Ir a un lugar…»; si no, «Repetir en voz alta» (relleno) → «Ir a un lugar…» →
@@ -2171,7 +2172,9 @@ Qué casos **no** ejercitan estos datos de prueba (con el backend real, desde FE
   lugar más cercano); sin ninguna: «No hay lugares conocidos cerca». `detalles`: una frase por referencia («Y está a tu
   derecha, a unos N metros.»), con `BAJA` además `POCO_SEGURA`, y con destino «Tu destino, Z, está <dirección>, a unos N
   metros.» (rumbo inicial y haversine de `CalibracionPaso.distanciaEntre` desde la posición) + `LLEGARA_NAVEGACION`.
-  `confianza` = «Confianza alta|media|baja»; `sugerirRepetir` = `BAJA`.
+  `confianza` = «Confianza alta|media|baja»; `sugerirRepetir` = `BAJA`. `coordenadas` (desde 0.11.0) =
+  `coordenadas(posicion.lat, posicion.lng)` = «Punto estimado: 6.20131, -75.57897» (5 decimales, `Locale.ROOT`, latitud
+  primero); solo se muestra, no entra en `hablado`. Sin posición (`sin_coincidencias` o sin ubicación) es `null`.
 - `hablado` = primera frase (título + distancia) + referencias + «Confianza ….» + aviso de baja + destino, separados por
   espacios.
 - `SinCoincidencias`: «No reconocí este lugar» + `REPETIR_VUELTA` (+ «Para llevarte a Z primero necesito saber dónde

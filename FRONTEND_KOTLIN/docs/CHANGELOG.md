@@ -23,6 +23,17 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.11.0] — 2026-10-27
+- Lote que la motivó: ninguno; pedido del usuario en el día de campo, para comparar la posición que da `POST
+  /v1/localize` con el punto real.
+- Qué cambió: la vista 6.3 muestra, debajo del título, el punto estimado en letra pequeña («Punto estimado: 6.20131,
+  -75.57897», 14 sp, `TextoSecundario`). Campo nuevo `DescripcionUbicacion.coordenadas` (por defecto `null`) y función
+  `DescribirUbicacion.coordenadas(lat, lng)` (5 decimales, `Locale.ROOT`). No se dice en voz alta.
+- Contratos tocados (§5): §5.7 (`DescripcionUbicacion`, reglas de `DescribirUbicacion`) y la pantalla de la 6.3.
+- Cómo se verificó: `DescribirUbicacionTest` (con posición, el texto exacto; sin coincidencias, `null`) y
+  `assembleDebug`. En el teléfono, sin comprobar.
+- Pendiente: decidir si se queda en la versión final o se esconde detrás de un modo de depuración.
+
 ## [0.10.1] — 2026-10-26
 - Lote que la motivó: FE-2.2 (cierre).
 - Qué cambió (solo documentos; el código validado es el de `cf4fcbb`):

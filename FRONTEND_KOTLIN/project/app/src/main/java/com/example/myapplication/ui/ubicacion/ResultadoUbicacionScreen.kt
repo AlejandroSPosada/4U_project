@@ -130,6 +130,7 @@ internal fun ResultadoUbicacionContent(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.semantics { heading() },
         )
+        d.coordenadas?.let { Text(it, color = CampusColors.TextoSecundario, fontSize = 14.sp) }
         d.subtitulo?.let { Text(it, color = CampusColors.TextoSecundario, fontSize = 22.sp) }
 
         if (d.detalles.isNotEmpty()) {

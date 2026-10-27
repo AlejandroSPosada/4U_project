@@ -4,6 +4,7 @@ import com.example.myapplication.domain.model.LugarDestino
 import com.example.myapplication.domain.model.NivelConfianza
 import com.example.myapplication.domain.model.ResultadoUbicacion
 import com.example.myapplication.domain.model.UbicacionEstimada
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -27,6 +28,8 @@ enum class DireccionRelativa(val texto: String) {
  * - [confianza]: «Confianza alta|media|baja», o `null` sin posición.
  * - [sugerirRepetir]: confianza baja, `sin_coincidencias` o sin ubicación: «Volver a ubicarme» va primero.
  * - [hablado]: todo junto, para `VoiceController.speak`.
+ * - [coordenadas]: el punto estimado («Punto estimado: 6.20131, -75.57897»), o `null` sin posición. Solo se muestra
+ *   (en letra pequeña, para verificar en el campus); no se dice.
  */
 data class DescripcionUbicacion(
     val titulo: String,
@@ -35,6 +38,7 @@ data class DescripcionUbicacion(
     val confianza: String?,
     val sugerirRepetir: Boolean,
     val hablado: String,
+    val coordenadas: String? = null,
 )
 
 /**
@@ -81,6 +85,10 @@ object DescribirUbicacion {
         val n = distanciaM.roundToInt()
         return if (n <= 1) "a un metro" else "a unos $n metros"
     }
+
+    /** «Punto estimado: 6.20131, -75.57897» (5 decimales ≈ 1 m, con punto, en el orden latitud, longitud). */
+    fun coordenadas(lat: Double, lng: Double): String =
+        "Punto estimado: ${"%.5f".format(Locale.ROOT, lat)}, ${"%.5f".format(Locale.ROOT, lng)}"
 
     /** Rumbo corregido = [rumboBrujula] (verdadero) + [correccion]; `null` sin rumbo de la brújula. */
     fun rumboCorregido(rumboBrujula: Double?, correccion: Double?): Double? =
@@ -164,6 +172,9 @@ object DescribirUbicacion {
         val referencias = detalles.take(u.referencias.size)
         val resto = detalles.drop(u.referencias.size)
         val hablado = (listOf(primera) + referencias + "$confianza." + resto).joinToString(" ")
-        return DescripcionUbicacion(titulo, subtitulo, detalles, confianza, baja, hablado)
+        return DescripcionUbicacion(
+            titulo, subtitulo, detalles, confianza, baja, hablado,
+            coordenadas = coordenadas(u.posicion.lat, u.posicion.lng),
+        )
     }
 }

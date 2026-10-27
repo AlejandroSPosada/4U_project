@@ -87,6 +87,7 @@ class DescribirUbicacionTest {
             d.detalles,
         )
         assertEquals("Confianza alta", d.confianza)
+        assertEquals("Punto estimado: 6.20000, -75.58000", d.coordenadas)
         assertFalse(d.sugerirRepetir)
         assertEquals(
             "Estás cerca de Biblioteca Central, a unos 12 metros. " +
@@ -162,6 +163,7 @@ class DescribirUbicacionTest {
         )
         assertEquals(DescribirUbicacion.SIN_COINCIDENCIAS, sc.titulo)
         assertNull(sc.confianza)
+        assertNull(sc.coordenadas)
         assertTrue(sc.sugerirRepetir)
         assertEquals(
             listOf(
