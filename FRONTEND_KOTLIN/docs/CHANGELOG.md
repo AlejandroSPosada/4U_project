@@ -23,6 +23,98 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.14.0] — 2026-10-27
+
+- **Lote que la motivó:** FE-4.1 (Videos e imágenes contra el backend, 7.11–7.14), sobre `main` en `97791a0` (0.13.1).
+- **Contratos que consume:** backend §4.12, «Para la app (FE-4.1)» (`DELETE` de un video → `202` y fuera de las listas;
+  `DELETE` repetido de una imagen → `404`, que la app toma como hecho; `reasignar` con `lugar_id` explícito; URLs GET de
+  1 h; `url_miniatura` solo en las `procesada`), §5.5 (`/v1/admin/videos`, `/v1/admin/videos/{id}`, `/v1/admin/images`,
+  `POST /v1/admin/images/lote`, `VideoResumen`, `ImagenAdmin`, `GET /v1/admin/places`) y §5.6 (backend 0.15.1, BE-4.1
+  «Hecho»); el validador usa además la recolección de §5.4. No hizo falta nada fuera del §5 del backend.
+- **Decisiones del usuario del 2026-10-27** (al maestro: «haz lo que más creas conveniente»; se eligieron las
+  recomendadas): (1) 7.13 muestra los videos del servidor **más** los recorridos del teléfono sin subir; uno que ya tiene
+  video en el servidor sale una sola vez, con los datos del servidor; `assets/videos/` ya no sale; (2) FE-4.1 hace «lo
+  esencial»: lo demás (7.12, modo Mapa de la Galería, filtro por fecha, «Subir imágenes», minimapa y comparar cobertura,
+  acciones por fila, pulsación larga, base común de mapas) pasa al lote nuevo **FE-4.4**; (3) las capas «Cobertura de
+  fotos» y «Rutas» de 7.8, también a FE-4.4.
+- **Decisiones del lote (ADR nuevas):** ADR-FE-35 — la Lista junta servidor y teléfono; un recorrido local sale solo si
+  es `finalizado` sin `remote_video_id` (se casa por `remote_video_id`, no por `ref_cliente`, que otro teléfono puede
+  repetir); los recorridos sin subir se renombran y eliminan en su manifest/carpeta, nunca mientras se suben y nunca
+  como efecto de otra acción. ADR-FE-36 — las miniaturas de los recorridos locales llegan al `WebView` por
+  `shouldInterceptRequest` (`https://miniaturas.local/…`, copias de 240 px en `cacheDir/miniaturas/`), sin
+  `allowFileAccess` (que es `false` desde la API 30: la causa de las miniaturas vacías del hallazgo de FE-2.1).
+  ADR-FE-37 — 7.14 espera el `202` antes de salir (aviso «Eliminando…», error con «Reintentar», sin cerrar la app),
+  recarga el video 5 min antes de que venzan las URLs y carga «Mostrar otros videos» solo al activarlo, con un tope de
+  500 fotos.
+- **Qué cambió:**
+  - Código (`project/`): nuevos `domain/model/ResumenVideo.kt`, `domain/usecase/Fechas.kt`,
+    `data/remote/RemoteVideoRepository.kt`, `data/local/MiniaturasLocales.kt` y `ui/admin/videos/TextosVideos.kt`;
+    `data/repository/VideoRepository.kt` reescrito (`VideoRepository`, `ImagenesRepository`, `VideosServidor`,
+    `ListaVideos`, `PaginaVideos`, `CambiosVideos`, `RecorridoNoEditableException`, `VideoRepositoryCompuesto`,
+    `MezclaVideos`; fuera `EdicionesLocales`, `AssetsVideoRepository`, `FuenteVideos`, `FuenteRecorridos`);
+    `Foto.kt` (`Foto` con `lugarId`, `orden`, `titulo`; `Video` con `local`, `editable`, `nota`, `urlsVencenEnMs`,
+    `finalizadoEn`); `CampusApi` (6 rutas: listar, `PATCH` y `DELETE` de videos; listar, `DELETE` y lote de imágenes),
+    `DtosApi` y `MapeoDatosApi`; `ManifestRecorrido` sin `video(recorrido, carpeta)`; `MapaWebView` con `recursos`;
+    7.13 (`VideosScreen`, `VideosViewModel`), 7.14 (`VideoDetalleScreen`, `VideoDetalleViewModel`, `video_detalle.js`,
+    `video_detalle.html`) y 7.11 (`GaleriaScreen`, `GaleriaViewModel`) reescritos sobre el backend; 7.6 y 7.7 con
+    `onVerFotos`; `UbicacionManualViewModel` (locales primero, servidor como mucho 8 s); `MainActivity` (rutas).
+    Borrados los 13 archivos de `assets/videos/vid_0001/` (~9,4 MB). Sin dependencias nuevas de Gradle.
+  - Pruebas JVM: nuevas `RemoteVideoRepositoryTest` (15, `MockWebServer`), `TextosVideosTest` (5),
+    `MiniaturasLocalesTest` (3) y `HistorialRecoleccionTest` (3); `VideoRepositoryCompuestoTest` reescrita (11: la mezcla
+    servidor + teléfono, sin duplicados). Total 337 (41 clases): las 300 de las demás clases siguen pasando sin cambios y
+    los 3 casos viejos de `VideoRepositoryCompuestoTest` (sobre `EdicionesLocales` y los assets) quedan reescritos en sus 11.
+  - Validadores: `src/ops/validate41.py` (local: C1a, C2a y C3a; `dev`: además C1b, C3b y C2b con dos pasos guiados;
+    manual C2c); `comun.py` gana `http_put_bytes` (PUT a S3 sin imprimir la URL) y `jpeg_sintetico` (JPEG en gris hecho a
+    mano, sin Pillow); `tests/ops/test_validate41.py` (20) y `tests/ops/test_comun_fe41.py` (5; una se omite sin Pillow).
+    Total 277 + 1 omitida.
+  - Documento: encabezado; §3.2; §4.1 (337 casos, 41 clases); §4.4 y §4.8 (notas: el hallazgo de las miniaturas y «Ver
+    fotos» resueltos); **§4.10 nuevo** (con trampas y «Para los lotes siguientes»: FE-4.4 y FE-4.3); §5.1 (variantes);
+    §5.5 (filas de Galería, 7.13, 7.14, `VideoBridge`, `TextosVideos`, `UbicacionManual`, Lugares); §5.6 («`VideoRepository`
+    en detalle», modelos, `MiniaturasLocales`, `Fechas`); §5.8 (rutas); §5.9 (`MapaWebView.recursos`, `VideoBridge`);
+    §5.10 (`CampusApi`, DTOs, mapeo y nueva «Videos e imágenes de administración (FE-4.1)»); §5.11 (ayudas nuevas de
+    `comun.py`, `validate41.py`, 277 casos, trampa de FE-4.1); §7.4 (nota); §7.6, §7.7, §7.11, §7.13 y §7.14
+    (implementación actual); ADR-FE-35, ADR-FE-36 y ADR-FE-37; R9 resuelto.
+  - `validation-4-1` reescrita en el formato de `validation-3-3`/`3-4`: entornos `local` y `dev`; P1–P6 en el orden del
+    contrato común (P6 con una sonda `POST /v1/collect/videos {}` → `422` sin rastro); C1 → C1a, C1b; C2 → C2a, C2b y la
+    manual C2c; C3 → C3a, C3b; §4 con los videos de prueba creados por la API de recolección y la limpieza solo de los
+    que tienen `nombre` y `ref_cliente` con el prefijo `validacion-4-1`; §5 con variables, preparación, ejecución
+    (también por `adb` con una FIFO), salida esperada y casos previstos. No necesita `embedding`.
+  - `PLAN.md`: «Alineado con» v0.14.0; §2.1 y §3 con la fila nueva FE-4.4 («Pendiente»); §2.2 FE-4.1 reescrito (alcance,
+    entregables, «Hecho en el código» y por qué C1–C3 no cambian; C1 aclara que los recorridos sin subir cuentan como
+    datos reales); §2.2 FE-4.4 nuevo; FE-4.3 (quitar `ManifestRecorrido.video(…)` de assets); §3 FE-4.1 «En curso»
+    (falta `dev`); §4: HU-17 y HU-18 también en FE-4.4.
+- **Contradicciones corregidas:**
+  - La `validation-4-1` anterior creaba las fotos de prueba con Pillow (no está en el grupo `ops`), usaba `ref_cliente =
+    nombre` (un segundo intento da `409 VIDEO_ELIMINADO`) y limpiaba por `q` sin mirar `ref_cliente` (podía borrar un video
+    real que se llamara así); sus precondiciones no seguían el orden del contrato común (sin Gradle, dispositivo, API
+    ni login) y C2 era solo manual.
+  - §5.5 dejaba como ⚠ que el rumbo negativo salía «undefined» en la tarjeta de 7.14: el JS lo normaliza.
+  - §4.8 y §7.6 decían que «Ver fotos» de 7.6 esperaba a FE-4.1 (deshabilitado): ya abre la Galería.
+  - §5.5 y §5.6 daban las fotos de un recorrido local como `file://<ruta>` sin decir que el `WebView` de 7.14 no las
+    carga (`allowFileAccess = false` desde la API 30: la causa de las miniaturas vacías del hallazgo de FE-2.1); ahora
+    llegan por `https://miniaturas.local/…` (ADR-FE-36).
+  - El aviso de §5.10 de que `VideoResumenDto` aún no traía `iniciado_en`, `finalizado_en`, `duracion_s`, `distancia_m`
+    ni `pasos` («el lote que los necesite (FE-4.1) los añade») queda cumplido: añadidos y comprobados por `GET` en `dev`.
+- **Contratos tocados (§5):** §5.6 `VideoRepository` **incompatible** (interfaz nueva; `EdicionesLocales`,
+  `AssetsVideoRepository` y `FuenteRecorridos` ya no existen; `ManifestRecorrido.video(recorrido, carpeta)` quitada);
+  `Foto` y `Video` ampliados con valores por defecto; modelos nuevos de `ResumenVideo.kt`. §5.5 `VideosScreen` (con
+  `onNuevoVideo`), `VideoDetalleScreen` (sin `onAbrirImagen`), `GaleriaScreen` (`lugarId`, `videoId`) y `GaleriaAcciones`
+  (acciones nuevas), `LugaresScreen`/`LugarFormScreen` con `onVerFotos`. §5.8 ruta `admin/imagenes?lugar={lugar}&video={video}`
+  (los dos opcionales: `admin/imagenes` sigue sirviendo). §5.9 `MapaWebView(…, recursos = null)` (compatible) y
+  `VideoBridge` (`pedirOtros`; `eliminarVideo` ya no sale solo; formatos de `videoJson`/`otrosJson`). §5.10 rutas, DTOs y
+  mapeo nuevos. Por ser `0.x`, el cambio incompatible sube la menor.
+- **Cómo se verificó (2026-10-27, worktree de FE-4.1 sobre `97791a0`, sin commit):** en Windows `testDebugUnitTest
+  assembleDebug` → `BUILD SUCCESSFUL`, 337 casos, 0 fallos (41 clases); en WSL `ruff check` («All checks passed!»),
+  `ruff format --check` («25 files already formatted») y `pytest` (277 passed, 1 skipped); `validate41.py --entorno
+  local` → código 0 (P1; C1a 11/11; C2a 5/5; C3a 15/15; C1b, C3b y C2b omitidas; C2c manual); `jpeg_sintetico`
+  decodificado con Pillow del entorno del backend (`JPEG (640, 480) L`). En `dev`, solo lecturas `GET` con el admin
+  (formas de `/v1/admin/videos`, `/v1/admin/videos/{id}` y `/v1/admin/images`, que coinciden con los DTOs; sin restos
+  `validacion-4-1`). `git diff --stat` igual a `--stat --ignore-cr-at-eol`.
+- **Pendiente:** `validate41.py --entorno dev` con el teléfono (C1b, C3b, C2b; dos pasos guiados; lo coordina el
+  maestro) y la evidencia de C2c; sin probar en el teléfono todo lo de §4.10 («Sin probar en el teléfono»); FE-4.4
+  (planificar); de FE-4.3, quitar `ManifestRecorrido.video(…)` de assets y mover `GaleriaColores` y los campos de la
+  Galería a `ui/components/`.
+
 ## [0.13.1] — 2026-10-27
 - Lote que la motivó: FE-3.3 (cierre: `validate33.py --entorno dev` sobre `7b275b6`).
 - Qué cambió (solo documentos y la evidencia): encabezado (FE-3.3 validado en `dev`); §5.11, `validate33.py`: lo que

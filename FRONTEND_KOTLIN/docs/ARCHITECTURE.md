@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.13.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.14.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-27 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; validado en `dev` con el Xiaomi el 2026-10-27; la recarga del Panel, sin comprobar en el teléfono). Desde FE-3.3 las alertas de administración son «local primero» de verdad: un repositorio único del proceso (`AlertasRepository`, en disco en `files/alertas/editor.json`, ADR-FE-33) con una operación pendiente por id que se envía con `POST /v1/admin/alerts/sincronizar`; el editor 7.8 carga las alertas y los lugares reales, «Mi posición» usa la última posición del PDR de 7.4, el formulario 7.9 tiene dictado, «Escuchar cómo sonará», vigencia y «Ajustar en el mapa», existe la lista 7.10 y 7.4 guarda sus alertas en disco y dibuja las existentes con la ruta pública `GET /v1/alerts`, sin llamar a rutas protegidas (ADR-FE-34) (§4.9; validado en `dev` con el Xiaomi el 2026-10-27). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; validado en `dev` con el Xiaomi el 2026-10-27; la recarga del Panel, sin comprobar en el teléfono). Desde FE-3.3 las alertas de administración son «local primero» de verdad: un repositorio único del proceso (`AlertasRepository`, en disco en `files/alertas/editor.json`, ADR-FE-33) con una operación pendiente por id que se envía con `POST /v1/admin/alerts/sincronizar`; el editor 7.8 carga las alertas y los lugares reales, «Mi posición» usa la última posición del PDR de 7.4, el formulario 7.9 tiene dictado, «Escuchar cómo sonará», vigencia y «Ajustar en el mapa», existe la lista 7.10 y 7.4 guarda sus alertas en disco y dibuja las existentes con la ruta pública `GET /v1/alerts`, sin llamar a rutas protegidas (ADR-FE-34) (§4.9; validado en `dev` con el Xiaomi el 2026-10-27). Desde FE-4.1 Galería, Lista y Detalle de video (7.11, 7.13 y 7.14) usan el backend (`RemoteVideoRepository`, `GET`/`PATCH`/`DELETE /v1/admin/videos`, `/v1/admin/images` y su lote): la Lista junta los videos del servidor con los recorridos del teléfono sin subir (un recorrido sale una sola vez), 7.14 renombra y elimina de verdad (en el servidor o, en uno local, en disco) sin cerrar la app si falla y sin salir antes de que el servidor confirme, la Galería pagina y filtra en el servidor con «Reasignar» a lugares reales, «Ver fotos» de 7.6 y 7.7 abre la Galería filtrada, las miniaturas de los recorridos locales ya se ven en 7.14 y `EdicionesLocales` y `assets/videos/` desaparecen (§4.10; probado en la JVM y con `validate41.py` en local, **sin probar en el teléfono ni en `dev`**). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -377,7 +377,7 @@ com.example.myapplication/
 ├── data/                        # Acceso a datos
 │   ├── remote/                  # Cliente HTTP (Retrofit + OkHttp, ADR-FE-12), DTOs, mapeo de errores y datos (§5.10)
 │   ├── repository/              # Implementaciones de repositorios
-│   └── local/                   # Desde FE-2.1: cola de subida de recorridos sobre los manifests de files/recoleccion/ (§5.10); desde FE-3.3, AlmacenAlertas (files/alertas/editor.json, §5.6); la caché pública de alertas es de FE-3.6
+│   └── local/                   # Desde FE-2.1: cola de subida de recorridos sobre los manifests de files/recoleccion/ (§5.10); desde FE-3.3, AlmacenAlertas (files/alertas/editor.json, §5.6); desde FE-4.1, MiniaturasLocales (cacheDir/miniaturas, §5.6); la caché pública de alertas es de FE-3.6
 │
 ├── sensors/                     # Sensores y PDR
 │   ├── PdrEngine, StepDetector, PdrTracker, OrientationProvider, InterruptorSensores (FE-2.3), ObservadorPrimerPlano (FE-3.1), Declinacion (FE-3.2)
@@ -399,10 +399,13 @@ Pruebas unitarias (JVM) en `app/src/test/java/com/example/myapplication/`: `data
 `domain/model/SesionDeNavegacionTest` y `ui/ubicacion/` (`FotosEscaneoTest`, `ErrorEscaneoTest`), y desde FE-2.2
 `data/remote/RemoteAdminRepositoryTest` y `ui/admin/panel/` (`TextosResumenTest`, `PendientesPanelTest`), y desde
 FE-3.4 `data/remote/RemoteLugaresAdminRepositoryTest`, `ui/admin/lugares/` (`FormularioLugarTest`, `ErroresLugarTest`)
-y `ui/admin/panel/RecargaResumenTest` (lista y conteos en §4.1).
+y `ui/admin/panel/RecargaResumenTest`, desde FE-3.3 las cuatro de alertas, y desde FE-4.1
+`data/remote/RemoteVideoRepositoryTest`, `data/local/MiniaturasLocalesTest`, `ui/admin/videos/TextosVideosTest` y
+`ui/admin/recoleccion/HistorialRecoleccionTest` (`data/repository/VideoRepositoryCompuestoTest` reescrita) (lista y
+conteos en §4.1).
 
 > Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
-> (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`), de la calibración (`calibracion_mapa.html/js`) y, desde FE-3.4, de los lugares (`lugar_mapa.html/js`), y la base común `mapa_base.js` (5.9).
+> (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`), de la calibración (`calibracion_mapa.html/js`) y, desde FE-3.4, de los lugares (`lugar_mapa.html/js`), y la base común `mapa_base.js` (5.9). Desde FE-4.1 ya **no** hay `assets/videos/` (los videos de ejemplo, ~9,4 MB, sin uso: §4.10).
 
 > Actualmente en el repo existen `ui/`, `camera/`, `sensors/`, `map/`, `logs/`, `session/`,
 > `data/remote/` (desde FE-1.1), `data/local/` (desde FE-2.1), `data/repository/`, `domain/model/`, `domain/usecase/`,
@@ -563,7 +566,11 @@ moverlos (moverlos a `ui/components/` es de FE-4.3, decisión del maestro del 20
   hasta que el 2026-10-27 se quitó la hoja de 7.4, §4.8). Desde FE-3.3:
   `data/repository/ReglasAlertasTest` (8), `data/remote/RemoteAlertasRepositoryTest` (11),
   `data/local/AlmacenAlertasTest` (3) y `ui/admin/mapa/FormularioAlertaTest` (9); las 272 de antes no cambian. Total al
-  terminar el código de FE-3.3: **303** casos (eran 305 sobre la rama vieja de FE-3.4, que aún tenía la hoja). No usan
+  terminar el código de FE-3.3: 303 casos (eran 305 sobre la rama vieja de FE-3.4, que aún tenía la hoja). Desde
+FE-4.1: `data/remote/RemoteVideoRepositoryTest` (15), `data/local/MiniaturasLocalesTest` (3),
+`ui/admin/videos/TextosVideosTest` (5) y `ui/admin/recoleccion/HistorialRecoleccionTest` (3), y
+`data/repository/VideoRepositoryCompuestoTest` reescrita (de 3 a 11: la mezcla servidor + teléfono); las otras 300 no
+cambian. Total al terminar el código de FE-4.1: **337** casos. No usan
   Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
   `EncryptedSharedPreferences` (la sesión se prueba con un `AlmacenSesion` en memoria, §5.3); lo de FE-2.3 es lógica
   pura (`PdrEngine`, `StepDetector`, `CalibracionPaso`, `DisparadorCaptura`, `Deriva`, `RetomarRecoleccion`,
@@ -572,7 +579,9 @@ moverlos (moverlos a `ui/components/` es de FE-4.3, decisión del maestro del 20
   `android.jar`), `MotorImagenAndroid` (`android.graphics`), los ViewModels y `PdrTracker` (sensores) no tienen
   pruebas en la JVM (desde FE-2.2 sí las funciones puras del archivo del Panel: `resumenConPendientes`,
   `errorVisibleDelResumen` y, desde FE-3.4, `debeRecargarResumen`; de FE-3.4, las piezas puras de `ui/admin/lugares/`:
-  `FormularioLugar`, `ErroresLugarMapeo`, `filtrarLugares`). `FormularioLugarTest` fija el idioma
+  `FormularioLugar`, `ErroresLugarMapeo`, `filtrarLugares`; de FE-4.1, `TextosVideos`, `Fechas`, `MezclaVideos` y las
+  funciones puras de 7.3 `siguienteNombre`, `masRecienteDelServidor` y `calcularUltimaPosicion`; los ViewModels de
+  7.11, 7.13 y 7.14 no, porque el build no tiene `kotlinx-coroutines-test` para `Dispatchers.Main`). `FormularioLugarTest` fija el idioma
   por defecto en `es-CO` (coma decimal) y lo restaura al terminar.
 - **Ayuda de pruebas `ManifestPrueba`** (FE-2.1; `app/src/test/java/com/example/myapplication/data/local/ManifestPrueba.kt`,
   `object` público: se usa desde cualquier paquete de pruebas; FE-2.2 la usa en `data/remote/` y `ui/admin/panel/`):
@@ -695,7 +704,7 @@ Qué se construyó (detalle y firmas en §5.5, §5.6, §5.8, §5.9, §5.10 y §5
 | Ruta | `MainActivity.kt` (`AppNav`) | `admin/recoleccion/resumen?video={video}` compone `ResumenVideoScreen` (ya no es un *placeholder*); «Finalizar» en 7.4 navega con `?video=rec_NNNN`; el Panel abre 7.5 desde su tarjeta de subidas (§5.8) |
 | Cola de subida | `data/local/` (`AlmacenRecorridos`, `ManifestRecorrido`, `SubidaRecorrido`, `ColaSubida`, `SubidorS3`, `Recodificacion.kt`, `MotorImagenAndroid`, `Subidas`, `RecorridoLocal.kt`) | La cola es el propio `manifest.json` (`subida_estado`, `remote_video_id`, `photos[].sync`, `photos[].upload`); re-codifica a ≤ 1600 px y ≤ 4 MB, crea el video, registra en lotes de 50, `PUT` a S3 sin interceptores, `complete`; reintentos con espera, «esperar sesión» sin bucles, retomar sin duplicar (§5.10; ADR-FE-19 y ADR-FE-20) |
 | `EstadoFoto.PENDIENTE` | `domain/model/Foto.kt`, `MapeoDatosApi.estadoFoto`, `GaleriaScreen`, `VideosScreen` | `pendiente_subida` del backend y `sync = pendiente` local; color gris en la Galería, «Pendiente de subir» en la Lista |
-| Ver lo recolectado | `data/repository/VideoRepository.kt` (`VideoRepositoryCompuesto`, `FuenteVideos`, `FuenteRecorridos`; `AssetsVideoRepository` con el parser compartido) | Galería, Lista, Detalle de video y 7.3 leen `assets/videos/` **y** los recorridos `finalizado` de `files/recoleccion/` (§5.6) |
+| Ver lo recolectado | `data/repository/VideoRepository.kt` (`VideoRepositoryCompuesto`, `FuenteVideos`, `FuenteRecorridos`; `AssetsVideoRepository` con el parser compartido) | Galería, Lista, Detalle de video y 7.3 leen `assets/videos/` **y** los recorridos `finalizado` de `files/recoleccion/` (§5.6). **Reemplazado en FE-4.1** (§4.10): `FuenteVideos`, `FuenteRecorridos`, `AssetsVideoRepository`, `EdicionesLocales` y `assets/videos/` ya no existen |
 | Panel | `ui/admin/panel/PanelAdminViewModel.kt` (`AvisoSubidas`, `avisoSubidas()`), `PanelAdminScreen.kt` (`TarjetaSubidas`, `onAbrirSubida`) | Con sesión, retoma la cola (`reanudar()`) y muestra la tarjeta «Subiendo…», «Subida pendiente…» o «Recorridos sin subir» (§5.5) |
 | Cerrojo compartido | `data/local/AlmacenRecorridos.kt` (`CerrojoRecoleccion`), `RecoleccionRepositoryLocal` | Un solo `Mutex` por proceso para los manifests (antes, uno por instancia); `contarPendientes()` cuenta como dice §5.10 |
 | Pruebas | `AlmacenRecorridosTest` (13), `RecodificacionFotoTest` (12), `SubidaRecorridoTest` (13), `ColaSubidaTest` (8), `VideoRepositoryCompuestoTest` (3) | C2 y C3 en la JVM: MockWebServer para el backend y S3, la cola, la re-codificación y sus límites, el parser (§4.1) |
@@ -954,7 +963,8 @@ que recarga sola por `CambiosLugares` → Atrás → Panel, que recarga el «Res
   avisa antes de «Guardar».
 - 7.6 y 7.7 (para el contexto del mapa y para leer el lugar que se edita) leen `GET /v1/admin/places` entero (sin
   paginar; decenas de lugares, backend §4.9).
-- `total_fotos` es 0 hasta que BE-4.1 asigne lugares a las fotos; «Ver fotos» y el enlace a la galería esperan a FE-4.1.
+- `total_fotos` es 0 hasta que se asignen lugares a las fotos (desde FE-4.1, con «Reasignar» de la Galería); «Ver
+  fotos» y el enlace a la galería existen desde FE-4.1 (§4.10).
 - El mapa de 7.7 está dentro de una columna con desplazamiento (como el de 7.4): tocar pone el alfiler; arrastrar el
   mapa con un dedo puede desplazar la página (**sin comprobar** en el teléfono).
 - `CambiosLugares` es solo memoria: si Android mata el proceso, el Panel nuevo carga en `init` de todos modos.
@@ -983,7 +993,9 @@ que recarga sola por `CambiosLugares` → Atrás → Panel, que recarga el «Res
     generalizar a dos contadores si `alertas_activas` debe quedar al día).
   - La lista 7.10 puede copiar la estructura de 7.6 (`LugaresScreen`: barra, aviso, buscador, lista con ⋮ y diálogo de
     eliminar; `ColorBorrar`).
-- **FE-4.1 («Ver fotos» y la galería contra el backend):**
+- **FE-4.1 («Ver fotos» y la galería contra el backend):** *hecho en FE-4.1 (§4.10)*: `LugaresAcciones.onVerFotos(id)` y
+  `LugarFormAcciones.onVerFotos()` abren `admin/imagenes?lugar=<id>`; «Reasignar» usa `LugaresAdminRepository.listar()`
+  y las escrituras de fotos avisan a `CambiosLugares`. Lo que sigue es la guía que dejó FE-3.4, como historia.
   - 7.6: el menú ⋮ está en la composable privada `FilaLugarAdmin` (`LugaresScreen.kt`), con un `DropdownMenuItem` «Ver
     fotos (próximamente)» `enabled = false`. Para habilitarlo: lambda nueva `onVerFotos(id)` en `LugaresAcciones` (y en
     la pantalla `LugaresScreen(…, onVerFotos)`), y que `AppNav` abra la Galería filtrada (hoy la ruta `admin/imagenes` no
@@ -1123,6 +1135,105 @@ FE-3.3 con sus 31 casos, como antes); en WSL `ruff check` («All checks passed!�
 C3b omitidas; C3c manual; informe `FE-3.3-20261027-224726.json`, `3b3b30c-dirty` por estar a mitad del rebase).
 **Sin probar en el teléfono ni en `dev`** (lo coordina el maestro).
 
+### 4.10 Videos e imágenes contra el backend (FE-4.1)
+
+Qué se construyó (detalle y firmas en §5.5, §5.6, §5.8, §5.9, §5.10 y §5.11; validación en
+[`validation-4-1`](./validation/validation-4-1.md)). Contratos que consume: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §4.12,
+«Para la app (FE-4.1)» (el `DELETE` de un video es `202` y ya no sale en ninguna lista; el `DELETE` de una imagen
+repetido da `404`, que la app toma como hecho; `reasignar` exige `lugar_id` explícito; las URLs GET valen 1 h y solo hay
+`url_miniatura` para las `procesada`), §5.5 (`VideoResumen`, `ImagenAdmin`, `GET /v1/admin/videos` con `q`, `orden`,
+`dir`, `pagina` y `por_pagina` ≤ 100, `GET /v1/admin/videos/{id}`, `PATCH`/`DELETE /v1/admin/videos/{id}`,
+`/v1/admin/images` y `POST /v1/admin/images/lote`, `GET /v1/admin/places`) y §5.6 (códigos); el validador usa además la
+recolección de §5.4 (crear, registrar, `PUT` a S3, `complete`). **Decisiones del usuario del 2026-10-27** (al maestro: «haz
+lo que más creas conveniente»; se eligieron las recomendadas): (1) 7.13 muestra los videos del servidor **más** los
+recorridos del teléfono que aún no se subieron; uno que ya tiene video en el servidor sale **una sola vez**, con los datos
+del servidor; los de `assets/videos/` ya no salen; (2) alcance «lo esencial» (lo demás pasó a FE-4.4, PLAN §2.2); (3) las
+capas «Cobertura de fotos» y «Rutas» de 7.8, también a FE-4.4. Decisiones del lote: ADR-FE-35 (la mezcla y editar los
+recorridos locales), ADR-FE-36 (miniaturas locales en el `WebView` sin `allowFileAccess`) y ADR-FE-37 (7.14 espera al
+servidor; URLs renovadas; «Mostrar otros videos» bajo demanda con tope).
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| Modelos | `domain/model/ResumenVideo.kt` (nuevo), `domain/model/Foto.kt`, `domain/usecase/Fechas.kt` (nuevo) | `ResumenVideo` (una fila de 7.13), `EstadoVideo`, `OrdenVideos`, `FiltrosImagenes`, `PaginaImagenes`, `AccionLote`, `FallidaLote`, `ResultadoLote`, `PuntoFoto`, `PuntosOtros`; `Foto` gana `lugarId`, `orden` y `titulo`; `Video` gana `local`, `editable`, `nota`, `urlsVencenEnMs` y `finalizadoEn` (todo con valor por defecto); `Fechas` compara y muestra fechas con `Z` o con zona (§5.6) |
+| Contrato y mezcla | `data/repository/VideoRepository.kt` (reescrito) | `VideoRepository` nuevo (listar con `q` y orden, detalle, renombrar, eliminar, eliminar foto, otros videos, cambios), `ImagenesRepository` (Galería), `VideosServidor`, `ListaVideos`, `PaginaVideos`, `CambiosVideos`, `RecorridoNoEditableException`, `VideoRepositoryCompuesto` (servidor + `files/recoleccion/`) y `MezclaVideos` (reglas puras: un recorrido sale una vez) (§5.6; ADR-FE-35) |
+| Backend | `data/remote/RemoteVideoRepository.kt` (nuevo), `CampusApi.kt`, `DtosApi.kt`, `MapeoDatosApi.kt` | `GET /v1/admin/videos` (todas las páginas), detalle, `PATCH`, `DELETE` (`202`; `404` = hecho), `GET /v1/admin/images`, `DELETE /v1/admin/images/{id}` (`404` = hecho) y el lote en partes de 200 con `"lugar_id": null` explícito; avisa a `CambiosVideos` y `CambiosLugares` (§5.10, «Videos e imágenes de administración») |
+| Miniaturas locales | `data/local/MiniaturasLocales.kt` (nuevo), `map/MapaWebView.kt` (`recursos`) | Las fotos de un recorrido del teléfono se piden como `https://miniaturas.local/<rec>/photos/NNNN.jpg` y se sirven por `shouldInterceptRequest` como una copia de 240 px en `cacheDir/miniaturas/` (hallazgo de FE-2.1 resuelto; ADR-FE-36) |
+| Lista 7.13 | `ui/admin/videos/VideosScreen.kt`, `VideosViewModel.kt`, `TextosVideos.kt` (nuevo) | «N videos» (`total` del servidor), «M sin subir en este teléfono», buscador (`q`, 400 ms), orden (Recientes / Nombre / Más fotos), sección «En este teléfono (sin subir)» y «En el servidor», cargando / error con «Reintentar» (los locales se ven igual) / vacío, «Nuevo video» → 7.3 (§5.5) |
+| Detalle 7.14 | `ui/admin/videos/VideoDetalleScreen.kt`, `VideoDetalleViewModel.kt`, `assets/video_detalle.js`, `video_detalle.html` | Datos reales; renombrar (`PATCH` o el manifest), eliminar foto y eliminar video con aviso «Eliminando…», error con «Reintentar» y sin cerrar la app; el JS ya no sale solo a los 900 ms: la app vuelve a 7.13 cuando el servidor confirmó; nota y botones deshabilitados si un recorrido local se está subiendo; «Detalle (próximamente)»; URLs renovadas antes de vencer; «Mostrar otros videos» bajo demanda (≤ 500 fotos) (§5.5, §5.9; ADR-FE-37) |
+| Galería 7.11 | `ui/admin/imagenes/GaleriaScreen.kt`, `GaleriaViewModel.kt` | Fotos del servidor, 24 por página, filtros del servidor (lugar y video por id, estado, calidad, `q`), «N imágenes» = `total` con los filtros, Eliminar y Reasignar en lote con un selector de lugares reales y «Sin lugar», aviso con las `fallidas`; se recarga con `CambiosVideos`; tocar una foto avisa que 7.12 llega más adelante; el modo Mapa queda con un mensaje (§5.5) |
+| Lugares 7.6 / 7.7 | `ui/admin/lugares/LugaresScreen.kt`, `LugaresState.kt`, `LugarFormScreen.kt`, `LugarFormState.kt` | «Ver fotos» del menú ⋮ (ya habilitado) y «Ver en la galería» en «Fotos asociadas» abren la Galería filtrada por ese lugar (§5.5) |
+| 7.3 | `ui/admin/recoleccion/UbicacionManualViewModel.kt` | «Usar mi última posición» y el nombre autonumerado: primero los recorridos del teléfono (sin red), después, como mucho 8 s, los del servidor (§5.5, «UbicacionManual») |
+| Rutas | `MainActivity.kt` (`AppNav`) | `admin/imagenes?lugar={lugar}&video={video}` (opcionales), `admin/videos` con `onNuevoVideo`, `admin/videos/{videoId}` sin `onAbrirImagen`; 7.6 y 7.7 con `onVerFotos` (§5.8) |
+| Quitado | `data/repository/VideoRepository.kt`, `data/local/ManifestRecorrido.kt`, `assets/videos/` | `EdicionesLocales`, `AssetsVideoRepository`, `FuenteVideos`, `FuenteRecorridos`, `ManifestRecorrido.video(recorrido, carpeta)` y los 13 archivos de `assets/videos/vid_0001/` (~9,4 MB; ya no los lee nadie). `ManifestRecorrido.video(videoId, json, url, miniaturaExiste)` (el formato de esos assets) se queda sin uso en la app: lo prueba `AlmacenRecorridosTest` (quitarlo es de FE-4.3) |
+| Pruebas | `RemoteVideoRepositoryTest` (15), `VideoRepositoryCompuestoTest` (11, reescrita), `TextosVideosTest` (5), `MiniaturasLocalesTest` (3), `HistorialRecoleccionTest` (3) | Apoyo de C1, C2 y C3 en la JVM (§4.1) |
+| Validador | `src/ops/validate41.py` + ayudas nuevas de `comun.py` (`http_put_bytes`, `jpeg_sintetico`) | Local: C1a, C2a y C3a (estáticas y JVM). Dev: además C1b (contadores de 7.13 y 7.11 frente a la API y los manifests), C3b (renombrar) y C2b (eliminar), con dos pasos guiados; manual C2c (capturas) (§5.11) |
+
+**Flujo** (rutas en §5.8): Panel → «Videos» → 7.13 (los del teléfono sin subir arriba, después los del servidor) →
+tocar una fila → 7.14. «Renombrar» → la app tapa el mapa («Guardando el nombre…») → `PATCH` (o el manifest) →
+`CambiosVideos` → 7.14 y 7.13 se recargan. «Eliminar video» (escribiendo su nombre) → «Eliminando el video…» → `DELETE`
+→ `202` → `Toast` ««nombre» eliminado (N fotos retiradas).» → vuelve a 7.13, que ya se recargó. Si falla: diálogo «No se
+pudo eliminar el video» con el motivo, «Reintentar» y «Cerrar» (el video sigue a la vista). Panel → «Imágenes» → 7.11
+(24 por página, filtros del servidor) → pulsación larga para seleccionar → «Reasignar» (lugar o «Sin lugar») o
+«Eliminar» → aviso con lo hecho y lo que no → la página, 7.13 y 7.14 se recargan; 7.6 y el Panel también
+(`CambiosLugares`). 7.6 → ⋮ → «Ver fotos» (o 7.7 → «Ver en la galería») → 7.11 filtrada por ese lugar.
+
+**Trampas.**
+- **Un recorrido local sale una sola vez, y solo si el backend no lo conoce:** se muestra como local un `finalizado` **sin**
+  `remote_video_id`; en cuanto la cola lo crea en el servidor (aunque falten fotos), lo representa el video del servidor
+  («Subida sin terminar»). Si la app murió justo entre el `POST /v1/collect/videos` y guardar `remote_video_id`, el mismo
+  recorrido sale dos veces (local y en el servidor, con 0 fotos) hasta que la cola lo retome (idempotente por
+  `ref_cliente`). No se casa por `ref_cliente`: otro teléfono con la misma cuenta numera también `rec_NNNN` (ADR-FE-35).
+- **El «N videos» del encabezado es el `total` del servidor con la búsqueda** (no cuenta los locales: esos van en «M sin
+  subir en este teléfono»). Con el servidor caído no hay «N videos»: se ve el error con «Reintentar» y los locales.
+- **La búsqueda de 7.13 y de 7.11 es la del backend:** contiene, sin distinguir mayúsculas, pero **con** tildes; en 7.11
+  busca en el nombre del video **o** en las notas de la foto. Los locales de 7.13 se filtran igual, en el teléfono.
+- **Distancia:** la fila de 7.13 muestra `distancia_m` (la que midió el PDR, enviada al crear el video); la cabecera de
+  7.14 sigue sumando los tramos entre fotos (haversine en el JS): pueden no coincidir.
+- **Renombrar o eliminar un recorrido local mientras se sube no se permite** (`subida_estado = subiendo` o la cola
+  activa sobre él): 7.14 muestra la nota «Se está subiendo: espera…» y los botones deshabilitados. Eliminarlo borra la
+  carpeta del teléfono (como «Descartar video» de 7.5), solo por la acción explícita de 7.14: nada más borra recorridos.
+- **Las fotos de los recorridos del teléfono no salen en la Galería** (decisión del usuario): se ven en 7.5 y en su 7.14.
+- **URLs prefirmadas (1 h):** 7.14 recarga el video 5 min antes del `url_expira_en` más temprano mientras la pantalla
+  está visible (y al volver a ella); 7.11, al volver a la pantalla (`ON_RESUME`) si la página vence en menos de 5 min. Una
+  miniatura que ya falló no se reintenta hasta esa recarga (el JS la oculta; Coil deja el fondo).
+- **Sin `url_miniatura`** (la foto no está `procesada`, p. ej. con `embedding` apagado en `dev`) la miniatura es la foto
+  original (`url`, ≤ 1600 px): pesa más en la tira de 7.14 y en la Galería.
+- **7.12 (Detalle de imagen) no existe:** en 7.14 «Detalle (próximamente)» está deshabilitado; en 7.11 tocar una foto sin
+  selección muestra un `Toast`. El puente sigue teniendo `abrirFoto`, que no hace nada.
+- **Los ViewModels de 7.11, 7.13 y 7.14 no tienen pruebas en la JVM** (no hay `kotlinx-coroutines-test`); su lógica pura
+  está en `TextosVideos`, `MezclaVideos` y `Fechas`, y el repositorio, en sus pruebas.
+- **El rumbo negativo ya no sale «undefined»** en la tarjeta de 7.14 (el JS normaliza a 0…360 antes de elegir el punto
+  cardinal; era un ⚠ de §5.5).
+- **Sin probar en el teléfono:** todo lo de este lote (el `WebView` sirviendo las miniaturas locales, el aviso
+  «Eliminando…», el `Toast` y la vuelta a 7.13, el selector de «Reasignar», «Mostrar otros videos» con datos reales,
+  TalkBack en 7.13 y 7.11). En `dev`, solo se leyeron por `GET` las formas reales de `/v1/admin/videos`,
+  `/v1/admin/videos/{id}` y `/v1/admin/images` (2026-10-27): coinciden con los DTOs (incluidos `distancia_m`,
+  `finalizado_en` y `url_expira_en` UTC con `Z`; un id que no es UUID da `422 VALIDACION`).
+
+**Para los lotes siguientes:**
+- **FE-4.4 (lo que salió de FE-4.1, PLAN §2.2):** 7.12 Detalle de imagen (`GET`/`PATCH /v1/admin/images/{id}`,
+  `reprocesar`): conectar `VideoDetalleEventos.abrirFoto` (hoy `Unit`) y `GaleriaAcciones.onAbrirFoto` (hoy un `Toast`) a
+  una ruta nueva `admin/imagenes/{id}`, y habilitar el botón `#a-ver` de `video_detalle.js` (hoy `disabled`). El modo Mapa
+  de la Galería (`ModoVista.MAPA`, hoy un mensaje) puede reutilizar `video_detalle.html` o una página nueva sobre
+  `mapa_base.js` con las fotos de la página (`GaleriaUiState.fotos` trae `lat`/`lng`). Filtro por fecha: el backend no
+  filtra por fecha (backend §5.5): o se añade al contrato (pedirlo) o se filtra la página en local. «Subir imágenes» no
+  tiene ruta en el backend. Minimapa por fila y comparar cobertura en 7.13 (`PuntosOtros` de §5.6 ya da coordenadas por
+  video). «Reintentar subida» por fila (`Subidas.cola.subir(id)`, solo locales) y «reprocesar» (`POST
+  /v1/admin/images/{id}/reprocesar` foto a foto: el backend no tiene uno por video, §4.12). Confirmación por pulsación
+  larga en 7.14 (hoy escribiendo el nombre, en el JS). Capas «Cobertura de fotos» y «Rutas» de 7.8.
+- **FE-4.3:** quitar `ManifestRecorrido.video(videoId, json, url, miniaturaExiste)` y su caso de
+  `AlmacenRecorridosTest`; `GaleriaColores` (con `Naranja` desde FE-4.1) a `CampusColors`; `CampoTexto`, `FiltroChip` y
+  `Paginador` de la Galería y `Busqueda`/`FilaOrden` de 7.13 a `ui/components/` si otra vista los usa.
+
+Verificado en local el 2026-10-27 (worktree de FE-4.1 sobre `97791a0`, con los cambios sin commit): en Windows
+`testDebugUnitTest assembleDebug` → `BUILD SUCCESSFUL`, **337 casos, 0 fallos** (41 clases; sin avisos nuevos del
+compilador); en WSL `ruff check` («All checks passed!»), `ruff format --check` («25 files already formatted») y `pytest`
+(**277 passed, 1 skipped**: la decodificación con Pillow de `jpeg_sintetico`, que no está en el grupo `ops`; se comprobó
+aparte con el Pillow 12.3.0 del entorno del backend: `JPEG (640, 480) L`) y `validate41.py --entorno local` → código 0
+(P1; C1a estática + `VideoRepositoryCompuestoTest` 11/11; C2a estática + `TextosVideosTest` 5/5; C3a
+`RemoteVideoRepositoryTest` 15/15; C1b, C3b y C2b omitidas; manual C2c). **Sin probar en el teléfono ni en `dev`** (lo
+coordina el maestro).
+
 ---
 
 ## 5. Interfaces (contratos): catálogo de piezas reutilizables y contratos entre vistas
@@ -1160,13 +1271,13 @@ C3b omitidas; C3c manual; informe `FE-3.3-20261027-224726.json`, `3b3b30c-dirty`
 
 **Variantes verificadas (vistas admin y públicas)** (no son errores, pero conviene unificarlas al tocar cada vista):
 - Nombre del `StateFlow` de estado: `state` (Panel, Login), `uiState` (Galería, Lista de videos), `ui` (Editor de mapa, Detalle de video) y `estado` (Inicio, Destino, Escaneo, desde FE-3.2 Resultado y, desde FE-3.4, Lugares y Formulario de lugar; desde FE-3.3, la Lista de alertas).
-- `Factory`: la de `PanelAdminViewModel` recibe un `Context` y lo convierte a `applicationContext` por sí sola; las de `GaleriaViewModel` (`appContext`) y `VideoDetalleViewModel` (`appContext`, `videoId`) **esperan que ya se les pase el de la aplicación**: con el de una `Activity` se filtraría. Las pantallas actuales ya pasan `LocalContext.current.applicationContext`. `VideosViewModel.Factory(appContext)` también **espera el de la aplicación**; `LoginViewModel.Factory(context)` lo convierte por sí sola (como la de Panel). Inicio y Destino son `AndroidViewModel` y no llevan `Factory`. Desde FE-3.4: `LugaresViewModel.Factory()` (sin argumentos) y `LugarFormViewModel.Factory(lugarId)`. Desde FE-3.3:
+- `Factory`: la de `PanelAdminViewModel` recibe un `Context` y lo convierte a `applicationContext` por sí sola. Desde FE-4.1 las de 7.11, 7.13 y 7.14 **no reciben contexto** (`VideoRepositoryCompuesto.deLaApp()` usa `Subidas`, que ya lo tiene): `GaleriaViewModel.Factory(lugarId: String? = null, videoId: String? = null)` (los filtros con que se abre), `VideosViewModel.Factory()` y `VideoDetalleViewModel.Factory(videoId)` (antes recibían `appContext`). `LoginViewModel.Factory(context)` lo convierte por sí sola (como la de Panel). Inicio y Destino son `AndroidViewModel` y no llevan `Factory`. Desde FE-3.4: `LugaresViewModel.Factory()` (sin argumentos) y `LugarFormViewModel.Factory(lugarId)`. Desde FE-3.3:
 `EditorMapaViewModel.Factory(appContext)` y `AlertasViewModel.Factory(appContext)` (**esperan el de la aplicación**;
 sus pantallas pasan `LocalContext.current.applicationContext`); `RecoleccionViewModel` (7.4) sigue sin `Factory`.
-- El Editor de mapa y el Detalle de video no usan `XEvento`: los eventos llegan de JavaScript a través de una interfaz (`EditorMapaEventos`, `VideoDetalleEventos`; 5.5) y el estado del editor se llama `EditorMapaUi`. Desde FE-3.3 el editor tiene además `avisos: Flow<String>` (`Channel.BUFFERED`; la pantalla los muestra en un `Toast`). Galería, Lista y Detalle de video no tienen flujo de eventos en el ViewModel: salir y navegar lo resuelven las lambdas de la pantalla.
-- `@Preview`: lo tienen `PanelAdminContent` (3), `GaleriaContent` (2), `SeleccionDestinoContent` (1), `LoginContent` (4: vacío, cargando, credenciales inválidas y sin conexión; faltan sin permisos, desconocido y contraseña visible) , desde FE-3.2, `ResultadoUbicacionContent` (2: con destino y sin coincidencias; `internal`) y, desde FE-3.4, `LugaresContent` (1) y `LugarFormContent` (1, con `conMapa = false`) y, desde FE-3.3, `AlertasContent` (1). **No** lo tienen `VideosContent`, `EditorMapaContent`, `VideoDetalleContent` ni `InicioContent` (un `WebView` no se previsualiza, pero `VideosContent` sí podría). `PanelAdminContent` y `LoginContent` son `internal`; los demás `XContent` son públicos.
-- Recolección del estado: `collectAsStateWithLifecycle()` en Panel, Editor, Detalle de video, Login, Inicio, Destino, desde FE-3.4, Lugares y Formulario de lugar y, desde FE-3.3, la Lista de alertas (y `PedidosEditorMapa.pedido` en el editor); `collectAsState()` en Galería, Lista de videos y 7.4 (`RecoleccionScreen`) (sigue recogiendo con la pantalla en segundo plano).
-- Acciones agrupadas: `PanelAcciones` (10 lambdas), `GaleriaAcciones` (14), desde FE-3.2 `ResultadoAcciones` (4), desde FE-3.4 `LugaresAcciones` (12) y `LugarFormAcciones` (12) y, desde FE-3.3, `AlertasAcciones` (17), todas `data class` con valores `{}` por defecto para los previews. `DestinoAcciones` (12 lambdas) es una `class` simple **sin** valores por defecto: su preview pasa doce `{}` a mano.
+- El Editor de mapa y el Detalle de video reciben los eventos de JavaScript a través de una interfaz (`EditorMapaEventos`, `VideoDetalleEventos`; 5.5) y el estado del editor se llama `EditorMapaUi`. Desde FE-3.3 el editor tiene además `avisos: Flow<String>` (`Channel.BUFFERED`; la pantalla los muestra en un `Toast`). Desde FE-4.1 el Detalle de video tiene `eventos: Flow<VideoDetalleEvento>` (`Channel.BUFFERED`: solo `Eliminado`, tras el `202`, que la pantalla convierte en `Toast` + `onVolver`). Galería y Lista no tienen flujo de eventos en el ViewModel: navegar lo resuelven las lambdas de la pantalla.
+- `@Preview`: lo tienen `PanelAdminContent` (3), `GaleriaContent` (2), `SeleccionDestinoContent` (1), `LoginContent` (4: vacío, cargando, credenciales inválidas y sin conexión; faltan sin permisos, desconocido y contraseña visible) , desde FE-3.2, `ResultadoUbicacionContent` (2: con destino y sin coincidencias; `internal`) y, desde FE-3.4, `LugaresContent` (1) y `LugarFormContent` (1, con `conMapa = false`) y, desde FE-3.3, `AlertasContent` (1) y, desde FE-4.1, `VideosContent` (1). **No** lo tienen `EditorMapaContent`, `VideoDetalleContent` ni `InicioContent` (un `WebView` no se previsualiza). `PanelAdminContent` y `LoginContent` son `internal`; los demás `XContent` son públicos.
+- Recolección del estado: `collectAsStateWithLifecycle()` en Panel, Editor, Detalle de video, Login, Inicio, Destino, desde FE-3.4, Lugares y Formulario de lugar, desde FE-3.3, la Lista de alertas (y `PedidosEditorMapa.pedido` en el editor) y, desde FE-4.1, Galería y Lista de videos; `collectAsState()` en 7.4 (`RecoleccionScreen`) (sigue recogiendo con la pantalla en segundo plano).
+- Acciones agrupadas: `PanelAcciones` (10 lambdas), `GaleriaAcciones` (15 desde FE-4.1), desde FE-3.2 `ResultadoAcciones` (4), desde FE-3.4 `LugaresAcciones` y `LugarFormAcciones` (13 cada una desde FE-4.1, con `onVerFotos`), desde FE-3.3 `AlertasAcciones` (17) y, desde FE-4.1, `VideosAcciones` (6), todas `data class` con valores `{}` por defecto para los previews. `DestinoAcciones` (12 lambdas) es una `class` simple **sin** valores por defecto: su preview pasa doce `{}` a mano.
 - Eventos de una sola vez (verificado en los ViewModels): Inicio y Destino usan `MutableSharedFlow(extraBufferCapacity = 1)` con `tryEmit` y **sin `replay`**: si nadie está recogiendo en ese instante, el evento **se pierde**. Login y, desde FE-3.2, Escaneo usan `Channel(BUFFERED)`, que sí espera al colector (pero admite **un solo** colector).
 - `InicioContent` recibe parámetros sueltos (`escuchando`, `backendEnLinea`, `permisosFaltantes`…) en vez de `InicioUiState`, y no tiene `modifier`.
 
@@ -1549,8 +1660,8 @@ pinta sus colores a mano. Un tema propio sería el sitio natural para unificar l
 | `FilaCategorias`, `CampoBusqueda`, `EncabezadoLista`, `FilaLugar`, `EstadoVacio`, `BotonVolver` | `ui/destino/componentes/ListaLugares.kt` | `FilaCategorias(seleccionada: CategoriaLugar?, onElegir: (CategoriaLugar?) -> Unit)` · `CampoBusqueda(texto: String, onCambio: (String) -> Unit)` · `EncabezadoLista(orden: OrdenLugares, onCambiarOrden: () -> Unit)` · `FilaLugar(lugar: LugarDestino, onClick: () -> Unit)` · `EstadoVacio(mensaje: String?, accion: String, onAccion: () -> Unit)` · `BotonVolver(onClick: () -> Unit)` | Verificado contra el código (bache 2). Propios de Destino salvo `EstadoVacio` y `BotonVolver`, que son genéricos. Todos públicos; `ChipCategoria` es privado. Detalle abajo. |
 | `EncabezadoPregunta`, `TarjetaOpciones` | `ui/destino/componentes/PanelesVoz.kt` | `EncabezadoPregunta()` · `TarjetaOpciones(opciones: List<LugarDestino>, onElegir: (LugarDestino) -> Unit)` | Verificadas contra el código (bache 2): las firmas coinciden con las llamadas de `SeleccionDestinoScreen`. `TarjetaOpciones` muestra las coincidencias cuando hay varias (5.5, Destino). Detalle abajo. |
 | `ResultadoUbicacionScreen` / `ResultadoUbicacionContent` | `ui/ubicacion/ResultadoUbicacionScreen.kt` | `ResultadoUbicacionScreen(onVolverAUbicarme, onIrALugar, onInicio, viewModel = viewModel())` · `internal ResultadoUbicacionContent(estado: ResultadoUiState, acciones: ResultadoAcciones, modifier)` | Vista 6.3 completa (FE-3.2; detalle abajo, «Resultado de ubicación»). **No navega**: las tres lambdas las conecta `AppNav` (5.8). Sus botones (`BotonPrincipal`, `BotonSecundario`) son `private`. |
-| `LugaresScreen` / `LugaresContent` | `ui/admin/lugares/LugaresScreen.kt` (`public`) | `LugaresScreen(onVolver, onNuevo, onEditar: (id: String) -> Unit, modifier, vm = viewModel(factory = LugaresViewModel.Factory()))` · `LugaresContent(estado: LugaresUiState, acciones: LugaresAcciones, modifier)` | Vista 7.6 (FE-3.4; detalle abajo, «Lugares de administración»). **No navega**. Un `@Preview` privado |
-| `LugarFormScreen` / `LugarFormContent` | `ui/admin/lugares/LugarFormScreen.kt` (`public`) | `LugarFormScreen(lugarId: String?, onListo: () -> Unit, modifier, vm = viewModel(key = "lugar-form-<id o nuevo>", factory = LugarFormViewModel.Factory(lugarId)))` · `LugarFormContent(estado: LugarFormUiState, acciones: LugarFormAcciones, modifier, conMapa = true)` | Vista 7.7 (FE-3.4; detalle abajo). `lugarId = null` = lugar nuevo. **No navega**: `onListo` (Atrás, «Cancelar», tras guardar o eliminar). `conMapa = false` dibuja el recuadro sin `WebView` (vista previa). Un `@Preview` privado |
+| `LugaresScreen` / `LugaresContent` | `ui/admin/lugares/LugaresScreen.kt` (`public`) | `LugaresScreen(onVolver, onNuevo, onEditar: (id: String) -> Unit, modifier, onVerFotos: (id: String) -> Unit = {}, vm = viewModel(factory = LugaresViewModel.Factory()))` (`onVerFotos` desde FE-4.1) · `LugaresContent(estado: LugaresUiState, acciones: LugaresAcciones, modifier)` | Vista 7.6 (FE-3.4; detalle abajo, «Lugares de administración»). **No navega**. Un `@Preview` privado |
+| `LugarFormScreen` / `LugarFormContent` | `ui/admin/lugares/LugarFormScreen.kt` (`public`) | `LugarFormScreen(lugarId: String?, onListo: () -> Unit, modifier, onVerFotos: (id: String) -> Unit = {}, vm = viewModel(key = "lugar-form-<id o nuevo>", factory = LugarFormViewModel.Factory(lugarId)))` (`onVerFotos` desde FE-4.1) · `LugarFormContent(estado: LugarFormUiState, acciones: LugarFormAcciones, modifier, conMapa = true)` | Vista 7.7 (FE-3.4; detalle abajo). `lugarId = null` = lugar nuevo. **No navega**: `onListo` (Atrás, «Cancelar», tras guardar o eliminar). `conMapa = false` dibuja el recuadro sin `WebView` (vista previa). Un `@Preview` privado |
 | `LugarMapaContent`, `LugarMapaEventos`, `lugaresJson` | `ui/admin/lugares/componentes/MapaLugares.kt` (`public`; el puente `LugarPuente` es `internal`) | `LugarMapaContent(lugaresJson: String, punto: Pair<Double, Double>?, editable: Boolean, eventos: LugarMapaEventos, modifier)` · `LugarMapaEventos(onPunto: (lat, lng) -> Unit = {…}, onLugarTocado: (id) -> Unit = {})` · `lugaresJson(lugares: List<LugarDestino>): String` (`[{id, nombre, lat, lng}]` con `org.json`) | Mapa de lugares embebido (FE-3.4; `lugar_mapa.html`, puente `LugarBridge`, §5.9). Crea su propio `rememberMapaWeb()`; `pasarInsets = false`, `manejarAtras = false`. Empuja en este orden `setModo`, `setPunto`/`quitarPunto` y `cargarLugares` (el primer encuadre usa el punto si lo hay) |
 
 **Componentes de `ui/destino/componentes/` en detalle (verificado, bache 2)**
@@ -1712,42 +1823,43 @@ Cuidados:
 - Desde FE-2.2 `cargarResumen()` y la relectura de los recorridos relanzan `CancellationException` (antes el `catch (e: Exception)` la tragaba). No registran nada en `AppLog` (la petición deja su línea `Api`, §5.10).
 - Con el stub (`nombre = "Administrador"`) el saludo sale "Administrador", no un nombre propio.
 
-**`GaleriaViewModel` (verificado, `ui/admin/imagenes/GaleriaViewModel.kt`)**
+**`GaleriaViewModel` (FE-4.1, reescrito; `ui/admin/imagenes/GaleriaViewModel.kt`)**
 
 | Pieza | Detalle |
 |---|---|
-| Constructor | `GaleriaViewModel(repositorio: VideoRepository)`. `Factory(appContext)` crea, desde FE-2.1, `VideoRepositoryCompuesto.deLaApp(appContext)` (assets + recorridos locales `finalizado`, 5.6; antes `AssetsVideoRepository`). Estado en `uiState: StateFlow<GaleriaUiState>`. Carga en `init`. |
-| `GaleriaUiState` | `cargando` (empieza en `true`), `error: String?`, `videos`, `todas: List<Foto>` (las fotos de todos los videos), `filtros`, `modo`, `pagina` (desde 1) y `seleccion: Set<String>` con el **`uid`** de cada foto (5.6). Calculadas: `filtradas`, `totalPaginas` (mínimo 1), `paginaActual` y `lugares` (lugares distintos, ordenados). |
-| `GaleriaFiltros` | `busqueda`, `lugar`, `videoId`, `estado`, `calidad`; todos opcionales y combinados con **Y**. `hayActivos` dice si hay alguno. |
-| `ModoVista` · `FOTOS_POR_PAGINA` | `CUADRICULA` / `MAPA` (`cambiarModo`). `const val FOTOS_POR_PAGINA = 24`, público, en este archivo. |
-| Acciones | `cargar()`, `buscar`, `filtrarLugar`, `filtrarVideo`, `filtrarEstado`, `filtrarCalidad`, `limpiarFiltros`, `irAPagina(n)` (se acota a 1…`totalPaginas`), `alternarSeleccion(uid)`, `limpiarSeleccion`, `eliminarSeleccion`, `reasignarSeleccion(lugar)`. |
+| Constructor | `GaleriaViewModel(imagenes: ImagenesRepository, videos: VideoRepository, lugares: LugaresAdminRepository, cambios: Flow<Int> = CambiosVideos.version, filtrosIniciales: GaleriaFiltros = GaleriaFiltros(), reloj = System::currentTimeMillis)`. `Factory(lugarId: String? = null, videoId: String? = null)` crea `RemoteVideoRepository()`, `VideoRepositoryCompuesto.deLaApp()` y `RemoteLugaresAdminRepository()` y abre con esos filtros. Estado en `uiState: StateFlow<GaleriaUiState>`. En `init`: las opciones (videos y lugares), la primera página y `cambios.drop(1)` → `cargar(silencioso = true)` |
+| `GaleriaUiState` | `cargando` (empieza en `true`), `error: String?`, `fotos: List<Foto>` (**solo la página actual** del servidor), `total` (`total` de `GET /v1/admin/images` con los filtros: el «N imágenes»), `filtros`, `modo`, `pagina` (desde 1), `seleccion: Set<String>` con **ids de imagen** (UUID; antes `uid`), `videos` y `lugares` (`List<OpcionFiltro(id, nombre)>`), `lugaresCargados`, `operacion: OperacionLote?` (`ELIMINANDO`, `REASIGNANDO`), `aviso: String?`. Calculadas: `totalPaginas` (= ⌈`total`/24⌉, mínimo 1) y `nombreLugarFiltrado` |
+| `GaleriaFiltros` | `busqueda` (el `q` del backend), `lugarId`, `videoId`, `estado`, `calidad`; `hayActivos`; `aDominio(): FiltrosImagenes` (búsqueda recortada; vacía → `null`) |
+| `ModoVista` · `FOTOS_POR_PAGINA` | `CUADRICULA` / `MAPA` (`cambiarModo`; el mapa es de FE-4.4). `const val FOTOS_POR_PAGINA = 24` (el `por_pagina` que se pide) |
+| Acciones | `cargar(silencioso = false, espera = 0)` (cancela la anterior; si la página quedó más allá del final tras borrar, pide la última) · `buscar(texto)` (≤ 100 caracteres, espera `ESPERA_BUSQUEDA_MS` = 400) · `filtrarLugar(id?)`, `filtrarVideo(id?)`, `filtrarEstado`, `filtrarCalidad`, `limpiarFiltros` (página 1, selección vacía, recarga) · `irAPagina(n)` (acotada; recarga) · `alReanudar()` (`ON_RESUME`: si la página vence en menos de `MARGEN_URLS_MS` = 5 min, recarga) · `alternarSeleccion(id)`, `limpiarSeleccion`, `descartarAviso` · `eliminarSeleccion()` · `reasignarSeleccion(lugarId?)` (`null` = «Sin lugar») |
+| Lote | `imagenes.lote(accion, ids, lugarId)` con **toda** la selección (también de otras páginas; el repositorio la parte en 200); `aviso` = `TextosVideos.resultadoLote(…)` («Se eliminaron N fotos.», «N fotos reasignadas a «X».» + «M no se pudieron: K ya no existían; …») o el error (`TextosVideos.error(e, "eliminar las fotos")`); la selección se vacía si salió bien. La página se recarga sola por `CambiosVideos` |
 
 Cuidados:
-- **Eliminar y reasignar no pasan por `VideoRepository` ni por `EdicionesLocales`:** solo cambian `todas` en el estado (y `videos` queda sin tocar). Al salir de la pantalla se pierden, y una foto "eliminada" aquí **sigue apareciendo** en Lista y Detalle de video. `cargar()` (el reintento) también restaura lo eliminado en memoria.
-- **No escucha `cambios()`:** carga una sola vez, así que lo que se borre o renombre en Detalle de video solo se ve al volver a entrar en Galería (el `VideoDetalleViewModel` sí lo hace, ver abajo).
-- Cambiar cualquier filtro vuelve a la página 1 y **vacía la selección**; cambiar de página **no** la vacía, y `eliminarSeleccion` / `reasignarSeleccion` actúan sobre toda la selección, incluidas fotos de otras páginas que no se ven. La interfaz debe mostrar el total seleccionado, no solo el de la página.
-- La búsqueda ignora mayúsculas pero **no tildes**, y mira nombre de archivo, nombre del video y lugar. Según 5.7, `BuscarLugares.filtrar` sí ignora tildes: no son equivalentes.
-- `filtradas`, `totalPaginas`, `paginaActual` y `lugares` son *getters* **sin caché**: `filtradas` se recalcula en cada lectura, y `GaleriaContent` lee `filtradas`, `paginaActual` y `totalPaginas` en cada recomposición (el filtro corre **tres veces**). Aceptable con pocos cientos de fotos; con el backend, filtrar y paginar en el servidor.
-- `reasignarSeleccion` guarda `lugar.trim()`: con texto en blanco asigna `""` (no `null`) y esa cadena vacía aparece como un lugar más en `lugares`. `GaleriaScreen` ya deshabilita "Reasignar" con el texto en blanco, pero el ViewModel no valida: otra vista que lo llame debe hacerlo.
-- Si se eliminan todas las fotos del lugar que está filtrado, el filtro sigue activo pero ese lugar ya no está en `lugares`: lista vacía sin opción visible para quitarlo (`eliminarSeleccion` no limpia filtros) salvo `limpiarFiltros()`.
-- `cargar()` captura toda `Exception` con un mensaje fijo ("No se pudieron cargar las imágenes") y no registra nada en `AppLog`.
+- **Los nombres de los videos de las tarjetas salen de `videos`** (`GET /v1/admin/videos` entero, al abrir): `ImagenAdmin` no
+  trae el nombre. Un video creado después de abrir la Galería sale como «video sin nombre» hasta volver a entrar.
+- Cambiar cualquier filtro vuelve a la página 1 y **vacía la selección**; cambiar de página **no** la vacía: la barra muestra
+  el total seleccionado.
+- La búsqueda es la del backend (contiene, sin mayúsculas, **con** tildes; nombre del video o notas), no la de 5.7.
+- Con la sesión perdida `TextosVideos.error` da `null`: no se muestra error (`AppNav` va a Login).
+- Sin lugares (falló `GET /v1/admin/places`), «Reasignar» solo ofrece «Sin lugar» y lo dice.
 
-**`VideoDetalleViewModel` (verificado, `ui/admin/videos/VideoDetalleViewModel.kt`; la pantalla y el puente, más abajo)**
+**`VideoDetalleViewModel` (FE-4.1, reescrito; `ui/admin/videos/VideoDetalleViewModel.kt`; la pantalla y el puente, más abajo)**
 
 | Pieza | Detalle |
 |---|---|
-| Constructor | `VideoDetalleViewModel(videoId: String, repositorio: VideoRepository)`. `Factory(appContext, videoId)` crea, desde FE-2.1, `VideoRepositoryCompuesto.deLaApp(appContext)` (un recorrido local se abre con su id `rec_NNNN`). Estado en `ui: StateFlow<VideoDetalleUiState>`. |
-| `VideoDetalleUiState` | `cargando` (empieza en `true`), `noEncontrado`, `videoJson: String?` y `otrosJson` (`"[]"` por defecto). Ya vienen **serializados**: el mapa web recibe JSON. |
-| `videoJson` | `{id, nombre, fecha, fotos: [{id, url, thumb, lat, lng, rumbo}]}`. `fecha` = los 10 primeros caracteres de `creadoEn` (espera `"2026-10-09…"`); `rumbo` es número o `null`. **No** incluye `lugar`, `estado`, `calidad` ni `capturadaEn`. |
-| `otrosJson` | `[{id, nombre, fotos: [{lat, lng}]}]` con **los demás videos**, para comparar cobertura en el mapa. |
-| Acciones | `renombrar(nombre)` (recorta espacios), `eliminarFoto(fotoId)`, `eliminarVideo()`. Lanzan la operación en `viewModelScope` y no esperan resultado. |
+| Constructor | `VideoDetalleViewModel(videoId: String, repositorio: VideoRepository, reloj = System::currentTimeMillis)`. `Factory(videoId)` crea `VideoRepositoryCompuesto.deLaApp()` (`videoId` = UUID del backend o `rec_NNNN` de un recorrido del teléfono sin subir). Estado en `ui: StateFlow<VideoDetalleUiState>`; eventos `eventos: Flow<VideoDetalleEvento>` (`Channel.BUFFERED`, un solo colector) |
+| `VideoDetalleUiState` | `cargando` (empieza en `true`), `noEncontrado`, `errorCarga: String?` (no se pudo cargar y aún no se había visto), `videoJson: String?`, `otrosJson: String?` (`null` hasta que la página lo pide), `nombre`, `operacion: OperacionVideo?` (`RENOMBRANDO` «Guardando el nombre…», `ELIMINANDO_FOTO` «Eliminando la foto…», `ELIMINANDO_VIDEO` «Eliminando el video…»), `aviso: AvisoVideo?` (`titulo`, `mensaje`, `reintento: ReintentoVideo?` = `Renombrar(nombre)`, `EliminarFoto(fotoId)` o `EliminarVideo`) |
+| `videoJson` | `{id, nombre, fecha, local, editable, nota, rev, fotos: [{id, url, thumb, lat, lng, rumbo}]}`. `fecha` = los 10 primeros caracteres de `creadoEn`; `local`, `editable` y `nota` (o `null`), los de `Video` (5.6); `rev` sube en cada carga, así la página recibe el video aunque no cambie (p. ej. tras una foto que no se pudo borrar y que el JS ya había quitado); `thumb` = `url_miniatura` o, sin ella, `url`; en uno local, `https://miniaturas.local/…` |
+| `otrosJson` | `{"videos": [{id, fotos: [{lat, lng}]}], "aviso": texto \| null}` de `repositorio.puntosDeOtros(videoId)` (≤ 500 fotos; el aviso dice si se cortó o si el servidor no respondió) |
+| Acciones | `renombrar(nombre)` (recorta; vacío, > 40 o con otra operación en curso → nada) · `eliminarFoto(fotoId)` · `eliminarVideo()` (espera la respuesta; con éxito emite `Eliminado(nombre, fotos_retiradas \| null)` y deja `operacion` puesta hasta salir) · `reintentar()` (el `reintento` del aviso) · `descartarAviso()` · `reintentarCarga()` · `pedirOtros()` (una vez) · `alReanudar()` / `alPausar()` (`ON_RESUME` / `ON_PAUSE`: programa o cancela la recarga `MARGEN_URLS_MS` = 5 min antes del `urlsVencenEnMs`) |
+| Constantes | `MARGEN_URLS_MS` (300 000), `MAX_NOMBRE` (40, el de `AlmacenRecorridos`) |
 
 Cuidados:
-- **Patrón de recarga (copiarlo):** en `init` solo se recoge `repositorio.cambios()`; su primera emisión **es** la carga inicial, así que no hay otra llamada a `cargar()` y se evita la doble carga que advierte 5.6. Cada renombrar o eliminar vuelve a leer **todos** los manifests, porque se filtra por `id` sobre `obtenerVideos()`.
-- **`huboVideo`:** una vez visto el video, si desaparece (lo eliminó la propia pantalla) **no** pasa a `noEncontrado` y `videoJson` conserva el último valor. `VideoDetalleScreen` no navega tras `eliminarVideo()`: lo hace el JS, que llama a `salir()` 900 ms después (ver `VideoBridge`, abajo).
-- **Errores:** una `Exception` en `cargar()` antes de haber visto el video se muestra como `noEncontrado` (no distingue "no existe" de "falló la lectura"); después se ignora en silencio. Hoy casi no ocurre (un manifest roto se omite), pero con un repositorio remoto un corte de red se vería como "no encontrado": hará falta un estado de error. Sí relanza `CancellationException`.
-- **`renombrar`, `eliminarFoto` y `eliminarVideo` no tienen `try/catch`:** si el repositorio lanza una excepción (el futuro `RemoteVideoRepository` con `IOException`), **la app se cierra**. Tampoco hay estado de progreso ni de error: es el pendiente "progreso y reintento del borrado" de la `PLAN.md`. `renombrar` no valida nada: la validación vive en el JS (ver `VideoBridge` más abajo).
-- `fecha` solo funciona si `creadoEn` viene en ISO-8601 (5.6: hoy es texto sin convertir).
+- **Patrón de recarga (copiarlo):** en `init` solo se recoge `repositorio.cambios()`; su primera emisión **es** la carga inicial. Cada escritura del repositorio sube `CambiosVideos` y el detalle se vuelve a pedir (`GET /v1/admin/videos/{id}` o el manifest).
+- **Nunca cierra la app:** renombrar, eliminar una foto y eliminar el video atrapan toda `Exception` (relanzan `CancellationException`); el mensaje es `TextosVideos.error(e, "<acción>")` (5.5, abajo); con la sesión perdida no se muestra nada (`AppNav` va a Login). Tras un error recarga para dibujar lo que hay de verdad. Un `RecorridoNoEditableException` no ofrece «Reintentar».
+- **`huboVideo`:** una vez visto el video, si desaparece (lo eliminó la propia pantalla) **no** pasa a `noEncontrado` y `videoJson` conserva el último valor; tras `Eliminado` deja de recargar.
+- `fecha` solo funciona si `creadoEn` viene en ISO-8601 (el backend da UTC con `Z`; el manifest, con zona: los 10 primeros caracteres son la fecha UTC o la local, según el caso).
+- No registra en `AppLog` (solo la línea `Api` de cada petición).
 
 **`PanelAdminScreen` (verificado, `ui/admin/panel/PanelAdminScreen.kt`)**
 
@@ -1777,10 +1889,10 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| `GaleriaScreen` | `(onVolver, onAbrirImagen: (videoId, fotoId) -> Unit, viewModel = viewModel(factory = GaleriaViewModel.Factory(LocalContext.current.applicationContext)))`. Con selección activa, el botón Atrás **primero limpia la selección** (`BackHandler(enabled = seleccion.isNotEmpty())`). |
-| `GaleriaContent` | `(state: GaleriaUiState, acciones: GaleriaAcciones, modifier)`. Público, sin ViewModel, con 2 `@Preview` privados. Cabecera, búsqueda, 4 filtros, selector de modo, cuadrícula de 2 columnas, barra de selección y paginador. |
-| `GaleriaAcciones` | `data class` con 14 lambdas (`{}` por defecto): `onVolver`, `onReintentar`, `onBuscar`, `onLugar`, `onVideo`, `onEstado`, `onCalidad`, `onLimpiarFiltros`, `onModo`, `onPagina`, `onAbrirFoto(Foto)`, `onAlternarSeleccion(uid)`, `onEliminar`, `onReasignar(lugar)`. |
-| `GaleriaColores` | `internal object` con la paleta de la maqueta; también la usa `VideosScreen`. Equivalencias en 5.4. |
+| `GaleriaScreen` | FE-4.1: `(onVolver, lugarId: String? = null, videoId: String? = null, viewModel = viewModel(key = "galeria-<lugarId>-<videoId>", factory = GaleriaViewModel.Factory(lugarId, videoId)))` (ya no recibe `onAbrirImagen`: tocar una foto sin selección muestra el `Toast` «El detalle de imagen llega más adelante.»). Con selección activa, el botón Atrás **primero limpia la selección** (`BackHandler(enabled = seleccion.isNotEmpty())`). `LifecycleResumeEffect` → `alReanudar()` (URLs que vencen) |
+| `GaleriaContent` | `(state: GaleriaUiState, acciones: GaleriaAcciones, modifier)`. Público, sin ViewModel, con 2 `@Preview` privados. Cabecera («Imágenes del dataset», «N imágenes» = `state.total` con `NumberFormat` de la región —«1 imagen» en singular— y «Página x de y»), aviso del último lote (tocar lo descarta; *live region*), búsqueda («Buscar por video o notas…»), 4 filtros, selector de modo, cuadrícula de 2 columnas de la página, y abajo la operación en curso («Eliminando las fotos…» / «Reasignando las fotos…»), la barra de selección y el paginador |
+| `GaleriaAcciones` | `data class` con 15 lambdas (`{}` por defecto): `onVolver`, `onReintentar`, `onBuscar`, `onLugar(id?)`, `onVideo(id?)`, `onEstado`, `onCalidad`, `onLimpiarFiltros`, `onModo`, `onPagina`, `onAbrirFoto(Foto)`, `onAlternarSeleccion(id de imagen)`, `onEliminar`, `onReasignar(lugarId?)` (`null` = «Sin lugar»), `onDescartarAviso` |
+| `GaleriaColores` | `internal object` con la paleta de la maqueta; también la usan 7.13 y 7.14. FE-4.1 añade `Naranja` (`#F59E0B`: lo del teléfono sin subir). Equivalencias en 5.4. |
 
 **Piezas privadas de la Galería, candidatas a `ui/components/`** (regla 4: hoy no se pueden importar):
 
@@ -1790,65 +1902,79 @@ Cuidados:
 | `FiltroChip<T>` | `(etiqueta, seleccionado: T?, opciones: List<T>, textoDe, onSeleccionar: (T?) -> Unit, textoTodos = "Todos")` | Chip de 48 dp con menú y opción "Todos". Genérico: sirve para los filtros pendientes de 7.13. |
 | `SelectorModo` | `(modo: ModoVista, onModo)` | Dos segmentos Cuadrícula / Mapa. Atado a `ModoVista`. |
 | `Paginador` + `paginasVisibles(actual, total)` | `(actual, total, onPagina)` | Anterior / siguiente y números con "…" (ej. 1 2 3 … 8); solo se dibuja si `total > 1`. `paginasVisibles` es lógica pura: se podría probar sin emulador si se hace `internal`. |
-| `BarraSeleccion` + `BotonLote` | `(cantidad, onReasignar, onEliminar)` | "N seleccionadas" y los botones Reasignar / Eliminar. |
+| `BarraSeleccion` + `BotonLote` | `(cantidad, habilitada, onReasignar, onEliminar)` (`habilitada` desde FE-4.1: `false` con un lote en curso) | "N seleccionadas" y los botones Reasignar / Eliminar. |
 | `MensajeVacio` | `(texto, accion?, onAccion)` | **Duplicada** con `Mensaje` (VideosScreen) y con `EstadoVacio` de `ui/destino/componentes/ListaLugares.kt` (arriba; firma invertida: allí `mensaje` es opcional y `accion` obligatoria): unificar. |
 | `BarraSuperior` | `(onVolver)` | Volver + título fijo "Galería de imágenes". Otra copia de la barra superior (ver `BarraSuperior` arriba); `VideosScreen` arma la suya en línea. |
 
 Cuidados:
 - La **`BarraSeleccion` se dibuja siempre** (en `bottomBar`), también con 0 seleccionadas ("0 seleccionadas", botones deshabilitados); `enModoSeleccion` solo decide qué hace el toque sobre una foto.
 - **Selección:** pulsación larga sobre la tarjeta (acción "Seleccionar" para TalkBack); ya en modo selección, el toque alterna. El círculo de la esquina (48 dp de área táctil) está **oculto a la accesibilidad** (`clearAndSetSemantics`).
-- **El diálogo de eliminar dice** "del dataset y del sistema de ubicación. Esto no se puede deshacer", pero hoy solo quita las fotos **de la memoria de esta pantalla** (ver `GaleriaViewModel`): el texto promete más de lo que hace.
-- **Reasignar:** campo de texto libre con el botón deshabilitado si está en blanco (TODO: selector de lugares reales, 7.6). Cualquier texto crea un "lugar" nuevo.
-- El modo `MAPA` solo muestra un mensaje provisional.
-- Miniaturas con Coil (`AsyncImage(model = foto.urlMiniatura)`, `contentDescription = null`: la tarjeta ya se anuncia completa con nombre, video, lugar, estado, "alta calidad" y "seleccionada"). Si la URL falla solo queda el fondo `Placeholder`. Las fotos de un recorrido local (FE-2.1) llegan como `file://<ruta absoluta>` del JPG original, sin miniatura (Coil 2 entiende `file://` y la reduce).
+- **El diálogo de eliminar dice** "del dataset y del sistema de ubicación. Esto no se puede deshacer": desde FE-4.1 es
+  cierto (`POST /v1/admin/images/lote` con `eliminar`: el vector sale de la búsqueda al instante, backend §5.5).
+- **Reasignar (FE-4.1):** diálogo «Reasignar N a un lugar» con una lista de opciones (`RadioButton`, `selectable`): «Sin
+  lugar» y los lugares de `GET /v1/admin/places` por nombre; «Reasignar» se habilita al elegir una.
+- El modo `MAPA` muestra «La vista de mapa de la galería llega más adelante. …» (FE-4.4).
+- Tarjeta (FE-4.1): miniatura, `Foto.titulo` («Foto N», su `orden`), el nombre del video, el lugar («Sin lugar» si no
+  tiene), el estado y la calidad. `content-desc` de la tarjeta: «Foto N, video <nombre>[, lugar X], <estado>[, alta
+  calidad][, seleccionada]» (`validate41.py` busca «video <nombre>»).
+- Miniaturas con Coil (`AsyncImage(model = foto.urlMiniatura)`, `contentDescription = null`). Desde FE-4.1 son URLs GET
+  prefirmadas de 1 h (`url_miniatura` o, sin ella, la `url` original); si fallan solo queda el fondo `Placeholder`. Las
+  fotos de los recorridos del teléfono ya no salen en la Galería.
 - Colores del estado (`EstadoFoto.color()`, `when` exhaustivo): `PENDIENTE` → `TextoSuave` (gris; FE-2.1), `SUBIDA` → `Azul`, `PROCESADA` → `Verde`, `ERROR` → `Rojo`. El filtro «Estado» lista los cuatro valores de `EstadoFoto` (con `PENDIENTE` desde FE-2.1).
 - `NumberFormat.getIntegerInstance()` para "N imágenes" (según la región).
 
-**`VideosScreen` y `VideosViewModel` (verificado, `ui/admin/videos/VideosScreen.kt` y `VideosViewModel.kt`)**
+**`VideosScreen` y `VideosViewModel` (FE-4.1, reescritos; `ui/admin/videos/VideosScreen.kt` y `VideosViewModel.kt`)**
 
 | Pieza | Detalle |
 |---|---|
-| `VideosScreen` | `(onVolver, onAbrirVideo: (videoId) -> Unit, viewModel = viewModel(factory = VideosViewModel.Factory(LocalContext.current.applicationContext)))`. Recoge `viewModel.uiState` con `collectAsState()`. El estado es `VideosUiState(cargando = true, error: String? = null, videos = emptyList())` y el ViewModel tiene `reintentar()` (detalle abajo). |
-| `VideosContent` | `(state: VideosUiState, onVolver, onAbrirVideo, onReintentar, modifier)`. Público, **sin `@Preview`**. Muestra cargando, error con "Reintentar", vacío ("Todavía no hay videos.") o la lista con "N videos". |
-| Tarjeta de video | Nombre, y una línea con la fecha `dd/MM/yyyy` (los 10 primeros caracteres de `creadoEn`, invertidos), "N fotos" y la distancia (`Video.distanciaMetros`: "N m" o "X,XX km" según la región). Más un estado calculado, en este orden: **Sin fotos**, **Pendiente de subir** (alguna `PENDIENTE`, FE-2.1: un recorrido local sin subir o a medias; gris `TextoSuave`), **Con errores** (alguna `ERROR`), **Procesado** (todas `PROCESADA`) o **Pendiente de proceso**. El estado va en texto además del color. |
+| `VideosScreen` | `(onVolver, onAbrirVideo: (videoId) -> Unit, onNuevoVideo: () -> Unit, viewModel = viewModel(factory = VideosViewModel.Factory()))`. Recoge `uiState` con `collectAsStateWithLifecycle()`. **No navega** |
+| `VideosContent` | `(state: VideosUiState, acciones: VideosAcciones, modifier)`. Público, 1 `@Preview`. Encabezado (Volver 48 dp; «Videos de recolección» con `heading()`; debajo «N videos» —`TextosVideos.total(totalServidor)`, solo si hay total— y, si hay locales, «M sin subir en este teléfono» en naranja); buscador (`OutlinedTextField` de una línea, «Buscar por nombre…», `content-desc` «Buscar videos por nombre», ✕ «Borrar búsqueda»); fila «Ordenar:» con `FilterChip` Recientes / Nombre / Más fotos (`content-desc` «Ordenar por …», ≥ 48 dp); el error del servidor con «Reintentar» (*live region*); cargando (solo si aún no hay filas); la sección «En este teléfono (sin subir)» con los locales y, si también hay del servidor, «En el servidor»; vacío («Todavía no hay videos.» o «No hay videos con «q».»). Botón flotante «Nuevo video» (→ 7.3) |
+| `VideosAcciones` | `data class` con 6 lambdas (`{}` por defecto): `onVolver`, `onAbrirVideo(id)`, `onNuevoVideo`, `onReintentar`, `onBuscar(texto)`, `onOrden(OrdenVideos)` |
+| Tarjeta de video (privada `TarjetaVideo`) | Ícono de teléfono si es local; nombre (18 sp); `TextosVideos.detalleFila` («dd/MM/yyyy · N fotos · 340 m · 8 min», lo que se sabe); punto de color y `TextosVideos.estado` (+ «· en este teléfono»). Borde naranja si es local. `content-desc` = `TextosVideos.descripcionFila` («Video <nombre>, [en este teléfono, ]<detalle>, <estado>»; lo lee `validate41.py`); rol de botón; ≥ 72 dp. Colores del estado: naranja (sin subir / subiendo), gris (sin fotos o subida sin terminar), azul (procesando), verde (procesado), rojo (con errores) |
+| `VideosUiState` | `cargando` (empieza en `true`), `errorServidor: String?`, `locales` y `servidor` (`List<ResumenVideo>`, 5.6), `totalServidor: Int?`, `busqueda`, `orden` (`OrdenVideos.RECIENTES`); calculada `vacia` |
+| `VideosViewModel` | `(repositorio: VideoRepository)`; `Factory()` sin argumentos → `VideoRepositoryCompuesto.deLaApp()`. En `init` recoge `repositorio.cambios()` y carga en cada emisión (la primera es la carga inicial; las siguientes, tras renombrar o eliminar en 7.14, un lote de la Galería o un intento de la cola de subida). Cada carga **cancela la anterior** (gana la última) y llama a `listarVideos(busqueda o null, orden)`: con el servidor caído deja su parte vacía, `totalServidor = null` y `errorServidor = TextosVideos.error(e, "cargar la lista del servidor")` (con la sesión perdida, `null`), pero los locales se ven. `buscar(texto)` (≤ `MAX_BUSQUEDA` = 100; espera `ESPERA_BUSQUEDA_MS` = 400 ms), `ordenar(orden)`, `reintentar()`. No usa `AppLog` |
 
 Cuidados:
-- El orden es el del repositorio (5.6: primero los de `assets/`, después los `rec_NNNN` locales, cada grupo por carpeta); aún no hay orden ni búsqueda (`PLAN.md`).
-- Usa `GaleriaColores` del paquete `ui.admin.imagenes`: dependencia cruzada hasta que se muevan a `CampusColors`.
-- La fecha supone formato ISO (`2026-10-09…`); con otro formato sale mal.
-- **`VideosViewModel` sí recoge `repositorio.cambios()`** (verificado): el ViewModel de la lista sigue vivo en la pila mientras se ve el detalle, y al volver tras renombrar o eliminar un video la lista se recarga sola.
-- Accesibilidad: tarjeta con rol de botón y descripción completa ("Video X, fecha, N fotos, distancia, estado"); mínimo 72 dp de alto.
-
-**`VideosViewModel` en detalle (verificado)**
-
-- `VideosViewModel(repositorio: VideoRepository)`; su `Factory(appContext)` crea, desde FE-2.1, `VideoRepositoryCompuesto.deLaApp(appContext)` (**espera el contexto de la aplicación**). Expone `uiState` y no tiene flujo de eventos. No usa `AppLog`.
-- En el `init` recoge `repositorio.cambios()` y llama a `cargar()` por cada emisión: la primera emisión **es** la carga inicial (no hay otra) y las siguientes llegan cuando el detalle renombra o elimina. Cada una relee **todos** los manifests (5.6).
-- `cargar()`: con éxito pone `cargando = false`, `error = null` y `videos`. Con cualquier `Exception` (salvo `CancellationException`, que relanza) pone `cargando = false` y `error = "No se pudieron cargar los videos"` (texto fijo, sin registrar) y **conserva** la lista anterior en `videos`.
-- `reintentar()` vuelve a llamar a `cargar()` **sin** poner `cargando = true`: durante el reintento no hay indicador de carga y el error sigue en el estado hasta que termine. Como `cargar()` corre dentro del `collect`, las recargas por `cambios()` son secuenciales, pero un `reintentar()` simultáneo puede solaparse con una (gana la última en terminar).
+- Carga **todas** las páginas de `GET /v1/admin/videos` (100 por página, hasta 50 páginas) en cada recarga: con cientos de
+  videos, cada vuelta a la lista son varias peticiones.
+- La búsqueda y el orden son los del servidor; los locales se filtran y ordenan igual en el teléfono (`MezclaVideos`) y
+  van siempre arriba, en su sección.
+- Usa `GaleriaColores` del paquete `ui.admin.imagenes`: dependencia cruzada hasta que se muevan a `CampusColors` (FE-4.3).
+- La fecha de una fila del servidor (`creado_en`, UTC con `Z`) se muestra en la zona del teléfono (`Fechas.fechaCorta`); la
+  de un local, la de su `created_at`. La distancia es la que midió el PDR (`distancia_m`), no la suma de tramos de 7.14.
+- **Sin probar en el teléfono** (FE-4.1 en `dev`): TalkBack, el teclado sobre el buscador y la lista con los 13 recorridos
+  sin subir del teléfono del usuario.
 
 **`VideoDetalleScreen` y `VideoBridge` (verificado, `ui/admin/videos/VideoDetalleScreen.kt`, `assets/video_detalle.html` y `assets/video_detalle.js`)**
 
 | Pieza | Detalle |
 |---|---|
-| `VideoDetalleScreen` | `(videoId: String, onVolver, onAbrirImagen: (videoId, fotoId) -> Unit, modifier, vm = viewModel(key = "video-$videoId", factory = VideoDetalleViewModel.Factory(LocalContext.current.applicationContext, videoId)))`. La `key` da un ViewModel distinto por video. Dibuja `VideoDetalleContent` y, encima, `NoEncontrado` si `ui.noEncontrado`. |
-| `VideoDetalleContent` | `(videoJson: String?, otrosJson: String, eventos: VideoDetalleEventos, modifier)`. Público, **sin `@Preview`**. Solo el `WebView` de `assets/video_detalle.html` (Leaflet + OpenStreetMap en línea). |
-| `VideoDetalleEventos` | `interface` con 5 funciones: `abrirFoto(fotoId)`, `renombrar(nombre)`, `eliminarFoto(fotoId)`, `eliminarVideo()` y `salir()`. |
-| `NoEncontrado` | Privado: "No se encontró este video." y un botón "Volver"; fondo fijo `#0A0E1A`. |
+| `VideoDetalleScreen` | FE-4.1: `(videoId: String, onVolver, modifier, vm = viewModel(key = "video-$videoId", factory = VideoDetalleViewModel.Factory(videoId)))` (ya no recibe `onAbrirImagen`: 7.12 es de FE-4.4). La `key` da un ViewModel distinto por video. Dibuja `VideoDetalleContent` (con `recursos` = las miniaturas locales de `MiniaturasLocales.deLaApp`, 5.6) y, encima: `MensajeCompleto` «No se encontró este video.» (`noEncontrado`) o el error de carga con «Reintentar» (si aún no había video), ambos con «Volver»; o `Ocupado` (fondo `#CC0A0E1A` que tapa la pantalla y sus toques, tarjeta con un indicador y el texto de la operación, *live region*) mientras hay `operacion`. `BackHandler(enabled = operacion != null) {}` (Atrás no hace nada hasta que el servidor responde). El `aviso` sale en un `AlertDialog` (título, mensaje, «Reintentar» si hay `reintento`, «Cerrar»). Recoge `eventos`: `Eliminado` → `Toast` ««nombre» eliminado (N fotos retiradas).» y `onVolver()`. `LifecycleResumeEffect` → `alReanudar()` / `alPausar()` |
+| `VideoDetalleContent` | `(videoJson: String?, otrosJson: String?, eventos: VideoDetalleEventos, modifier, recursos: ((String) -> WebResourceResponse?)? = null)`. Público, **sin `@Preview`**. Solo el `WebView` de `assets/video_detalle.html` (Leaflet + OpenStreetMap en línea); envía `cargarOtros` solo cuando `otrosJson != null` |
+| `VideoDetalleEventos` | `interface` con 6 funciones: `abrirFoto(fotoId)` (sin uso: la página lo deshabilita), `renombrar(nombre)`, `eliminarFoto(fotoId)`, `eliminarVideo()`, `salir()` y, desde FE-4.1, `pedirOtros()` (con cuerpo vacío por defecto) |
+| `TextosVideos` | `ui/admin/videos/TextosVideos.kt` (`internal object`, puro; `TextosVideosTest`): `TITULO_LISTA` («Videos de recolección»), `total(n)` («1 video» / «N videos», sin separador de miles), `sinSubir(m)` («M sin subir en este teléfono»), `fotos(n)`, `distancia(m)` («340 m» / «1,25 km» en la región; `null` sin dato), `duracion(s)` («8 min» / «45 s»; `null` sin dato o 0), `estado(r)` («Sin subir», «Subiendo desde este teléfono», «Sin fotos», «Subida sin terminar», «Procesando», «Procesado», «Con errores»), `detalleFila(r, zona)`, `descripcionFila(r, zona)`, `error(e, accion): String?` y `resultadoLote(accion, r, lugar)` |
+| `TextosVideos.error(e, accion)` | Nunca lanza. `RecorridoNoEditableException` → su mensaje; `ManifestException` → «No se pudo <acción>: el recorrido del teléfono no se pudo leer.»; `IllegalArgumentException` → «… el nombre no es válido (de 1 a 40 caracteres).»; sesión perdida → `null` (no se muestra nada); sin red → «Sin conexión: no se pudo <acción>. Revisa tu conexión a internet e inténtalo de nuevo.»; `403` → «Tu cuenta no tiene permisos…»; `429` → «Demasiados intentos…»; `409`/`422` → «No se pudo <acción>: <mensaje del backend>.»; `404` → «No se pudo <acción>: ya no existe en el servidor (quizá lo borró otra persona).»; el resto → «Algo salió mal: no se pudo <acción>. Inténtalo de nuevo.» |
 
-**Puente `VideoBridge`, web → app** (`@JavascriptInterface`; todo pasa al hilo principal): `listo()`, `abrirFoto(id)`, `renombrar(nombre)`, `eliminarFoto(id)`, `eliminarVideo()`, `salir()`. **App → web:** `setInsets(topDp, bottomDp)`, `cargarOtros(json)`, `cargarVideo(json)` (solo si `videoJson != null`; ambos como texto JSON entre comillas; el JS hace `JSON.parse`) y `window.onAtras()` (el JS cierra primero el diálogo o la foto seleccionada y al final llama a `salir()`).
+**Puente `VideoBridge`, web → app** (`@JavascriptInterface`; todo pasa al hilo principal): `listo()`, `abrirFoto(id)`, `renombrar(nombre)`, `eliminarFoto(id)`, `eliminarVideo()`, `salir()` y, desde FE-4.1, `pedirOtros()`. **App → web:** `setInsets(topDp, bottomDp)`, `cargarOtros(json)` (cuando la página lo pidió), `cargarVideo(json)` (solo si `videoJson != null`; ambos como texto JSON entre comillas; el JS hace `JSON.parse`) y `window.onAtras()` (el JS cierra primero el diálogo o la foto seleccionada y al final llama a `salir()`). Formatos en 5.9.
 
 Cuidados:
-- **Kotlin no navega tras `eliminarVideo()`; lo hace el JS** (verificado): llama a `eliminarVideo`, muestra "Video eliminado" y **900 ms después** llama a `salir()` sin esperar resultado. Si el borrado fallara (futuro `RemoteVideoRepository`, ver el `try/catch` que falta en 5.5), el admin ya habría salido.
+- **FE-4.1: Kotlin vuelve a la lista cuando el servidor confirmó el borrado** (`202`); el JS ya no sale solo a los 900 ms
+  (`eliminarVideo()` solo llama al puente; `validate41.py` C2a lo comprueba). Renombrar no es optimista: el nombre nuevo
+  llega con el siguiente `cargarVideo`. Eliminar una foto sí lo es en el JS: si el servidor falla, `cargarVideo` (con
+  otro `rev`) la devuelve.
 - **No usa `ui.cargando`:** mientras llega el JSON se ve el mapa vacío, sin indicador.
+- **Recorridos del teléfono:** su `videoJson` trae `local: true` (la cabecera dice «En este teléfono, sin subir») y, si se
+  están subiendo, `editable: false` y la `nota` (visible bajo la cabecera; «Renombrar», «Eliminar video» y «Eliminar
+  foto» deshabilitados). Sus miniaturas llegan por `https://miniaturas.local/…` (ADR-FE-36).
 - **Sin internet:** si Leaflet (`unpkg.com`) no carga, `MapaBase.iniciar` (5.9) avisa en pantalla y **ya dejó definidos** `window.onAtras` (llama a `salir()`), `setInsets` y el botón Volver; `video_detalle.js` termina antes de llamar a `listo()`, así que Atrás y Volver funcionan pero la app no envía el video. Probado con jsdom, no en dispositivo. El registro va por `Log` con el tag `VideoDetalle`, no por `AppLog`.
 - **Orden de `window.onAtras()`:** cierra el diálogo abierto → deselecciona la foto → `salir()` (aquí no hay confirmación de pendientes).
-- **Confirmaciones (en el JS):** eliminar el video exige **escribir su nombre** (la `PLAN.md` anota como pendiente una "confirmación por pulsación larga"; hoy es esta). Eliminar una foto es **optimista**: la quita de la lista al instante y, si era la última, ofrece eliminar también el video. El `WebView` no muestra `window.prompt`, por eso hay un diálogo propio (`dialogo()`, `role="alertdialog"`).
-- **Renombrar se valida en el JS, no en el ViewModel:** texto no vacío, distinto del actual y de máximo 40 caracteres; **no** se comprueba que el nombre no exista ya en otro video.
-- **Formatos duplicados con Kotlin:** el JS calcula su propia distancia (haversine, también en `Video.distanciaMetros`) y la da como "1.25 km" (punto), mientras la lista de videos usa la región ("1,25 km"). La fecha se invierte de `2026-10-09` a `09/10/2026`, igual que la lista.
-- ⚠ **Rumbo negativo sale como "undefined":** la orientación (`Math.round(rumbo / 45) % 8` sobre `CARDINALES`) falla con valores negativos, y el acimut de `OrientationProvider` sale en −180…180 (5.2). La recolección debe guardar `rumbo` normalizado a 0…360. Deducido leyendo el código, no probado.
-- El encuadre del mapa (`fitBounds`) se hace **solo la primera vez** que llega el video; editar (renombrar, eliminar foto) no lo mueve. "Mostrar otros videos" dibuja puntos grises `#64748b` solo con lat/lng.
-- Accesibilidad web: marcadores con `title`, tira de fotos con `aria-label` y `aria-pressed`, tarjeta como región `aria-live`. Las miniaturas que fallan se ocultan (`onerror`).
-- `abrirFoto` → `onAbrirImagen` (placeholder: falta 7.12).
+- **Confirmaciones (en el JS):** eliminar el video exige **escribir su nombre** (la confirmación por pulsación larga pasó a FE-4.4). Eliminar una foto es **optimista**: la quita de la lista al instante y, si era la última, ofrece eliminar también el video. El `WebView` no muestra `window.prompt`, por eso hay un diálogo propio (`dialogo()`, `role="alertdialog"`).
+- **Renombrar se valida en el JS y en el ViewModel:** texto recortado no vacío, distinto del actual y de máximo 40 caracteres (`maxlength` del diálogo); **no** se comprueba que el nombre no exista ya en otro video (el backend no lo exige).
+- **Formatos duplicados con Kotlin:** el JS calcula su propia distancia (haversine de las fotos, también en `Video.distanciaMetros`) y la da como "1.25 km" (punto), mientras la lista de videos usa `distancia_m` y la región ("1,25 km"). La fecha se invierte de `2026-10-09` a `09/10/2026`.
+- **Rumbo negativo (resuelto en FE-4.1):** la tarjeta normaliza el rumbo a 0…360 antes de `Math.round(r / 45) % 8` (antes salía «undefined» con valores negativos). Sin probar en el teléfono (los rumbos del backend ya vienen en [0, 360)).
+- El encuadre del mapa (`fitBounds`) se hace **solo la primera vez** que llega el video; editar (renombrar, eliminar foto) no lo mueve. "Mostrar otros videos" dibuja puntos grises `#64748b` solo con lat/lng; desde FE-4.1 se piden la primera vez que se activa (`pedirOtros`, toast «Cargando las fotos de otros videos…») y llegan con un aviso si se cortaron en 500 o el servidor no respondió.
+- Accesibilidad web: marcadores con `title`, tira de fotos con `aria-label` y `aria-pressed`, tarjeta como región `aria-live`, la nota con `role="status"`. Las miniaturas que fallan se ocultan (`onerror`).
+- «Ver detalle» de la tarjeta es, desde FE-4.1, «Detalle (próximamente)» y está `disabled` (7.12 es de FE-4.4).
 - **Infraestructura compartida:** la fábrica del `WebView` (tamaño, fondo `#0A0E1A`, ajustes, depuración, consola, errores, `setInsets`, `BackHandler`) vive ahora en `map/MapaWebView.kt` (`MapaWebView` y `PuenteWeb`, ver 5.9). Aquí solo quedan `VideoPuente` y los `LaunchedEffect` que empujan `cargarOtros` y `cargarVideo`.
 - El botón "Volver" de `NoEncontrado` es un `Button` estándar de Material: su alto mínimo (40 dp) queda bajo los 48 dp.
 
@@ -1856,14 +1982,14 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| `UbicacionManualViewModel` | `ViewModel(videos: VideoRepository, lugares: LugaresRepository)`; `Factory(appContext)` crea `VideoRepositoryCompuesto.deLaApp(appContext)` (desde FE-2.1: «Usar mi última posición» y el nombre autonumerado también cuentan los recorridos grabados; *decisión provisional del maestro, a confirmar por el usuario*) y `LugaresRepositoryStub` (**espera el contexto de la aplicación**). Estado en `ui: StateFlow<UbicacionManualUiState>`. Eventos por `Channel(BUFFERED)` + `receiveAsFlow()` (un solo colector; no se pierden). |
+| `UbicacionManualViewModel` | `ViewModel(videos: VideoRepository, lugares: LugaresRepository)`; `Factory(appContext)` crea `VideoRepositoryCompuesto.deLaApp()` (desde FE-4.1: los recorridos del teléfono y, con red, los videos del servidor; ya no los de `assets/videos/`) y `LugaresRepositoryStub` (**espera el contexto de la aplicación**). Estado en `ui: StateFlow<UbicacionManualUiState>`. Eventos por `Channel(BUFFERED)` + `receiveAsFlow()` (un solo colector; no se pierden). Constante `LIMITE_SERVIDOR_MS` = 8 000 |
 | `UbicacionManualUiState` | `lugares`, `punto: PuntoMapa?` (`null` hasta tocar el mapa), `rumbo` (0…360), `brujulaDisponible`, `usandoBrujula`, `cargandoUltima`, `ultimaPosicion: UltimaPosicion?`, `ultimaAplicada`, `nombreVideo`, `nombreSugerido`, `edicion: EdicionCoordenada?`, `centrarSolicitud: Int`, `confirmando`. Calculadas: `puedeConfirmar` (hay punto y no está confirmando), `latitudTexto`, `longitudTexto` (6 decimales, siempre con punto). |
 | `UbicacionManualEvento` | Solo `Confirmado(inicio: InicioRecoleccion)`. **No navega.** |
 | `UbicacionManualAcciones` | `data class` con 15 lambdas (`{}` por defecto): `onVolver`, `onAjustes`, `onPuntoCambiado(lat, lng)`, `onRumbo`, `onAlternarBrujula`, `onEditarCoordenada`, `onTextoEdicion`, `onAceptarEdicion`, `onCancelarEdicion`, `onUsarUltima`, `onNombre`, `onCancelar`, `onConfirmar`, `onCalibrar`, `onRetomar` (FE-2.3). |
 | `GrabacionPendiente` | `UbicacionManualState.kt`: `data class GrabacionPendiente(nombre: String, fotos: Int)` (FE-2.3). La lee la pantalla, no el ViewModel |
 | `InicioRecoleccion` | `domain/model/InicioRecoleccion.kt`: `lat`, `lng`, `rumbo` (0…360), `nombreVideo` (recortado, nunca vacío) y `continuaVideoAnterior`. Es lo que debe recibir la vista 7.4. |
 | Acciones del ViewModel | `alAbrir(brujulaDisponible)` (idempotente) · `alPausar()` (ON_STOP: apaga la brújula) · `alReanudar()` (ON_RESUME: reactiva «Confirmar») · `alMoverPunto(lat, lng)` · `alUsarUltimaPosicion()` · `alElegirRumbo(grados)` · `alAlternarBrujula()` · `alLeerBrujula(acimut)` · `alEditarCoordenada(campo)` · `alCambiarTextoEdicion` · `alAceptarEdicion()` · `alCancelarEdicion()` · `alCambiarNombre` · `alConfirmar()`. |
-| Lógica pura (`internal`, sin Android) | `Rumbo` (`normalizar`, `diferencia`, `suavizar` —promedio exponencial **circular**—, `cardinal`, `nombreCardinal`), `parsearCoordenada(texto, limite)`, `siguienteNombre(videos)` y `calcularUltimaPosicion(videos)`. Se pueden probar sin emulador. |
+| Lógica pura (`internal`, sin Android) | `Rumbo` (`normalizar`, `diferencia`, `suavizar` —promedio exponencial **circular**—, `cardinal`, `nombreCardinal`), `parsearCoordenada(texto, limite)`, `siguienteNombre(nombres: List<String>)` (desde FE-4.1 recibe nombres), `masRecienteDelServidor(locales: List<Video>, servidor: List<ResumenVideo>): String?` (FE-4.1) y `calcularUltimaPosicion(videos)`. Las tres últimas, con `HistorialRecoleccionTest` |
 | Constantes | `MAX_NOMBRE_VIDEO = 40`, `PREFIJO_VIDEO = "video_"`, `CampusMapa.CENTRO` (⚠ **aproximado**, EAFIT: solo es el encuadre inicial) y `CampusMapa.ZOOM_INICIAL = 17`. |
 
 **Puente `UbicacionBridge`, web → app** (`@JavascriptInterface`, clase `UbicacionPuente : PuenteWeb`, `internal`; todo pasa al hilo principal): `listo()` (heredado), `puntoCambiado(lat, lng)` y `gesto(activo)`.
@@ -1874,8 +2000,19 @@ Comportamiento:
 - **Centrar el mapa:** solo cuando el punto cambia **desde fuera** del mapa (coordenadas editadas o «Usar mi última posición»): el ViewModel sube `centrarSolicitud` y la pantalla llama a `centrar()` (acerca a zoom ≥ 18).
 - **Brújula:** `EscucharOrientacion` entrega acimut en −180…180; el ViewModel lo **normaliza**, lo suaviza y solo actualiza el estado si el cambio es ≥ 1,5°. Girar el dial a mano apaga la brújula. Es norte **magnético** (5.2).
 - **Editar coordenadas:** si aún no hay punto, la otra coordenada se toma de `CampusMapa.CENTRO`. El diálogo usa `KeyboardType.Text` (no `Decimal`) porque algunos teclados numéricos no traen «−» y la longitud de Colombia es negativa.
-- **Última posición:** el «último» video es el de mayor `creadoEn` (ISO-8601 ordena como texto; sin fecha, el último de la lista) y la última foto, la de mayor `capturadaEn`. Si `obtenerVideos()` falla, la fila queda deshabilitada y la vista sigue siendo usable.
-- **Nombre autonumerado:** `video_(N+1)`, con N = mayor número entre los videos llamados `video3` / `video_3`…; si ninguno cumple el patrón, la cantidad de videos. Salta nombres ya usados.
+- **Historial (FE-4.1; la recolección nunca espera a la red):** al abrir, primero `recorridosDelTelefono()` (los
+  `finalizado` del disco, también los ya subidos) → nombre y última posición; después, como mucho
+  `LIMITE_SERVIDOR_MS` (8 s), `listarVideos()` (todas las páginas del servidor): sus nombres entran en el autonumerado y,
+  si `masRecienteDelServidor` da un video del servidor que terminó después que todos los del teléfono, se pide su detalle
+  (otros 8 s como mucho) para su última foto. Sin red o si tarda, se queda con lo del teléfono. No cambia una posición
+  que la persona ya aplicó ni un nombre que ya cambió.
+- **Última posición:** el «último» video es el de mayor fin (`finalizadoEn` o, sin él, `creadoEn`, en milisegundos con
+  `Fechas.aMilis`: el servidor da UTC con `Z` y el manifest su zona; sin fecha, el último de la lista; empate entre uno del
+  teléfono y uno del servidor: el del teléfono) y la última foto, la de mayor `capturadaEn`. Si el teléfono no se puede
+  leer, la fila queda deshabilitada y la vista sigue siendo usable. Los videos de `validate41.py` tienen fechas de enero
+  de 2026: nunca son el último.
+- **Nombre autonumerado:** `video_(N+1)`, con N = mayor número entre los nombres `video3` / `video_3`… (del teléfono y del
+  servidor); si ninguno cumple el patrón, la cantidad de nombres distintos. Salta nombres ya usados.
 - **Confirmar:** `confirmando` evita un doble toque; `alReanudar()` lo libera al volver a la pantalla (p. ej. desde 7.4).
 - **Calibrar mi paso (7.3b):** `FilaCalibracion` (privada) va entre «Usar mi última posición» y el nombre del video. La pantalla lee `CalibracionPasoRepository(contexto).guardada()` con `remember` (`null` = valor genérico; se relee al volver porque `NavHost` recompone la ruta) y se la pasa al contenido; no está en el `UiState` ni en el ViewModel. Tocar la fila llama a `onCalibrar`, que la ruta conecta con `navigate("admin/calibracion")` (5.8).
 - **Retomar una grabación sin finalizar (FE-2.3):** la pantalla lee con `produceState` `RecoleccionRepositoryLocal(contexto).buscarEnCurso()` y `leerEnCurso(id)` (`GrabacionPendiente(nombre, fotos.size)`; un error da `null`; se relee al volver a la ruta, como la calibración). Si hay una, `FilaRetomar` (privada; borde ámbar `#F59E0B`, «Retomar «nombre»» y «Quedó sin finalizar: N fotos guardadas. Retómala en pausa o empieza otra abajo.»; descripción para TalkBack «Retomar la grabación …») va justo debajo del encabezado. Tocarla llama a `onRetomar`, que la ruta conecta con `SesionDeRecoleccion.limpiar()` + `navigate("admin/recoleccion")`: 7.4, sin inicio, retoma (5.2). «Confirmar y comenzar» sigue creando un video nuevo aunque haya uno pendiente. ⚠ Cómo se ve: a verificar en dispositivo (no tiene `@Preview`).
@@ -2199,12 +2336,12 @@ Reutiliza de `ui/destino/componentes/` sin cambiarlos `CampoBusqueda` (placehold
 |---|---|
 | `LugaresViewModel(repo: LugaresAdminRepository, cambios: StateFlow<Int> = CambiosLugares.version)` (7.6) | `Factory()` sin argumentos → `RemoteLugaresAdminRepository()`. Estado `estado: StateFlow<LugaresUiState>`. En `init`: `cargar()` y recoge `cambios.drop(1)` → `cargar(silencioso = true)` (cada crear, editar o borrar del proceso recarga la lista sin vaciarla). `cargar(silencioso = false)` cancela la carga anterior. Error al cargar: `ErroresLugarMapeo.errorDeCarga(e)` (sin red → «Sin conexión. Revisa tu conexión a internet e inténtalo de nuevo.»; otro → «No se pudo cargar la lista de lugares.»; sesión perdida → nada); en una recarga silenciosa con lista, va a `aviso`. `alBuscar`, `alCategoria`, `limpiarFiltros`, `alModo`, `descartarAviso`, `pedirBorrar(l)` / `cancelarBorrar()` / `confirmarBorrar()` (`DELETE`, lo quita de la lista al instante, aviso `"«<nombre>» eliminado."` o `"No se pudo eliminar: …"`) |
 | `LugaresUiState` (`LugaresState.kt`) | `cargando` (empieza en `true`), `error`, `todos: List<LugarAdmin>`, `busqueda`, `categoria: CategoriaLugar?`, `modo: ModoLugares` (`LISTA` / `MAPA`), `confirmandoBorrar: LugarAdmin?`, `borrando`, `aviso`; calculadas `visibles` (= `filtrarLugares(todos, busqueda, categoria)`) y `hayFiltros`. `filtrarLugares` (`internal`, pura): categoría exacta y `BuscarLugares.filtrar` (5.7) |
-| `LugaresAcciones` | `data class` con 12 lambdas (`{}` por defecto): `onVolver`, `onNuevo`, `onEditar(id)`, `onReintentar`, `onBusqueda`, `onCategoria`, `onLimpiarFiltros`, `onModo`, `onPedirBorrar(l)`, `onConfirmarBorrar`, `onCancelarBorrar`, `onDescartarAviso` |
+| `LugaresAcciones` | `data class` con 13 lambdas (`{}` por defecto): `onVolver`, `onNuevo`, `onEditar(id)`, `onReintentar`, `onBusqueda`, `onCategoria`, `onLimpiarFiltros`, `onModo`, `onPedirBorrar(l)`, `onConfirmarBorrar`, `onCancelarBorrar`, `onDescartarAviso` y, desde FE-4.1, `onVerFotos(id)` |
 | Pantalla 7.6 | Barra (`BotonIcono` «Volver», título «Lugares» con `heading()` y «N lugares registrados»), aviso (tocar lo descarta, `liveRegion`), selector «Lista» / «Mapa» (`content-desc` «Vista de lista» / «Vista de mapa», `Role.Tab`), buscador y chips; cargando, error con «Reintentar», «Aún no hay lugares.» con «Nuevo lugar», «No hay lugares con estos filtros» con «Limpiar filtros»; la lista (`LazyColumn`, `key = id`) o el mapa (`LugarMapaContent` en modo ver: tocar un lugar → `onEditar`). Botón flotante «Nuevo lugar». Diálogo «¿Eliminar «X»?» («Deja de aparecer en Selección de destino. [Sus N fotos quedarán sin lugar.] No se puede deshacer.») |
-| Fila de 7.6 (privada `FilaLugarAdmin`) | Ícono de la categoría, nombre (18 sp), «‹categoría› · N fotos», coordenada `FormularioLugar.textoCoordenada`; tocarla edita; `BotonIcono` ⋮ «Opciones de ‹nombre›» con Editar, Eliminar y «Ver fotos (próximamente)» deshabilitado (FE-4.1). `content-desc` de la fila: `descripcionFila(l)` = «‹nombre›, ‹categoría›, N fotos. Toca para editar.» (`textoFotos`: «1 foto» / «N fotos») |
+| Fila de 7.6 (privada `FilaLugarAdmin`) | Ícono de la categoría, nombre (18 sp), «‹categoría› · N fotos», coordenada `FormularioLugar.textoCoordenada`; tocarla edita; `BotonIcono` ⋮ «Opciones de ‹nombre›» con Editar, Eliminar y, desde FE-4.1, «Ver fotos» (abre la Galería filtrada por el lugar: `onVerFotos(id)`). `content-desc` de la fila: `descripcionFila(l)` = «‹nombre›, ‹categoría›, N fotos. Toca para editar.» (`textoFotos`: «1 foto» / «N fotos») |
 | `LugarFormViewModel(lugarId: String?, repo)` (7.7) | `Factory(lugarId)`. Estado `estado: StateFlow<LugarFormUiState>`, eventos `eventos: Flow<LugarFormEvento>` (`Channel.BUFFERED`): `Guardado(nombre)` y `Eliminado(nombre)`. `cargar()` (en `init` y «Reintentar»): `repo.listar()`; los demás lugares van a `otros` (contexto del mapa); editando rellena `campos` con `FormularioLugar.campos(l)` y `totalFotos`, o `errorCarga` = «Este lugar ya no existe…» / «No se pudo leer el lugar: …»; creando, un fallo solo deja el mapa sin contexto. `alNombre`, `alAlias`, `alDescripcion`, `alReferencias`, `alCategoria`, `alPunto(lat, lng)` (redondea a 6 decimales) limpian el error de su campo y el general. `guardar()`: valida (`FormularioLugar.validar`); con errores los muestra y no envía; si no, `crear` o `reemplazar` con `FormularioLugar.datos`; éxito → `Guardado` (y se queda en `guardando = true` hasta salir); error → `ErroresLugarMapeo.deExcepcion(e)` (nada con la sesión perdida). `pedirBorrar` (solo editando) / `cancelarBorrar` / `confirmarBorrar` (`borrar` → `Eliminado`) |
-| `LugarFormUiState` / `LugarFormAcciones` (`LugarFormState.kt`) | `esNuevo`, `cargando`, `errorCarga`, `campos: CamposLugar`, `errores: ErroresLugar`, `otros: List<LugarDestino>`, `totalFotos`, `guardando`, `confirmandoBorrar`; calculada `textoPunto`. `LugarFormAcciones`: 12 lambdas (`{}` por defecto): `onVolver`, `onNombre`, `onAlias`, `onDescripcion`, `onCategoria`, `onPunto(lat, lng)`, `onReferencias`, `onGuardar`, `onReintentar`, `onPedirBorrar`, `onConfirmarBorrar`, `onCancelarBorrar` |
-| Pantalla 7.7 | Barra («Volver», título «Nuevo lugar» / «Editar lugar»); columna con desplazamiento: error general (`MensajeError`, `liveRegion`), campos «Nombre» (ayuda «Único: no distingue mayúsculas ni tildes.»), «Alias (separados por comas)», «Descripción» (contador /300), chips de las 8 categorías (`FilterChip`), «Punto de llegada» con el mapa de 300 dp (`LugarMapaContent` editable con los demás lugares), «Referencias cercanas» (contador /300), «Fotos asociadas» («N fotos con este lugar. Las fotos se asignan a un lugar desde la galería (próximamente).») y, editando, «Eliminar lugar». El error de un campo reemplaza su ayuda (`supportingText`, `liveRegion`). **Pie fijo** (fuera del desplazamiento, con `imePadding`): el texto `estado.textoPunto` y los botones «Cancelar» y «Guardar» (con indicador mientras guarda). `BackHandler` → `onListo`. Tras `Guardado`/`Eliminado`, `Toast` con `"«<nombre>» guardado."` o `"«<nombre>» eliminado."` y `onListo()` |
+| `LugarFormUiState` / `LugarFormAcciones` (`LugarFormState.kt`) | `esNuevo`, `cargando`, `errorCarga`, `campos: CamposLugar`, `errores: ErroresLugar`, `otros: List<LugarDestino>`, `totalFotos`, `guardando`, `confirmandoBorrar`; calculada `textoPunto`. `LugarFormAcciones`: 13 lambdas (`{}` por defecto): `onVolver`, `onNombre`, `onAlias`, `onDescripcion`, `onCategoria`, `onPunto(lat, lng)`, `onReferencias`, `onGuardar`, `onReintentar`, `onPedirBorrar`, `onConfirmarBorrar`, `onCancelarBorrar` y, desde FE-4.1, `onVerFotos` |
+| Pantalla 7.7 | Barra («Volver», título «Nuevo lugar» / «Editar lugar»); columna con desplazamiento: error general (`MensajeError`, `liveRegion`), campos «Nombre» (ayuda «Único: no distingue mayúsculas ni tildes.»), «Alias (separados por comas)», «Descripción» (contador /300), chips de las 8 categorías (`FilterChip`), «Punto de llegada» con el mapa de 300 dp (`LugarMapaContent` editable con los demás lugares), «Referencias cercanas» (contador /300), «Fotos asociadas» («N fotos con este lugar. Las fotos se asignan a un lugar desde la galería (selecciona fotos y «Reasignar»).» y, editando, el botón «Ver en la galería» → `onVerFotos`, desde FE-4.1) y, editando, «Eliminar lugar». El error de un campo reemplaza su ayuda (`supportingText`, `liveRegion`). **Pie fijo** (fuera del desplazamiento, con `imePadding`): el texto `estado.textoPunto` y los botones «Cancelar» y «Guardar» (con indicador mientras guarda). `BackHandler` → `onListo`. Tras `Guardado`/`Eliminado`, `Toast` con `"«<nombre>» guardado."` o `"«<nombre>» eliminado."` y `onListo()` |
 | `FormularioLugar` (`FormularioLugar.kt`, `internal object`, puro; `FormularioLugarTest`) | Límites de `LugarEntrada` (backend §5.5) **tras recortar**: `NOMBRE_MIN` 2, `NOMBRE_MAX` 80, `ALIAS_MAX_ELEMENTOS` 20, `ALIAS_MAX` 60, `TEXTO_MAX` 300 (descripción y referencias). `DECIMALES` 6: `redondear(g)` = `Math.round(g · 10⁶) / 10⁶`; `textoCoordenada(lat, lng)` = `String.format(Locale.ROOT, "%.6f, %.6f")` (punto decimal en cualquier idioma); `textoPunto(punto)` = «Punto: ‹lat›, ‹lng›» o `SIN_PUNTO` «Punto: sin elegir (toca el mapa)». `aliasDeTexto` (separa por comas y saltos de línea, recorta, sin vacíos ni repetidos sin distinguir mayúsculas) / `textoDeAlias` («a, b»). `validar(CamposLugar): ErroresLugar` con los textos `ERROR_NOMBRE_CORTO` «Escribe un nombre de al menos 2 caracteres.», `ERROR_NOMBRE_LARGO` «Máximo 80 caracteres.», `ERROR_CATEGORIA` «Elige una categoría.», `ERROR_PUNTO` «Toca el mapa para elegir el punto de llegada.», `ERROR_ALIAS_MUCHOS`, `ERROR_ALIAS_LARGO`, `ERROR_TEXTO_LARGO`. `datos(CamposLugar): DatosLugar?` (`null` con errores; textos recortados, vacíos → `null`, coordenada redondeada). `campos(LugarAdmin)` (para editar). **No** comprueba la unicidad del nombre (la decide el backend, ADR-FE-30) |
 | `CamposLugar`, `ErroresLugar` (`FormularioLugar.kt`) | `CamposLugar(nombre, aliasTexto, descripcion, categoria?, punto: Pair<Double, Double>?, referencias)` (lo escrito, sin validar). `ErroresLugar(nombre, alias, descripcion, categoria, punto, referencias, general)` (`String?` cada uno), `hay`, `NINGUNO` |
 | `ErroresLugarMapeo` (`ErroresLugarMapeo.kt`, `internal object`, puro; `ErroresLugarTest`) | `deExcepcion(e)` / `deFallo(FalloApi): ErroresLugar?` (`null` = sesión perdida, no se muestra nada): `409` + `NOMBRE_DUPLICADO` → `nombre` = `NOMBRE_DUPLICADO` «Ya existe un lugar con ese nombre (sin distinguir mayúsculas ni tildes).»; `422` con `detalle.campos` → cada campo a su sitio por el **primer tramo conocido** de `campo` partido por puntos (`nombre`, `alias` —`alias.3`—, `descripcion`, `referencias`, `categoria`, `lat`/`lng` → `punto`; `body.descripcion` también vale), motivo vacío → `CAMPO_INVALIDO` «No es válido.», campos desconocidos → `general` «Revisa los datos (‹campo›: ‹motivo›; …).»; otro `409`/`422` sin campos → `general` con su `mensaje`; `404` → `NO_EXISTE` «Este lugar ya no existe (lo borró otra persona). Vuelve a la lista.»; sin red → `SIN_CONEXION`; `SinPermisos` → `SIN_PERMISOS`; `429` → `DEMASIADOS_INTENTOS`; el resto (y una respuesta fuera de contrato) → `ALGO_SALIO_MAL` «Algo salió mal. Inténtalo de nuevo.». `errorDeCarga(e): String?` para las lecturas (arriba, 7.6) y `ERROR_CARGA` |
@@ -2222,13 +2359,14 @@ Cuidados:
 ### 5.6 Datos: repositorios y modelos
 
 Convención: `interface XRepository` + `XRepositoryStub` (o `AssetsX` si lee de `assets/`) + TODO `RemoteX`
-en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean su repositorio directamente (verificado: desde FE-2.1, las `Factory` de Galería, Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp(appContext)`): para pasar al backend se cambian esas líneas, no las pantallas. `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1), la `Factory` de Login, `RemoteAuthRepository` (FE-1.2), `SeleccionDestinoViewModel`, `RemoteLugaresRepository` (FE-3.1; con posición desde FE-3.2), `EscaneoViewModel`, `RemoteLocalizacionRepository` (FE-3.2), la `Factory` del Panel, `RemoteAdminRepository` (FE-2.2), y las de 7.6 y 7.7, `RemoteLugaresAdminRepository` (FE-3.4; sin *stub*); desde FE-3.3, 7.4 (`RecoleccionViewModel`, sin `Factory`), 7.8 y 7.10 comparten `Alertas.de(context)` (`RemoteAlertasRepository`, sin *stub*).
+en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean su repositorio directamente (desde FE-4.1, las `Factory` de Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp()` y la de la Galería con `RemoteVideoRepository()`, `VideoRepositoryCompuesto.deLaApp()` y `RemoteLugaresAdminRepository()`). `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1), la `Factory` de Login, `RemoteAuthRepository` (FE-1.2), `SeleccionDestinoViewModel`, `RemoteLugaresRepository` (FE-3.1; con posición desde FE-3.2), `EscaneoViewModel`, `RemoteLocalizacionRepository` (FE-3.2), la `Factory` del Panel, `RemoteAdminRepository` (FE-2.2), y las de 7.6 y 7.7, `RemoteLugaresAdminRepository` (FE-3.4; sin *stub*); desde FE-3.3, 7.4 (`RecoleccionViewModel`, sin `Factory`), 7.8 y 7.10 comparten `Alertas.de(context)` (`RemoteAlertasRepository`, sin *stub*).
 
 | Repositorio | Métodos | Implementación actual | Usado por |
 |---|---|---|---|
 | `AuthRepository` | `suspend login(identificador: String, password: String): Sesion` (lanza `CredencialesInvalidasException` o `java.io.IOException`; con el backend real también `ApiException` y `RespuestaInesperadaException`) | **Real** (`RemoteAuthRepository`, `POST /v1/auth/login`, FE-1.2); queda `AuthRepositoryStub` sin uso | `LoginViewModel` (por `Factory`) |
 | `AdminRepository` | `suspend obtenerResumen(): ResumenAdmin` (las excepciones solo están en el KDoc: con el backend real `SinConexionException` —una `IOException`—, `ApiException` o `RespuestaInesperadaException`) | **Real** desde FE-2.2 (`RemoteAdminRepository`: `GET /v1/admin/stats` + la cola local, §5.10, «Panel»); queda `AdminRepositoryStub` (600 ms) sin uso | `PanelAdminViewModel` (por `Factory`). Detalle abajo |
-| `VideoRepository` | `suspend obtenerVideos(): List<Video>` (cada `Video` ya trae sus `fotos`) · `suspend renombrarVideo(videoId, nombre)` · `suspend eliminarVideo(videoId)` · `suspend eliminarFoto(videoId, fotoId)` · `cambios(): Flow<Int>` | Local: desde FE-2.1 `VideoRepositoryCompuesto.deLaApp(appContext)` = `AssetsVideoRepository` (`assets/videos/`) + `FuenteRecorridos` (`files/recoleccion/`, solo `finalizado`) | Galería, Lista, Detalle de video y (FE-2.1) 7.3. Detalle abajo |
+| `VideoRepository` (contrato nuevo desde FE-4.1) | `suspend listarVideos(q: String? = null, orden: OrdenVideos = RECIENTES): ListaVideos` · `suspend recorridosDelTelefono(): List<Video>` · `suspend obtenerVideo(id): Video?` · `suspend renombrarVideo(videoId, nombre)` · `suspend eliminarVideo(videoId): Int?` · `suspend eliminarFoto(videoId, fotoId)` · `suspend puntosDeOtros(excluir, maximo = MAX_PUNTOS_OTROS): PuntosOtros` · `cambios(): Flow<Int>`. `data/repository/VideoRepository.kt` | **Real** (FE-4.1): `VideoRepositoryCompuesto.deLaApp()` = `RemoteVideoRepository()` (backend) + `Subidas.almacen` (`files/recoleccion/`); sin *stub* | Lista (7.13), Detalle de video (7.14), Galería (solo los nombres de los videos) y 7.3. Detalle abajo |
+| `ImagenesRepository` (FE-4.1) | `suspend imagenes(filtros: FiltrosImagenes, pagina, porPagina): PaginaImagenes` · `suspend lote(accion: AccionLote, ids: List<String>, lugarId: String?): ResultadoLote`. `data/repository/VideoRepository.kt` | **Real**: `RemoteVideoRepository()` (§5.10, «Videos e imágenes de administración») | Galería (7.11) |
 | `RecoleccionRepository` | `crearVideo(inicio): String` · `carpetaFotos(videoId): File` · `registrarFoto(videoId, archivo, DatosFoto): FotoRecolectada` · `desplazarFotos(videoId, desdeIndice, dLat, dLng)` · `fotos(videoId)` · `finalizar(videoId, duracionS, distanciaM, pasos): ResumenRecoleccion` · `descartar(videoId)` · `buscarEnCurso(): String?` · `leerEnCurso(videoId): VideoEnCurso` (FE-2.3) · `guardarProgreso(videoId, ProgresoRecoleccion)` (FE-2.3) · `contarPendientes(): Int` · `marcarSubida(videoId, fotoIds)` · `espacioLibreBytes(): Long` | Local (`RecoleccionRepositoryLocal(context)`, `data/repository/RecoleccionRepository.kt`) | `RecoleccionViewModel` (lo crea directamente) y, desde FE-2.3, `UbicacionManualScreen` (solo `buscarEnCurso` y `leerEnCurso`, para «Retomar …»). La subida (FE-2.1) no pasa por aquí: usa `AlmacenRecorridos` (§5.10). Detalle abajo |
 | `CalibracionPasoRepository` | `guardada(): Double?` · `longitudPasoM(): Double` (la calibrada, o `PdrEngine.LONGITUD_PASO_DEFECTO_M`) · `guardar(Valido, ahoraMs = ahora)` · `restablecer()` (borra todo el archivo) | Local (`CalibracionPasoRepository(context)`, `data/repository/CalibracionPasoRepository.kt`; **sin interfaz**) | `PdrTracker` (valor por defecto del parámetro), `CalibracionViewModel` y `UbicacionManualScreen`. Detalle abajo |
 | `LugaresRepository` | `suspend obtenerLugares(): List<LugarDestino>` (lanza `IOException`; con el backend real `SinConexionException`, `ApiException` o `RespuestaInesperadaException`) | **Real** desde FE-3.1 (`RemoteLugaresRepository`, `GET /v1/places`, §5.10); queda `LugaresRepositoryStub` (300 ms, `LUGARES_DE_PRUEBA`, 6 lugares) para vistas previas y pruebas, **y en 7.3** (abajo) | `SeleccionDestinoViewModel` (lo crea directamente, desde FE-3.2 con `posicion = { SesionDeNavegacion.posicionVigente() }`) y `UbicacionManualViewModel` (7.3, por su `Factory`, **con `LugaresRepositoryStub()`**: sus etiquetas de referencia en el mapa son los 6 lugares de ejemplo, no los reales; comprobado con `grep` en FE-3.4; 5.5, «UbicacionManual»). La administración (7.6, 7.7) **no** lo usa: tiene `LugaresAdminRepository` (abajo) |
@@ -2248,7 +2386,11 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 | `LugarDestino`, `CategoriaLugar` | `domain/model/LugarDestino.kt` | Verificado contra el código. `id`, `nombre`, `categoria`, `lat`, `lng`, `alias`, `distanciaMetros?`, `imagenUrl?`. **El único modelo de lugar de la app** desde FE-3.4 (ADR-FE-30): 6.4, 6.3, el editor de mapa (7.8) y, dentro de `LugarAdmin`, 7.6 y 7.7. Detalle más abajo |
 | `LugarAdmin`, `DatosLugar` | `domain/model/LugarAdmin.kt` | FE-3.4: el lugar visto por la administración (envuelve un `LugarDestino`) y lo que se envía al crear o reemplazar. Detalle más abajo |
 | `ContadorCambios`, `CambiosLugares` | `data/repository/LugaresAdminRepository.kt` | FE-3.4: contador de cambios de lugares del proceso (ADR-FE-32). Detalle más abajo |
-| `Foto`, `Video`, `EstadoFoto`, `CalidadFoto` | `domain/model/Foto.kt` | Detalle abajo. Ver también 7.11 y 7.14. `EstadoFoto.PENDIENTE` desde FE-2.1 |
+| `Foto`, `Video`, `EstadoFoto`, `CalidadFoto` | `domain/model/Foto.kt` | Detalle abajo. Ver también 7.11 y 7.14. `EstadoFoto.PENDIENTE` desde FE-2.1; campos nuevos (con valor por defecto) desde FE-4.1 |
+| `ResumenVideo`, `EstadoVideo`, `OrdenVideos`, `FiltrosImagenes`, `PaginaImagenes`, `AccionLote`, `FallidaLote`, `ResultadoLote`, `PuntoFoto`, `PuntosOtros` | `domain/model/ResumenVideo.kt` | FE-4.1: filas de 7.13, filtros y páginas de 7.11, el lote y «Mostrar otros videos». Detalle abajo |
+| `ListaVideos`, `PaginaVideos`, `VideosServidor`, `CambiosVideos`, `RecorridoNoEditableException`, `VideoRepositoryCompuesto`, `MezclaVideos` | `data/repository/VideoRepository.kt` | FE-4.1: la mezcla servidor + teléfono. Detalle abajo («`VideoRepository` en detalle») |
+| `MiniaturasLocales` | `data/local/MiniaturasLocales.kt` | FE-4.1: miniaturas de los recorridos del teléfono para el `WebView` de 7.14. Detalle abajo |
+| `Fechas` | `domain/usecase/Fechas.kt` (`object`) | FE-4.1: `aMilis(texto)` (ISO-8601 con `Z` o `±hh:mm`, fracciones descartadas; sin zona → `null`) y `fechaCorta(texto, zona = la del teléfono)` («dd/MM/yyyy»; si no se reconoce pero empieza por `yyyy-MM-dd`, esos 10 caracteres invertidos; si no, `null`). `TextosVideosTest` |
 | `RecorridoLocal`, `FotoLocal`, `FotoPreparada`, `EstadoSubida` | `data/local/RecorridoLocal.kt` | FE-2.1: un recorrido de `files/recoleccion/` tal como lo leen 7.5, la cola y el repositorio compuesto (de `ManifestRecorrido.recorrido`). Detalle en §5.10, «Subida de un recorrido» |
 | `InicioRecoleccion` | `domain/model/InicioRecoleccion.kt` | `lat`, `lng`, `rumbo` (0…360, 0 = norte; norte magnético si vino de la brújula), `nombreVideo` y `continuaVideoAnterior`. Lo emite la vista 7.3 y lo consume la 7.4 a través de `SesionDeRecoleccion`. Detalle en 5.5 («UbicacionManual») |
 | `FotoRecolectada`, `DatosFoto`, `ResumenRecoleccion` | `domain/model/FotoRecolectada.kt` | Lo que guarda y devuelve `RecoleccionRepository`. `FotoRecolectada` tiene un `uid`. Detalle abajo |
@@ -2340,73 +2482,63 @@ Pair<Double, Double>? = { null })` con `registrar(lat, lng)` (`@Volatile`) y `ul
 `respaldo()`); `object PosicionAdmin` usa como respaldo `SesionDeNavegacion.ultimaPosicion()` (aunque no sea vigente).
 Lo escribe 7.4 con cada posición distinta del PDR; lo lee «Mi posición» de 7.8 (`posicionAdmin`, 5.8). Solo memoria.
 
-**`VideoRepository` en detalle (verificado)**
+**`VideoRepository` en detalle (FE-4.1, reescrito; `data/repository/VideoRepository.kt`)**
 
-- **No hay `obtenerVideo(id)` ni `obtenerFotos`:** todo sale de `obtenerVideos()`, que relee **todos** los manifests en `Dispatchers.IO`. Para un solo video (Detalle) se filtra por `id` en la lista; no llamarlo en cada recomposición.
-- **Videos** ordenados por nombre de carpeta; **fotos** de cada video ordenadas por `id` como **texto**: los ids deben ir con ceros a la izquierda (`"0001"`, `"0002"`…); `"10"` quedaría antes que `"9"`. Un video cuyo manifest falla se **omite** (queda un `Log.w`, no una excepción).
-- **`cambios(): Flow<Int>`** devuelve el contador de `EdicionesLocales` (un `StateFlow` por dentro; en el compuesto, `combine` con `ColaSubida.cambiosVideos`, que sube cada vez que la cola termina un intento sobre un recorrido): emite el valor actual **apenas se empieza a recoger**. Si el ViewModel carga datos y además recoge `cambios()`, la carga inicial ocurre dos veces salvo que se ignore la primera emisión. El número no significa nada; solo avisa de que "algo cambió, vuelve a pedir".
-- **`EdicionesLocales`** (`internal object`): renombrar y eliminar viven **en memoria** y se aplican encima de lo leído de `assets/`; se pierden al cerrar la app. Al renombrar un video, también cambia `videoNombre` en todas sus fotos. Desaparece con el backend (**TODO** `RemoteVideoRepository`).
-- **Cómo lo consumen hoy las vistas:** Detalle de video recoge `cambios()` y es la referencia (ver `VideoDetalleViewModel`, 5.5). Galería carga una sola vez, no recoge `cambios()` y sus eliminar/reasignar **no** pasan por el repositorio (ver `GaleriaViewModel`, 5.5). Lista de videos también recoge `cambios()` desde su `init` (ver `VideosViewModel`, 5.5).
-- **Ver lo recolectado (FE-2.1, hecho):** la recolección (7.4) guarda con `RecoleccionRepository` (abajo); Galería,
-  Lista, Detalle de video y 7.3 leen con **`VideoRepositoryCompuesto`** (`data/repository/VideoRepository.kt`). La
-  interfaz `VideoRepository` no cambió (solo lectura + borrar/renombrar):
-  - `fun interface FuenteVideos { suspend fun videos(): List<Video> }` (sin `EdicionesLocales`; un video ilegible se
-    omite). `AssetsVideoRepository(context)` es a la vez `VideoRepository` (con `EdicionesLocales`) y `FuenteVideos`;
-    `FuenteRecorridos(almacen: AlmacenRecorridos)` da los recorridos `finalizado` (los `en_curso` no: se retoman en 7.4;
-    *decisión provisional del maestro, a confirmar por el usuario*) con `ManifestRecorrido.video(recorrido, carpeta)`.
-  - `VideoRepositoryCompuesto(fuentes: List<FuenteVideos>, cambiosExtra: Flow<Int> = flowOf(0))`: `obtenerVideos()` =
-    `EdicionesLocales.aplicar(fuentes.flatMap { it.videos() })` (en ese orden: primero `assets/`, después los
-    `rec_NNNN`); renombrar y eliminar van a `EdicionesLocales` **también para los recorridos locales** (en memoria; no
-    tocan el disco: persistirlos es FE-4.1 y borrar un recorrido local de verdad es «Descartar video» de 7.5;
-    *decisión provisional del maestro, a confirmar por el usuario*). `deLaApp(appContext)` = assets +
-    `FuenteRecorridos(Subidas.almacen)` con `cambiosExtra = Subidas.cola.cambiosVideos`.
-  - Un recorrido local como `Video`: `id` = `rec_NNNN`, `nombre` = `name`, `creadoEn` = `created_at` (ISO con zona, p.
-    ej. `2026-10-25T15:04:10-05:00`: los 10 primeros caracteres son la fecha, como espera la Lista); cada `Foto` con
-    `urlFoto` = `urlMiniatura` = `file://` + ruta absoluta del JPG original (no hay miniaturas), `rumbo` = `heading`,
-    `capturadaEn` = `captured_at`, sin `lugar`, `calidad = NORMAL` y `estado` según la regla del parser (abajo).
-  - El parser **compartido** es `ManifestRecorrido` (`data/local/`, Gson; §5.10): `AssetsVideoRepository` dejó de usar
-    `org.json` y llama a `ManifestRecorrido.video(videoId, json, url, miniaturaExiste)`, con las mismas reglas que antes
-    (`name` en blanco o ausente → id; miniatura solo si existe en `thumbs/`; fotos por `id` como texto; si falta `id`,
-    `file`, `lat` o `lng`, el video se omite). `RecoleccionRepositoryLocal` sigue con su propio `org.json` para escribir
-    durante la grabación (las claves son las mismas).
-- **Estructura y formato de los videos locales** (fuente única; la usan 7.11, 7.13 y 7.14):
+Hasta FE-4.1 era `obtenerVideos()` + `EdicionesLocales` (renombrar y eliminar en memoria) sobre `assets/videos/` y los
+recorridos `finalizado`. Desde FE-4.1 junta el **backend** con los recorridos **de este teléfono** que el backend aún no
+conoce (decisión del usuario del 2026-10-27; ADR-FE-35); `EdicionesLocales`, `AssetsVideoRepository`, `FuenteVideos`,
+`FuenteRecorridos` y `assets/videos/` ya no existen.
 
-  **Fuente de datos (provisional, local):** `AssetsVideoRepository` lee los videos empaquetados en
-  `app/src/main/assets/videos/<video_id>/`. Estructura:
+| Pieza | Firma y reglas |
+|---|---|
+| `VideoRepository` | `listarVideos(q, orden): ListaVideos` (no lanza por el servidor: lo deja en `errorServidor`; sí por el disco) · `recorridosDelTelefono(): List<Video>` (los `finalizado` del disco, **también los ya subidos**, con sus fotos: lo que 7.3 puede leer sin red) · `obtenerVideo(id): Video?` (`null` = no existe) · `renombrarVideo(id, nombre)` · `eliminarVideo(id): Int?` (`fotos_retiradas`; `null` en uno local) · `eliminarFoto(videoId, fotoId)` · `puntosDeOtros(excluir, maximo = MAX_PUNTOS_OTROS)` (500; no lanza por el servidor) · `cambios(): Flow<Int>` |
+| `ListaVideos(locales, servidor, totalServidor: Int?, errorServidor: Exception? = null)` | `locales` = filas de los recorridos sin subir (ya filtradas por `q` y ordenadas); `servidor` = todas las páginas de `GET /v1/admin/videos`; `totalServidor` = su `total` (con `q`), `null` si falló |
+| `PaginaVideos(items, total)` · `VideosServidor` | Lo que el compuesto pide al backend: `paginaVideos(q, orden, pagina, porPagina)`, `todosLosVideos(q, orden)`, `detalle(id): Video?`, `renombrar(id, nombre): ResumenVideo`, `eliminar(id): Int`, `eliminarImagen(id)`, `imagenes(filtros, pagina, porPagina)`. En la app, `RemoteVideoRepository` (§5.10); en las pruebas, un doble |
+| `ImagenesRepository` | `imagenes(filtros, pagina, porPagina)` y `lote(accion, ids, lugarId)` (Galería). En la app, `RemoteVideoRepository` |
+| `CambiosVideos` (`object : ContadorCambios()`) | Sube con cada escritura correcta de videos o fotos (las de `RemoteVideoRepository` y las de un recorrido local). Lo recogen 7.11, 7.13 y 7.14. Solo memoria (como `CambiosLugares`, ADR-FE-32) |
+| `RecorridoNoEditableException(mensaje)` (`IllegalStateException`) | Renombrar o eliminar un recorrido local que se está subiendo, que el backend ya conoce o que no terminó; el mensaje es el de `MezclaVideos.motivoNoEditable` y se muestra tal cual |
+| `VideoRepositoryCompuesto(servidor: VideosServidor, almacen: AlmacenRecorridos, estadoCola: () -> EstadoCola = { EstadoCola() }, cambiosCola: Flow<Int> = flowOf(0), cambiosVideos: ContadorCambios = CambiosVideos)` | `deLaApp()` = `RemoteVideoRepository()` + `Subidas.almacen`, `estadoCola = { Subidas.cola.estado.value }`, `cambiosCola = Subidas.cola.cambiosVideos`. `cambios()` = `combine(cambiosVideos.version, cambiosCola)` (emite al suscribirse: la primera emisión **es** la carga inicial) |
+| Un id, ¿local o del servidor? | Local si cumple `^[A-Za-z0-9_-]{1,64}$` y existe `files/recoleccion/<id>/manifest.json` legible; si no, del servidor solo si es un UUID (si no, `obtenerVideo` da `null` sin preguntar) |
+| Local: escribir | `renombrarVideo` → `AlmacenRecorridos.renombrar` (recorta, ≤ 40; el nombre nuevo es el que se sube después), `eliminarFoto` → `descartarFoto`, `eliminarVideo` → `descartar` (borra la carpeta). Antes, `MezclaVideos.motivoNoEditable(r, subiendo)`; después, `cambiosVideos.avisar()`. «Subiendo» = `subida_estado = subiendo` **o** la cola activa (`EstadoCola.activa`) con ese `videoId` |
+| Servidor: escribir | `renombrar` (`PATCH`), `eliminarImagen(fotoId)` (`DELETE /v1/admin/images/{id}`), `eliminar` (`DELETE /v1/admin/videos/{id}`): avisos en `RemoteVideoRepository` |
+| `puntosDeOtros(excluir, maximo)` | Los recorridos del teléfono sin subir (del disco; sin `excluir`) y las fotos de `GET /v1/admin/images` (sin filtros, de 100 en 100, hasta `maximo` fotos o `MAX_PAGINAS_OTROS` = 10 páginas), agrupadas por video. `truncado` y `aviso` («Se muestran las primeras N fotos de otros videos.») si se cortó; con el servidor caído, solo las locales y el aviso «No se pudieron cargar las fotos de los videos del servidor.» |
 
-  ```
-  videos/
-  └── vid_0001/
-      ├── manifest.json
-      ├── photos/0001.png ...
-      └── thumbs/0001.png ...      (si falta una miniatura se usa la foto original)
-  ```
+**`MezclaVideos`** (`internal object`, puro; `VideoRepositoryCompuestoTest`):
+- `locales(recorridos, q, orden, subiendo)`: las filas locales de 7.13 = los `finalizado` **sin** `remote_video_id` (uno con
+  `remote_video_id` lo representa el video del servidor: así **un recorrido sale una sola vez**, esté subido o a medias),
+  cuyo `nombre` contiene `q` sin distinguir mayúsculas (`Locale.ROOT`; como el `q` del backend), con `local = true`,
+  `estado` `SUBIENDO` o `SIN_SUBIR`, `fotos` = las del manifest y la distancia y duración del manifest. Orden:
+  `RECIENTES` por `created_at` en ms (`Fechas.aMilis`) descendente, `NOMBRE` por nombre en minúsculas, `MAS_FOTOS` por
+  fotos descendente; a igualdad, por id (descendente, salvo en `NOMBRE`).
+- `motivoNoEditable(r, subiendo)`: «Este recorrido ya está en el servidor: …» (`remote_video_id` o `completada`), «Se
+  está subiendo: espera a que termine (o a que la subida se detenga) para renombrarlo o eliminarlo.», «La grabación no ha
+  terminado: …» (`en_curso`) o `null`.
+- `videoLocal(r, subiendo)`: el `Video` de 7.14 de un recorrido: fotos por id (texto), `urlFoto` = `urlMiniatura` =
+  `MiniaturasLocales.url(id, archivo)` (`https://miniaturas.local/<rec>/photos/NNNN.jpg`), `orden` = el número del id,
+  `local = true`, `editable` y `nota` según `motivoNoEditable`, `finalizadoEn` = `ended_at`.
+- `esIdLocal(id)`, `esUuid(id)`.
 
-  `manifest.json` (un solo archivo por video):
+**`MiniaturasLocales`** (FE-4.1, ADR-FE-36; `data/local/MiniaturasLocales.kt`; `MiniaturasLocalesTest`):
+`MiniaturasLocales(raizRecorridos: File, cache: File, preparador: PreparadorFoto)`; `deLaApp(appContext)` =
+`files/recoleccion`, `cacheDir/miniaturas` y `Recodificador(MotorImagenAndroid(), LIMITES)` con `LIMITES` = lado ≤
+`LADO_PX` (240), ≤ 120 000 bytes, calidades 80/70/60, lado mínimo 120 (aplica la orientación EXIF, como la subida).
+`url(videoId, archivo)` = `https://miniaturas.local/<videoId>/<archivo>`; `ruta(url)` → `(videoId, archivo)` solo si el
+host es `miniaturas.local`, `videoId` cumple `^[A-Za-z0-9_-]{1,64}$` y `archivo`, `^photos/[A-Za-z0-9_-]{1,64}\.(jpg|jpeg|png)$`
+(sin `..` ni más barras; la *query* se ignora); si no, `null`. `archivo(url): File?` (`@Synchronized`, bloquea: fuera del
+hilo principal): la copia `cacheDir/miniaturas/<videoId>/<NNNN>.jpg`, generada si falta o es más vieja que el original;
+`null` si la URL no vale, el original no existe o no se puede re-codificar (borra la copia a medias). La caché no se
+limpia sola (Android puede vaciar `cacheDir`).
 
-  | Campo | Obligatorio | Descripción |
-  |---|---|---|
-  | `video_id`, `name`, `created_at` | `name` recomendado | Identificador y nombre visible (renombrable). El código **no lee `video_id`**: el id es el nombre de la carpeta |
-  | `photos[].id`, `file`, `lat`, `lng` | Sí | Id dentro del video, ruta relativa y coordenadas (WGS84) |
-  | `photos[].thumb` | No | Ruta relativa de la miniatura |
-  | `photos[].heading` | No | Rumbo en grados, 0 = norte, sentido horario |
-  | `photos[].captured_at` | No | Fecha/hora de captura |
-  | `photos[].lugar`, `estado`, `calidad` | No | Valores por defecto: sin lugar, `procesada`, `normal` (FE-2.1: sin `estado`, una foto con `sync` toma `pendiente`/`subida` de `sync`) |
-  | `photos[].sync`, `error`, `upload` | No | De los recorridos locales (abajo y §5.10) |
-
-  > El `manifest.json` es solo la semilla local. Cuando exista el backend, la fuente de verdad serán
-  > su base de datos (metadatos) y S3 (archivos, bucket privado con URLs prefirmadas de vida corta).
-  > Cambiar `AssetsVideoRepository` por un `RemoteVideoRepository` no afecta a las pantallas: `Foto`
-  > ya recibe las URLs resueltas.
-
-- **Formato del `manifest.json` que lee hoy el código** (`ManifestRecorrido`, desde FE-2.1): `name` (si falta o está en blanco, usa el nombre de la carpeta), `created_at`, `photos[]` con `id`, `file`, `lat`, `lng` (obligatorios) y `thumb`, `heading`, `captured_at`, `lugar`, `estado`, `calidad`, `sync`, `error`, `upload` (opcionales). ⚠ **El código no lee `video_id`**: el id del video es el **nombre de la carpeta**, aunque la tabla de 7.11 lo menciona. **Regla del estado** (`ManifestRecorrido.estadoFoto`): `estado` si se reconoce, sin importar mayúsculas (`pendiente` o `pendiente_subida` → `PENDIENTE`, `subida`, `procesada`, `error`); si no, `sync` (`pendiente` → `PENDIENTE`, `subida` → `SUBIDA`); si no hay ninguno, `PROCESADA`. `calidad` se compara con el **nombre** del enum sin importar mayúsculas (`"alta"`) y si falta o no se reconoce, `NORMAL`.
-- Las URLs que arma son `file:///android_asset/videos/<id>/<ruta>`; si la miniatura no existe en `thumbs/`, `urlMiniatura` es la foto original.
+- **Cómo lo consumen las vistas:** 7.13 y 7.14 recogen `cambios()` (patrón de 5.5); la Galería recoge
+  `CambiosVideos.version` directamente (`drop(1)`) y usa `listarVideos()` solo para los nombres; 7.3 usa
+  `recorridosDelTelefono()`, `listarVideos()` y `obtenerVideo(id)` con un tope de tiempo (5.5, «UbicacionManual»).
+- **Formato del `manifest.json` que lee hoy el código** (`ManifestRecorrido`, desde FE-2.1): `name` (si falta o está en blanco, usa el nombre de la carpeta), `created_at`, `photos[]` con `id`, `file`, `lat`, `lng` (obligatorios) y `thumb`, `heading`, `captured_at`, `lugar`, `estado`, `calidad`, `sync`, `error`, `upload` (opcionales). ⚠ **El código no lee `video_id`**: el id del video es el **nombre de la carpeta**. **Regla del estado** (`ManifestRecorrido.estadoFoto`): `estado` si se reconoce, sin importar mayúsculas (`pendiente` o `pendiente_subida` → `PENDIENTE`, `subida`, `procesada`, `error`); si no, `sync` (`pendiente` → `PENDIENTE`, `subida` → `SUBIDA`); si no hay ninguno, `PROCESADA`. `calidad` se compara con el **nombre** del enum sin importar mayúsculas (`"alta"`) y si falta o no se reconoce, `NORMAL`. Hasta FE-4.1 el mismo formato tenían los videos de ejemplo de `assets/videos/<id>/` (con `thumbs/`); `ManifestRecorrido.video(videoId, json, url, miniaturaExiste)`, que los leía, queda sin uso en la app (lo prueba `AlmacenRecorridosTest`; quitarlo es de FE-4.3).
 
 **`RecoleccionRepository` y `SesionDeRecoleccion` en detalle** (entregado el 2026-10-11; compila; el repositorio no tiene pruebas automáticas —usa `org.json`—, pero la decisión de cómo retomar sí: `RetomarRecoleccionTest`, §5.7)
 
-- **Por qué es aparte de `VideoRepository`:** éste es la fuente de verdad (futuro `RemoteVideoRepository`); el almacenamiento local de la captura es otra responsabilidad y así no se toca lo que ya funciona.
+- **Por qué es aparte de `VideoRepository`:** éste lee el backend y los recorridos terminados (desde FE-4.1, `RemoteVideoRepository` + `AlmacenRecorridos`); el almacenamiento local de la captura es otra responsabilidad y así no se toca lo que ya funciona.
 - **Carpeta:** `files/recoleccion/<rec_NNNN>/photos/NNNN.jpg` + `manifest.json`. El id del video es `rec_` + 4 dígitos (prefijo distinto de `vid_` para no chocar con los datos de prueba); el id de cada foto lleva 4 dígitos con ceros a la izquierda, para ordenar como texto (ver `VideoRepository`).
-- **Manifest:** usa las claves del formato de `assets/videos/` (`video_id`, `name`, `created_at`, `photos[].id`, `file`, `lat`, `lng`, `heading`, `captured_at`) más claves propias: `estado` (`en_curso` / `finalizado`), `start_lat`, `start_lng`, `start_heading`, `ended_at`, `duration_s`, `distance_m`, `steps`, `photos[].sync` (`pendiente` / `subida`), desde FE-2.3 `progress` (abajo) y, desde FE-2.1, las de la subida: `remote_video_id`, `subida_estado`, `photos[].upload`, `photos[].estado` y `photos[].error` (formato en §5.10, «Subida de un recorrido»). Desde FE-2.1 el mismo parser (`ManifestRecorrido`) lee `assets/videos/` y `files/recoleccion/`.
+- **Manifest:** usa las claves del formato de `assets/videos/` (`video_id`, `name`, `created_at`, `photos[].id`, `file`, `lat`, `lng`, `heading`, `captured_at`) más claves propias: `estado` (`en_curso` / `finalizado`), `start_lat`, `start_lng`, `start_heading`, `ended_at`, `duration_s`, `distance_m`, `steps`, `photos[].sync` (`pendiente` / `subida`), desde FE-2.3 `progress` (abajo) y, desde FE-2.1, las de la subida: `remote_video_id`, `subida_estado`, `photos[].upload`, `photos[].estado` y `photos[].error` (formato en §5.10, «Subida de un recorrido»). Desde FE-2.1 el mismo parser (`ManifestRecorrido`) lee `files/recoleccion/` (y leía `assets/videos/`, que FE-4.1 quitó).
 - **`progress` (FE-2.3, solo mientras `estado = en_curso`; queda tal cual al finalizar):** objeto con `lat`, `lng`, `heading` (0…360), `steps`, `distance_m`, `duration_s` (sin pausas), `anchor_distance_m` (distancia en el último re-anclaje), `anchor_photo_index` y `anchor_track_index` (primera foto y primer punto de `track` posteriores al último re-anclaje), `track` (`[[lat, lng], …]`, la trayectoria completa: un punto cada 3 pasos más los de re-anclaje), `mode` (`{"type": "distance", "value": 5.0}` o `{"type": "time", "value": 3}`) y `saved_at` (ISO-8601, con segundos). Ejemplo: `"progress": {"lat": 6.20012, "lng": -75.57795, "heading": 92.5, "steps": 30, "distance_m": 21.6, "duration_s": 95, "anchor_distance_m": 0.0, "anchor_photo_index": 0, "anchor_track_index": 0, "track": [[6.2, -75.578], [6.20002, -75.57799]], "mode": {"type": "time", "value": 3}, "saved_at": "2026-10-25T15:04:10-05:00"}`. Lo escribe `guardarProgreso` y lo lee `leerEnCurso`; si falta `lat`/`lng` o algo no se puede leer, `progreso = null` (se retoma sin él, `AppLog.w` «progress ilegible»); un `mode` desconocido da el intervalo por defecto.
 - **Fechas** en ISO-8601 (`yyyy-MM-dd'T'HH:mm:ssXXX`): ordena como texto (decisión pendiente de la nota de `Video.creadoEn` en 7.14).
 - **`registrarFoto`** recibe el JPG que dejó `tomarFoto` (`tmp_<n>.jpg`), lo renombra a `NNNN.jpg` y actualiza el manifest en cada foto (se guarda de forma continua). `desplazarFotos` mueve de forma uniforme las fotos desde un índice (re-anclaje). `finalizar` marca el video como `finalizado` y devuelve el `ResumenRecoleccion`; `descartar` borra la carpeta. `contarPendientes` (desde FE-2.1 cuenta como dice §5.10: `sync = pendiente` en los `finalizado`; antes contaba todo lo que no fuera `subida`, también los `en_curso`) y `marcarSubida` siguen **sin uso** (la cola usa `AlmacenRecorridos`; el Panel, desde FE-2.2, `AlmacenRecorridos.contarFotosPendientes()`; `contarPendientes()` da lo mismo). `espacioLibreBytes` alimenta el aviso de almacenamiento.
@@ -2429,10 +2561,16 @@ Lo escribe 7.4 con cada posición distinta del PDR; lo lee «Mi posición» de 7
 |---|---|
 | `EstadoFoto(etiqueta)` | `PENDIENTE` "Pendiente" (FE-2.1: `pendiente_subida` del backend o `sync = pendiente` local; es el **primero**: un `when` exhaustivo sobre `EstadoFoto` en otro archivo deja de compilar hasta cubrirlo) · `SUBIDA` "Subida" · `PROCESADA` "Procesada" · `ERROR` "Error" |
 | `CalidadFoto(etiqueta)` | `ALTA` "Alta calidad" · `NORMAL` "Normal" · `BAJA` "Baja calidad" |
-| `Foto` | `id` (único **solo dentro del video**), `videoId`, `videoNombre`, `urlFoto`, `urlMiniatura`, `lat`, `lng`, `rumbo: Float?` (grados, 0 = norte, sentido horario; `null` si se desconoce), `capturadaEn: String?`, `lugar: String?`, `estado` (por defecto `PROCESADA`), `calidad` (por defecto `NORMAL`). Calculadas: `uid` = `"videoId/id"` (**usarla como clave** en selecciones, listas y `key` de Compose, porque `id` se repite entre videos) y `nombreArchivo` (último tramo de `urlFoto`). |
-| `Video` | `id`, `nombre`, `creadoEn: String?`, `fotos: List<Foto>`. `distanciaMetros` (calculada): suma haversine entre fotos consecutivas **en el orden de la lista**; con menos de 2 fotos vale `0.0`. |
+| `Foto` | `id` (del backend: el UUID de la imagen, único; de un recorrido del teléfono: "0001"…, único **solo dentro del video**), `videoId`, `videoNombre`, `urlFoto`, `urlMiniatura`, `lat`, `lng`, `rumbo: Float?` (grados, 0 = norte, sentido horario; `null` si se desconoce), `capturadaEn: String?`, `lugar: String?` (el nombre), `estado` (por defecto `PROCESADA`), `calidad` (por defecto `NORMAL`) y, desde FE-4.1, `lugarId: String? = null` y `orden: Int? = null`. Calculadas: `uid` = `"videoId/id"` (clave de listas y `key` de Compose), `nombreArchivo` (último tramo de `urlFoto` **sin la *query***: la de una URL prefirmada lleva la firma) y `titulo` (FE-4.1: «Foto N» con su `orden`; sin él, `nombreArchivo`). La Galería selecciona por `id` (UUID) desde FE-4.1 |
+| `Video` | `id`, `nombre`, `creadoEn: String?`, `fotos: List<Foto>` y, desde FE-4.1 (con valor por defecto), `local` (recorrido del teléfono sin subir), `editable` (renombrar y eliminar permitidos), `nota: String?` (por qué no, para 7.14), `urlsVencenEnMs: Long?` (vencimiento más temprano de las URLs de sus fotos) y `finalizadoEn: String?` (`finalizado_en` o `ended_at`). `distanciaMetros` (calculada): suma haversine entre fotos consecutivas **en el orden de la lista**; con menos de 2 fotos vale `0.0`. |
+| `ResumenVideo` (FE-4.1, `ResumenVideo.kt`) | `id`, `nombre`, `creadoEn`, `finalizadoEn`, `fotos` (las registradas: la suma del `conteo`; en uno local, las del manifest), `distanciaMetros: Double?` y `duracionSegundos: Long?` (`distancia_m` / `duracion_s`, o `distance_m` / `duration_s`), `estado: EstadoVideo`, `local` (por defecto `false`), `numero: Int?` |
+| `EstadoVideo` (FE-4.1) | `SIN_SUBIR`, `SUBIENDO` (locales), `SUBIDA_A_MEDIAS` (`pendiente` del backend), `PROCESANDO`, `PROCESADO`, `CON_ERRORES`. Textos en `TextosVideos.estado` (5.5) |
+| `OrdenVideos(orden, dir, etiqueta)` (FE-4.1) | `RECIENTES` (`fecha`, `desc`), `NOMBRE` (`nombre`, `asc`), `MAS_FOTOS` (`fotos`, `desc`): los parámetros de `GET /v1/admin/videos` |
+| `FiltrosImagenes` · `PaginaImagenes` (FE-4.1) | `FiltrosImagenes(q, videoId, lugarId, estado: EstadoFoto?, calidad: CalidadFoto?)` (todos `null` por defecto) · `PaginaImagenes(fotos, total, pagina, porPagina, vencenEnMs: Long? = null)` |
+| `AccionLote(clave)` · `FallidaLote(id, codigo)` · `ResultadoLote(procesadas, fallidas)` (FE-4.1) | `ELIMINAR` (`eliminar`), `REASIGNAR` (`reasignar`); `codigo` ∈ `NO_ENCONTRADO`, `VALIDACION`, `ERROR_INTERNO` |
+| `PuntoFoto(lat, lng)` · `PuntosOtros(videos: Map<String, List<PuntoFoto>>, truncado = false, aviso: String? = null)` (FE-4.1) | «Mostrar otros videos» de 7.14 |
 
-- `capturadaEn` y `creadoEn` son **texto tal cual viene del manifest**: nadie los convierte a fecha todavía. Definir el formato (ISO-8601) antes de ordenar o filtrar por fecha.
+- `capturadaEn`, `creadoEn` y `finalizadoEn` son **texto tal cual viene** (del backend, UTC con `Z`; del manifest, con zona): para comparar o mostrar, `Fechas` (desde FE-4.1; 7.13 y 7.3 lo hacen).
 - La función haversine (`distanciaEntre`) es **`private`**: si otra pieza necesita distancia entre coordenadas (seguimiento, `LugarDestino.distanciaMetros`), hay que extraerla a algo como `domain/util/Geo.kt` en vez de copiarla. No confundir `Video.distanciaMetros` (longitud del recorrido) con `LugarDestino.distanciaMetros?` (distancia desde la persona).
 
 **`LugarDestino` y `CategoriaLugar` en detalle (verificado, bache 1)**
@@ -2582,13 +2720,13 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 | `admin/calibracion` | `CalibracionScreen` (7.3b) | — | Pide `Permisos.ACTIVIDAD` antes de mostrar la pantalla y **descarta el resultado** (negarlo no cambia nada: los pasos salen siempre del acelerómetro; quitar este permiso es parte de FE-4.3). `onVolver` → `popBackStack()`. Se llega desde la fila «Calibrar mi paso» de 7.3. No devuelve datos: el resultado se guarda en `CalibracionPasoRepository` (5.6) y lo recoge cada `PdrTracker` al crearse |
 | `admin/recoleccion` | `RecoleccionScreen` (7.4) | `InicioRecoleccion` por `SesionDeRecoleccion` (no por la ruta) | Pide **solo la cámara** antes de mostrar la pantalla (como `ubicarme`; si se niega, `popBackStack()`). `onFinalizado(resumen)` → `SesionDeRecoleccion.finalizar(resumen)` y `navigate("admin/recoleccion/resumen?video=${resumen.videoId}") { popUpTo("admin/ubicacion-manual") { inclusive = true } }` (saca 7.3 y 7.4 de la pila; FE-2.1 pasa el id); `onDescartado` (video sin fotos) → `popBackStack("admin/panel", inclusive = false)`; `onVolver` (solo con error: `SIN_INICIO` —sin inicio ni video `en_curso` que retomar— o `NO_SE_PUDO_CREAR`) → `popBackStack()`; `onAjustes` → `ajustes` (*placeholder* en blanco; al volver, la grabación queda en pausa: 5.5, «`RecoleccionScreen`», visto el 2026-10-26). Sin `InicioRecoleccion` (pila restaurada tras matar el proceso, o `onRetomar` de 7.3) retoma el video `en_curso` más reciente (FE-2.3, 5.2) |
 | `admin/recoleccion/resumen?video={video}` | `ResumenVideoScreen` (7.5, FE-2.1) | `video` = `rec_NNNN` (argumento opcional: `navArgument("video") { type = NavType.StringType; nullable = true; defaultValue = null }`); sin él, `SesionDeRecoleccion.resumen` o el recorrido sin subir más reciente (5.5). `navigate("admin/recoleccion/resumen")` sin argumento también vale | `onIrAlPanel` → `popBackStack("admin/panel", inclusive = false)`; si el Panel no está en la pila, `navigate("admin/panel") { popUpTo("inicio") }`. Atrás lo maneja la pantalla (`BackHandler` → «Guardar y subir después» o salir) |
-| `admin/lugares` | `LugaresScreen` (7.6, FE-3.4) | — | `onVolver` → `popBackStack()`; `onNuevo` → `navigate("admin/lugares/form")`; `onEditar(id)` → `navigate("admin/lugares/form?id=<id>")`. Se llega desde el Panel («Lugares», `onLugares`). Sin permisos ni guarda de rol propia (como el resto de `admin/*`) |
-| `admin/lugares/form?id={id}` | `LugarFormScreen` (7.7, FE-3.4) | `id` = UUID del lugar (argumento opcional: `navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null }`); sin él, lugar nuevo. `navigate("admin/lugares/form")` sin argumento también vale | `onListo` (Atrás, «Cancelar», tras guardar o eliminar) → `popBackStack()`: vuelve a 7.6, que recarga por `CambiosLugares` (5.6) |
+| `admin/lugares` | `LugaresScreen` (7.6, FE-3.4) | — | `onVolver` → `popBackStack()`; `onNuevo` → `navigate("admin/lugares/form")`; `onEditar(id)` → `navigate("admin/lugares/form?id=<id>")`; desde FE-4.1 `onVerFotos(id)` → `navigate("admin/imagenes?lugar=<id>")`. Se llega desde el Panel («Lugares», `onLugares`). Sin permisos ni guarda de rol propia (como el resto de `admin/*`) |
+| `admin/lugares/form?id={id}` | `LugarFormScreen` (7.7, FE-3.4) | `id` = UUID del lugar (argumento opcional: `navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null }`); sin él, lugar nuevo. `navigate("admin/lugares/form")` sin argumento también vale | `onListo` (Atrás, «Cancelar», tras guardar o eliminar) → `popBackStack()`: vuelve a 7.6, que recarga por `CambiosLugares` (5.6); desde FE-4.1 `onVerFotos(id)` («Ver en la galería», solo al editar) → `navigate("admin/imagenes?lugar=<id>")` |
 | `admin/mapa` | `EditorMapaScreen` | `posicionAdmin: () -> Pair<Double, Double>?` = desde FE-3.3 `{ PosicionAdmin.ultima() }` (antes `{ null }`); los pedidos de 7.10 por `PedidosEditorMapa` (5.5) | `onVolver` → `popBackStack()`; `onVerLista` (FE-3.3) → `navigate("admin/mapa/alertas") { launchSingleTop = true }` |
 | `admin/mapa/alertas` | `AlertasScreen` (7.10, FE-3.3) | — | `onVolver` → `popBackStack()` (vuelve a 7.8, que está debajo; también es «Ver mapa»); `onVerEnMapa(id)` → `PedidosEditorMapa.pedir(VerAlerta(id))` y `popBackStack()`; `onNuevaEnMapa` → `pedir(NuevaAlerta)` y `popBackStack()`. Sin permisos ni guarda de rol propia (como el resto de `admin/*`; lee `/v1/admin/alerts` al abrirse: sin sesión, `AppNav` va a Login) |
-| `admin/imagenes` | `GaleriaScreen` | — | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
-| `admin/videos` | `VideosScreen` | — | `onVolver`, `onAbrirVideo(id)` → `admin/videos/<id>` |
-| `admin/videos/{videoId}` | `VideoDetalleScreen` | `videoId` (argumento de ruta, texto) | `onVolver`, `onAbrirImagen(videoId, fotoId)` (placeholder, falta 7.12) |
+| `admin/imagenes?lugar={lugar}&video={video}` (FE-4.1; antes `admin/imagenes`) | `GaleriaScreen` | `lugar` y `video`: ids (UUID) para abrir filtrada, opcionales (`navArgument` anulables, `defaultValue = null`); `navigate("admin/imagenes")` sin argumentos también vale (el Panel) | `onVolver` → `popBackStack()`. 7.12 no existe: tocar una foto muestra un `Toast` (FE-4.4) |
+| `admin/videos` | `VideosScreen` | — | `onVolver` → `popBackStack()`, `onAbrirVideo(id)` → `admin/videos/<id>`, `onNuevoVideo` (FE-4.1, «Nuevo video») → `navigate("admin/ubicacion-manual")` |
+| `admin/videos/{videoId}` | `VideoDetalleScreen` | `videoId` (argumento de ruta, texto): UUID del backend o, desde FE-2.1, `rec_NNNN` de un recorrido del teléfono | `onVolver` → `popBackStack()` (Atrás o «Volver» del JS; y, desde FE-4.1, tras eliminar el video cuando el servidor lo confirmó). Desde FE-4.1 ya no tiene `onAbrirImagen` (7.12 es de FE-4.4) |
 | `mapa` | `MapaPublicoScreen` (2.6) | — | Ruta pública registrada en FE-2.3. Desde FE-3.1 la abre `inicio` (`onVerMapa`); en el APK de depuración también se abre al arrancar con el extra `ruta` (abajo). Queda encima de `inicio`: Atrás (del sistema; la página no tiene botón Volver) vuelve a Inicio, que repite la bienvenida. No entrega nada |
 
 Rutas con placeholder vacío (pantalla en blanco, no cierran la app): `admin/estadisticas` y `ajustes` (desde FE-2.1
@@ -2600,8 +2738,9 @@ registrada** cierra la app con un error.
 - **El `NavHost` vive en `MainActivity.kt`**, no en `ui/navigation/AppNavHost.kt` (§3.2). Ruta
   inicial: `inicio`. Cada pantalla crea su propio ViewModel; `AppNav` **no** crea ni comparte ninguno.
 - **Datos que viajan por ruta:** `videoId` de `admin/videos/{videoId}`, como argumento de texto sin `navArgument` declarado y sin
-  codificar (el id del video es el nombre de su carpeta, 5.6: no usar `/` ni caracteres especiales; si falta, la ruta
-  no dibuja nada), y desde FE-2.1 `video` de `admin/recoleccion/resumen?video={video}` (opcional, con `navArgument`
+  codificar (desde FE-4.1, el UUID del backend o la carpeta `rec_NNNN` de un recorrido local, 5.6: sin `/` ni caracteres
+  especiales; si falta, la ruta no dibuja nada), desde FE-4.1 `lugar` y `video` de `admin/imagenes?lugar={lugar}&video={video}`
+  (opcionales, UUID sin codificar), y desde FE-2.1 `video` de `admin/recoleccion/resumen?video={video}` (opcional, con `navArgument`
   anulable; `rec_NNNN`). Android guarda los argumentos con la pila: tras matar el proceso, 7.5 vuelve al mismo recorrido.
   Desde FE-3.4, `id` de `admin/lugares/form?id={id}` (opcional, `navArgument` anulable; UUID del lugar, sin codificar:
   no lleva caracteres especiales): tras matar el proceso, 7.7 vuelve a leer ese lugar del backend.
@@ -2695,7 +2834,7 @@ sección; las de `UbicacionBridge`, `RecoleccionBridge` y `CalibracionBridge`, e
 | `MapaWeb` / `rememberMapaWeb()` | `class MapaWeb` · `listo: Boolean` (estado) · `js(codigo)` | Controlador de una pantalla: `listo` pasa a `true` cuando la página llama a `listo()`; `js` ejecuta JavaScript (hilo principal). Usar `LaunchedEffect(mapa.listo, dato)` para empujar estado. |
 | `literalJs(s)` | `(String) -> String` | Texto → literal de JavaScript (`JSONObject.quote`), para `cargarX(${literalJs(json)})`. |
 | `PuenteWeb(mapa)` | `open class` · `listo()` · `enHiloPrincipal { }` | Base de los puentes: ya trae `listo()`. Cada subclase añade sus `@JavascriptInterface` y los pasa por `enHiloPrincipal` (llegan en un hilo del `WebView`). **Debe ser pública o `internal`, nunca `private`** (el `WebView` la invoca por reflexión). |
-| `MapaWebView` | `(mapa, html, puente, nombrePuente, tag, modifier = fillMaxSize(), pasarInsets = true, manejarAtras = true)` | Crea el `WebView` (tamaño, fondo `#0A0E1A`, JS, DOM storage, depuración solo en builds depurables, consola y errores a Logcat con `tag`), registra el puente, carga `file:///android_asset/<html>`, envía `setInsets` y conecta el `BackHandler` con `window.onAtras()`. `pasarInsets = false` si la página no define `setInsets`. `onRelease` destruye el `WebView`. |
+| `MapaWebView` | `(mapa, html, puente, nombrePuente, tag, modifier = fillMaxSize(), pasarInsets = true, manejarAtras = true, recursos: ((String) -> WebResourceResponse?)? = null)` | Crea el `WebView` (tamaño, fondo `#0A0E1A`, JS, DOM storage, depuración solo en builds depurables, consola y errores a Logcat con `tag`), registra el puente, carga `file:///android_asset/<html>`, envía `setInsets` y conecta el `BackHandler` con `window.onAtras()`. `pasarInsets = false` si la página no define `setInsets`. `onRelease` destruye el `WebView`. **`recursos` (FE-4.1):** si no es `null`, `shouldInterceptRequest` le pasa cada URL que pide la página (en un hilo del `WebView`, puede bloquear); su respuesta reemplaza a la red, `null` deja que el `WebView` la pida; una excepción da un `404` y una línea `Log.w(tag, …)` sin la URL. Se toma la del primer *composition* (el `WebViewClient` se crea una vez). Lo usa 7.14 para las miniaturas locales (ADR-FE-36). `allowFileAccess` sigue en su valor por defecto (`false` desde la API 30) |
 
 Receta para una pantalla de mapa nueva (como `EditorMapaContent` y `VideoDetalleContent`):
 
@@ -2774,20 +2913,25 @@ campos `id, lat, lng, mensaje, tipo, prioridad, radio, activa` (tipo: `agua`, `m
 | Dirección | Función | Descripción |
 |---|---|---|
 | Web → Kotlin | `listo()` | La página cargó; Kotlin responde con insets, otros videos y el video |
-| Web → Kotlin | `abrirFoto(id)` | "Ver detalle" de la foto (→ vista 7.12) |
+| Web → Kotlin | `abrirFoto(id)` | "Ver detalle" de la foto (→ vista 7.12). Desde FE-4.1 el botón está deshabilitado («Detalle (próximamente)») y Kotlin no hace nada (FE-4.4) |
 | Web → Kotlin | `renombrar(nombre)` | Nuevo nombre confirmado |
 | Web → Kotlin | `eliminarFoto(id)` | Eliminación de una foto confirmada |
-| Web → Kotlin | `eliminarVideo()` | Eliminación del video confirmada |
+| Web → Kotlin | `eliminarVideo()` | Eliminación del video confirmada. Desde FE-4.1 la página **no** sale sola: Kotlin vuelve a la lista cuando el servidor confirmó (`202`) |
 | Web → Kotlin | `salir()` | Volver a la lista |
+| Web → Kotlin | `pedirOtros()` (FE-4.1) | «Mostrar otros videos» se activó por primera vez: Kotlin carga las fotos de los otros videos y responde con `cargarOtros` |
 | Kotlin → Web | `cargarVideo(json)` | Reemplaza el video mostrado |
-| Kotlin → Web | `cargarOtros(json)` | Fotos de los demás videos (capa de contexto) |
+| Kotlin → Web | `cargarOtros(json)` | Fotos de los demás videos (capa de contexto). Desde FE-4.1 solo tras `pedirOtros()` |
 | Kotlin → Web | `setInsets(top, bottom)` | Alto de las barras del sistema (en dp) |
 | Kotlin → Web | `onAtras()` | Lo invoca el `BackHandler`; el JS decide qué cerrar |
 
 Formato de los datos:
-- Video: `{ id, nombre, fecha, fotos: [{ id, url, thumb, lat, lng, rumbo }] }` (`fecha` como
-  `"2026-10-09"`; `rumbo` puede ser `null`).
-- Otros videos: `[{ id, nombre, fotos: [{ lat, lng }] }]`.
+- Video: `{ id, nombre, fecha, local, editable, nota, rev, fotos: [{ id, url, thumb, lat, lng, rumbo }] }` (`fecha` como
+  `"2026-10-09"`; `rumbo` puede ser `null`). Desde FE-4.1: `local` (recorrido del teléfono sin subir: la cabecera dice
+  «En este teléfono, sin subir»), `editable` (con `false`, «Renombrar», «Eliminar video» y «Eliminar foto» quedan
+  deshabilitados), `nota` (texto bajo la cabecera, o `null`) y `rev` (sube en cada envío; el JS lo ignora). `thumb` es una
+  URL prefirmada o `https://miniaturas.local/…`.
+- Otros videos (FE-4.1): `{ videos: [{ id, fotos: [{ lat, lng }] }], aviso: texto | null }` (el JS muestra el aviso en un
+  `toast`; también acepta la lista sola, el formato anterior a FE-4.1: `[{ id, nombre, fotos: [{ lat, lng }] }]`).
 
 #### Funciones de `LugarBridge` (mapa de lugares, 7.6 y 7.7; FE-3.4)
 
@@ -2821,8 +2965,9 @@ ningún navegador ni en el teléfono (FE-3.4 no tenía `node` ni jsdom); se revi
 > desde FE-3.2, «Ubicarse» (`POST /v1/localize`, `RemoteLocalizacionRepository`); desde FE-2.2, el «Resumen rápido» del
 > Panel (`GET /v1/admin/stats`, `RemoteAdminRepository`); desde FE-3.4, los lugares de administración
 > (`/v1/admin/places`, `RemoteLugaresAdminRepository`); desde FE-3.3, las alertas de administración
-> (`/v1/admin/alerts`, `sincronizar` y `GET /v1/alerts`, `RemoteAlertasRepository`). Los demás repositorios siguen siendo *stubs* o datos locales
-> (§5.6) hasta su lote.
+> (`/v1/admin/alerts`, `sincronizar` y `GET /v1/alerts`, `RemoteAlertasRepository`); desde FE-4.1, los videos y las
+> imágenes de administración (`/v1/admin/videos`, `/v1/admin/images` y su lote, `RemoteVideoRepository`). Los demás
+> repositorios siguen siendo *stubs* o datos locales (§5.6) hasta su lote.
 
 **Configuración y cliente**
 - `ApiConfig.kt` (`object ApiConfig`, paquete raíz): `API_BASE_URL` = output `api_base_url` de Terraform
@@ -2848,7 +2993,7 @@ ningún navegador ni en el teléfono (FE-3.4 no tenía `node` ni jsdom); se revi
 
 | Pieza | Archivo | Firma y uso |
 |---|---|---|
-| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-2.2: `@GET("admin/stats") estadisticas(): Response<EstadisticasAdminDto>` (protegida). FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). FE-3.2: `@Multipart @POST("localize") localizar(@Part fotos: List<MultipartBody.Part>, @Part("metadatos") metadatos: RequestBody): Response<LocalizacionRespuestaDto>` (las partes van en el orden de la lista y después `metadatos`). FE-3.4 (protegidas): `@GET("admin/places") lugaresAdmin(@Query("q") q: String? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresAdminDto>` (la app no pasa `q` ni `categoria`), `@POST("admin/places") crearLugar(@Body LugarEntradaDto): Response<LugarAdminDto>`, `@PUT("admin/places/{id}") reemplazarLugar(@Path("id") id, @Body LugarEntradaDto): Response<LugarAdminDto>` y `@DELETE("admin/places/{id}") borrarLugar(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`). FE-3.3: `@GET("alerts") alertasPublicas(@Query("desde") desde: String? = null): Response<AlertasPublicasDto>` (**pública**: no pasa por `SesionInterceptor`; la app aún no usa `desde`), `@GET("admin/alerts") alertasAdmin(@Query("q") q: String? = null): Response<ListaAlertasAdminDto>` (la app no pasa `q`) y `@POST("admin/alerts/sincronizar") sincronizarAlertas(@Body SincronizarAlertasDto): Response<SincronizarAlertasRespuestaDto>` (protegidas); `PUT`/`DELETE /v1/admin/alerts/{id}` no se usan. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
+| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-2.2: `@GET("admin/stats") estadisticas(): Response<EstadisticasAdminDto>` (protegida). FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). FE-3.2: `@Multipart @POST("localize") localizar(@Part fotos: List<MultipartBody.Part>, @Part("metadatos") metadatos: RequestBody): Response<LocalizacionRespuestaDto>` (las partes van en el orden de la lista y después `metadatos`). FE-3.4 (protegidas): `@GET("admin/places") lugaresAdmin(@Query("q") q: String? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresAdminDto>` (la app no pasa `q` ni `categoria`), `@POST("admin/places") crearLugar(@Body LugarEntradaDto): Response<LugarAdminDto>`, `@PUT("admin/places/{id}") reemplazarLugar(@Path("id") id, @Body LugarEntradaDto): Response<LugarAdminDto>` y `@DELETE("admin/places/{id}") borrarLugar(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`). FE-3.3: `@GET("alerts") alertasPublicas(@Query("desde") desde: String? = null): Response<AlertasPublicasDto>` (**pública**: no pasa por `SesionInterceptor`; la app aún no usa `desde`), `@GET("admin/alerts") alertasAdmin(@Query("q") q: String? = null): Response<ListaAlertasAdminDto>` (la app no pasa `q`) y `@POST("admin/alerts/sincronizar") sincronizarAlertas(@Body SincronizarAlertasDto): Response<SincronizarAlertasRespuestaDto>` (protegidas); `PUT`/`DELETE /v1/admin/alerts/{id}` no se usan. FE-4.1 (protegidas): `@GET("admin/videos") videos(@Query("q") q: String? = null, @Query("orden") orden: String? = null, @Query("dir") dir: String? = null, @Query("pagina") pagina: Int? = null, @Query("por_pagina") porPagina: Int? = null): Response<PaginaVideosDto>`, `@PATCH("admin/videos/{id}") renombrarVideo(@Path("id") id, @Body VideoRenombrarDto): Response<VideoResumenDto>`, `@DELETE("admin/videos/{id}") borrarVideo(@Path("id") id): Response<VideoBorradoDto>` (`202` **con** cuerpo: con `llamar`), `@GET("admin/images") imagenes(@Query("video_id"), @Query("lugar_id"), @Query("estado"), @Query("calidad"), @Query("q"), @Query("pagina"), @Query("por_pagina")): Response<PaginaImagenesDto>` (todos `String?`/`Int?` = `null`, en ese orden en la URL), `@DELETE("admin/images/{id}") borrarImagen(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`) y `@POST("admin/images/lote") loteImagenes(@Body cuerpo: RequestBody): Response<LoteResultadoDto>` (el cuerpo va ya armado, sin pasar por el convertidor: «Videos e imágenes de administración», abajo); `GET /v1/admin/videos/{id}` (`video`) ya existía. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
 | `ClienteApi` | `ClienteApi.kt` (`object`) | `ClienteApi.api: CampusApi` (instancia única, `lazy`, contra `ApiConfig.BASE_URL`, registra con `AppLog.i("Api", …)`; usa el `vigilante` que haya **al crearse**). `ClienteApi.vigilante: VigilanteSesion?` (`@Volatile var`, `null` por defecto; FE-1.2: `MyApp.onCreate` lo asigna antes de que nadie use `api`; sustituye al `proveedorToken` de FE-1.1, que ya no existe). `ClienteApi.crear(urlBase = ApiConfig.BASE_URL, token = { null }, registrar: (String) -> Unit, vigilante: VigilanteSesion? = null): CampusApi` (añade la barra final que exige Retrofit) y `ClienteApi.okHttp(token = { null }, registrar, vigilante = null): OkHttpClient` para pruebas (MockWebServer) o clientes propios. Con `vigilante`, las rutas protegidas pasan por `SesionInterceptor` y `token` no se usa; sin él, por `AutenticacionInterceptor(token)` |
 | `RequestIdInterceptor(registrar)` | `ClienteApi.kt` | Pone `X-Request-Id` y registra **una línea por petición**: `GET /v1/health -> 200 (85 ms) rid=<uuid>` o `GET /v1/health -> falla UnknownHostException (3 ms) rid=<uuid>`. Solo método, ruta sin parámetros, código y duración: nunca encabezados ni cuerpos. `rid` es el de la respuesta si la trae, si no el enviado. `validate11.py` C1a busca esta línea en `files/logs/app.log`: cambiar el formato exige cambiar `PATRON_SALUD` del validador. Una petición que `SesionInterceptor` no deja salir **no** deja línea `Api` (deja la `Sesion` del vigilante) |
 | `AutenticacionInterceptor(token)` | `ClienteApi.kt` | Regex `RUTA_PROTEGIDA` = `.*/v1/(admin\|collect)(/.*)?` sobre la ruta; `/v1/administrar` no la cumple. Solo cuando `ClienteApi` no tiene vigilante |
@@ -2860,6 +3005,7 @@ ningún navegador ni en el teléfono (FE-3.4 no tenía `node` ni jsdom); se revi
 | `RemoteLocalizacionRepository(api = ClienteApi.api, preparador: PreparadorFoto = Recodificador(MotorImagenAndroid(), LimitesRecodificacion.LOCALIZACION), appVersion: String? = null, gson = Gson())` | `RemoteLocalizacionRepository.kt` (FE-3.2) | `LocalizacionRepository` real (abajo, «Ubicarse») · `companion`: `MAX_FOTOS = 5`, `PARTE_FOTOS = "fotos"`, `ORIGEN = "escaneo"`, `PREFIJO_ENVIO = "envio_"`, `APP_VERSION_MAX = 40`. No registra nada propio (solo la línea `Api`) |
 | `RemoteLugaresAdminRepository(api = ClienteApi.api, cambios: ContadorCambios = CambiosLugares, registrar = { AppLog.w("Lugares", it) })` | `RemoteLugaresAdminRepository.kt` (FE-3.4) | `LugaresAdminRepository` real (abajo, «Lugares de administración») · `TAG = "Lugares"` (el mismo de `RemoteLugaresRepository`) |
 | `RemoteAlertasRepository(almacen: AlmacenAlertas, api = ClienteApi.api, cambios: ContadorCambios = CambiosAlertas, registrar = { AppLog.i("Alertas", it) })` · `object Alertas` (`de(context)`) | `RemoteAlertasRepository.kt` (FE-3.3) | `AlertasRepository` real «local primero» (abajo, «Alertas de administración») · `TAG = "Alertas"`. `Alertas.de(context)` crea la instancia única del proceso con `AlmacenAlertasArchivo(files/alertas/editor.json, registrar = AppLog.w)` y `ClienteApi.api` |
+| `RemoteVideoRepository(api = ClienteApi.api, cambios: ContadorCambios = CambiosVideos, cambiosLugares: ContadorCambios = CambiosLugares)` | `RemoteVideoRepository.kt` (FE-4.1) | `VideosServidor` e `ImagenesRepository` reales (abajo, «Videos e imágenes de administración») · `companion`: `POR_PAGINA = 100`, `MAX_PAGINAS = 50`, `LOTE_MAX = 200`, `cuerpoLote(accion, ids, lugarId)` (`internal`). No registra nada propio (solo la línea `Api`) |
 | `llamar(peticion): T` | `ErroresApi.kt` (función `suspend` de nivel superior) | `llamar { api.salud() }` devuelve el cuerpo de un 2xx o lanza: `SinConexionException` (red, *timeout*, 5xx de API Gateway), `CredencialesInvalidasException` (la de `data/repository/AuthRepository.kt`), `ApiException` (el resto, también la sesión perdida de `SesionInterceptor`) o `RespuestaInesperadaException` (2xx sin cuerpo o JSON roto). La cancelación de la corrutina se propaga |
 | `llamarSinCuerpo(peticion)` | `ErroresApi.kt` | Igual, para rutas `204` declaradas `Response<Unit>` (en un 204 Retrofit da `body() == null` y `llamar` lo trataría como respuesta inesperada) |
 | `FalloApi` | `ErroresApi.kt` (`sealed interface`) | `SinConexion`, `CredencialesInvalidas`, `SesionVencida(codigo)`, `SinPermisos`, `DemasiadosIntentos`, `EmbeddingNoDisponible`, `FotosInvalidas(indice: Int?, motivo: String?)` (FE-3.2), `Validacion(http, codigo, mensaje, campos: List<CampoInvalido(campo, motivo)>)`, `Desconocido(http: Int?, codigo: String?)`. Una fila por fila de la tabla de abajo. Añadir un caso no rompe ningún `when` de hoy (el de `SubidaRecorrido.clasificar` tiene `else`; comprobado con `grep` en FE-3.2) |
@@ -2867,8 +3013,8 @@ ningún navegador ni en el teléfono (FE-3.4 no tenía `node` ni jsdom); se revi
 | `SinConexionException(requestId = null, causa = null)` | `ErroresApi.kt` | **Es una `IOException`**: `LoginViewModel` y los demás que ya atrapan `IOException` la tratan como «sin conexión» sin cambios |
 | `RespuestaInesperadaException(mensaje, causa)` | `ErroresApi.kt` | 2xx que no cumple el contrato (falta un campo obligatorio, rol desconocido, JSON roto). Para la UI es «Algo salió mal» |
 | `MapeoErroresApi` | `ErroresApi.kt` (`object`) | `clasificar(http: Int, cuerpo: String?): FalloApi` (lógica pura) · `excepcion(fallo, http, requestId): Exception` · `deExcepcion(t: Throwable): FalloApi` (para un `catch` genérico en un ViewModel; desde FE-1.2 reconoce `SinSesionException` como `SesionVencida(SIN_SESION_LOCAL)`) · `CODIGOS_SESION` (`TOKEN_EXPIRADO`, `TOKEN_INVALIDO`, `NO_AUTENTICADO`) · FE-1.2: `codigoError(cuerpo: String?): String?` (`error.codigo` de un cuerpo de §5.1, o `null`) y `SIN_SESION_LOCAL = "SIN_SESION_LOCAL"` (código de `SesionVencida` cuando la petición no salió del teléfono; el backend nunca lo envía) |
-| DTOs | `DtosApi.kt` | `SaludDto`, `LoginPeticionDto` (FE-1.2; con los de la recolección, la localización y, desde FE-3.4, `LugarEntradaDto`, los que envía la app), `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto` (y, desde FE-3.1, `ListaLugaresDto`), `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional y, desde FE-2.1, `conteo`), desde FE-2.1 los de la recolección y desde FE-3.2 los de la localización (`MetadatosLocalizacionDto`, `LocalizacionRespuestaDto`, `PosicionDto`, `LugarCercanoDto`, `ReferenciaLugarDto`; abajo) y desde FE-3.4 los de lugares de administración (`LugarAdminDto`, `ListaLugaresAdminDto`, `LugarEntradaDto`) y desde FE-3.3 los de alertas (`AlertasPublicasDto`, `ListaAlertasAdminDto`, `AlertaEntradaDto`, `CambioAlertaDto`, `SincronizarAlertasDto`, `SincronizarAlertasRespuestaDto`, `ResultadoCambioAlertaDto`). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos de respuesta anulables y con valor por defecto** (trampa abajo) |
-| `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `sesion(LoginRespuestaDto): Sesion` (FE-1.2: `token` no vacío + `usuario` + `expiraEnMs`; si falta algo, `RespuestaInesperadaException`) · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` (FE-3.3: también vigencia, `version` y `actualizado_en`) · FE-3.3: `entradaAlerta(Alerta): AlertaEntradaDto`, `cambioAlerta(OperacionAlerta): CambioAlertaDto` y `milisAIso(ms): String` (`yyyy-MM-dd'T'HH:mm:ss'Z'` en UTC, sin milisegundos) · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` (desde FE-2.2, `ultimo_video` presente sin `numero` → `RespuestaInesperadaException`) · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` · FE-3.2: `resultadoUbicacion(LocalizacionRespuestaDto): ResultadoUbicacion` (reglas en «Ubicarse», abajo) · FE-3.4: `lugarAdmin(LugarAdminDto): LugarAdmin?` (`null` = categoría desconocida) y `entradaLugar(DatosLugar): LugarEntradaDto` (abajo, «Lugares de administración») |
+| DTOs | `DtosApi.kt` | `SaludDto`, `LoginPeticionDto` (FE-1.2; con los de la recolección, la localización y, desde FE-3.4, `LugarEntradaDto`, los que envía la app), `UsuarioDto`, `LoginRespuestaDto`, `LugarPublicoDto` (y, desde FE-3.1, `ListaLugaresDto`), `AlertaDto`, `EstadisticasAdminDto` (+ `UltimoVideoDto`), `ImagenAdminDto` (+ `ReferenciaDto`), `VideoResumenDto` (con `fotos` opcional y, desde FE-2.1, `conteo`), desde FE-2.1 los de la recolección y desde FE-3.2 los de la localización (`MetadatosLocalizacionDto`, `LocalizacionRespuestaDto`, `PosicionDto`, `LugarCercanoDto`, `ReferenciaLugarDto`; abajo) y desde FE-3.4 los de lugares de administración (`LugarAdminDto`, `ListaLugaresAdminDto`, `LugarEntradaDto`) y desde FE-3.3 los de alertas (`AlertasPublicasDto`, `ListaAlertasAdminDto`, `AlertaEntradaDto`, `CambioAlertaDto`, `SincronizarAlertasDto`, `SincronizarAlertasRespuestaDto`, `ResultadoCambioAlertaDto`) y desde FE-4.1 los de videos e imágenes (`PaginaVideosDto`, `PaginaImagenesDto`, `VideoRenombrarDto`, `VideoBorradoDto`, `LoteResultadoDto`, `FallidaLoteDto`; y `VideoResumenDto` gana `iniciado_en`, `finalizado_en`, `duracion_s`, `distancia_m` y `pasos`). El JSON del backend tal cual, con `@SerializedName` en snake_case y propiedades en camelCase. **Todos los campos de respuesta anulables y con valor por defecto** (trampa abajo) |
+| `MapeoDatosApi` | `MapeoDatosApi.kt` (`object`) | `enumDe<E>(valor): E?` · `usuario(UsuarioDto?): Usuario` · `expiraEnMs(LoginRespuestaDto): Long` · `sesion(LoginRespuestaDto): Sesion` (FE-1.2: `token` no vacío + `usuario` + `expiraEnMs`; si falta algo, `RespuestaInesperadaException`) · `lugarDestino(LugarPublicoDto): LugarDestino?` (`null` = categoría desconocida: se descarta) · `alerta(AlertaDto): Alerta` (FE-3.3: también vigencia, `version` y `actualizado_en`) · FE-3.3: `entradaAlerta(Alerta): AlertaEntradaDto`, `cambioAlerta(OperacionAlerta): CambioAlertaDto` y `milisAIso(ms): String` (`yyyy-MM-dd'T'HH:mm:ss'Z'` en UTC, sin milisegundos) · `resumenAdmin(EstadisticasAdminDto, fotosPendientes: Int): ResumenAdmin` (desde FE-2.2, `ultimo_video` presente sin `numero` → `RespuestaInesperadaException`) · `estadoFoto(String?): EstadoFoto?` · `foto(ImagenAdminDto, videoNombre): Foto` · `video(VideoResumenDto): Video` · `isoAMilis(String?): Long?` · FE-4.1: `estadoVideo(String?): EstadoVideo`, `resumenVideo(VideoResumenDto): ResumenVideo`, `claveEstadoFoto(EstadoFoto): String`, `paginaImagenes(PaginaImagenesDto, pagina, porPagina): PaginaImagenes` y `resultadoLote(LoteResultadoDto): ResultadoLote` (y `foto`/`video` ampliados; reglas en «Videos e imágenes de administración») · FE-3.2: `resultadoUbicacion(LocalizacionRespuestaDto): ResultadoUbicacion` (reglas en «Ubicarse», abajo) · FE-3.4: `lugarAdmin(LugarAdminDto): LugarAdmin?` (`null` = categoría desconocida) y `entradaLugar(DatosLugar): LugarEntradaDto` (abajo, «Lugares de administración») |
 | `RemoteBackendHealth(api, limiteMs = 5_000)` | `RemoteBackendHealth.kt` | `BackendHealth` real: `true` solo con `200` y `"estado": "ok"`; cualquier otra cosa (sin red, *timeout*, 5xx, otro `estado`) es `false`; nunca lanza salvo cancelación. `LIMITE_MS = 5_000` |
 
 **Cómo se añade una ruta**: 1) DTO en `DtosApi.kt` (campos anulables); 2) método en `CampusApi`
@@ -3006,6 +3152,53 @@ inactivas conservadas; `mover`; sin `items`. `AlmacenAlertasTest` (3) cubre el a
 repositorio nuevo (como tras matar el proceso). **Sin comprobar contra el backend real** (FE-3.3 en `dev`,
 `validate33.py`).
 
+**Videos e imágenes de administración (FE-4.1): `RemoteVideoRepository`** (contratos: backend §4.12, «Para la app
+(FE-4.1)», y §5.5: `GET /v1/admin/videos`, `GET /v1/admin/videos/{id}`, «Videos: `PATCH` y `DELETE`», «Imágenes:
+`/v1/admin/images`»; §5.6). Rutas protegidas: con `ClienteApi.api` las lleva `SesionInterceptor` (sin sesión no salen y
+`AppNav` vuelve a Login). Implementa `VideosServidor` (lo usa `VideoRepositoryCompuesto`, §5.6) e `ImagenesRepository`
+(la Galería).
+1. `paginaVideos(q, orden, pagina, porPagina)`: `GET /v1/admin/videos?q=&orden=&dir=&pagina=&por_pagina=` (`q` recortado;
+   vacío → no se envía; `orden`/`dir` de `OrdenVideos`). Sin `items` o sin `total` → `RespuestaInesperadaException`; cada
+   `VideoResumen` con `MapeoDatosApi.resumenVideo` (falta `id` → `RespuestaInesperadaException`). `todosLosVideos(q,
+   orden)`: páginas de `POR_PAGINA` (100) desde la 1 hasta juntar `total` o recibir una vacía (como mucho `MAX_PAGINAS` =
+   50); `distinctBy { id }` (un video creado entre dos páginas puede repetirse); devuelve el `total` de la última.
+2. `detalle(id)`: `GET /v1/admin/videos/{id}` → `MapeoDatosApi.video` (fotos por `orden`, con sus URLs); `404` (no existe o
+   eliminado) y `422` (id que no es un UUID) → `null`; otro error se propaga.
+3. `renombrar(id, nombre)`: `PATCH /v1/admin/videos/{id}` con `{"nombre": "<recortado>"}` → `200` `VideoResumen` →
+   `CambiosVideos.avisar()` (no `CambiosLugares`). `422` (vacío, > 40) → `ApiException(Validacion)`; `404` → `Desconocido(404)`.
+4. `eliminar(id)`: `DELETE /v1/admin/videos/{id}` → `202` `{"id", "estado": "eliminado", "fotos_retiradas", "purga":
+   "programada"}` → devuelve `fotos_retiradas` (ausente → 0). Un `404` cuenta como hecho (devuelve 0). Después,
+   `CambiosVideos.avisar()` y `CambiosLugares.avisar()` (el «N fotos» de 7.6 y el Panel). Desde la respuesta el video ya no
+   sale en ninguna lista ni en la búsqueda; la purga de S3 es del `worker` (con `embedding` apagado en `dev`, espera).
+5. `eliminarImagen(id)`: `DELETE /v1/admin/images/{id}` (`204`); el `404` de un `DELETE` repetido cuenta como hecho
+   (backend §4.12); avisa a los dos contadores.
+6. `imagenes(filtros, pagina, porPagina)`: `GET /v1/admin/images?video_id=&lugar_id=&estado=&calidad=&q=&pagina=&por_pagina=`
+   (`estado` con `MapeoDatosApi.claveEstadoFoto`: `PENDIENTE` → `pendiente_subida`; `calidad` en minúsculas; `q` recortado,
+   vacío → no se envía) → `MapeoDatosApi.paginaImagenes` (`items` y `total` obligatorios; cada foto con `videoNombre = ""`:
+   `ImagenAdmin` no trae el nombre del video; `vencenEnMs` = el `url_expira_en` más temprano).
+7. `lote(accion, ids, lugarId)`: ids sin repetir, en partes de `LOTE_MAX` (200), cada una `POST /v1/admin/images/lote` con el
+   cuerpo de `cuerpoLote` (`Content-Type: application/json; charset=utf-8`): `{"accion": "eliminar", "ids": […]}` o
+   `{"accion": "reasignar", "ids": […], "lugar_id": "<uuid>" | null}` — **`lugar_id` siempre** con `reasignar` (`null` =
+   quitar el lugar, «Sin lugar»): Gson con `serializeNulls` solo para este cuerpo (el de Retrofit no escribe los `null`).
+   Suma `procesadas` y junta `fallidas` (`MapeoDatosApi.resultadoLote`: `procesadas` obligatorio, `fallidas` ausente =
+   vacía, `codigo` ausente = `ERROR_INTERNO`). Si alguna parte respondió, avisa a los dos contadores aunque una posterior
+   falle (lo aplicado queda: repetir es seguro, backend §5.5).
+8. Errores (los de `llamar`): sin red, *timeout* o `5xx` de API Gateway → `SinConexionException`; `401 TOKEN_*` o sin
+   sesión → `ApiException(SesionVencida)`; `409`/`422` → `Validacion`; `404` (salvo los casos de arriba), `500
+   ERROR_INTERNO` (falta `SQS_URL_PURGA`, o SQS no aceptó la purga de una imagen: nada cambió) y `503` → `Desconocido`. Qué
+   dice cada vista: `TextosVideos.error` (5.5).
+
+Lo cubre `RemoteVideoRepositoryTest` (15; MockWebServer y un `VigilanteSesion` real con un almacén en memoria, como
+`RemoteLugaresAdminRepositoryTest`): todas las páginas con `q` y orden y el mapeo de las filas (suma del `conteo`,
+distancia, duración, estados); sin `q` y una página; el detalle con miniatura de respaldo, `nombreArchivo` sin la firma,
+`lugarId`, `orden` y el vencimiento más temprano; `404`/`422` del detalle → `null`; `PATCH` con el cuerpo exacto y su
+aviso; `422` del `PATCH` sin aviso; `DELETE` `202` con `fotos_retiradas` y los dos avisos; `404` = hecho y sin red sin
+aviso; `500` con su `X-Request-Id`; `DELETE` de imagen `204` y `404`; los filtros de `GET /v1/admin/images` en la URL y la
+página; página sin `total`; el lote con `"lugar_id":null` explícito y sin repetidos; 250 ids en dos partes (200 + 50) sin
+`lugar_id` al eliminar; sin sesión no llega al servidor. **Contra el backend real** solo se leyeron (`GET`, 2026-10-27)
+las formas de `/v1/admin/videos`, `/v1/admin/videos/{id}` y `/v1/admin/images`: coinciden; el resto, en `dev` con
+`validate41.py` (lo coordina el maestro).
+
 **Detalles internos del cliente (para no abrir `data/remote/`)**
 - Campos de los DTOs (propiedad Kotlin ← clave JSON; todos `T? = null` salvo el de la petición):
   `LoginPeticionDto(identificador: String, password: String)` (FE-1.2; su `toString()` no muestra los valores) ·
@@ -3031,9 +3224,13 @@ repositorio nuevo (como tras matar el proceso). **Sin comprobar contra el backen
   totalLugares, alertasActivas, ultimoVideo: UltimoVideoDto(numero, creadoEn)?)` · `ReferenciaDto(id, nombre)` ·
   `ImagenAdminDto(id, videoId, orden, lat, lng, rumbo: Double?, capturadaEn, estado, error, calidad, lugar:
   ReferenciaDto?, notas, url, urlMiniatura, urlExpiraEn)` · `VideoResumenDto(id, numero, nombre, refCliente, estado,
-  creadoEn, totalFotos, conteo: ConteoFotosDto?, fotos: List<ImagenAdminDto>?)` (`conteo` desde FE-2.1). `VideoResumenDto`
-  **no** trae todavía `iniciado_en`, `finalizado_en`, `duracion_s`, `distancia_m`, `pasos`, `inicio` ni `creado_por`: el
-  lote que los necesite (FE-4.1) los añade. FE-2.1, recolección (backend §5.4): **cuerpos que envía la app** (no
+  creadoEn, totalFotos, conteo: ConteoFotosDto?, fotos: List<ImagenAdminDto>?, iniciadoEn ← iniciado_en, finalizadoEn ←
+  finalizado_en, duracionS ← duracion_s: Long?, distanciaM ← distancia_m: Double?, pasos: Int?)` (`conteo` desde FE-2.1;
+  los cinco últimos desde FE-4.1; la app no lee `inicio` ni `creado_por`) · FE-4.1: `PaginaVideosDto(items:
+  List<VideoResumenDto>?, total, pagina, porPagina ← por_pagina)` · `PaginaImagenesDto(items: List<ImagenAdminDto>?,
+  total, pagina, porPagina)` · `VideoBorradoDto(id, estado, fotosRetiradas ← fotos_retiradas: Int?, purga)` ·
+  `LoteResultadoDto(procesadas: Int?, fallidas: List<FallidaLoteDto(id, codigo)>?)`; **cuerpo que envía la app**
+  `VideoRenombrarDto(nombre: String)` (el del lote no es un DTO: abajo). FE-2.1, recolección (backend §5.4): **cuerpos que envía la app** (no
   anulables salvo los opcionales del contrato; Gson omite los `null`) `InicioRecorridoDto(lat, lng, rumbo: Double?)` ·
   `VideoCrearDto(refCliente ← ref_cliente, nombre?, iniciadoEn ← iniciado_en?, finalizadoEn ← finalizado_en?,
   duracionS ← duracion_s: Long?, distanciaM ← distancia_m?, pasos?, inicio?, totalFotos ← total_fotos: Int = 0,
@@ -3101,7 +3298,9 @@ repositorio nuevo (como tras matar el proceso). **Sin comprobar contra el backen
 - **`EstadoFoto.PENDIENTE` (FE-2.1):** `MapeoDatosApi.estadoFoto` es un `when` explícito: `pendiente_subida` →
   `PENDIENTE`, `subida`, `procesada` y `error` → el suyo; cualquier otro texto (también `pendiente`) → `null`, que
   `foto()` muestra como `SUBIDA`. Ya no usa `enumDe` (el nombre del enum, `PENDIENTE`, no coincide con el del backend).
-- **URLs de fotos:** `url` y `url_miniatura` llegan `null` hasta BE-4.1; `foto()` las deja en `""`.
+- **URLs de fotos:** desde BE-4.1 llegan firmadas (1 h; `url_expira_en`); `url` es `null` mientras la foto sigue
+  `pendiente_subida` (o si S3 no está configurado) y `foto()` la deja en `""`; sin `url_miniatura` (solo existe para las
+  `procesada`) la miniatura es la `url` (FE-4.1). Nunca se registran.
 - **Registrar:** el registrador por defecto (`AppLog.i`) llama a `android.util.Log`, que en las pruebas de la JVM no
   existe: las pruebas pasan su propio `registrar`.
 
@@ -3141,8 +3340,8 @@ fila.
 | `Alerta.radio_m` | `Alerta.radio`; desde FE-3.3 `vigencia_desde`/`vigencia_hasta` → `vigenciaDesdeMs`/`vigenciaHastaMs` y `actualizado_en` → `actualizadoEnMs` (`isoAMilis`; otra forma → `null`), `version` tal cual. De vuelta (`AlertaEntrada`, `entradaAlerta`): `radio` → `radio_m`, vigencias con `milisAIso`; `version` y `actualizado_en` no se envían |
 | `GET /v1/admin/stats` | `ResumenAdmin`: `total_fotos`, `total_lugares`, `alertas_activas` tal cual; `ultimo_video.numero` → `ultimoVideoNumero`; `ultimo_video.creado_en` (ISO-8601 UTC con `Z`) → `ultimoVideoFecha` en milisegundos; `ultimo_video = null` → los dos `null`; `fotosPendientes` sale de la cola local de subida, no del backend (desde FE-2.2, `RemoteAdminRepository`; «Panel», arriba) |
 | `usuario` del login | `Usuario`; `expira_en` → `Sesion.expiraEnMs` (milisegundos) y se guarda con la sesión (`expira_en_ms`, §5.3) |
-| `VideoResumen` / `ImagenAdmin` | `Video` / `Foto`. El `id` del video pasa a ser UUID (hoy es el nombre de la carpeta); `uid` de `Foto` sigue siendo `videoId/id`. `pendiente_subida` → `EstadoFoto.PENDIENTE` (desde FE-2.1) |
-| Fechas ISO-8601 | `creadoEn` / `capturadaEn` siguen siendo texto en los modelos actuales; convertir solo donde se ordene o filtre |
+| `VideoResumen` / `ImagenAdmin` | `Video` / `Foto` (detalle de 7.14) y, desde FE-4.1, `ResumenVideo` (fila de 7.13). El `id` es el UUID del backend; `uid` de `Foto` es `videoId/id`. `pendiente_subida` → `EstadoFoto.PENDIENTE` (desde FE-2.1). Desde FE-4.1: `lugar.id` → `Foto.lugarId`, `orden` → `Foto.orden`, `url_miniatura` ausente → la `url`; `estado` del video → `EstadoVideo` (`pendiente` → `SUBIDA_A_MEDIAS`); `fotos` = suma del `conteo` |
+| Fechas ISO-8601 | `creadoEn` / `capturadaEn` / `finalizadoEn` siguen siendo texto en los modelos; desde FE-4.1 se comparan y muestran con `Fechas` (5.6), que entiende `Z` y `±hh:mm` |
 | Respuesta 200 de `POST /v1/localize` (FE-3.2) | `ResultadoUbicacion` (`Ubicado` / `SinCoincidencias`; `nivel` → `NivelConfianza`; `version_vector` y `latencia_ms` no se usan). Reglas en «Ubicarse», abajo |
 
 Implementación (FE-1.1), por fila: `MapeoDatosApi.enumDe` (desconocido → `null`; en `usuario`, un rol desconocido es
@@ -3494,6 +3693,14 @@ Ayudas que añadió FE-3.2 (para validadores que llaman a rutas `multipart/form-
 | `cuerpo_multipart(partes, limite)` → `bytes` | Cuerpo RFC 7578 en el orden de `partes`: `--<limite>\r\nContent-Disposition: form-data; name="…"[; filename="…"]\r\nContent-Type: …\r\n\r\n<datos>\r\n` por parte y `--<limite>--\r\n` al final. Lógica pura |
 | `http_post_multipart(url, partes, *, timeout=15, token=None)` → `RespuestaHttp` | `POST` con `Content-Type: multipart/form-data; boundary=validacion-<uuid>` y `X-Request-Id` propio; 4xx/5xx se devuelven, sin respuesta → `ErrorRed`. Nunca imprime el cuerpo; `token` → `Authorization: Bearer` |
 
+Ayudas que añadió FE-4.1 (para validadores que suben fotos de prueba por la API de recolección, sin la app; backend
+§5.4):
+
+| Elemento | Qué hace |
+|---|---|
+| `http_put_bytes(url, datos, encabezados, *, timeout=60)` → `RespuestaHttp` | `PUT` de `datos` a una URL prefirmada de S3 con **exactamente** los `encabezados` que dio el backend (`{"Content-Type": "image/jpeg"}`: va en la firma). Sin `X-Request-Id` ni `Authorization` (como `SubidorS3` de la app; `urllib` añade `Host`, `Content-Length`, `User-Agent` y `Connection`, que no van firmados). 4xx/5xx se devuelven; sin respuesta → `ErrorRed` «PUT a S3 sin respuesta (<tipo>)»: **la URL (lleva la firma) nunca se imprime ni va a un mensaje** |
+| `jpeg_sintetico(ancho=640, alto=480, semilla=0)` → `bytes` | JPEG *baseline* en escala de grises hecho a mano, sin Pillow: bloques de 8×8 de un solo tono (solo el coeficiente DC; tabla DC de luminancia del anexo K.3 y una tabla AC con un único símbolo, EOB, de un bit; cuantización 8) que dibujan franjas diagonales: nivel del bloque `(bx, by)` = 28 + (3·bx + 5·by + 37·semilla) mod 200. La misma semilla da los mismos bytes; otra, otros (ETag distintos). `ancho` y `alto` múltiplos de 8 (si no, `ValueError`). 640×480 ≈ 4 KB; su lado menor (480) cumple `REC_LADO_MIN_PX` (320, backend §5.10). `dimensiones_jpeg` lo lee; con Pillow 12.3.0 (el del entorno del backend, 2026-10-27) se decodificó como `JPEG (640, 480) L` con los niveles esperados (`test_comun_fe41.py` lo prueba solo si hay Pillow, que no está en el grupo `ops`) |
+
 
 Forma de un validador (`validate11.py` es el ejemplo): `import comun`, `main(argv=None)` crea el `Validador` y devuelve
 `v.correr(cuerpo, argv)`, el módulo termina con `sys.exit(main())`. Sus pruebas (`tests/ops/test_validate11.py`)
@@ -3503,7 +3710,9 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 `test_validate21.py`, 20, y `test_comun_fe21.py`, 15; 129 con el arreglo de 0.7.2; 159 con FE-3.1:
 `test_validate31.py`, 30, que incluye las pruebas de `http_delete` y `esperar_enter`; 190 con FE-3.2:
 `test_validate32.py`, 31, que incluye las de `cuerpo_multipart` y `http_post_multipart`; 222 con FE-2.2:
-`test_validate22.py`, 32; 241 con FE-3.4: `test_validate34.py`, 19; 253 con FE-3.3: `test_validate33.py`, 12).
+`test_validate22.py`, 32; 241 con FE-3.4: `test_validate34.py`, 19; 253 con FE-3.3: `test_validate33.py`, 12; 278 con
+FE-4.1: `test_validate41.py`, 20, y `test_comun_fe41.py`, 5, de los que uno se omite sin Pillow: «277 passed, 1
+skipped»).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -3831,6 +4040,71 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   C2 con `upsert` + `eliminar`, error en `app.log`, c1 lejos de la foto, sin sincronizar, 7.10 sin la alerta del
   backend, BE-3.3 sin «Hecho», credenciales malas, `--solo C1a,C2a,C3a`, JVM que falla, EOF) y comprueban que ni la
   contraseña ni el token salen por stdout, stderr o el informe y que nunca se llama a `pm clear`.
+- `validate41.py` (FE-4.1; ejemplo de un validador que **crea videos de prueba por la API de recolección** sin la app,
+  compara **contadores de la interfaz** con la API y con los manifests del teléfono, y comprueba una **navegación que hace
+  la app sola** tras un paso guiado): IDs `C1a, C1b, C2a, C2b, C3a, C3b` con grupos `C1 → [C1a, C1b]`, `C2 → [C2a, C2b]` y
+  `C3 → [C3a, C3b]`; manual `C2c` (capturas para el PR, se imprime también en `local`); entornos `local` y `dev`; ayudas
+  nuevas en `comun.py`: `http_put_bytes` y `jpeg_sintetico` (arriba). Constantes: `CLASES_C1A`
+  (`VideoRepositoryCompuestoTest`), `CLASES_C2A` (`TextosVideosTest`), `CLASES_C3A` (`RemoteVideoRepositoryTest`),
+  `MINIMO_CASOS` (8, 4 y 10; hoy 11, 5 y 15), `DIR_KOTLIN`, `DIR_ASSETS`, `JS_DETALLE` (`assets/video_detalle.js`),
+  `PROHIBIDOS` (`EdicionesLocales`, `AssetsVideoRepository`, `FuenteRecorridos`), `FACTORIES` (lo que deben crear las
+  `Factory` de `GaleriaViewModel.kt`, `VideosViewModel.kt` y `VideoDetalleViewModel.kt` y `deLaApp` de
+  `VideoRepository.kt`), `PREFIJO` (`validacion-4-1`: el `q` de la limpieza), `VIDEO_A` (`validacion-4-1-a`, se renombra),
+  `VIDEO_B` (`validacion-4-1-b`, se elimina), `RENOMBRADO` (`validacion-4-1-renombrado`), `FOTOS_POR_VIDEO` (3),
+  `LADO_FOTOS` (640×480), `POSICION_PRUEBA` (1,0, −100,0: fuera del campus, como los validadores del backend),
+  `INICIADO_EN`/`FINALIZADO_EN` (2026-01-01: así 7.3 nunca toma un video de prueba como «el último»), `PERMISOS_INICIO` +
+  `PERMISO_ACTIVIDAD`, `DIR_RECOLECCION`, `LIMITE_LOGIN_S` (15), `LIMITE_LISTA_S` (30), `LIMITE_FILTRO_S` (15),
+  `LIMITE_RENOMBRAR_S` (20), `LIMITE_VUELTA_S` (30), `MAX_DESPLAZAMIENTOS` (4), `TECLA_FIN` (123) y `TECLA_BORRAR` (67), y
+  los textos de la app (5.5, `TextosVideos` y la Galería): `ACCESO_VIDEOS` («Videos») y `ACCESO_IMAGENES` («Imágenes»)
+  del Panel, `TITULO_LISTA`, `TITULO_GALERIA` («Imágenes del dataset»), `PATRON_TOTAL_VIDEOS` (`^(\d+) videos?$`),
+  `PATRON_SIN_SUBIR`, `PATRON_TOTAL_IMAGENES` («N imágenes» con separadores o «1 imagen»), `PREFIJO_FILA` («Video »),
+  `ERROR_ELIMINAR` («No se pudo eliminar el video»), `ERROR_RENOMBRAR` y `ERRORES_LOGIN`; instrucciones
+  `INSTRUCCION_C3B`, `INSTRUCCION_C2B` y `INSTRUCCION_C2C`. Piezas puras: `quitar_comentarios_kotlin(texto, cadenas=True)`
+  (Kotlin o JS sin `//` ni `/* */`, respetando `"…"`, `'…'`, `` `…` `` y `"""…"""`; con `cadenas=False` vacía también las
+  cadenas), `usos_prohibidos(archivos)`, `cuerpo_funcion_js(texto, nombre)`, `comprobar_js_eliminar(texto)` (el cuerpo de
+  `function eliminarVideo()` llama a `call('eliminarVideo')` y no tiene `setTimeout` ni `salir`), `es_de_prueba(item)`
+  (`nombre` **y** `ref_cliente` empiezan por `PREFIJO`), `valor_entero`, `total_en_pantalla(nodos, patron)`,
+  `filas_videos(nodos)`, `hay_fila(filas, nombre)` (una `content-desc` que empieza por «Video <nombre>,»),
+  `sin_subir_en_manifests(manifests)` (`finalizado` sin `remote_video_id`, con fotos válidas, como `AlmacenRecorridos`) y
+  `saludo_esperado`. Precondiciones, en orden y sin seguir si una falla: P1 Gradle (3); en `dev` y solo si alguna de C1b,
+  C3b o C2b está incluida (si no, P2–P6 «no evaluada»): P2 dispositivo físico (3), P3 URL vigente + `ApiConfig.BASE_URL`
+  igual + `GET /health` (2, o 3 sin URL), P4 login del admin por la API (401 o rol → 3; otro → 2; guarda token y nombre),
+  P5 FE-2.1 «Hecho» (2) y P6 BE-2.1 y BE-4.1 «Hecho» en `PLAN_BACKEND` + `GET /admin/videos?por_pagina=1` y `GET
+  /admin/images?por_pagina=1` con `items` y `total` + la sonda `POST /collect/videos {}` → `422 VALIDACION` (2).
+  Comprobaciones: C1a (estática: sin `PROHIBIDOS` fuera de comentarios y cadenas en `app/src/main/java`, sin
+  `assets/videos/` y con las `FACTORIES`; + JVM), C2a (`comprobar_js_eliminar` sobre `video_detalle.js` + JVM) y C3a (JVM),
+  con una sola ejecución de Gradle; si una falla, las del teléfono quedan `omitida` («no se hace: falló …»). Después, en
+  este orden: `preparar_datos()` (una vez: registra la limpieza, borra los restos y crea A y B: `POST /collect/videos` con
+  `ref_cliente = <nombre>-<sello>` —único en cada ejecución, porque volver a usar uno borrado da `409 VIDEO_ELIMINADO`—,
+  `nombre`, fechas, `inicio`, `total_fotos` 3 y `dispositivo` `validate41.py`; `POST …/images` con 3 fotos —`bytes`
+  reales, coordenadas de `POSICION_PRUEBA`, rumbos 90/180/270—; `http_put_bytes` de cada `jpeg_sintetico` a su URL; `POST
+  …/complete`, que debe dar `pendiente_subida = 0`); `abrir_panel()` (como `validate34`). **C1b**: lee los manifests
+  (`listar_archivos_app` + `leer_archivo_app`; si `run-as` no lista, no compara «M sin subir» y lo dice), toca «Videos»,
+  espera 7.13 con «N videos» y lo compara con el `total` de `GET /admin/videos` de antes **o** de después; compara «M sin
+  subir en este teléfono» (0 si no está) con los manifests; escribe `PREFIJO` en el buscador (`asegurar_busqueda`: si el
+  campo tiene otra cosa la borra con `TECLA_FIN` y `TECLA_BORRAR`) y espera las filas de A y B y «N videos» = `total` con
+  `q`; vuelve al Panel (Atrás hasta el saludo), toca «Imágenes» y compara «N imágenes» con `GET /admin/images` (antes o
+  después). **C3b**: deja 7.13 con la búsqueda (`abrir_lista_filtrada`), paso guiado (`INSTRUCCION_C3B`: abrir A,
+  «Renombrar», `RENOMBRADO`, «Guardar»), y consulta `GET /admin/videos/{A}` cada ~1 s hasta 20 s: pasa con el nombre
+  nuevo; si la app muestra «No se pudo renombrar…», falla con ese texto. **C2b**: deja 7.13 con la búsqueda, paso guiado
+  (`INSTRUCCION_C2B`: abrir B, «Eliminar video», escribir su nombre, confirmar y **esperar sin tocar** a que la app vuelva
+  sola), espera hasta 30 s a 7.13 (si se ve el diálogo «No se pudo eliminar el video», falla con su mensaje), exige `GET
+  /admin/videos/{B}` → `404`, que 7.13 con la búsqueda no tenga la fila de B y sí la de A (o del renombrado) con «N videos»
+  = `total` con `q`, y en la Galería, con `PREFIJO` en su buscador, «N imágenes» = `GET /admin/images?q=` y ninguna
+  tarjeta «… video validacion-4-1-b»; además `GET /admin/images?video_id=<B>` da 0. Limpieza (orden inverso): `am
+  force-stop` y `borrar_restos()`: `DELETE /v1/admin/videos/{id}` (`202` o `404`) de los de `GET
+  /admin/videos?q=validacion-4-1` (hasta 20 páginas de 100) que cumplen `es_de_prueba`, y de los que creó esta ejecución
+  si su `ref_cliente` es del prefijo (por si la persona los renombró a otra cosa); **nunca** otros videos (uno que solo se
+  *llama* `validacion-4-1…` pero cuyo `ref_cliente` no lo es se queda) ni imágenes sueltas; nunca `pm clear`. Las pruebas
+  (`tests/ops/test_validate41.py`, 20) simulan el backend de videos e imágenes (recolección con URLs `PUT` firmadas, `q`,
+  páginas, `DELETE` `202`), el teléfono (Inicio, Login, Panel con «Videos» e «Imágenes», 7.13 con buscador, «N videos», «M
+  sin subir…» y filas, 7.14, la Galería con buscador, «N imágenes» y tarjetas, `files/recoleccion` por `run-as`, Atrás,
+  `input text` y `KEYCODE_DEL`) y Gradle, y lo que hace la persona en cada paso guiado; recorren `main()` en `local` y
+  `dev` (feliz con un resto de una ejecución anterior, un video real y uno que solo se llama como los de prueba —los dos se
+  quedan—; contador de 7.13, «M sin subir» o contador de la Galería distintos; sin renombrar; error al borrar; la app que
+  no vuelve a 7.13; BE-4.1 sin «Hecho»; credenciales malas; `--solo C1a,C2a,C3a`; JVM que falla; EOF) y las piezas puras
+  (comentarios y cadenas, el JS viejo con el `setTimeout` y el de la app), y comprueban que ni la contraseña, ni el token,
+  ni la firma de las URLs `PUT` salen por stdout, stderr o el informe y que nunca se llama a `pm clear`.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -3976,6 +4250,20 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
   7.3 sin desplazar (sin comprobar si existe más abajo): el recorrido se creó como `video_N` y el nombre `validacion-3-3`
   se puso en 7.5 («Nombre del video») antes de «Guardar y subir después». Hace falta: la limpieza borra del teléfono el
   recorrido por ese nombre.
+
+- **FE-4.1, `validate41.py`:** los dos pasos guiados leen la entrada estándar (terminal interactiva o, como hizo el
+  maestro en FE-2.2, una FIFO con los pasos hechos por `adb`). En C2b **la persona no navega tras confirmar**: es la app la
+  que vuelve a 7.13 cuando el servidor responde `202`; si la persona pulsa Atrás antes, C2b puede pasar igual (la lista se
+  ve) pero no prueba la vuelta sola. Crea y borra videos en `dev` (la purga de S3 necesita el `worker`, es decir,
+  `embedding` encendido; sin él, los objetos de los videos borrados esperan en la cola `purga` y no salen en ninguna
+  lista): no correrlo a la vez que otro validador que cuente videos o fotos (`validate22.py` compara `total_fotos`) ni que
+  el de BE-4.1 (que borra todos los videos `validacion-`). Los contadores de C1b se comparan con la API **antes o
+  después** de leer la pantalla: si la cola de subida del teléfono crea un video justo entonces, puede fallar (repetir).
+  No necesita `embedding`: las fotos de prueba pueden quedarse en `subida` (la Galería y la Lista cuentan todas); con
+  `embedding` encendido el `worker` las procesa (son JPEG válidos) y salen sus miniaturas. **Sin comprobar en el
+  teléfono:** que `uiautomator` vuelque el encabezado de 7.13 y las `content-desc` de sus filas y de las tarjetas de la
+  Galería (Compose las fusiona con `mergeDescendants`, como `TileDato` y `FilaLugar`), que `KEYCODE_DEL` borre el buscador
+  y que el diálogo de error se vea sobre el `WebView` de 7.14.
 
 ---
 
@@ -4554,8 +4842,8 @@ de 7.4 tiene dictado, «Escuchar cómo sonará» y vigencia, pero no «Ajustar e
 
 **Decisiones tomadas:**
 - **Datos entre vistas con un holder en memoria** (`SesionDeRecoleccion`), no argumentos de ruta: resuelve la decisión abierta 15 para este flujo (7.3 → 7.4 → 7.5).
-- **Almacenamiento propio** (`RecoleccionRepository`), separado de `VideoRepository`: éste es la fuente de verdad (futuro `RemoteVideoRepository`); no se amplió como pedía 5.6. Ver «Pendiente» más abajo.
-- Fotos y manifest en `files/recoleccion/<rec_NNNN>/photos/NNNN.jpg` y `manifest.json` (misma forma que `assets/videos/`); prefijo `rec_` para no chocar con los datos de prueba (`vid_`); fechas en ISO-8601 (`yyyy-MM-dd'T'HH:mm:ssXXX`).
+- **Almacenamiento propio** (`RecoleccionRepository`), separado de `VideoRepository`: éste lee el backend y los recorridos terminados (desde FE-4.1, `RemoteVideoRepository` + `AlmacenRecorridos`, §5.6); no se amplió como pedía 5.6. Ver «Pendiente» más abajo.
+- Fotos y manifest en `files/recoleccion/<rec_NNNN>/photos/NNNN.jpg` y `manifest.json` (la forma que tenían los videos de ejemplo de `assets/videos/`, quitados en FE-4.1); prefijo `rec_` para no chocar con los de ejemplo (`vid_`); fechas en ISO-8601 (`yyyy-MM-dd'T'HH:mm:ssXXX`).
 - Deriva estimada = 4 % de la distancia desde el último ancla (heurística provisional; decisión abierta 16).
 - **Distancia = pasos × longitud de paso calibrada** (7.3b; 0,72 m si no hay calibración): el `PdrTracker` de 7.4 la lee una vez al crearse, así que calibrar **antes** de entrar a 7.4.
 - **Retomar desde el manifest** (FE-2.3, ADR-FE-17): el progreso se guarda en el propio `manifest.json` y se retoma en pausa.
@@ -4608,9 +4896,8 @@ ofrece en su tarjeta de subidas; «Descartar video» y descartar fotos solo mien
 - Toque en un lugar → editar. Opciones: editar, eliminar (con confirmación), ver fotos.
 - Alternar entre **vista de lista** y **vista de mapa**.
 
-**Implementación actual (FE-3.4):** todo lo anterior contra `GET`/`DELETE /v1/admin/places`, salvo **«Ver fotos»**, que
-está en el menú pero deshabilitado («Ver fotos (próximamente)»): las fotos con lugar llegan con BE-4.1 y la galería
-contra el backend es de FE-4.1. La vista de mapa usa `lugar_mapa.html` en modo ver (tocar un lugar lo edita). El buscador y
+**Implementación actual (FE-3.4):** todo lo anterior contra `GET`/`DELETE /v1/admin/places`; **«Ver fotos»** del menú
+(deshabilitado en FE-3.4) abre desde FE-4.1 la Galería filtrada por ese lugar (`admin/imagenes?lugar=<id>`, §4.10). La vista de mapa usa `lugar_mapa.html` en modo ver (tocar un lugar lo edita). El buscador y
 los chips son los de 6.4. Detalle, firmas y textos en §5.5 («Lugares de administración»); ruta en §5.8; construido en
 §4.8. ⚠ Sin probar en el teléfono (FE-3.4 en `dev`).
 
@@ -4638,8 +4925,8 @@ los chips son los de 6.4. Detalle, firmas y textos en §5.5 («Lugares de admini
 separados por comas; el punto de llegada se elige tocando el mapa o arrastrando el alfiler (con los demás lugares como
 contexto) y se ve siempre en el pie fijo «Punto: lat, lng» (6 decimales: es exactamente lo que se guarda). Las
 validaciones locales son las de longitud y obligatorios de `LugarEntrada`; **el nombre único lo decide el backend**: su
-`409 NOMBRE_DUPLICADO` se muestra bajo el campo nombre sin salir del formulario (ADR-FE-30). «Fotos asociadas» es solo el
-número (`total_fotos`, 0 hasta BE-4.1), sin lista ni enlace a la galería (FE-4.1). Eliminar solo al editar, con
+`409 NOMBRE_DUPLICADO` se muestra bajo el campo nombre sin salir del formulario (ADR-FE-30). «Fotos asociadas» es el
+número (`total_fotos`) y, desde FE-4.1, al editar, el botón «Ver en la galería» (la Galería filtrada por el lugar; §4.10). Eliminar solo al editar, con
 confirmación. Detalle en §5.5 («Lugares de administración»); ruta en §5.8; construido en §4.8. ⚠ Sin probar en el
 teléfono (FE-3.4 en `dev`).
 
@@ -4794,7 +5081,14 @@ muestra un aviso con «Sincronizar». Detalle en §5.5 («Lista de alertas (7.10
 
 ![alt text](<../assets/galeria_de_imagenes.png>)
 
-**Implementación actual:** con datos locales: `assets/` y, desde FE-2.1, los recorridos grabados `finalizado` de `files/recoleccion/` (`VideoRepositoryCompuesto`, §5.6). Lo que falta está en `PLAN.md`, FE-4.1.
+**Implementación actual (FE-4.1, §4.10):** contra el backend: las fotos de `GET /v1/admin/images` (24 por página, filtros
+del servidor: lugar y video por id, estado, calidad y búsqueda en el nombre del video o las notas); «N imágenes» es el
+`total` con los filtros activos; Eliminar y Reasignar en lote con `POST /v1/admin/images/lote` y un **selector de
+lugares reales** (y «Sin lugar»), informando las que fallaron; se recarga sola tras borrar o reasignar (aquí o en 7.14).
+Las fotos de los recorridos del teléfono sin subir **no** salen (se ven en 7.5 y en su 7.14). Se abre filtrada por un
+lugar desde 7.6 («Ver fotos») y 7.7. **No están** (pasaron a FE-4.4, decisión del usuario del 2026-10-27): la vista de
+mapa (muestra un mensaje), el filtro por fecha, «Subir imágenes» y el Detalle de imagen (7.12: tocar una foto muestra un
+`Toast`). Detalle, firmas y textos en §5.5 («`GaleriaViewModel`», «`GaleriaScreen`»).
 
 **Elementos:**
 - **Encabezado**: contador de imágenes (según los filtros activos) y chip "Página x de y".
@@ -4823,26 +5117,25 @@ muestra un aviso con «Sincronizar». Detalle en §5.5 («Lista de alertas (7.10
 (archivo, video, lugar, estado, calidad y si está seleccionada); la selección se hace con pulsación
 larga, que TalkBack expone como acción ("Seleccionar"); el encabezado está marcado como título.
 
-**Fuente de datos (provisional, local):** `AssetsVideoRepository` lee los videos empaquetados en
-`app/src/main/assets/videos/<video_id>/`; estructura de carpetas y formato del `manifest.json` en §5.6
-(«`VideoRepository` en detalle»).
+**Fuente de datos (FE-4.1):** `RemoteVideoRepository` (`/v1/admin/images` y su lote; §5.10, «Videos e imágenes de
+administración»). Hasta FE-4.1 eran los videos empaquetados en `assets/videos/` y los recorridos del teléfono.
 
 **Módulos que lo implementan:**
 
 | Archivo | Responsabilidad |
 |---|---|
 | `ui/admin/imagenes/GaleriaScreen.kt` | Pantalla (`GaleriaScreen`), contenido sin estado (`GaleriaContent`), `GaleriaAcciones` y previews |
-| `ui/admin/imagenes/GaleriaViewModel.kt` | Estado (`GaleriaUiState`, `GaleriaFiltros`, `ModoVista`), filtros, búsqueda, selección, paginación y acciones en lote |
-| `data/repository/VideoRepository.kt` | Contrato (`VideoRepository`) e implementación local (`AssetsVideoRepository`) (**TODO:** `RemoteVideoRepository`) |
-| `domain/model/Foto.kt` | `Foto`, `Video`, `EstadoFoto`, `CalidadFoto` |
+| `ui/admin/imagenes/GaleriaViewModel.kt` | Estado (`GaleriaUiState`, `GaleriaFiltros`, `OpcionFiltro`, `OperacionLote`, `ModoVista`), filtros, búsqueda, selección, paginación del servidor y acciones en lote |
+| `data/repository/VideoRepository.kt` · `data/remote/RemoteVideoRepository.kt` | Contratos (`ImagenesRepository`, `VideoRepository`) y la implementación contra el backend |
+| `domain/model/Foto.kt` · `domain/model/ResumenVideo.kt` | `Foto`, `Video`, `EstadoFoto`, `CalidadFoto`; `FiltrosImagenes`, `PaginaImagenes`, `AccionLote`, `ResultadoLote` |
 
-**Dependencia:** Coil para cargar imágenes (`io.coil-kt:coil-compose:2.7.0`); entiende las URLs
-`file:///android_asset/...` y, más adelante, las URLs prefirmadas de S3.
+**Dependencia:** Coil para cargar imágenes (`io.coil-kt:coil-compose:2.7.0`); carga las URLs prefirmadas de S3 tal cual
+(1 h; al volver a la pantalla con la página por vencer, se pide de nuevo).
 
-**Navegación:** ruta `admin/imagenes`; conexiones en §5.8.
+**Navegación:** ruta `admin/imagenes?lugar={lugar}&video={video}`; conexiones en §5.8.
 
-**Pendiente:** `PLAN.md`, FE-4.1 (vista de mapa, filtro por fecha, backend, navegar al detalle, «Subir imágenes»)
-y FE-4.3 (paleta).
+**Pendiente:** `PLAN.md`, FE-4.4 (vista de mapa, filtro por fecha, navegar al detalle 7.12, «Subir imágenes») y FE-4.3
+(paleta). ⚠ Sin probar en el teléfono (FE-4.1 en `dev`).
 
 ### 7.12 Detalle de imagen — `ui/admin/imagenes/DetalleImagenScreen.kt`
 
@@ -4879,13 +5172,33 @@ inspeccionarlo o eliminarlo.
 - Indicador de videos pendientes sin sincronizar.
 - Botón **"Nuevo video"** (lleva a la ubicación manual inicial).
 
+**Implementación actual (FE-4.1, §4.10):** los videos del servidor (todas las páginas de `GET /v1/admin/videos`) **y**,
+arriba, los recorridos de este teléfono que el backend aún no conoce, cada uno con su marca (ícono, borde naranja, «en
+este teléfono»); uno que ya tiene video en el servidor sale una sola vez, con los datos del servidor (decisión del
+usuario del 2026-10-27; ADR-FE-35). Fila: nombre, fecha, nº de fotos, distancia y duración (las del PDR) y estado.
+Encabezado: «N videos» (el `total` del servidor) y «M sin subir en este teléfono». Búsqueda por nombre y orden por fecha,
+nombre o nº de fotos (los del servidor). Cargando, error con «Reintentar» (los locales se ven igual) y vacío. «Nuevo
+video» → 7.3. **No están** (FE-4.4): minimapa por fila, acciones por fila (renombrar y eliminar se hacen en 7.14;
+«reintentar subida» y «reprocesar»), comparar cobertura. La duración se muestra si se midió. Detalle en §5.5
+(«`VideosScreen` y `VideosViewModel`»); ruta en §5.8. ⚠ Sin probar en el teléfono (FE-4.1 en `dev`).
+
 ---
 
 ### 7.14 Detalle de video — `ui/admin/videos/VideoDetalleScreen.kt`
 
 ![alt text](<../assets/detalle_de_video.png>)
 
-**Implementación actual:** con datos locales: `assets/` y, desde FE-2.1, los recorridos grabados `finalizado` (`VideoRepositoryCompuesto`, §5.6; renombrar y eliminar siguen en memoria también para ellos). Lo que falta está en `PLAN.md`, FE-4.1.
+**Implementación actual (FE-4.1, §4.10):** un video del servidor (`GET /v1/admin/videos/{id}`, miniaturas por URLs
+prefirmadas que se renuevan antes de vencer) o un recorrido del teléfono sin subir (miniaturas por
+`https://miniaturas.local/…`, ADR-FE-36). Renombrar (`PATCH`, o el nombre del manifest en uno local: es el que se sube
+después), eliminar una foto (`DELETE /v1/admin/images/{id}`, o descartarla del manifest) y eliminar el video (`DELETE
+/v1/admin/videos/{id}` con `202`, o borrar la carpeta del recorrido) **persisten**; mientras el servidor responde, la app
+tapa el mapa con «Guardando el nombre…» / «Eliminando…» y Atrás no hace nada; un error se muestra con «Reintentar» y
+nunca cierra la app; tras eliminar el video vuelve a 7.13 **cuando el servidor lo confirmó**. Un recorrido local que se
+está subiendo no se puede renombrar ni eliminar (nota visible; ADR-FE-35). «Mostrar otros videos» carga, al activarlo,
+hasta 500 fotos de los demás videos. **No están** (FE-4.4): «Ver detalle» (7.12; botón «Detalle (próximamente)»
+deshabilitado), la confirmación por pulsación larga, la duración y el nombre editable en el encabezado, y la base común de
+mapas para 7.11 y 7.12. Detalle en §5.5 («`VideoDetalleViewModel`», «`VideoDetalleScreen` y `VideoBridge`») y §5.9.
 
 **Propósito:** al seleccionar un video, ver en el mapa **SOLO las fotos de ese video** y
 poder renombrarlo o eliminarlo por completo. Se llega desde la Lista de videos (7.13).
@@ -4916,10 +5229,11 @@ poder renombrarlo o eliminarlo por completo. Se llega desde la Lista de videos (
    fotos del sistema de ubicación y no se puede deshacer."*
 2. Confirmación reforzada: hay que **escribir el nombre exacto del video**; el botón
    "Eliminar video" permanece deshabilitado hasta que coincida.
-3. Aviso "Video eliminado" y regreso automático a la lista de videos.
-4. *(Pendiente con backend, FE-4.1)* progreso del borrado (imágenes, embeddings e índice) y, si falla
-   parcialmente, informar y permitir reintentar sin dejar fotos "huérfanas". En local el
-   borrado es instantáneo y no puede fallar.
+3. Aviso «Eliminando el video…» mientras el servidor responde; con el `202`, `Toast` ««nombre» eliminado (N fotos
+   retiradas).» y regreso automático a la lista de videos (desde FE-4.1; antes el JS salía a los 900 ms sin esperar).
+4. *(FE-4.1)* Si falla, diálogo «No se pudo eliminar el video» con el motivo, «Reintentar» y «Cerrar»; la pantalla sigue
+   abierta. El borrado del backend es una transacción (el video y sus vectores) y la purga de S3, del `worker`: no deja
+   fotos «huérfanas» a la vista (backend §4.12).
 
 **Eliminar una foto:** botón en la tarjeta de vista previa, con confirmación. Si el video
 queda con 0 fotos, se ofrece eliminarlo.
@@ -4934,25 +5248,19 @@ deselecciona la foto y, si no queda nada, sale a la lista.
 - Los cambios se aplican de inmediato en la pantalla; el ViewModel los guarda en el
   repositorio y la Lista de videos (7.13) se refresca sola.
 
-**Fuente de datos (provisional, local):** `AssetsVideoRepository` (ver 7.11) lee
-`assets/videos/<video_id>/manifest.json`. Como los assets son de solo lectura, renombrar y
-eliminar se guardan **en memoria** (`EdicionesLocales`, un objeto único del proceso): se
-pierden al cerrar la app. Al cambiar algo, el repositorio emite por `cambios()` y las
-pantallas abiertas (7.13 y 7.14) vuelven a cargar.
-
-> `VideoRepository` ganó `renombrarVideo`, `eliminarVideo`, `eliminarFoto` y `cambios()`.
-> Con el backend, `RemoteVideoRepository` los implementa con llamadas a la API y `EdicionesLocales`
-> desaparece; las pantallas no cambian.
+**Fuente de datos (FE-4.1):** `VideoRepositoryCompuesto` = `RemoteVideoRepository` + los recorridos del teléfono
+(§5.6). Al cambiar algo sube `CambiosVideos` y las pantallas abiertas (7.11, 7.13 y 7.14) vuelven a cargar.
+`EdicionesLocales` (renombrar y eliminar en memoria sobre `assets/videos/`) ya no existe.
 
 **Módulos que lo implementan:**
 
 | Archivo | Responsabilidad |
 |---|---|
 | `ui/admin/videos/VideoDetalleScreen.kt` | `VideoDetalleScreen` (la que usa el NavHost: conecta ViewModel y navegación), `VideoDetalleContent` (solo dibuja el `WebView`) e interfaz `VideoDetalleEventos` |
-| `ui/admin/videos/VideoDetalleViewModel.kt` | Carga el video y los demás, los serializa a JSON para el mapa y delega renombrar / eliminar foto / eliminar video al repositorio |
+| `ui/admin/videos/VideoDetalleViewModel.kt` | Carga el video (y, al pedirlo, las fotos de los demás), los serializa a JSON para el mapa, y renombra / elimina foto / elimina video con estado de operación, errores con «Reintentar» y el evento `Eliminado` |
 | `app/src/main/assets/video_detalle.html` | Interfaz (estilos y estructura): cabecera, tarjeta, tira de miniaturas y barra inferior |
 | `app/src/main/assets/video_detalle.js` | Leaflet + OSM, marcadores con rumbo, trayectoria, selección sincronizada y diálogos; usa `mapa_base.js` para el puente, `toast`, `dialogo`, medidas y mapa (5.9) |
-| `data/repository/VideoRepository.kt` | Contrato e implementación local (ver arriba) |
+| `data/repository/VideoRepository.kt` · `data/remote/RemoteVideoRepository.kt` · `data/local/MiniaturasLocales.kt` | Contrato, mezcla servidor + teléfono, backend y miniaturas locales (ver arriba) |
 | `domain/model/Foto.kt` | `Video.distanciaMetros` (fórmula de haversine) |
 
 **Puente WebView ↔ Android:** `VideoBridge`; funciones y formato de los datos en §5.9.
@@ -4961,14 +5269,14 @@ pantallas abiertas (7.13 y 7.14) vuelven a cargar.
 
 **Requisitos:** `video_detalle.html` y `video_detalle.js` en la raíz de `assets/`, permiso
 `INTERNET` y conexión a internet (Leaflet y las teselas se descargan en línea; ver decisión
-abierta 13). Las fotos se cargan desde `file:///android_asset/...`. Si la página no carga,
-`VideoDetalle` en Logcat muestra los errores del `WebView`.
+abierta 13). Las fotos del servidor son URLs prefirmadas de S3; las de un recorrido local, `https://miniaturas.local/…`
+(las sirve la app, sin red). Si la página no carga, `VideoDetalle` en Logcat muestra los errores del `WebView`.
 
 **Accesibilidad:** botones de 48 dp o más (miniaturas de 64 dp); cada miniatura y marcador
 lleva su número ("Foto 3 de 6"); los diálogos son `alertdialog` y el campo de texto recibe el
 foco al abrir.
 
-**Pendiente:** `PLAN.md`, FE-4.1.
+**Pendiente:** `PLAN.md`, FE-4.4. ⚠ Sin probar en el teléfono (FE-4.1 en `dev`).
 
 ---
 
@@ -5310,6 +5618,52 @@ llama a rutas protegidas: dibuja las existentes con `GET /v1/alerts` (pública, 
 7.4 no ve las inactivas del servidor salvo las que ya tenía el teléfono; el chip de 7.8 cuenta un pendiente tras crear y
 borrar.
 
+**ADR-FE-35 — La Lista junta servidor y teléfono, cada recorrido una sola vez; los recorridos sin subir se editan en
+disco salvo mientras se suben (aceptada, 2026-10-27, FE-4.1; la mezcla, decisión del usuario).**
+Hacía falta que 7.13 mostrara los videos del backend sin perder de vista lo grabado en el teléfono que aún no se subió (el
+del usuario tiene unos 13 recorridos así). Pregunta del maestro al usuario («¿qué muestra 7.13?»; respondió «haz lo que
+más creas conveniente» y el maestro eligió la recomendada): los del servidor **más** los recorridos locales sin subir;
+uno que ya tiene video en el servidor (subido o a medias) sale **una sola vez**, con los datos del servidor; los de
+`assets/videos/` ya no salen. Cómo se casa: por `remote_video_id` (lo guarda la cola tras `POST /v1/collect/videos`), no
+por `ref_cliente`, porque otro teléfono con la misma cuenta numera también `rec_NNNN` y casarlos ocultaría un recorrido
+real; el coste es el caso raro de un `POST` cuya respuesta no llegó a guardarse (sale dos veces hasta que la cola lo
+retome). Los locales van arriba, en su sección, con su contador «M sin subir en este teléfono»; «N videos» es el `total`
+del servidor. Para 7.14 de un recorrido local (preferencia del maestro): renombrar, eliminar una foto y eliminar el video
+**persisten en disco** (`AlmacenRecorridos.renombrar`, `descartarFoto`, `descartar`; el nombre nuevo es el que se sube
+después), y se **deshabilitan** con una nota visible mientras se sube (`subida_estado = subiendo` o la cola activa sobre
+él), porque `SubidaRecorrido` lee el manifest al empezar y una carpeta borrada a mitad dejaría un video a medias en el
+backend. *Consecuencias:* `EdicionesLocales` desaparece (C1); 7.13 no se puede ver sin leer el disco (rápido: manifests
+pequeños) y, sin red, muestra solo los locales con el error del servidor; nada borra un recorrido local salvo «Eliminar
+video» de su 7.14 o «Descartar video» de 7.5.
+
+**ADR-FE-36 — Las miniaturas de los recorridos del teléfono llegan al `WebView` por intercepción, sin `allowFileAccess`
+(aceptada, 2026-10-27, FE-4.1).**
+Hallazgo de FE-2.1: en 7.14 las miniaturas de un recorrido local salían vacías. Causa: la página (`file:///android_asset/`)
+pedía `file:///data/…` y `WebView` tiene `allowFileAccess = false` desde la API 30. Opciones: activar `allowFileAccess`
+(la página carga Leaflet de `unpkg.com`: el JavaScript de un tercero vería `file://`; y cada miniatura sería el JPG original
+de 3–5 MB decodificado entero), pasar las miniaturas en el JSON como `data:` (cientos de KB por video en cada
+`cargarVideo`), `androidx.webkit.WebViewAssetLoader` (dependencia nueva) o interceptar con `shouldInterceptRequest` una
+URL propia. Se eligió la última: `MapaWebView(recursos = …)` (parámetro opcional: las demás páginas no cambian) y
+`MiniaturasLocales`, que solo sirve `https://miniaturas.local/<rec>/photos/<archivo>` con un id y un archivo validados (sin
+`..`) y una copia de 240 px re-codificada con el `Recodificador` de la subida (EXIF aplicado) en `cacheDir`.
+*Consecuencias:* sin dependencias nuevas; la primera vez cada miniatura cuesta una decodificación con `inSampleSize`
+(~50–100 ms, sin medir en el teléfono) en un hilo del `WebView`; la caché ocupa ~10–20 KB por foto y la limpia Android.
+
+**ADR-FE-37 — 7.14 espera al servidor antes de salir, renueva las URLs prefirmadas y carga «Mostrar otros videos» bajo
+demanda con tope (aceptada, 2026-10-27, FE-4.1).**
+Con el backend, renombrar y eliminar pueden fallar, y el JS salía de la pantalla a los 900 ms sin saber el resultado
+(§5.5, hasta 0.13.1); las URLs de las fotos valen 1 h; y «Mostrar otros videos» pedía las fotos de todos los demás videos
+(con el backend, un `GET` de detalle por video). Decisiones: (a) las operaciones las confirma Kotlin: la pantalla tapa el
+mapa mientras responde el servidor (Atrás no hace nada), un error sale en un diálogo con «Reintentar» (nunca cierra la
+app) y la vuelta a 7.13 ocurre con el `202`; el JS solo llama al puente; (b) con la pantalla visible, el video se vuelve a
+pedir 5 min antes del `url_expira_en` más temprano (y al volver a la pantalla); la Galería, al volver a la pantalla si la
+página vence en menos de 5 min; (c) «Mostrar otros videos» (elegido entre cargarlo al activarlo con tope o
+deshabilitarlo con una nota): la página avisa (`pedirOtros`) la primera vez que se activa y Kotlin junta las coordenadas
+de `GET /v1/admin/images` (de 100 en 100, hasta 500 fotos o 10 páginas) y de los recorridos locales sin subir, con un aviso
+si se cortó. *Consecuencias:* contrato de `VideoBridge` ampliado (`pedirOtros`; `cargarOtros` con objeto; `editable`,
+`nota`, `local` y `rev` en el video, §5.9); C2 se comprueba en `dev` con la vuelta sola a 7.13 (`validate41.py` C2b) y en
+`local` con el JS (C2a); con más de 500 fotos en otros videos, la capa queda incompleta (el aviso lo dice).
+
 ### 8.2 Decisiones abiertas
 
 La numeración se conserva: otras secciones y documentos citan «decisión abierta N».
@@ -5384,7 +5738,7 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
 | R10 | La subida solo avanza con el proceso vivo y con sesión (ADR-FE-19): con la app cerrada o sin login no sube | Media | Bajo | El progreso queda en el manifest; la tarjeta del Panel avisa de lo pendiente y lo retoma al entrar. Si hiciera falta subir en segundo plano sin abrir la app, valorar WorkManager con un token de larga vida (cambio de contrato del backend) |
 | R7 | Eventos de una sola vez perdidos (`SharedFlow` sin repetición) dejan pantallas atascadas | Baja | Medio | Ver 5.1; migrar a `Channel` donde importe (el Escaneo ya lo usa desde FE-3.2; quedan Inicio y Destino) |
 | R8 | En `dev` la ubicación no funciona mientras embeddings está apagado (por defecto, y siempre desde las 22:00) | Alta | Bajo | Mensaje claro con `503 EMBEDDING_NO_DISPONIBLE` (§5.10); encender embeddings antes de probar (infra §3.4) |
-| R9 | Ediciones de admin hechas sobre datos locales se pierden al cerrar la app (`EdicionesLocales`) | Media | Bajo | Desde FE-3.3 las alertas se guardan en disco y se sincronizan (ADR-FE-33); queda `EdicionesLocales` de la galería y los videos, que desaparece con FE-4.1 |
+| R9 | Ediciones de admin hechas sobre datos locales se pierden al cerrar la app (`EdicionesLocales`) | Baja | Bajo | **Resuelto en FE-4.1:** las alertas se guardan en disco y se sincronizan (FE-3.3, ADR-FE-33) y los videos y fotos se editan en el backend o, los recorridos sin subir, en su manifest (ADR-FE-35); `EdicionesLocales` ya no existe |
 
 ### 9.2 Notas para quien implemente
 

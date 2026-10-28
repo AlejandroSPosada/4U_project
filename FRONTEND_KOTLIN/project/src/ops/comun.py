@@ -1451,6 +1451,112 @@ def leer_objeto_s3(bucket: str, clave: str, *, primeros: int = 131072) -> Objeto
     return ObjetoS3(clave, total, dimensiones_jpeg(contenido))
 
 
+# --- FE-4.1: subir fotos de prueba por la API de recolección (sin la app) -----------------------------------------
+
+
+def http_put_bytes(url: str, datos: bytes, encabezados: dict[str, str], *, timeout: float = 60.0) -> RespuestaHttp:
+    """`PUT` de `datos` a una URL prefirmada de S3 con **exactamente** los `encabezados` que dio el backend (backend
+    §5.4: `Content-Type` va en la firma). Sin `X-Request-Id` ni `Authorization` (como `SubidorS3` de la app). La URL
+    lleva la firma en la *query*: nunca se imprime ni va a un mensaje (un error dice solo el tipo). 4xx/5xx se
+    devuelven; sin respuesta → ErrorRed."""
+    peticion = urllib.request.Request(url, data=datos, method="PUT", headers=dict(encabezados))
+    inicio = time.monotonic()
+    try:
+        with urllib.request.urlopen(peticion, timeout=timeout) as r:  # noqa: S310 — URL https del backend
+            return RespuestaHttp(
+                r.status, dict(r.headers.items()), r.read().decode("utf-8", errors="replace"), _ms(inicio)
+            )
+    except urllib.error.HTTPError as e:
+        return RespuestaHttp(e.code, dict(e.headers.items()), e.read().decode("utf-8", errors="replace"), _ms(inicio))
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        motivo = getattr(e, "reason", e)
+        raise ErrorRed(f"PUT a S3 sin respuesta ({type(motivo).__name__})") from None
+
+
+# Tabla de Huffman de los coeficientes DC de luminancia (JPEG, anexo K.3) y una de AC con un solo símbolo, EOB (0x00),
+# de un bit: los bloques son de un solo tono, así que no hay coeficientes AC.
+_DC_BITS = (0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)
+_DC_VALORES = tuple(range(12))
+_AC_BITS = (1,) + (0,) * 15
+_AC_VALORES = (0x00,)
+_CUANTIZACION = 8  # el coeficiente DC cuantizado queda en el nivel de gris − 128
+
+
+def _codigos_huffman(bits: tuple[int, ...], valores: tuple[int, ...]) -> dict[int, tuple[int, int]]:
+    """Códigos canónicos `{símbolo: (código, longitud)}` de una tabla DHT."""
+    codigos: dict[int, tuple[int, int]] = {}
+    codigo, k = 0, 0
+    for longitud in range(1, 17):
+        for _ in range(bits[longitud - 1]):
+            codigos[valores[k]] = (codigo, longitud)
+            codigo += 1
+            k += 1
+        codigo <<= 1
+    return codigos
+
+
+class _EscritorBits:
+    def __init__(self) -> None:
+        self.salida = bytearray()
+        self._acumulado = 0
+        self._n = 0
+
+    def poner(self, valor: int, longitud: int) -> None:
+        for i in range(longitud - 1, -1, -1):
+            self._acumulado = (self._acumulado << 1) | ((valor >> i) & 1)
+            self._n += 1
+            if self._n == 8:
+                self.salida.append(self._acumulado)
+                if self._acumulado == 0xFF:
+                    self.salida.append(0x00)  # relleno de bytes (byte stuffing)
+                self._acumulado, self._n = 0, 0
+
+    def cerrar(self) -> bytes:
+        if self._n:
+            faltan = 8 - self._n
+            self.poner((1 << faltan) - 1, faltan)  # se completa con unos
+        return bytes(self.salida)
+
+
+def _segmento(marcador: int, cuerpo: bytes) -> bytes:
+    return bytes((0xFF, marcador)) + (len(cuerpo) + 2).to_bytes(2, "big") + cuerpo
+
+
+def jpeg_sintetico(ancho: int = 640, alto: int = 480, semilla: int = 0) -> bytes:
+    """JPEG *baseline* en escala de grises hecho a mano, sin Pillow (FE-4.1): bloques de 8×8 de un solo tono que dibujan
+    franjas diagonales según `semilla` (la misma semilla, los mismos bytes; distintas, otros bytes). `ancho` y `alto`
+    deben ser múltiplos de 8. 640×480 ocupa ~4 KB; su lado menor (480) cumple el mínimo del `worker` (320, backend
+    §5.10). `dimensiones_jpeg` lo lee; la decodificación con libjpeg se prueba si hay Pillow."""
+    if ancho <= 0 or alto <= 0 or ancho % 8 or alto % 8:
+        raise ValueError("jpeg_sintetico: ancho y alto deben ser múltiplos de 8")
+    dc, ac = _codigos_huffman(_DC_BITS, _DC_VALORES), _codigos_huffman(_AC_BITS, _AC_VALORES)
+    bits = _EscritorBits()
+    anterior = 0
+    for by in range(alto // 8):
+        for bx in range(ancho // 8):
+            nivel = 28 + (bx * 3 + by * 5 + semilla * 37) % 200
+            valor = nivel - 128  # DC cuantizado: 8·(nivel − 128) / _CUANTIZACION
+            diferencia = valor - anterior
+            anterior = valor
+            categoria = abs(diferencia).bit_length()
+            codigo, longitud = dc[categoria]
+            bits.poner(codigo, longitud)
+            if categoria:
+                bits.poner(diferencia if diferencia >= 0 else diferencia + (1 << categoria) - 1, categoria)
+            codigo, longitud = ac[0x00]  # EOB: el resto del bloque es cero
+            bits.poner(codigo, longitud)
+    salida = bytearray(b"\xff\xd8")
+    salida += _segmento(0xE0, b"JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00")
+    salida += _segmento(0xDB, b"\x00" + bytes([_CUANTIZACION] * 64))
+    salida += _segmento(0xC0, b"\x08" + alto.to_bytes(2, "big") + ancho.to_bytes(2, "big") + b"\x01\x01\x11\x00")
+    salida += _segmento(0xC4, b"\x00" + bytes(_DC_BITS) + bytes(_DC_VALORES))
+    salida += _segmento(0xC4, b"\x10" + bytes(_AC_BITS) + bytes(_AC_VALORES))
+    salida += _segmento(0xDA, b"\x01\x01\x00\x00\x3f\x00")
+    salida += bits.cerrar()
+    salida += b"\xff\xd9"
+    return bytes(salida)
+
+
 @dataclass
 class _Entrada:
     id: str

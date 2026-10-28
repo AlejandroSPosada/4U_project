@@ -7,6 +7,7 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Part
@@ -57,9 +58,60 @@ interface CampusApi {
     @POST("collect/videos/{id}/complete")
     suspend fun completarSubida(@Path("id") videoId: String): Response<SubidaCompletadaDto>
 
-    /** `GET /v1/admin/videos/{id}` (backend §5.5; FE-2.1): `VideoResumen` + `fotos` para el progreso por foto. */
+    /**
+     * `GET /v1/admin/videos/{id}` (backend §5.5; FE-2.1): `VideoResumen` + `fotos` para el progreso por foto. Desde
+     * FE-4.1 también el detalle de 7.14 (cada foto con sus URLs GET prefirmadas de 1 h).
+     */
     @GET("admin/videos/{id}")
     suspend fun video(@Path("id") videoId: String): Response<VideoResumenDto>
+
+    /**
+     * `GET /v1/admin/videos` (backend §5.5; FE-4.1, Lista 7.13): una página de `VideoResumen`, sin los eliminados.
+     * `orden` ∈ `fecha`/`nombre`/`fotos`, `dir` ∈ `desc`/`asc`, `por_pagina` ≤ 100. Retrofit omite los `null`.
+     */
+    @GET("admin/videos")
+    suspend fun videos(
+        @Query("q") q: String? = null,
+        @Query("orden") orden: String? = null,
+        @Query("dir") dir: String? = null,
+        @Query("pagina") pagina: Int? = null,
+        @Query("por_pagina") porPagina: Int? = null,
+    ): Response<PaginaVideosDto>
+
+    /** `PATCH /v1/admin/videos/{id}` (FE-4.1, 7.14): renombrar; `200` con el `VideoResumen`; `404`, `422`. */
+    @PATCH("admin/videos/{id}")
+    suspend fun renombrarVideo(@Path("id") id: String, @Body cuerpo: VideoRenombrarDto): Response<VideoResumenDto>
+
+    /** `DELETE /v1/admin/videos/{id}` (FE-4.1, 7.14): `202` con `VideoBorrado` (repetirlo da lo mismo); `404`. */
+    @DELETE("admin/videos/{id}")
+    suspend fun borrarVideo(@Path("id") id: String): Response<VideoBorradoDto>
+
+    /**
+     * `GET /v1/admin/images` (FE-4.1, Galería 7.11): una página de `ImagenAdmin` con sus URLs GET, por video (el más
+     * reciente primero) y `orden`. `estado` ∈ `pendiente_subida`/`subida`/`procesada`/`error`; `calidad` ∈
+     * `alta`/`normal`/`baja`; `q` busca en el nombre del video o en las notas.
+     */
+    @GET("admin/images")
+    suspend fun imagenes(
+        @Query("video_id") videoId: String? = null,
+        @Query("lugar_id") lugarId: String? = null,
+        @Query("estado") estado: String? = null,
+        @Query("calidad") calidad: String? = null,
+        @Query("q") q: String? = null,
+        @Query("pagina") pagina: Int? = null,
+        @Query("por_pagina") porPagina: Int? = null,
+    ): Response<PaginaImagenesDto>
+
+    /** `DELETE /v1/admin/images/{id}` (FE-4.1, 7.14): `204` sin cuerpo ([llamarSinCuerpo]); repetirlo da `404`. */
+    @DELETE("admin/images/{id}")
+    suspend fun borrarImagen(@Path("id") id: String): Response<Unit>
+
+    /**
+     * `POST /v1/admin/images/lote` (FE-4.1, Galería): `{"accion", "ids" (≤ 200), "lugar_id"}`. El cuerpo va como
+     * [RequestBody] ya armado (con `"lugar_id": null` explícito para «Sin lugar»), sin pasar por el convertidor.
+     */
+    @POST("admin/images/lote")
+    suspend fun loteImagenes(@Body cuerpo: RequestBody): Response<LoteResultadoDto>
 
     /**
      * `GET /v1/admin/stats` (backend §5.5, BE-2.3; FE-2.2): totales del dataset, lugares, alertas activas y último

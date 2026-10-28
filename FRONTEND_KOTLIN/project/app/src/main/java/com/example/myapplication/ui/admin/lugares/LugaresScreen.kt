@@ -80,6 +80,7 @@ fun LugaresScreen(
     onNuevo: () -> Unit,
     onEditar: (id: String) -> Unit,
     modifier: Modifier = Modifier,
+    onVerFotos: (id: String) -> Unit = {},
     vm: LugaresViewModel = viewModel(factory = LugaresViewModel.Factory()),
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
@@ -89,6 +90,7 @@ fun LugaresScreen(
             onVolver = onVolver,
             onNuevo = onNuevo,
             onEditar = onEditar,
+            onVerFotos = onVerFotos,
             onReintentar = { vm.cargar() },
             onBusqueda = vm::alBuscar,
             onCategoria = vm::alCategoria,
@@ -148,7 +150,12 @@ fun LugaresContent(estado: LugaresUiState, acciones: LugaresAcciones, modifier: 
                         contentPadding = PaddingValues(bottom = 96.dp),
                     ) {
                         items(estado.visibles, key = { it.id }) { l ->
-                            FilaLugarAdmin(l, onEditar = { acciones.onEditar(l.id) }, onBorrar = { acciones.onPedirBorrar(l) })
+                            FilaLugarAdmin(
+                                l,
+                                onEditar = { acciones.onEditar(l.id) },
+                                onBorrar = { acciones.onPedirBorrar(l) },
+                                onVerFotos = { acciones.onVerFotos(l.id) },
+                            )
                         }
                     }
                 }
@@ -185,7 +192,7 @@ fun LugaresContent(estado: LugaresUiState, acciones: LugaresAcciones, modifier: 
 
 /** Fila de 7.6: nombre, categoría, nº de fotos y coordenada; tocarla edita; ⋮ abre Editar / Eliminar / Ver fotos. */
 @Composable
-private fun FilaLugarAdmin(l: LugarAdmin, onEditar: () -> Unit, onBorrar: () -> Unit) {
+private fun FilaLugarAdmin(l: LugarAdmin, onEditar: () -> Unit, onBorrar: () -> Unit, onVerFotos: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val categoria = l.lugar.categoria
     Row(
@@ -207,10 +214,10 @@ private fun FilaLugarAdmin(l: LugarAdmin, onEditar: () -> Unit, onBorrar: () -> 
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(CampusColors.SuperficieAlta)) {
                 DropdownMenuItem(text = { Text("Editar", color = CampusColors.TextoPrincipal) }, onClick = { menu = false; onEditar() })
                 DropdownMenuItem(text = { Text("Eliminar", color = ColorBorrar) }, onClick = { menu = false; onBorrar() })
-                // Las fotos con lugar las asigna el backend desde BE-4.1; la galería contra el backend es de FE-4.1.
+                // FE-4.1: abre la Galería filtrada por este lugar (`GET /v1/admin/images?lugar_id=`).
                 DropdownMenuItem(
-                    text = { Text("Ver fotos (próximamente)", color = CampusColors.TextoSuave) },
-                    onClick = {}, enabled = false,
+                    text = { Text("Ver fotos", color = CampusColors.TextoPrincipal) },
+                    onClick = { menu = false; onVerFotos() },
                 )
             }
         }

@@ -235,6 +235,57 @@ data class VideoResumenDto(
     /** FE-2.1: conteo por estado (siempre las cuatro claves en el backend). */
     @SerializedName("conteo") val conteo: ConteoFotosDto? = null,
     @SerializedName("fotos") val fotos: List<ImagenAdminDto>? = null,
+    // FE-4.1 (7.13 y 7.3): lo que envió la app al crear el video (backend §5.4); `null` si no lo envió.
+    @SerializedName("iniciado_en") val iniciadoEn: String? = null,
+    @SerializedName("finalizado_en") val finalizadoEn: String? = null,
+    @SerializedName("duracion_s") val duracionS: Long? = null,
+    @SerializedName("distancia_m") val distanciaM: Double? = null,
+    @SerializedName("pasos") val pasos: Int? = null,
+)
+
+// ---- FE-4.1: administración de videos e imágenes (backend §5.5, BE-4.1) ------------------------------------------
+
+/** Página de `GET /v1/admin/videos` (§5.1: `{items, total, pagina, por_pagina}`). */
+data class PaginaVideosDto(
+    @SerializedName("items") val items: List<VideoResumenDto>? = null,
+    @SerializedName("total") val total: Int? = null,
+    @SerializedName("pagina") val pagina: Int? = null,
+    @SerializedName("por_pagina") val porPagina: Int? = null,
+)
+
+/** Página de `GET /v1/admin/images`. */
+data class PaginaImagenesDto(
+    @SerializedName("items") val items: List<ImagenAdminDto>? = null,
+    @SerializedName("total") val total: Int? = null,
+    @SerializedName("pagina") val pagina: Int? = null,
+    @SerializedName("por_pagina") val porPagina: Int? = null,
+)
+
+/** Cuerpo de `PATCH /v1/admin/videos/{id}` (lo envía la app): solo `nombre` (1–40 tras recortar). */
+data class VideoRenombrarDto(@SerializedName("nombre") val nombre: String)
+
+/** Respuesta `202` de `DELETE /v1/admin/videos/{id}` (`VideoBorrado`). */
+data class VideoBorradoDto(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("estado") val estado: String? = null,
+    @SerializedName("fotos_retiradas") val fotosRetiradas: Int? = null,
+    @SerializedName("purga") val purga: String? = null,
+)
+
+/** Un elemento de `fallidas` de `POST /v1/admin/images/lote`. */
+data class FallidaLoteDto(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("codigo") val codigo: String? = null,
+)
+
+/**
+ * Respuesta `200` de `POST /v1/admin/images/lote` (`LoteResultado`). El cuerpo que se **envía** no es un DTO: lo arma
+ * `RemoteVideoRepository.cuerpoLote` a mano, porque `reasignar` a «Sin lugar» exige `"lugar_id": null` explícito y el
+ * Gson de Retrofit no escribe los `null`.
+ */
+data class LoteResultadoDto(
+    @SerializedName("procesadas") val procesadas: Int? = null,
+    @SerializedName("fallidas") val fallidas: List<FallidaLoteDto>? = null,
 )
 
 // ---- Recolección (FE-2.1; backend §5.4). Los cuerpos que envía la app no son anulables salvo los opcionales del

@@ -43,4 +43,6 @@ data class LugarFormAcciones(
     val onPedirBorrar: () -> Unit = {},
     val onConfirmarBorrar: () -> Unit = {},
     val onCancelarBorrar: () -> Unit = {},
+    /** FE-4.1: «Ver en la galería» de «Fotos asociadas» (solo al editar). */
+    val onVerFotos: () -> Unit = {},
 )

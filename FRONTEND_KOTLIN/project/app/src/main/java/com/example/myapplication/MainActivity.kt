@@ -267,28 +267,46 @@ fun AppNav(rutaInicial: String? = null) {
             )
         }
 
-        composable("admin/imagenes") {
+        // 7.11 Galería (FE-4.1). `lugar` y `video` (ids, opcionales) la abren filtrada: «Ver fotos» de 7.6 y «Ver en la
+        // galería» de 7.7. `navigate("admin/imagenes")` sin argumentos también vale (el Panel). 7.12 no existe aún.
+        composable(
+            "admin/imagenes?lugar={lugar}&video={video}",
+            arguments = listOf(
+                navArgument("lugar") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("video") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { entrada ->
             GaleriaScreen(
                 onVolver = { nav.popBackStack() },
-                onAbrirImagen = { _, _ -> }, // placeholder: aún no existe la vista 7.12
+                lugarId = entrada.arguments?.getString("lugar"),
+                videoId = entrada.arguments?.getString("video"),
             )
         }
 
-        // 7.13 Lista de videos
+        // 7.13 Lista de videos (FE-4.1: servidor + recorridos del teléfono sin subir). «Nuevo video» → 7.3.
         composable("admin/videos") {
             VideosScreen(
                 onVolver = { nav.popBackStack() },
                 onAbrirVideo = { id -> nav.navigate("admin/videos/$id") },
+                onNuevoVideo = { nav.navigate("admin/ubicacion-manual") },
             )
         }
 
-        // 7.14 Detalle de video
+        // 7.14 Detalle de video. `videoId` = UUID del backend o `rec_NNNN` de un recorrido del teléfono sin subir.
+        // Tras eliminar el video (confirmado por el servidor) la pantalla llama a onVolver: vuelve a 7.13.
         composable("admin/videos/{videoId}") { entrada ->
             val videoId = entrada.arguments?.getString("videoId") ?: return@composable
             VideoDetalleScreen(
                 videoId = videoId,
                 onVolver = { nav.popBackStack() },
-                onAbrirImagen = { _, _ -> }, // placeholder: aún no existe la vista 7.12
             )
         }
 
@@ -402,6 +420,7 @@ fun AppNav(rutaInicial: String? = null) {
                 onVolver = { nav.popBackStack() },
                 onNuevo = { nav.navigate("admin/lugares/form") },
                 onEditar = { id -> nav.navigate("admin/lugares/form?id=$id") },
+                onVerFotos = { id -> nav.navigate("admin/imagenes?lugar=$id") }, // FE-4.1
             )
         }
 
@@ -420,6 +439,7 @@ fun AppNav(rutaInicial: String? = null) {
             LugarFormScreen(
                 lugarId = entrada.arguments?.getString("id"),
                 onListo = { nav.popBackStack() },
+                onVerFotos = { id -> nav.navigate("admin/imagenes?lugar=$id") }, // FE-4.1
             )
         }
 

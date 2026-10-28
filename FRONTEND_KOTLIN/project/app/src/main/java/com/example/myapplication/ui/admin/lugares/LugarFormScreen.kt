@@ -73,6 +73,7 @@ fun LugarFormScreen(
     lugarId: String?,
     onListo: () -> Unit,
     modifier: Modifier = Modifier,
+    onVerFotos: (id: String) -> Unit = {},
     vm: LugarFormViewModel = viewModel(key = "lugar-form-${lugarId ?: "nuevo"}", factory = LugarFormViewModel.Factory(lugarId)),
 ) {
     val estado by vm.estado.collectAsStateWithLifecycle()
@@ -105,6 +106,7 @@ fun LugarFormScreen(
             onPedirBorrar = vm::pedirBorrar,
             onConfirmarBorrar = vm::confirmarBorrar,
             onCancelarBorrar = vm::cancelarBorrar,
+            onVerFotos = { lugarId?.let(onVerFotos) },
         ),
         modifier = modifier,
     )
@@ -197,9 +199,18 @@ fun LugarFormContent(
 
                 Titulo("Fotos asociadas")
                 Text(
-                    "${textoFotos(estado.totalFotos)} con este lugar. Las fotos se asignan a un lugar desde la galería (próximamente).",
+                    "${textoFotos(estado.totalFotos)} con este lugar. Las fotos se asignan a un lugar desde la galería " +
+                        "(selecciona fotos y «Reasignar»).",
                     color = CampusColors.TextoSuave, fontSize = 14.sp,
                 )
+                // FE-4.1: abre la Galería filtrada por este lugar (solo al editar: uno nuevo aún no tiene id).
+                if (!estado.esNuevo) {
+                    OutlinedButton(
+                        onClick = acciones.onVerFotos,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CampusColors.Acento),
+                    ) { Text("Ver en la galería", fontSize = 16.sp) }
+                }
 
                 if (!estado.esNuevo) {
                     OutlinedButton(

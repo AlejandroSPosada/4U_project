@@ -5,7 +5,12 @@ import com.example.myapplication.domain.model.CalidadFoto
 import com.example.myapplication.domain.model.CategoriaLugar
 import com.example.myapplication.domain.model.DatosLugar
 import com.example.myapplication.domain.model.EstadoFoto
+import com.example.myapplication.domain.model.EstadoVideo
+import com.example.myapplication.domain.model.FallidaLote
 import com.example.myapplication.domain.model.Foto
+import com.example.myapplication.domain.model.PaginaImagenes
+import com.example.myapplication.domain.model.ResultadoLote
+import com.example.myapplication.domain.model.ResumenVideo
 import com.example.myapplication.domain.model.LugarAdmin
 import com.example.myapplication.domain.model.LugarCercano
 import com.example.myapplication.domain.model.LugarDestino
@@ -186,13 +191,17 @@ object MapeoDatosApi {
         else -> null
     }
 
-    /** `ImagenAdmin` → `Foto` del video [videoNombre]. URLs `null` (hasta BE-4.1) quedan como `""`. */
+    /**
+     * `ImagenAdmin` → `Foto` del video [videoNombre]. `url` `null` (la foto sigue `pendiente_subida`, o S3 sin configurar)
+     * queda `""`; sin `url_miniatura` (solo existe para las `procesada`, backend §5.5) la miniatura es la `url` original
+     * (FE-4.1). `lugar.id` → `lugarId` y `orden` pasan al modelo desde FE-4.1.
+     */
     fun foto(dto: ImagenAdminDto, videoNombre: String): Foto = Foto(
         id = obligatorio(dto.id, "imagen.id"),
         videoId = obligatorio(dto.videoId, "imagen.video_id"),
         videoNombre = videoNombre,
         urlFoto = dto.url ?: "",
-        urlMiniatura = dto.urlMiniatura ?: "",
+        urlMiniatura = dto.urlMiniatura ?: dto.url ?: "",
         lat = obligatorio(dto.lat, "imagen.lat"),
         lng = obligatorio(dto.lng, "imagen.lng"),
         rumbo = dto.rumbo?.toFloat(),
@@ -200,18 +209,89 @@ object MapeoDatosApi {
         lugar = dto.lugar?.nombre,
         estado = estadoFoto(dto.estado) ?: EstadoFoto.SUBIDA,
         calidad = enumDe<CalidadFoto>(dto.calidad) ?: CalidadFoto.NORMAL,
+        lugarId = dto.lugar?.id,
+        orden = dto.orden,
     )
 
-    /** `VideoResumen` (+ `fotos` si viene del detalle) → `Video`. El `id` es el UUID del backend. */
+    /**
+     * `VideoResumen` (+ `fotos` si viene del detalle) → `Video`. El `id` es el UUID del backend. Desde FE-4.1 también
+     * `finalizado_en` y [Video.urlsVencenEnMs] (el `url_expira_en` más temprano de sus fotos).
+     */
     fun video(dto: VideoResumenDto): Video {
         val nombre = dto.nombre ?: ""
+        val fotos = dto.fotos.orEmpty().sortedBy { it.orden ?: Int.MAX_VALUE }
         return Video(
             id = obligatorio(dto.id, "video.id"),
             nombre = nombre,
             creadoEn = dto.creadoEn,
-            fotos = dto.fotos.orEmpty().sortedBy { it.orden ?: Int.MAX_VALUE }.map { foto(it, nombre) },
+            fotos = fotos.map { foto(it, nombre) },
+            urlsVencenEnMs = fotos.mapNotNull { isoAMilis(it.urlExpiraEn) }.minOrNull(),
+            finalizadoEn = dto.finalizadoEn,
         )
     }
+
+    /**
+     * `estado` de `VideoResumen` → [EstadoVideo] (FE-4.1): `pendiente` → `SUBIDA_A_MEDIAS`, `procesando`, `procesado`,
+     * `con_errores` → el suyo; otro valor (o ausente) → `PROCESANDO`.
+     */
+    fun estadoVideo(valor: String?): EstadoVideo = when (valor?.trim()?.lowercase(Locale.ROOT)) {
+        "pendiente" -> EstadoVideo.SUBIDA_A_MEDIAS
+        "procesado" -> EstadoVideo.PROCESADO
+        "con_errores" -> EstadoVideo.CON_ERRORES
+        else -> EstadoVideo.PROCESANDO
+    }
+
+    /**
+     * `VideoResumen` → fila de 7.13 (FE-4.1). Obligatorio: `id`. `fotos` = la suma del `conteo` (las registradas); sin
+     * `conteo`, `total_fotos` (el declarado). `distancia_m` y `duracion_s` tal cual (`null` si la app no los envió).
+     */
+    fun resumenVideo(dto: VideoResumenDto): ResumenVideo {
+        val c = dto.conteo
+        val registradas = c?.let { (it.pendienteSubida ?: 0) + (it.subida ?: 0) + (it.procesada ?: 0) + (it.error ?: 0) }
+        return ResumenVideo(
+            id = obligatorio(dto.id, "video.id"),
+            nombre = dto.nombre ?: "",
+            creadoEn = dto.creadoEn,
+            finalizadoEn = dto.finalizadoEn,
+            fotos = registradas ?: dto.totalFotos ?: 0,
+            distanciaMetros = dto.distanciaM,
+            duracionSegundos = dto.duracionS,
+            estado = estadoVideo(dto.estado),
+            local = false,
+            numero = dto.numero,
+        )
+    }
+
+    /** [EstadoFoto] → el `estado` de `ImagenAdmin` (filtro de `GET /v1/admin/images`). */
+    fun claveEstadoFoto(estado: EstadoFoto): String = when (estado) {
+        EstadoFoto.PENDIENTE -> "pendiente_subida"
+        EstadoFoto.SUBIDA -> "subida"
+        EstadoFoto.PROCESADA -> "procesada"
+        EstadoFoto.ERROR -> "error"
+    }
+
+    /**
+     * Página de `GET /v1/admin/images` → [PaginaImagenes] (FE-4.1). `items` y `total` obligatorios; cada foto con
+     * `videoNombre = ""` (la imagen no trae el nombre de su video: lo pone la Galería con su lista de videos).
+     */
+    fun paginaImagenes(dto: PaginaImagenesDto, pagina: Int, porPagina: Int): PaginaImagenes {
+        val items = obligatorio(dto.items, "items")
+        return PaginaImagenes(
+            fotos = items.map { foto(it, videoNombre = "") },
+            total = obligatorio(dto.total, "total"),
+            pagina = dto.pagina ?: pagina,
+            porPagina = dto.porPagina ?: porPagina,
+            vencenEnMs = items.mapNotNull { isoAMilis(it.urlExpiraEn) }.minOrNull(),
+        )
+    }
+
+    /** `LoteResultado` → [ResultadoLote] (FE-4.1). `procesadas` obligatorio; `fallidas` ausente = vacía. */
+    fun resultadoLote(dto: LoteResultadoDto): ResultadoLote = ResultadoLote(
+        procesadas = obligatorio(dto.procesadas, "procesadas"),
+        fallidas = dto.fallidas.orEmpty().map {
+            FallidaLote(obligatorio(it.id, "fallidas.id"), it.codigo ?: "ERROR_INTERNO")
+        },
+    )
 
     /**
      * Fecha ISO-8601 en UTC del backend (`2026-10-23T15:04:05Z`, backend §5.1) → milisegundos epoch, o `null`.

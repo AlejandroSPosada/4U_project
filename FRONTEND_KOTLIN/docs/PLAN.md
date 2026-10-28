@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.13.1**. Este archivo contiene además el **catálogo único de historias de usuario**
+Alineado con `ARCHITECTURE.md` **v0.14.0**. Este archivo contiene además el **catálogo único de historias de usuario**
 del proyecto (§5), que los planes de las otras carpetas referencian.
 
 ---
@@ -70,6 +70,7 @@ prototipo ya construido sobre datos locales y *stubs*.
 | FE-4.1 | Videos e imágenes contra el backend (7.11–7.14) | FE-2.1 | FE-2.1, BE-4.1 | [`validation-4-1`](./validation/validation-4-1.md) |
 | FE-4.2 | Ajustes (6.7) | — | — | [`validation-4-2`](./validation/validation-4-2.md) |
 | FE-4.3 | Limpieza y deuda técnica | — | — | [`validation-4-3`](./validation/validation-4-3.md) |
+| FE-4.4 | Galería y videos: lo que quedó de FE-4.1 (7.8, 7.11–7.14) | FE-4.1 | FE-4.1, BE-4.1 | — (se escribe al planificarlo) |
 | FE-5.1 | Navegación guiada, llegada y fusión (6.5, 6.6) — diferido | FE-3.2, BE-5.1, BE-5.3 | — | — |
 | FE-5.2 | Estadísticas (7.15) — diferido | BE-5.2 | — | — |
 | FE-6.1 | Preparación para publicar — diferido | Fases 1–4 cerradas | — | — |
@@ -311,24 +312,41 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
 - **Historias:** HU-05.
 
 #### FE-4.1 — Videos e imágenes contra el backend (7.11–7.14)
-- **Entregables:** `RemoteVideoRepository` (desaparece `EdicionesLocales`) y lo pendiente de cada vista:
-  - **7.8:** cargar las capas de cobertura y rutas (hoy los interruptores existen sin datos).
-  - **7.11 Galería:** vista de mapa con las fotos filtradas (con un filtro de video activo, solo las de ese video);
-    filtro por fecha (requiere `capturada_en` real); Eliminar y Reasignar contra `/v1/admin/images` (hoy solo en
-    memoria) con un selector de lugares reales en vez de texto libre; navegar al detalle (7.12) con `videoId` y
-    `fotoId`; botón «Subir imágenes» (opcional).
-  - **7.12 Detalle de imagen:** vista nueva.
-  - **7.13 Lista de videos:** duración, minimapa, orden y búsqueda, acciones por fila, comparar cobertura, «Nuevo
-    video».
-  - **7.14 Detalle de video:** duración en el encabezado; confirmación reforzada por pulsación larga; borrado con
-    `DELETE /v1/admin/videos/{id}` (`202`: el video sale de la búsqueda al instante) y manejo de error; persistir
-    renombrar y eliminar; que la Galería se refresque al eliminar fotos desde aquí; navegar al Detalle de imagen; nombre
-    editable en el encabezado; reutilizar la base común de mapas en el modo Mapa de la galería y en el minimapa de 7.12.
-  - Desde FE-3.4 (con BE-4.1, que asigna lugares a las fotos): «Ver fotos» del menú de cada lugar en 7.6 (hoy
-    deshabilitado, «Ver fotos (próximamente)») y la lista o el enlace a la galería en «Fotos asociadas» de 7.7 (hoy solo
-    el número `total_fotos`), filtrando la Galería por lugar.
-- **Criterios de cierre:**
-  - C1. Las vistas 7.11 a 7.14 funcionan solo con datos del backend (`EdicionesLocales` ya no existe).
+- **Alcance (decisión del usuario del 2026-10-27: FE-4.1 hace lo esencial).** El usuario le dijo al maestro «haz lo que
+  más creas conveniente» y el maestro eligió las opciones recomendadas: (1) 7.13 muestra los videos del servidor **más**
+  los recorridos del teléfono que aún no se subieron; uno que ya tiene video en el servidor (subido o a medias) sale **una
+  sola vez**, con los datos del servidor; los videos empaquetados en `assets/videos/` ya no se muestran; (2) entra solo
+  lo esencial de 7.11–7.14 (abajo); lo demás pasó a **FE-4.4**; (3) las capas «Cobertura de fotos» y «Rutas» de 7.8,
+  también a FE-4.4. Por qué: el día de campo ya dejó el dataset real en `dev` y lo que urge es poder revisarlo y
+  corregirlo (renombrar, borrar, asignar lugares) sin cerrar la app y sin perder lo grabado; lo visual (mapas, 7.12,
+  comparar cobertura) no cambia el dataset.
+- **Entregables:**
+  - `RemoteVideoRepository` (o el nombre que encaje con ARCHITECTURE §5.6) y `EdicionesLocales` fuera del código.
+  - **7.13:** lista real (todas las páginas de `GET /v1/admin/videos`: nombre, fecha, nº de fotos, distancia si se sabe,
+    estado); «N videos» = `total` del servidor; los locales sin subir con su propio indicador y una marca por fila;
+    búsqueda y orden del servidor (`q`, `orden`); «Nuevo video» → 7.3; cargando, error con «Reintentar» y vacío.
+  - **7.14:** datos reales; renombrar con `PATCH` (persistente); eliminar el video con `DELETE` (`202`) con progreso,
+    error y reintento, **sin cerrar la app** si falla y sin salir antes de que el borrado se confirme; eliminar una foto
+    con `DELETE /v1/admin/images/{id}` (`404` = hecho); miniaturas reales (URLs GET prefirmadas, renovadas si caducan) y
+    las de los recorridos locales (hallazgo de FE-2.1); «Mostrar otros videos» con un enfoque barato documentado. Un
+    recorrido local sin subir también se renombra y se elimina, en disco (deshabilitado con una nota mientras se sube;
+    nunca se borra un recorrido local como efecto de otra acción).
+  - **7.11:** fotos reales con paginación (24) y filtros del servidor (`video_id`, `lugar_id`, `estado`, `calidad`, `q`);
+    «N imágenes» = `total` con los filtros; las fotos de recorridos locales sin subir no salen; Eliminar y Reasignar en
+    lote con `POST /v1/admin/images/lote` y un selector de lugares reales (y «Sin lugar»), informando las `fallidas`;
+    7.13 y 7.14 se refrescan tras borrar o reasignar.
+  - Desde FE-3.4: «Ver fotos» de 7.6 y el enlace de «Fotos asociadas» de 7.7 abren la Galería filtrada por el lugar.
+  - 7.3 sigue funcionando sin red: «Usar mi última posición» y el nombre autonumerado cuentan servidor + teléfono con red y
+    solo el teléfono sin ella; la recolección nunca espera ni falla por la red.
+  - Hecho en el código (ARCHITECTURE 0.14.0, §4.10; ADR-FE-35, ADR-FE-36 y ADR-FE-37): todo lo anterior.
+    «Mostrar otros videos» se carga al activarlo, con un tope de 500 fotos (ADR-FE-37). En 7.11 y 7.14, tocar una foto o
+    «Ver detalle» no abre 7.12 (un `Toast` y un botón «Detalle (próximamente)» deshabilitado). Además se quitaron
+    `assets/videos/` (~9,4 MB sin uso) y `AssetsVideoRepository`.
+- **Criterios de cierre** (no cambian con el recorte: C1–C3 siguen midiendo lo esencial; lo que salió no era parte de
+  ellos):
+  - C1. Las vistas 7.11 a 7.14 funcionan solo con datos del backend (`EdicionesLocales` ya no existe). Desde el
+    2026-10-27, «solo con datos del backend» incluye, en 7.13 y 7.14, los recorridos de este teléfono que aún no se
+    subieron (decisión del usuario, arriba): ya no hay datos de ejemplo ni ediciones en memoria.
   - C2. Borrar un video desde 7.14 lo quita de la lista y de la Galería sin reiniciar la app.
   - C3. Renombrar un video en la app se refleja en `GET /v1/admin/videos/{id}`.
 - **Historias:** HU-17, HU-18.
@@ -378,6 +396,9 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
   - Desde FE-3.4: 7.3 dibuja como etiquetas de referencia los 6 lugares de ejemplo (`UbicacionManualViewModel.Factory`
     crea `LugaresRepositoryStub()`; ARCHITECTURE §4.8 y §5.6): pasarla a `RemoteLugaresRepository()` (una línea).
   - `toString()` de `Sesion` y `Usuario` sin token ni correo (5.6).
+  - Desde FE-4.1: quitar `ManifestRecorrido.video(videoId, json, url, miniaturaExiste)` (el formato de los videos de
+    `assets/videos/`, que FE-4.1 borró) y su caso de `AlmacenRecorridosTest`; `GaleriaColores` (que ahora también usan
+    7.13 y 7.14, con `Naranja`) a `CampusColors` (ARCHITECTURE §4.10, «Para los lotes siguientes»).
   - Guardas de rol en las rutas `admin/*` (5.8).
   - Enriquecer los *stubs* que queden (errores `IOException`, lugares de `DEPORTES` y `ADMINISTRACION`, `imagenUrl`,
     distancias nulas, fecha y último video nulos; 5.6).
@@ -391,6 +412,22 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
   - C4. Ninguna página de `assets/` carga recursos de `unpkg.com` ni de Google Fonts.
   - C5. Las demás tareas de la lista están hechas o abiertas como lote nuevo (lista revisada en el PR).
 - **Historias:** HU-08.
+
+#### FE-4.4 — Galería y videos: lo que quedó de FE-4.1 (7.8, 7.11–7.14)
+Nace de la **decisión del usuario del 2026-10-27: FE-4.1 hace lo esencial** (§2.2, FE-4.1). Reúne lo que FE-4.1 dejó
+fuera; guía para construirlo en ARCHITECTURE §4.10, «Para los lotes siguientes».
+- **Entregables:**
+  - **7.12 Detalle de imagen:** vista nueva (`GET`/`PATCH /v1/admin/images/{id}`, `reprocesar`); abrirla desde 7.11
+    (tocar una foto) y desde 7.14 («Ver detalle», hoy «Detalle (próximamente)» deshabilitado).
+  - **7.11:** modo Mapa con las fotos filtradas (hoy un mensaje); filtro por fecha (el backend no filtra por fecha:
+    pedirlo o filtrar la página en local); botón «Subir imágenes» (opcional; sin ruta en el backend).
+  - **7.13:** minimapa o miniatura de trayectoria por fila; comparar cobertura de varios videos; acciones por fila
+    «reintentar subida» (locales) y «reprocesar» (foto a foto: el backend no tiene uno por video).
+  - **7.14:** confirmación por pulsación larga; duración y nombre editable en el encabezado.
+  - **Base común de mapas** para el modo Mapa de la Galería y el minimapa de 7.12.
+  - **7.8:** capas «Cobertura de fotos» y «Rutas» (hoy los interruptores existen sin datos).
+- **Criterios de cierre:** por definir al planificarlo (a decidir con el usuario).
+- **Historias:** HU-17, HU-18.
 
 #### FE-5.1 — Navegación guiada, llegada y fusión (diferido)
 - **Alcance:** vistas 6.5 y 6.6 sobre `PdrTracker`; fusión PDR + visual en `domain/fusion/` (decisiones abiertas 4 y 5);
@@ -440,7 +477,8 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
 | FE-3.4 | 3 | Hecho | [3-4](./validation/validation-3-4.md) | `8317f56` 2026-10-27 | 0.12.1 | `dev` (`GET`/`POST`/`PUT`/`DELETE /v1/admin/places`, `GET /v1/places`; lugares de prueba `validacion-3-4-lugar`, creado desde la app, y `validacion-3-4-dup`, por la API, borrados al terminar) | Código y pruebas listos (ARCHITECTURE 0.12.0, §4.8; ADR-FE-30 y 32): vistas 7.6 y 7.7 sobre `/v1/admin/places` (`RemoteLugaresAdminRepository`) con el punto de llegada en un mapa (`lugar_mapa.html`, puente `LugarBridge`; el pie «Punto: lat, lng» con 6 decimales es lo que se guarda), un solo modelo de lugar (`LugarDestino`, envuelto por `LugarAdmin`; `Lugar` desaparece), el `409 NOMBRE_DUPLICADO` bajo el nombre y el Panel al día al volver (`CambiosLugares`). No toca 7.4 (la hoja que había hecho se quitó el 2026-10-27, antes de integrar; §2.2). 272 casos JVM (C1a 11; C2a 10; C3a 5; más `RecargaResumenTest` 3; el maestro, 2026-10-27, en Windows); `pytest` 241; `validate34.py --entorno local` con código 0 (2026-10-26, worktree sobre `e56e211` sin commit, todavía con la hoja y C2a 12/12; P1, C1a, C2a, C3a; no se repitió tras quitarla). `validate34.py --entorno dev` con el Xiaomi (2026-10-27): corrida completa con todo en verde salvo C1c (la persona contestó por voz en Destino) y `--solo C1b,C2b,C1c` con código 0; instalación con un envoltorio de `VALIDACION_GRADLE` porque MIUI rechazó `installDebug` (ARCHITECTURE §5.11, trampas) |
 | FE-3.5 | 3 | Pendiente | [3-5](./validation/validation-3-5.md) | — | — | | Decisión abierta 18 resuelta por el usuario el 2026-10-26: «Orbe único» (ARCHITECTURE ADR-FE-29); falta decidir cómo llega TalkBack a «Ir a un lugar» y «Ver mapa» (§2.2). Se hace después del día de campo, desde el 2026-10-28 (decisión del usuario) |
 | FE-3.6 | 3 | Pendiente | [3-6](./validation/validation-3-6.md) | — | — | | Fuera del núcleo (decisión del usuario del 2026-10-25: «No necesitamos las alertas por el momento»). Sale de FE-3.1 y FE-3.2. Desde el 2026-10-26 (decisión del usuario al cerrar FE-3.1) lleva también la prueba con TalkBack del mapa (C5) y el punto de inicio del mapa sin tocarlo |
-| FE-4.1 | 4 | Pendiente | [4-1](./validation/validation-4-1.md) | — | — | | |
+| FE-4.1 | 4 | En curso | [4-1](./validation/validation-4-1.md) | — | — | `dev` (`GET`/`PATCH`/`DELETE /v1/admin/videos`, `GET /v1/admin/images` y su lote, `GET /v1/admin/places`; videos de prueba `validacion-4-1-a` y `-b` por la API de recolección, con 3 JPEG sintéticos cada uno, borrados al terminar); local (`files/recoleccion/`, solo lectura) | Código y pruebas listos (ARCHITECTURE 0.14.0, §4.10; ADR-FE-35, 36 y 37), con el alcance «lo esencial» que decidió el usuario el 2026-10-27 (lo demás, a FE-4.4): `RemoteVideoRepository` y la mezcla servidor + recorridos del teléfono sin subir (un recorrido sale una vez), 7.13 con «N videos», «M sin subir», búsqueda, orden y «Nuevo video»; 7.14 que renombra y elimina de verdad (en el servidor o, en uno local, en disco) con aviso de progreso, error con «Reintentar» y sin salir antes del `202`; miniaturas reales y las de los recorridos locales (hallazgo de FE-2.1, resuelto); 7.11 con paginación y filtros del servidor y lote con lugares reales; «Ver fotos» de 7.6 y 7.7; 7.3 sin depender de la red; `EdicionesLocales` y `assets/videos/` fuera. 337 casos JVM (C1a 11; C2a 5; C3a 15); `pytest` 277 + 1 omitida (Pillow); `validate41.py --entorno local` con código 0 (2026-10-27, worktree sin commit). **Falta** `validate41.py --entorno dev` con el teléfono (C1b, C3b y C2b, dos pasos guiados) y la manual C2c; no necesita `embedding` |
+| FE-4.4 | 4 | Pendiente | — | — | — | | Nace de FE-4.1 (decisión del usuario del 2026-10-27: FE-4.1 hace lo esencial): 7.12, mapa de la Galería, filtro por fecha, «Subir imágenes», minimapa y comparar cobertura en 7.13, acciones por fila, pulsación larga, base común de mapas y las capas de 7.8 (§2.2) |
 | FE-4.2 | 4 | Pendiente | [4-2](./validation/validation-4-2.md) | — | — | | Puede empezar ya |
 | FE-4.3 | 4 | Pendiente | [4-3](./validation/validation-4-3.md) | — | — | | Puede empezar ya (salvo lo que dependa de decisiones) |
 | FE-5.1 | 5 | Diferido | — | — | — | | |
@@ -469,8 +507,8 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
 | HU-14 Subir un recorrido | FE-2.1 | BE-2.1, BE-2.2, EMB-2.1, INF-1.2, INF-2.1 |
 | HU-15 Gestionar lugares | FE-3.4 | BE-3.1 |
 | HU-16 Gestionar alertas en el mapa | FE-0.6, FE-3.3 | BE-3.3 |
-| HU-17 Revisar y corregir imágenes | FE-0.7, FE-4.1 | BE-4.1 |
-| HU-18 Gestionar recorridos | FE-0.8, FE-4.1 | BE-4.1 |
+| HU-17 Revisar y corregir imágenes | FE-0.7, FE-4.1, FE-4.4 | BE-4.1 |
+| HU-18 Gestionar recorridos | FE-0.8, FE-4.1, FE-4.4 | BE-4.1 |
 | HU-19 Ver estadísticas | FE-5.2 | BE-5.2 |
 | HU-20 Desplegar automáticamente | FE-1.1, FE-6.1 | INF-0.1, INF-0.2, INF-1.3, BE-1.1, EMB-1.1 |
 | HU-21 Mantener el gasto bajo 100 USD/mes | — | INF-0.1, INF-2.1, INF-6.1 |

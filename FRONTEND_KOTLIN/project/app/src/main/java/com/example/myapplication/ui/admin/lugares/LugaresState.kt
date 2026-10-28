@@ -52,4 +52,6 @@ data class LugaresAcciones(
     val onConfirmarBorrar: () -> Unit = {},
     val onCancelarBorrar: () -> Unit = {},
     val onDescartarAviso: () -> Unit = {},
+    /** FE-4.1: «Ver fotos» del menú ⋮ (abre la Galería filtrada por ese lugar). */
+    val onVerFotos: (id: String) -> Unit = {},
 )

@@ -17,9 +17,11 @@ import java.util.Locale
 class ManifestException(mensaje: String, causa: Throwable? = null) : IOException(mensaje, causa)
 
 /**
- * Parser **compartido** del `manifest.json` (FE-2.1, ARCHITECTURE §5.6): lo usan `AssetsVideoRepository`
- * (`assets/videos/`), el `VideoRepository` compuesto y la cola de subida (`files/recoleccion/`). Lógica pura con Gson
- * (no `org.json`, que en la JVM son *stubs*): se prueba en `AlmacenRecorridosTest`.
+ * Parser **compartido** del `manifest.json` (FE-2.1, ARCHITECTURE §5.6): lo usan `AlmacenRecorridos` (y con él la cola
+ * de subida, 7.5 y, desde FE-4.1, el `VideoRepository` compuesto de 7.13/7.14) sobre `files/recoleccion/`. Lógica pura
+ * con Gson (no `org.json`, que en la JVM son *stubs*): se prueba en `AlmacenRecorridosTest`. Desde FE-4.1 no hay
+ * `assets/videos/` ni `AssetsVideoRepository`: [video] (el formato de esos assets) queda sin uso en la app y solo lo
+ * prueba `AlmacenRecorridosTest` (quitarlo con su prueba es de FE-4.3).
  *
  * Claves por foto: `id`, `file`, `lat`, `lng` (obligatorias), `thumb`, `heading`, `captured_at`, `lugar`, `estado`,
  * `calidad`, `sync`, `error` y `upload` (`{bytes, width, height}`). Por video: `name`, `created_at`, `estado`,
@@ -149,31 +151,6 @@ object ManifestRecorrido {
             }.orEmpty(),
         remoteVideoId = json.texto(VIDEO_REMOTO)?.ifBlank { null },
         subida = EstadoSubida.deClave(json.texto(SUBIDA_ESTADO)),
-    )
-
-    /**
-     * [RecorridoLocal] → [Video] para Galería, Lista y Detalle de video: las URLs son `file://` + ruta absoluta (Coil
-     * las carga; no hay miniaturas, Coil reduce la original), sin lugar y con calidad `NORMAL`.
-     */
-    fun video(recorrido: RecorridoLocal, carpeta: java.io.File): Video = Video(
-        id = recorrido.id,
-        nombre = recorrido.nombre,
-        creadoEn = recorrido.creadoEn,
-        fotos = recorrido.fotos.map { f ->
-            val url = "file://" + java.io.File(carpeta, f.archivo).absolutePath
-            Foto(
-                id = f.id,
-                videoId = recorrido.id,
-                videoNombre = recorrido.nombre,
-                urlFoto = url,
-                urlMiniatura = url,
-                lat = f.lat,
-                lng = f.lng,
-                rumbo = f.rumbo?.toFloat(),
-                capturadaEn = f.capturadaEn,
-                estado = f.estado,
-            )
-        }.sortedBy { it.id },
     )
 
     /** Las fotos (`photos[]`) como objetos; sin `photos` → lista vacía. */
