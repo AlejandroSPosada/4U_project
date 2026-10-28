@@ -2,12 +2,16 @@ package com.example.myapplication.domain.guia
 
 import com.example.myapplication.domain.model.ResultadoFrame
 import com.example.myapplication.domain.ruta.Ruta
+import com.example.myapplication.domain.usecase.Deriva
 import kotlin.math.roundToInt
 
 /** Lo que la guía pide hacer a quien la usa (el ViewModel de 6.5). */
 sealed interface SalidaGuia {
-    /** Decir [texto]; [prioritario] = cortar lo que se esté diciendo (maniobras, recálculo, alertas). */
-    data class Hablar(val texto: String, val prioritario: Boolean = false) : SalidaGuia
+    /**
+     * Decir [texto]; [prioritario] = cortar lo que se esté diciendo (maniobras, recálculo, alerta alta); [vibrar] = es
+     * una alerta (vibrar al decirla, como el mapa).
+     */
+    data class Hablar(val texto: String, val prioritario: Boolean = false, val vibrar: Boolean = false) : SalidaGuia
 
     /**
      * Tomar una foto y mandarla a `POST /v1/localize/frame` con `posicion_previa` = ([previaLat], [previaLng]),
@@ -68,7 +72,9 @@ data class EstadoGuia(
  * - **Fotos:** [DisparadorFoto]; [ReglaMezcla] decide aceptar o descartar; una aceptada se pega a la ruta (si está a ≤
  *   [ParametrosGuia.desvioM]) y pide [SalidaGuia.CorregirPosicion].
  * - **Sin red / 503:** se avisa una vez cada caso en toda la guía y se sigue con los pasos.
- * - **Alertas:** [avisador] en cada posición (vacío hasta FE-3.6).
+ * - **Alertas:** [avisador] en cada posición estimada, con su incertidumbre = la de la última posición aceptada (la de
+ *   «Ubicarme», [incertidumbreInicialM], o el `radio_m` de la foto) + `Deriva` (4 %) de lo caminado desde entonces; la
+ *   primera alerta, si es alta, corta; las demás van en cola. Todas vibran.
  */
 class GuiaNavegacion(
     private val calcularRuta: (lat: Double, lng: Double, rumbo: Double?) -> Ruta?,
@@ -76,6 +82,7 @@ class GuiaNavegacion(
     private val p: ParametrosGuia = ParametrosGuia(),
     private val avisador: AvisadorAlertasRuta = SinAvisosDeAlertas,
     caminadoInicialM: Double = 0.0,
+    incertidumbreInicialM: Double = p.incertidumbreInicialM,
 ) {
     var ruta: Ruta = rutaInicial
         private set
@@ -92,6 +99,7 @@ class GuiaNavegacion(
     private var estLng = lng
     private var caminado = caminadoInicialM
     private var caminadoAceptada = caminadoInicialM
+    private var incertidumbreBase = incertidumbreInicialM
     private var rumbo: Double? = null
     private var instruccion = rutaInicial.primera.texto
 
@@ -127,7 +135,9 @@ class GuiaNavegacion(
         if (desvio.lectura(desvioM)) recalcular(salida)
         anunciar(salida)
         if (llegado) return salida
-        avisador.avisos(estLat, estLng, avance, ruta).forEach { salida += SalidaGuia.Hablar(it, prioritario = true) }
+        avisador.avisos(estLat, estLng, incertidumbreM(), ruta).forEachIndexed { i, a ->
+            salida += SalidaGuia.Hablar(a.texto, prioritario = i == 0 && a.alta, vibrar = true)
+        }
         if (disparador.debeTomar(caminado, desvioM, fotoEnCurso)) {
             fotoEnCurso = true
             fotosPedidas++
@@ -155,6 +165,7 @@ class GuiaNavegacion(
             is DecisionFrame.Aceptar -> {
                 fotosAceptadas++
                 caminadoAceptada = pedido.caminadoM
+                (resultado as? ResultadoFrame.Ubicado)?.let { incertidumbreBase = it.radioM }
                 val enRuta = trazado.proyectar(d.lat, d.lng, avance)
                 val (nLat, nLng) = if (enRuta.desvioM <= p.desvioM) enRuta.lat to enRuta.lng else d.lat to d.lng
                 ultimaFoto = "aceptada (${(resultado as? ResultadoFrame.Ubicado)?.distanciaPreviaM?.roundToInt() ?: 0} m)"
@@ -180,6 +191,9 @@ class GuiaNavegacion(
             FalloFrame.FOTO_NO_VALIDA, FalloFrame.OTRO -> emptyList()
         }
     }
+
+    /** Incertidumbre de la posición (m): la de la última aceptada + la deriva de los pasos desde entonces. */
+    fun incertidumbreM(): Double = incertidumbreBase + Deriva.estimar((caminado - caminadoAceptada).coerceAtLeast(0.0)).derivaM
 
     /** «Repetir instrucción». */
     fun repetir(): String = anunciador.repetir(avance)

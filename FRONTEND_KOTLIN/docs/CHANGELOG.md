@@ -23,6 +23,39 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.18.0] — 2026-10-28
+- Lote que la motivó: FE-5.3 (guía por voz con pasos y fotos, vistas 6.5 y 6.6; la «App 2» de la meta «Guía en tiempo
+  real»).
+- Qué cambió: §4.13 nueva (piezas, flujo, decisiones del usuario —fotos + pasos y regla simple, 2026-10-27; cómo se
+  lleva el teléfono, 2026-10-28: «en la mano, frente al pecho, con la cámara hacia adelante», respuesta «claramente»—,
+  trampas y verificación); encabezado; §2.2, §2.3 y §2.7 (implementación actual); §3.2 (tag `Guia` y `navegacion` en
+  «Alerta anunciada»); §4.11 y §4.12 («Para FE-5.3»: hecho); §5.2 (voz en la guía); §5.5 (`NavegacionScreen`,
+  `LlegadaScreen`, `BotonGrande`, la 6.3 con `onGuiarme`, `hayRuta` y `pedirGuia`); §5.6 (`ResultadoFrame`,
+  `LocalizacionFrameRepository`, `PruebaGuia`, `LlegadaGuia`); §5.7 («Guía por voz»: `domain/guia/` con sus firmas,
+  parámetros de partida y textos); §5.8 (rutas `navegacion` y `llegada`, `onGuiarme`, ruta de prueba `navegacion`);
+  §5.10 («Corrección visual de la guía»: `POST /v1/localize/frame`, `CampusApi.localizarFrame`, `falloFrameDe`, fila de
+  errores); §5.11 (`validate53.py` y sus trampas); §6.3, §6.5 y §6.6 (implementación actual); §8.1 ADR-FE-44 a
+  ADR-FE-49; §8.2 decisiones abiertas 3, 4, 5, 6 y 16. `DescribirUbicacion`: con ruta, «La navegación guiada llegará…»
+  pasa a `GUIA_DISPONIBLE` (en el mismo sitio, antes de las alertas). `validate36.py`: `PATRON_ANUNCIADA` acepta
+  `navegacion`. PLAN: FE-5.3 (hecho en el código, criterios, decisión del usuario, fila de §3) y la nota de FE-4.3
+  sobre `CalidadImagen`. `validation-5-3.md` nueva.
+- Contratos tocados (§5): nuevos (`domain/guia/`, `RemoteFrameRepository`, `LocalizacionFrameRepository`,
+  `ResultadoFrame`, rutas `navegacion` y `llegada`, ruta de prueba `navegacion` y extra `simular_pasos`,
+  `CampusApi.localizarFrame`, tag `Guia`); ampliados sin romper (`ResultadoUbicacionScreen(onGuiarme = {})`,
+  `ResultadoUiState.hayRuta = false`, `ResultadoAcciones.onGuiarme = {}`, `RUTAS_DE_PRUEBA` con `navegacion`); cambia un
+  texto hablado de 6.3 (`GUIA_DISPONIBLE`).
+- Cómo se verificó: rebasado sobre `main` `c6b650a` (choques con FE-3.6 y FE-5.1 en `MainActivity.kt`, la 6.3,
+  `DescribirUbicacion.kt` y `PlanificadorTest`, resueltos conservando los tres lotes). En Windows `testDebugUnitTest
+  assembleDebug` → `BUILD SUCCESSFUL`, 430 casos, 0 fallos; en WSL `ruff check`, `ruff format --check`, `pytest` (342
+  passed, 1 skipped), `validate53.py --entorno local` → código 0, y `validate36.py` y `validate51.py --entorno local`
+  siguen con código 0. Fuentes leídas: backend §5.3 (`POST /v1/localize/frame`) y §4.14; esta carpeta §4.11 y §4.12
+  («Para FE-5.3»), §5.2, §5.7, §5.10; código de `domain/ruta/`, `domain/usecase/DetectarAlertasCercanas.kt`,
+  `data/remote/RemoteLocalizacionRepository.kt`, `camera/`, `ui/ubicacion/` y `MainActivity.kt`.
+- Pendiente: `validate53.py --entorno dev` (C1b, C2b) y la captura C3c; el día de campo (C4c) para ajustar
+  `ParametrosGuia`; en la 6.5, flecha, tiempo estimado, mapa de apoyo, pausar, reubicarme, vibración por giro y voz
+  dentro de la vista; en la 6.6, el entorno y «¿Llegaste bien?»; guiar con la pantalla apagada (servicio en primer
+  plano); la deriva de la brújula (decisión abierta 16); confirmar con el usuario las decisiones abiertas 4 y 6.
+
 ## [0.17.1] — 2026-10-28
 - Lote que la motivó: FE-5.1 (cierre: `validate51.py --entorno dev` sobre `e34cc28`) y FE-3.6 (resultado parcial en
   `dev`: `validate36.py --solo C1,C4` sobre `1c514b8`).

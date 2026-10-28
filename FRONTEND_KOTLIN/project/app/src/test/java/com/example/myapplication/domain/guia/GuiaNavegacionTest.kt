@@ -1,5 +1,6 @@
 package com.example.myapplication.domain.guia
 
+import com.example.myapplication.domain.model.Alerta
 import com.example.myapplication.domain.model.NivelConfianza
 import com.example.myapplication.domain.model.ResultadoFrame
 import com.example.myapplication.domain.ruta.Geo
@@ -149,18 +150,36 @@ class GuiaNavegacionTest {
     }
 
     @Test
-    fun lasAlertasDelAvisadorSeDicenConPrioridad() {
-        val avisador = AvisadorAlertasRuta { _, _, avance, _ -> if (avance > 5.0) listOf("Ten cuidado, hay bancas cerca.") else emptyList() }
+    fun lasAlertasCercaDeLaRutaSeDicenUnaVez_laAltaCorta() {
         val ruta = calcular(lat0, lng0, null)!!
+        val t = TrazadoRuta(ruta)
+        val (aLat, aLng) = t.puntoEn(12.0)
+        val alertas = listOf(
+            Alerta("n", aLat, aLng, "Hay bancas cerca", radio = 2),
+            Alerta("h", aLat, aLng, "Ten cuidado, hay escalones", prioridad = "alta", radio = 2),
+        )
+        val lineas = mutableListOf<String>()
+        val avisador = AlertasEnRuta({ alertas }, ahoraMs = { 1_000L }, registrar = { lineas += it })
         val g = GuiaNavegacion(::calcular, ruta, avisador = avisador)
         g.empezar()
-        val t = TrazadoRuta(ruta)
         val (la, ln) = t.puntoEn(1.0)
-        assertEquals(emptyList<String>(), textos(g.alMoverse(la, ln, 1.0, null)))
+        assertTrue(g.alMoverse(la, ln, 1.0, null).filterIsInstance<SalidaGuia.Hablar>().none { it.vibrar })
+        // A 6 m: umbral = radio 2 + incertidumbre (5 de partida + 4 % de 6 m) ≈ 7,2 m.
         val (la2, ln2) = t.puntoEn(6.0)
-        val s = g.alMoverse(la2, ln2, 6.0, null).filterIsInstance<SalidaGuia.Hablar>()
-        // También el aviso previo del giro («En 8 metros…»), que no es prioritario.
-        assertEquals(listOf(SalidaGuia.Hablar("Ten cuidado, hay bancas cerca.", prioritario = true)), s.filter { it.prioritario })
+        val s = g.alMoverse(la2, ln2, 6.0, null).filterIsInstance<SalidaGuia.Hablar>().filter { it.vibrar }
+        assertEquals(
+            listOf(
+                SalidaGuia.Hablar("Ten cuidado, hay escalones.", prioritario = true, vibrar = true),
+                SalidaGuia.Hablar("Hay bancas cerca.", prioritario = false, vibrar = true),
+            ),
+            s,
+        )
+        assertEquals(5.24, g.incertidumbreM(), 1e-9)
+        assertTrue(lineas.all { it.startsWith("Alerta anunciada (navegacion): ") })
+        assertEquals(2, lineas.size)
+        // Una vez por aproximación: un paso más no las repite.
+        val (la3, ln3) = t.puntoEn(7.0)
+        assertTrue(g.alMoverse(la3, ln3, 7.0, null).none { it is SalidaGuia.Hablar && it.vibrar })
     }
 
     @Test

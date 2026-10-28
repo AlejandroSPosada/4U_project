@@ -72,7 +72,7 @@ prototipo ya construido sobre datos locales y *stubs*.
 | FE-4.3 | Limpieza y deuda técnica | — | — | [`validation-4-3`](./validation/validation-4-3.md) |
 | FE-4.4 | Galería y videos: lo que quedó de FE-4.1 (7.8, 7.11–7.14) | FE-4.1 | FE-4.1, BE-4.1 | — (se escribe al planificarlo) |
 | FE-5.1 | Grafo y rutas (la «App 1» de la guía en tiempo real) | FE-3.2 | FE-3.1, BE-3.1 | [`validation-5-1`](./validation/validation-5-1.md) |
-| FE-5.3 | Guía por voz con pasos y fotos (6.5, 6.6) | FE-5.1, BE-5.1 | FE-5.1, BE-5.1 | — (se escribe al planificarlo) |
+| FE-5.3 | Guía por voz con pasos y fotos (6.5, 6.6) | FE-5.1, BE-5.1 | FE-5.1, BE-5.1 | [`validation-5-3`](./validation/validation-5-3.md) |
 | FE-5.2 | Estadísticas (7.15) — diferido | BE-5.2 | — | — |
 | FE-6.1 | Preparación para publicar — diferido | Fases 1–4 cerradas | — | — |
 
@@ -395,7 +395,9 @@ públicas que antes estaba en FE-3.1 (caché, detección, anuncio en el mapa) y 
   - Quitar de `project/` (código, scripts y su README) las referencias a `eafit.mbtiles`.
   - Quitar `ACTIVITY_RECOGNITION` de `Permisos.INICIALES`, `Permisos.ACTIVIDAD`, la ruta `admin/calibracion` y el
     Manifest (3.2, «Permisos de Android»).
-  - Reactivar el control de calidad de imagen (`CalidadImagen.kt`): foto borrosa y poca luz en 6.2 y 7.4.
+  - Reactivar el control de calidad de imagen (`CalidadImagen.kt`): foto borrosa y poca luz en 6.2 y 7.4. **Ojo:**
+    desde FE-5.3 la guía (6.5) ya usa `evaluarCalidad` antes de cada foto de corrección: no borrarlo como código sin
+    uso; calibrar sus umbrales (oscuridad 40, nitidez 30) sirve a las tres vistas.
   - Proteger `SpeechRecognizer` con `isRecognitionAvailable` (9.2).
   - Empaquetar Leaflet y fuentes en `assets/` (decisión abierta 13).
   - Migrar `MapaPublicoScreen` a `MapaWebView(…, pasarInsets = false)` (5.9); confirmar que solo la usa la ruta
@@ -503,7 +505,8 @@ una foto que contradice lo caminado, p. ej. 40 m de salto tras 5 m de pasos, se 
   y, si es confiable y coherente con lo caminado, **reemplaza** la posición; instrucciones habladas al acercarse a cada
   giro (con `Instruccion.desdeM`); recalcular si se aleja ~15 m de la ruta varias lecturas seguidas; alertas cercanas a la
   ruta; «has llegado»; sin red sigue solo con pasos y lo avisa (propuesta pendiente del usuario, decisión abierta 6);
-  reactivar el control de foto borrosa (`CalidadImagen.kt`, hoy en FE-4.3); deriva de la brújula (decisión abierta 16).
+  reactivar el control de foto borrosa (`CalidadImagen.kt`, que también está en FE-4.3); deriva de la brújula (decisión
+  abierta 16).
   Ajustar en el campo los parámetros de `ParametrosRuta` y las distancias (aviso antes del giro, umbral de desvío, cada
   cuánto se toma foto).
 - **Fuera:** el filtro de Kalman o de partículas (decisión abierta 5; un lote aparte solo si el campo muestra que la regla
@@ -511,9 +514,26 @@ una foto que contradice lo caminado, p. ej. 40 m de salto tras 5 m de pasos, se 
 - **Criterio de cierre** (el de la meta 3, aceptado por el usuario): en el campus, en al menos 5 recorridos de 50 a 150 m
   dentro del grafo, el usuario llega a ≤ 5 m de la entrada del destino; cada giro se anuncia antes del cruce; si se
   desvía, la app lo nota y recalcula; y la posición no se aleja más de ~10 m de la real en todo el trayecto gracias a las
-  fotos. Se planifica (documento de validación, comprobaciones) al empezar el lote.
-- **Pendientes del usuario:** cómo se lleva el teléfono (la cámara debe mirar hacia adelante al caminar); cada cuánto se
-  toma la foto; qué pasa sin señal.
+  fotos. Es la manual C4c de [`validation-5-3`](./validation/validation-5-3.md).
+- **Hecho en el código** (ARCHITECTURE 0.18.0, §4.13; ADR-FE-44 a ADR-FE-49): la guía pura (`domain/guia/`: avance
+  sobre la ruta, avisos previo y en la maniobra, desvío y recálculo, regla de mezcla, disparador de fotos, cola de voz,
+  alertas de FE-3.6 cercanas a la ruta), el cliente de `POST /v1/localize/frame` (`RemoteFrameRepository`), las vistas
+  6.5 y 6.6, «Guiarme» y el comando «guíame» en 6.3, `CalidadImagen` antes de cada foto y el modo de simulación (ruta de
+  prueba `navegacion` con `simular_pasos`, solo en el APK de depuración). Parámetros de partida en `ParametrosGuia`.
+- **Criterios** (propuestos por el esclavo el 2026-10-28; los tres primeros se comprueban en casa; C4 es el de la meta):
+  - C1. Avisos: el avance, el aviso previo (10 m), la maniobra (3 m), el desvío (4 lecturas a más de 15 m → recálculo
+    avisado) y la llegada (3 m) siguen `ParametrosGuia` (C1a, JVM); en el teléfono, la ruta de prueba caminada en modo
+    de simulación dice en orden cómo llevar el teléfono y la primera instrucción, el aviso previo del giro, el giro, el
+    aviso de la llegada y abre la 6.6 (C1b, `app.log`).
+  - C2. Fotos: la regla de mezcla acepta solo `ok` `alta`/`media` coherente y descarta el resto; sin red y `503` se avisan
+    una vez; el cliente arma el multipart del backend §5.3 (C2a, JVM y MockWebServer); en el teléfono, la app llama de
+    verdad a `POST /v1/localize/frame` (`200`) y la guía sigue hasta la llegada (C2b).
+  - C3. El modo de prueba y simulación solo existe en el APK depurable; rutas `navegacion` y `llegada`, «Guiarme» en 6.3
+    y el texto de cómo llevar el teléfono = la decisión del usuario (C3a); capturas de 6.5 y 6.6 (C3c).
+  - C4. El de la meta 3, en el campus (C4c, manual, día de campo).
+- **Decisiones del usuario:** cómo se lleva el teléfono, **resuelta el 2026-10-28**: en la mano, frente al pecho, con la
+  cámara hacia adelante (respuesta: «claramente»). Siguen como propuestas implementadas, a confirmar: cada cuánto se
+  toma la foto (~10 m o antes si es dudosa) y qué pasa sin señal (seguir con los pasos y avisar una vez).
 - **Historias:** HU-04, HU-05, HU-06.
 
 #### FE-5.2 — Estadísticas (diferido)
@@ -563,7 +583,7 @@ una foto que contradice lo caminado, p. ej. 40 m de salto tras 5 m de pasos, se 
 | FE-4.2 | 4 | Pendiente | [4-2](./validation/validation-4-2.md) | — | — | | Puede empezar ya |
 | FE-4.3 | 4 | Pendiente | [4-3](./validation/validation-4-3.md) | — | — | | Puede empezar ya (salvo lo que dependa de decisiones) |
 | FE-5.1 | 5 | Hecho | [5-1](./validation/validation-5-1.md) | `e34cc28` 2026-10-28 | 0.17.1 | Local (`assets/grafo.json` v209 del usuario, solo lectura); `dev` (`GET /v1/places`, solo lectura); teléfono en casa (ruta de prueba del mapa, APK de depuración) | Código y pruebas listos en dos fases (ARCHITECTURE 0.15.0 y 0.17.0, §4.11; ADR-FE-38, 39 y 43): grafo en `assets/` validado al leerlo (inválido → rutas desactivadas; `lugar` informativo), proyección sobre la arista más cercana de la persona y de las coordenadas del destino (decisión del usuario del 2026-10-28: cualquier lugar con coordenadas tiene ruta; lejos del grafo, el tramo final en línea recta), Dijkstra entre los dos, instrucciones por ángulos con `ParametrosRuta`, ruta y aviso en el mapa público, 6.3 con la distancia por el camino y la primera instrucción, destino y posición de prueba solo en depuración. Fase 2 rebasada sobre FE-3.6 (`1c514b8`): 398 casos JVM (C1a 7; C2a 10 y 12; C3a 3; C4a 8 y 3); `pytest` 329 + 1 omitida; `validate51.py --entorno local` con código 0 (2026-10-28, sin commit de los docs). **`validate51.py --entorno dev` con código 0** sobre `e34cc28` el 2026-10-28 (Xiaomi, a la primera): C3b con los 3 lugares de `dev` a ≤ 4 m del grafo, C4b (ruta y aviso en el mapa, recalculados al cambiar la posición; paso guiado por `adb`) y la manual C4c con la captura `validation/evidencia/fe-5-1/c4c-mapa-ruta.png`. Hallazgo sin arreglar: el mapa no encuadra la ruta al dibujarla (con el zoom de siempre, una ruta de 29 m no se distingue). Criterios C1–C4 propuestos por el esclavo y aceptados por el maestro |
-| FE-5.3 | 5 | Pendiente | — | — | — | | Nace el 2026-10-28 del FE-5.1 «diferido»: guía por voz con pasos y fotos (6.5, 6.6). Para construir y validar: FE-5.1 y BE-5.1 (`POST /v1/localize/frame`); criterio de la meta 3 (§2.2) |
+| FE-5.3 | 5 | En curso | [5-3](./validation/validation-5-3.md) | — | — | Local (`assets/grafo.json`, caché de alertas públicas, `files/camera/guia/`); `dev` (`POST /v1/localize/frame` desde la app, `embedding`); teléfono en casa (ruta de prueba `navegacion` con simulación, APK de depuración); campus (C4c) | Código y pruebas listos (ARCHITECTURE 0.18.0, §4.13; ADR-FE-44 a 49): guía pura con la regla de mezcla, cliente del frame, 6.5 y 6.6, «Guiarme» en 6.3, alertas de FE-3.6 cercanas a la ruta, modo de simulación solo en depuración. 430 casos JVM (C1a 5, 5, 6 y 2; C2a 6, 4 y 2; C3a 2); `pytest` 342 + 1 omitida; `validate53.py --entorno local` con código 0 (2026-10-28, rebasado sobre `c6b650a`, sin commit). **Falta** `validate53.py --entorno dev` en casa (C1b, C2b; con `embedding` encendido), las capturas C3c y el día de campo (C4c, criterio de la meta 3). Decisión del usuario del 2026-10-28: el teléfono en la mano, frente al pecho, con la cámara hacia adelante. Criterios C1–C3 propuestos, a confirmar por el usuario |
 | FE-5.2 | 5 | Diferido | — | — | — | | |
 | FE-6.1 | 6 | Diferido | — | — | — | | |
 

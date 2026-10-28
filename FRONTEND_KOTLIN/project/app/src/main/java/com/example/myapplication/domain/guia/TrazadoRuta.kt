@@ -95,10 +95,16 @@ class TrazadoRuta(val ruta: Ruta) {
             if (ruta.fueraDelCamino) return ruta.puntos
             val ini = ruta.inicio
             val resto = ruta.puntos.drop(1) // el primero es la persona
-            val sinInicio = if (resto.isNotEmpty() && resto.first().lat == ini.lat && resto.first().lng == ini.lng) {
-                resto.drop(1)
-            } else {
-                resto
+            val sinInicio = when {
+                resto.isEmpty() -> resto
+                resto.first().lat == ini.lat && resto.first().lng == ini.lng -> resto.drop(1)
+                // El punto proyectado quedó a menos de puntoRepetidoM de la persona y se juntó con el siguiente (desde
+                // FE-5.1 0.17.0 sus metros pasan al siguiente): se le quitan, porque desdeM empieza en el proyectado.
+                else -> {
+                    val primero = resto.first()
+                    val m = (primero.metrosDesdeAnterior - ini.distanciaM).coerceAtLeast(0.0)
+                    listOf(primero.copy(metrosDesdeAnterior = m)) + resto.drop(1)
+                }
             }
             return listOf(PuntoRuta(ini.lat, ini.lng, 0.0)) + sinInicio
         }

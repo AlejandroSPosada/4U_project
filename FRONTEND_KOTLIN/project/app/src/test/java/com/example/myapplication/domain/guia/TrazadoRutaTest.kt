@@ -38,6 +38,15 @@ class TrazadoRutaTest {
     }
 
     @Test
+    fun aMenosDeMedioMetroDelCaminoElLargoSigueSiendoElDeLasInstrucciones() {
+        // 0,3 m al sur de A–B: el punto proyectado se junta con el siguiente (FE-5.1 0.17.0 le pasa sus metros).
+        val r = ruta(Planificador(GrafosDePrueba.cuadrado()), 50.0, -0.3)
+        val t = TrazadoRuta(r)
+        assertEquals(r.instrucciones.last().desdeM, t.largoM, 0.01)
+        assertEquals(r.instrucciones.first { it.tipo == TipoInstruccion.GIRO }.desdeM, 50.0, 0.3)
+    }
+
+    @Test
     fun fueraDelCaminoCuentaElTramoHastaElCamino() {
         // 30 m al sur de A–B: primero «ve hasta el camino» (30 m), luego 50 + 100.
         val r = ruta(Planificador(GrafosDePrueba.cuadrado()), 50.0, -30.0)

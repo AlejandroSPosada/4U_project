@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 from pathlib import Path
 from xml.sax.saxutils import quoteattr
 
@@ -384,7 +385,10 @@ def test_modo_prueba_contra_el_codigo_real_y_variantes_rotas():
         validate36.comprobar_modo_prueba(otro, main, mapa, js)
     with pytest.raises(comun.Falla, match='no incluye "resultado"'):
         validate36.comprobar_modo_prueba(
-            _archivos_reales(), main.replace('setOf("mapa", "resultado")', 'setOf("mapa")'), mapa, js
+            _archivos_reales(),
+            re.sub(r"RUTAS_DE_PRUEBA = setOf\([^)]*\)", 'RUTAS_DE_PRUEBA = setOf("mapa")', main),
+            mapa,
+            js,
         )
     with pytest.raises(comun.Falla, match="onNativeRastreoIniciado"):
         validate36.comprobar_modo_prueba(_archivos_reales(), main, mapa, js.replace("onNativeRastreoIniciado", "x"))

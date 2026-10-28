@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.17.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.18.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-28 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; validado en `dev` con el Xiaomi el 2026-10-27; la recarga del Panel, sin comprobar en el teléfono). Desde FE-3.3 las alertas de administración son «local primero» de verdad: un repositorio único del proceso (`AlertasRepository`, en disco en `files/alertas/editor.json`, ADR-FE-33) con una operación pendiente por id que se envía con `POST /v1/admin/alerts/sincronizar`; el editor 7.8 carga las alertas y los lugares reales, «Mi posición» usa la última posición del PDR de 7.4, el formulario 7.9 tiene dictado, «Escuchar cómo sonará», vigencia y «Ajustar en el mapa», existe la lista 7.10 y 7.4 guarda sus alertas en disco y dibuja las existentes con la ruta pública `GET /v1/alerts`, sin llamar a rutas protegidas (ADR-FE-34) (§4.9; validado en `dev` con el Xiaomi el 2026-10-27). Desde FE-4.1 Galería, Lista y Detalle de video (7.11, 7.13 y 7.14) usan el backend (`RemoteVideoRepository`, `GET`/`PATCH`/`DELETE /v1/admin/videos`, `/v1/admin/images` y su lote): la Lista junta los videos del servidor con los recorridos del teléfono sin subir (un recorrido sale una sola vez), 7.14 renombra y elimina de verdad (en el servidor o, en uno local, en disco) sin cerrar la app si falla y sin salir antes de que el servidor confirme, la Galería pagina y filtra en el servidor con «Reasignar» a lugares reales, «Ver fotos» de 7.6 y 7.7 abre la Galería filtrada, las miniaturas de los recorridos locales ya se ven en 7.14 y `EdicionesLocales` y `assets/videos/` desaparecen (§4.10; validado en `dev` con el Xiaomi el 2026-10-27; «Reasignar», el error del borrado y TalkBack, sin probar en el teléfono). Desde FE-5.1 la app lee el grafo de caminos de `assets/grafo.json` (versión 209, del usuario, de solo lectura, `GrafoDeLaApp`), calcula en el teléfono y sin red la ruta más corta desde la arista más cercana a la persona hasta el punto del grafo más cercano a las coordenadas del destino (decisión del usuario del 2026-10-28: cualquier lugar con coordenadas tiene ruta; si queda lejos del grafo, se dice el tramo final en línea recta), con instrucciones por los ángulos entre tramos (`domain/ruta/`), la dibuja en el mapa público con la distancia por el camino y la primera instrucción, y la 6.3 dice esa distancia y la primera instrucción (§4.11; validado en `dev` con el Xiaomi el 2026-10-28). Desde FE-3.6 la app guarda las alertas públicas en una caché local (`files/alertas/publicas.json`, `AlertasPublicas`) que se sincroniza por diferencias con `GET /v1/alerts` al pasar a primer plano, cada 5 min en primer plano y al volver la conexión, y funciona sin red; la vista 6.3 muestra y dice al final las alertas cercanas a la posición estimada, el mapa público empieza el seguimiento en la posición de «Ubicarme» sin tocarlo (también desde el botón «Caminar con el mapa» de 6.3) y anuncia por voz, con vibración y un aviso, las alertas al entrar en su radio (una vez por aproximación; la de prioridad alta interrumpe), con la lógica pura `DetectarAlertasCercanas` / `SeguimientoAlertas` que reutilizará FE-5.3 (§4.12; en `dev` con el Xiaomi el 2026-10-28, C1 y C4 en verde —la caché, el borrado y las alertas leídas en 6.3—; faltan C2b con modo avión, C5a y la manual C5). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; validado en `dev` con el Xiaomi el 2026-10-27; la recarga del Panel, sin comprobar en el teléfono). Desde FE-3.3 las alertas de administración son «local primero» de verdad: un repositorio único del proceso (`AlertasRepository`, en disco en `files/alertas/editor.json`, ADR-FE-33) con una operación pendiente por id que se envía con `POST /v1/admin/alerts/sincronizar`; el editor 7.8 carga las alertas y los lugares reales, «Mi posición» usa la última posición del PDR de 7.4, el formulario 7.9 tiene dictado, «Escuchar cómo sonará», vigencia y «Ajustar en el mapa», existe la lista 7.10 y 7.4 guarda sus alertas en disco y dibuja las existentes con la ruta pública `GET /v1/alerts`, sin llamar a rutas protegidas (ADR-FE-34) (§4.9; validado en `dev` con el Xiaomi el 2026-10-27). Desde FE-4.1 Galería, Lista y Detalle de video (7.11, 7.13 y 7.14) usan el backend (`RemoteVideoRepository`, `GET`/`PATCH`/`DELETE /v1/admin/videos`, `/v1/admin/images` y su lote): la Lista junta los videos del servidor con los recorridos del teléfono sin subir (un recorrido sale una sola vez), 7.14 renombra y elimina de verdad (en el servidor o, en uno local, en disco) sin cerrar la app si falla y sin salir antes de que el servidor confirme, la Galería pagina y filtra en el servidor con «Reasignar» a lugares reales, «Ver fotos» de 7.6 y 7.7 abre la Galería filtrada, las miniaturas de los recorridos locales ya se ven en 7.14 y `EdicionesLocales` y `assets/videos/` desaparecen (§4.10; validado en `dev` con el Xiaomi el 2026-10-27; «Reasignar», el error del borrado y TalkBack, sin probar en el teléfono). Desde FE-5.1 la app lee el grafo de caminos de `assets/grafo.json` (versión 209, del usuario, de solo lectura, `GrafoDeLaApp`), calcula en el teléfono y sin red la ruta más corta desde la arista más cercana a la persona hasta el punto del grafo más cercano a las coordenadas del destino (decisión del usuario del 2026-10-28: cualquier lugar con coordenadas tiene ruta; si queda lejos del grafo, se dice el tramo final en línea recta), con instrucciones por los ángulos entre tramos (`domain/ruta/`), la dibuja en el mapa público con la distancia por el camino y la primera instrucción, y la 6.3 dice esa distancia y la primera instrucción (§4.11; validado en `dev` con el Xiaomi el 2026-10-28). Desde FE-3.6 la app guarda las alertas públicas en una caché local (`files/alertas/publicas.json`, `AlertasPublicas`) que se sincroniza por diferencias con `GET /v1/alerts` al pasar a primer plano, cada 5 min en primer plano y al volver la conexión, y funciona sin red; la vista 6.3 muestra y dice al final las alertas cercanas a la posición estimada, el mapa público empieza el seguimiento en la posición de «Ubicarme» sin tocarlo (también desde el botón «Caminar con el mapa» de 6.3) y anuncia por voz, con vibración y un aviso, las alertas al entrar en su radio (una vez por aproximación; la de prioridad alta interrumpe), con la lógica pura `DetectarAlertasCercanas` / `SeguimientoAlertas` que reutilizará FE-5.3 (§4.12; en `dev` con el Xiaomi el 2026-10-28, C1 y C4 en verde —la caché, el borrado y las alertas leídas en 6.3—; faltan C2b con modo avión, C5a y la manual C5). Desde FE-5.3 la guía por voz (6.5) lleva a la persona por la ruta con los pasos (PDR) y una foto de corrección cada ~10 m (`POST /v1/localize/frame`), avisa cada giro, recalcula si se desvía, anuncia las alertas cercanas a la ruta y termina en la Llegada (6.6); se entra desde «Guiarme» de 6.3 (§4.13; sin probar en el teléfono). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -114,6 +114,10 @@ oscura (se repite esa captura), baja confianza (se pide repetir la vuelta), sin 
 > coordenadas tiene ruta). La 6.3 dice la distancia por el camino y la primera instrucción, y el mapa público dibuja la
 > ruta. Los pasos 4 a 6 (guía hablada en movimiento con pasos y fotos, recalcular al desviarse, alertas cercanas) son de
 > FE-5.3 (PLAN §2.2).
+>
+> **Implementación actual (FE-5.3, §4.13):** los pasos 4 a 6 ya existen: desde la 6.3, «Guiarme» (o «guíame») abre la
+> 6.5, que dice cómo llevar el teléfono y cada instrucción al acercarse a su maniobra, recalcula tras 4 pasos seguidos a
+> más de 15 m de la ruta, anuncia las alertas cercanas a la ruta y termina en la 6.6. El paso 2 sigue siendo «Ubicarme».
 
 ### 2.3 Seguimiento de posición (sistema híbrido)
 
@@ -146,6 +150,12 @@ cuando la incertidumbre estimada supera un umbral. **Sin intervención del usuar
 > que contradice lo caminado, p. ej. 40 m de salto tras 5 m de pasos, se descarta). Lo construye FE-5.3; el filtro de
 > Kalman o de partículas queda fuera mientras el campo no muestre que hace falta (decisión abierta 5). FE-5.1 ya da
 > la proyección de una posición sobre la arista más cercana (`Proyeccion`, §5.7).
+>
+> **Desde FE-5.3 (§4.13, ADR-FE-44 y 45)** la regla simple existe en `domain/guia/` (no en `domain/fusion/`): los pasos
+> del PDR mueven la posición desde la de «Ubicarme»; cada ~10 m (o antes si se aleja ≥ 8 m de la ruta) se manda una
+> foto a `POST /v1/localize/frame` y, si es `ok`, `alta` o `media` y `distancia_previa_m` ≤ 8 + 0,5 × metros
+> caminados desde la última aceptada, reemplaza la posición (como desplazamiento y pegada a la ruta); si no, se
+> descarta. Sin red sigue solo con los pasos y lo avisa una vez.
 
 ### 2.4 Recolección del dataset (admin)
 
@@ -283,6 +293,9 @@ Funciones del puente, formato de los mensajes y requisitos del lado Kotlin: §5.
 - **Salida:** `TextToSpeech`, con cola de prioridades (una alerta de obstáculo de prioridad
   alta interrumpe a una instrucción normal).
 - Todo comando de voz tiene un **equivalente táctil** y es compatible con TalkBack.
+- **Desde FE-5.3:** la guía (6.5) habla por una cola (`ColaVoz`, §5.7): una maniobra, un recálculo o una alerta alta
+  cortan lo que se esté diciendo; lo demás espera su turno. En 6.3, con ruta, «guíame» abre la guía (una sola escucha
+  tras decir el resultado, ADR-FE-47).
 
 ---
 
@@ -513,7 +526,16 @@ almacenamiento externo.
   «publicas.json ilegible (…)»; y, al anunciar, `AppLog.i` «Alerta anunciada (resultado|mapa): <id> a <d> m (radio <r> m,
   incertidumbre <i> m, <prioridad>)», sin el mensaje: el id y la distancia dicen que la persona estuvo cerca de esa
   alerta, como la línea `Ruta`, y solo quedan en el `app.log` del teléfono) y, en `MapaPublico`, «Inicio desde Ubicarme
-  (radio <r> m): seguimiento iniciado sin tocar el mapa» (sin la posición).
+  (radio <r> m): seguimiento iniciado sin tocar el mapa» (sin la posición). Desde FE-5.3 `Guia` (`NavegacionViewModel`
+  y la 6.6; las lee `validate53.py`; sin posiciones, y el nombre del destino sale como `<destino>`): «Guía iniciada: ruta
+  N m, K instrucciones[, fuera del camino][, datos de prueba][, simulación P m cada I ms]» o `AppLog.w` «Guía no
+  iniciada: <motivo>»; «Voz: <texto>» y «Voz (ya): <texto>» (lo que dice, la segunda cortando lo anterior); «Enviando
+  foto a POST /v1/localize/frame (radio R m)»; «Foto: ok nivel=<n> distancia_previa=<d> en_radio=<k> (<ms> ms)» o «Foto:
+  sin_coincidencias en_radio=<k> (<ms> ms)»; «Foto aceptada (N m)» o «Foto descartada (sin_coincidencias|nivel_bajo|
+  incoherente)»; `AppLog.w` «Foto falló (<clave>): <Excepción>» y «Foto falló (sin_foto)»; «Foto no enviada:
+  oscura|borrosa»; «Posición corregida por la foto»; «Ruta recalculada: N m, K instrucciones»; «Llegada: <texto>»; «Guía
+  terminada por la persona»; y, al abrir la 6.6, «Llegada mostrada (6.6)». Las alertas de la guía usan el tag
+  `AlertasPublicas` con `donde` = `navegacion` («Alerta anunciada (navegacion): …»).
 - Registrar transiciones y decisiones, **no** cada lectura de sensor (50 por segundo).
 - No registrar datos sensibles (tokens, credenciales) **ni la ubicación de la persona** (FE-3.2, HU-23: las líneas del
   escaneo y del Resultado no llevan posición, rumbos de la respuesta ni nombres de lugares).
@@ -1410,7 +1432,7 @@ grafo.»; con el grafo inválido: «Rutas desactivadas: el grafo de caminos no e
 - Lo que falta: vistas 6.5 y 6.6; voz en movimiento; foto cada ~10 m con `POST /v1/localize/frame` (BE-5.1) y la regla
   simple de mezcla (§2.3); recalcular tras ~15 m de desvío varias lecturas seguidas; «has llegado» hablado; sin red;
   reactivar `CalidadImagen.kt`. (La posición de «Ubicarme» como inicio del mapa y las alertas ya están: FE-3.6, §4.12,
-  «Para FE-5.3».)
+  «Para FE-5.3».) **Hecho en FE-5.3** (§4.13).
 
 Verificado en local, fase 1 (0.15.0, 2026-10-28, worktree sobre `bef5853`): 374 casos JVM, `pytest` 312 + 1 omitida y
 `validate51.py --entorno local` con código 0. Fase 2 (0.17.0, 2026-10-28, rama de FE-5.1 rebasada sobre `main` en
@@ -1514,6 +1536,8 @@ el criterio C4 pide que se lean después de la ubicación.
   `DetectarAlertasCercanas.lineaAnunciada("navegacion", a, incertidumbre)` (si se usa otro `donde`, actualizar
   `PATRON_ANUNCIADA` de los validadores que lo lean).
 - Sin estado y para una sola posición (p. ej. al recalcular): `DetectarAlertasCercanas.cercanas(...)`.
+- **Hecho en FE-5.3** (§4.13, `AlertasEnRuta` en §5.7): `incluir` = centro a ≤ `radio` + 10 m de la ruta (ADR-FE-49);
+  la incertidumbre = la de la última posición aceptada + `Deriva` de lo caminado; la vibración y la voz, como aquí.
 
 Verificado en local el 2026-10-28 (worktree de FE-3.6 sobre `56e685a`, sin commit): en Windows `testDebugUnitTest
 assembleDebug --rerun-tasks` → `BUILD SUCCESSFUL`, **392 casos, 0 fallos** (50 clases; los avisos del compilador son
@@ -1532,6 +1556,96 @@ código 3 por `INSTALL_FAILED_USER_RESTRICTED` de MIUI aunque el envoltorio de `
 (se arregla desactivando y activando «Instalar vía USB»); la segunda, C1b en falla con `SinConexionException`: el Wi-Fi
 `EAFIT_VISITANTES` tiene portal cautivo (`CAPTIVE_PORTAL` en `dumpsys connectivity`, `ConnectException` en todas las
 peticiones de la app aunque `ping` funcione); tras iniciar sesión en el portal salió `VALIDATED` y pasó.
+
+---
+
+### 4.13 Guía por voz con pasos y fotos (FE-5.3)
+
+Qué se construyó (detalle y firmas en §5.2, §5.5, §5.6, §5.7, §5.8, §5.10 y §5.11; validación en
+[`validation-5-3`](./validation/validation-5-3.md)). Es la «App 2» de la meta «Guía en tiempo real (fotos + pasos)»:
+vistas 6.5 (Navegación guiada) y 6.6 (Llegada). Contratos que consume: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.3
+`POST /v1/localize/frame` (BE-5.1, pública) y §4.14; de esta carpeta, la ruta de FE-5.1 (§4.11, «Para FE-5.3») y las
+alertas de FE-3.6 (§4.12, «Para FE-5.3»). Decisiones del lote: ADR-FE-44 a ADR-FE-49.
+
+**Decisiones del usuario** (dadas al maestro): (1) 2026-10-27: fotos + pasos («La verdad sí me gustaría que fuera con
+fotos + pasos») con una regla simple de mezcla (los pasos mueven la posición entre fotos y cada foto confiable y
+coherente con lo caminado la reemplaza, siempre sobre el grafo; una foto que contradice lo caminado se descarta);
+`embedding` sigue en CPU. (2) 2026-10-28: **cómo se lleva el teléfono**: en la mano, frente al pecho, con la cámara
+hacia adelante (pregunta del maestro con esa propuesta; respuesta del usuario: «claramente»); la guía lo dice al empezar
+(`COMO_LLEVAR_EL_TELEFONO`). Por encargo del maestro (alcance de PRIORITY-2 «App 2»): una foto cada ~10 m o antes si la
+posición es dudosa (decisión abierta 4, propuesta del usuario), sin red seguir con los pasos y avisarlo una vez (decisión
+abierta 6, propuesta del usuario), «Guiarme» y su comando de voz en 6.3, modo de simulación solo en depuración, y solo las
+alertas cercanas a la ruta, con un valor con nombre (decisión abierta 3).
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| Parámetros | `domain/guia/ParametrosGuia.kt` (nuevo) | `ParametrosGuia` (valores de partida, §5.7) y `COMO_LLEVAR_EL_TELEFONO` |
+| Avance sobre la ruta | `domain/guia/TrazadoRuta.kt` (nuevo) | `TrazadoRuta(ruta)`: la polilínea en la escala de `Instruccion.desdeM`; `proyectar` (avance y desvío) y `puntoEn` |
+| Avisos | `domain/guia/Anunciador.kt` (nuevo) | `Anunciador` (aviso previo, maniobra, llegada, «Repetir»), `Anuncio`, `TextosGuia` |
+| Regla de mezcla, fotos, desvío, alertas | `domain/guia/ReglaMezcla.kt` (nuevo) | `ReglaMezcla` (aceptar o descartar una foto), `DisparadorFoto`, `DetectorDesvio`, `AvisadorAlertasRuta`, `AvisoAlerta`, `AlertasEnRuta` (FE-3.6 en la guía), `SinAvisosDeAlertas` |
+| La guía | `domain/guia/GuiaNavegacion.kt` (nuevo) | Máquina de estados pura: posiciones y respuestas de fotos → `SalidaGuia` (hablar, tomar foto, corregir posición, ruta nueva, llegada); `EstadoGuia`, `FalloFrame` |
+| Voz | `domain/guia/ColaVoz.kt`, `ComandoGuia.kt` (nuevos) | Cola de lo que dice la guía (un texto prioritario corta, los demás esperan); comando «guíame» de 6.3 |
+| Prueba y simulación | `domain/guia/PruebaGuia.kt` (nuevo) | `PruebaGuia` (destino, posición y simulación de prueba; solo APK depurable) y `SimuladorPasos` |
+| Modelo y repositorio | `domain/model/ResultadoFrame.kt`, `data/repository/LocalizacionFrameRepository.kt`, `data/remote/RemoteFrameRepository.kt` (nuevos); `data/remote/CampusApi.kt` | `POST /v1/localize/frame`: re-codificación como el escaneo, multipart con una parte `foto`, mapeo y errores (§5.10) |
+| Vista 6.5 | `ui/navegacion/NavegacionScreen.kt`, `NavegacionViewModel.kt`, `NavegacionState.kt` (nuevos) | Guía por voz: PDR (con el ciclo de vida de la pantalla), cámara (vista previa pequeña, foto automática), `CalidadImagen`, TTS por `ColaVoz`, vibración de las alertas, dos botones grandes, líneas `Guia` (§3.2) |
+| Vista 6.6 | `ui/navegacion/LlegadaScreen.kt` (nuevo) | Dice y muestra la llegada (`LlegadaGuia.texto`); «Ir a otro lugar» y «Volver al inicio» |
+| Vista 6.3 | `ui/ubicacion/ResultadoUbicacion*.kt`, `domain/usecase/DescribirUbicacion.kt` | Con ruta: botón «Guiarme» (el primero) y, tras decir el resultado, una escucha de «guíame»; con ruta, «La navegación guiada llegará…» pasa a `GUIA_DISPONIBLE` («Toca «Guiarme» o di «guíame» para que te lleve.») en el mismo sitio (antes de las alertas) |
+| Rutas | `MainActivity.kt` | `resultado` → `onGuiarme` → `navegacion` → `llegada`; ruta de prueba `navegacion` con `destino_prueba`, `posicion_prueba` y `simular_pasos` (§5.8, ADR-FE-46) |
+| Pruebas | `TrazadoRutaTest` (5), `AnunciadorTest` (5), `GuiaNavegacionTest` (6), `AlertasEnRutaTest` (2), `ReglaMezclaTest` (6), `RemoteFrameRepositoryTest` (4), `ComandoGuiaTest` (2), `ColaVozTest` (2); `PlanificadorTest` y `AlertasEnResultadoTest` esperan `GUIA_DISPONIBLE` con ruta | Criterios C1–C3 en la JVM (§4.1) |
+| Validador | `src/ops/validate53.py` (sin ayudas nuevas en `comun.py`); `validate36.py` acepta `navegacion` en `PATRON_ANUNCIADA` | Local: C1a, C2a y C3a. Dev, en casa con el teléfono: C1b (caminata simulada) y C2b (frame real); manuales C3c y C4c (§5.11) |
+
+**Flujo.** Inicio → «dos» → destino → Ubicarme → 6.3: «… Tu destino, Bloque 35, está a unos 31 metros por el camino.
+Gira a tu izquierda y sigue recto 14 metros. Toca «Guiarme» o di «guíame» para que te lleve. [alertas]» → «Guiarme» (o
+«guíame») → 6.5 (la 6.3 queda debajo): «Lleva el teléfono en la mano, frente al pecho, con la cámara hacia adelante.
+Vamos a Bloque 35, a 31 metros por el camino. Gira a tu izquierda y sigue recto 14 metros.» → la persona camina; los
+pasos mueven la posición desde la de «Ubicarme»; a 10 m del giro, «En 10 metros, gira a la izquierda.»; a 3 m, «Gira a
+la izquierda y sigue recto 16 metros.»; cada 10 m una foto sola a `POST /v1/localize/frame` (se acepta o se descarta en
+silencio); una alerta cercana a la ruta se dice (la alta corta) y vibra; a 3 m del final → 6.6 «Has llegado a Bloque
+35.». Si se aleja más de 15 m durante 4 pasos seguidos: «Te alejaste de la ruta. Recalculando.» + la primera instrucción
+nueva. Sin red (o con `503`), una vez cada caso: «Sin conexión: sigo con tus pasos; la precisión puede bajar.» (o «El
+servicio de fotos no está disponible: …»). «Terminar» vuelve a la 6.3.
+
+**Trampas.**
+- **El PDR sigue la pantalla** (ADR-FE-22): con la app en segundo plano o la pantalla apagada, la guía se detiene (calla
+  y no cuenta pasos). La 6.5 mantiene la pantalla encendida (`keepScreenOn`). Si el campo pide guiar con el teléfono
+  bloqueado, hace falta un servicio en primer plano (pendiente).
+- **El desvío se mide con la posición cruda del PDR**, no con la pegada a la ruta (si se re-anclara en cada paso, nunca
+  se vería un desvío). Por eso un rumbo de brújula desviado acumula error lateral hasta la siguiente foto aceptada
+  (decisión abierta 16): sin fotos (sin dataset o sin red), si ese error pasa de 15 m la guía recalcula aunque la persona
+  no se haya desviado.
+- **En una esquina** el avance usa el tramo más cercano; con dos tramos casi igual de cerca (a < 2 m), el más cercano
+  dentro de ±20 m del avance anterior. Una ruta de ida y vuelta por el mismo camino podría confundir el avance si la
+  ventana no basta (no pasa con el grafo de hoy).
+- **Desde FE-5.1 0.17.0 los metros de un punto repetido pasan al siguiente:** si el punto proyectado queda a menos de
+  0,5 m de la persona, `TrazadoRuta` le quita al primer punto del camino esos metros para seguir en la escala de `desdeM`
+  (`TrazadoRutaTest`).
+- **Foto oscura o borrosa no se envía** (`CalidadImagen`, umbrales de 2026-10-10 sin calibrar: luminancia media < 40,
+  varianza del laplaciano < 30): en casa, con la cámara tapada o boca abajo, no sale ninguna petición (`app.log`: «Foto no
+  enviada: oscura»).
+- **`rumboGrados` del PDR vale 0 hasta la primera lectura:** la primera foto puede llevar rumbo 0 (hoy el backend no lo
+  usa) y un recálculo antes de esa lectura daría la primera instrucción respecto al norte.
+- **Fotos en `files/camera/guia/`**, borradas al enviarlas (con éxito o con error), al empezar y al salir; nunca en
+  `camera/photos/` (la carpeta del escaneo, que `crearCarpetaEscaneo` limpia).
+- **La simulación no sigue a las fotos:** camina siempre por el trazado (una foto aceptada no la mueve) y, si la guía
+  recalcula, sigue por el trazado nuevo. La cámara sí saca fotos reales (de la casa).
+- **Alertas:** la caché es la de FE-3.6 (`AlertasPublicas`), sin sincronizar a mano. Una aproximación por guía: la misma
+  alerta dicha en 6.3 se vuelve a decir en la 6.5 al acercarse (como el mapa). Con 2 min de espera antes de repetir.
+- **La 6.3 escucha una sola vez** tras decir el resultado (necesita el micrófono; sin permiso, solo el botón). Repetir o
+  tocar cualquier botón invalida esa escucha (token).
+- **Tramos cortos entre cruces** (5,7 m de n0014 a n0016): la instrucción completa del primero ya dice «sigue recto 6
+  metros» y se omite el aviso previo del segundo; si en el campo dos giros seguidos se pisan, ajustar `enManiobraM` o
+  juntar tramos (FE-5.1).
+- **`uiautomator` con la vista previa de la cámara**: `validate53.py` vuelca la 6.5 y la 6.6 (**sin comprobar** que no
+  dé «could not get idle state» con la vista previa en marcha).
+- **Sin probar en el teléfono:** todo lo de este lote (TTS y cola, cámara en 6.5, PDR en la guía, «guíame» en 6.3,
+  alertas en la guía, 6.6). Lo comprueba `validate53.py --entorno dev` en casa (C1b, C2b) y el día de campo (C4c).
+
+Verificado en local el 2026-10-28 (rama de FE-5.3 rebasada sobre `main` en `c6b650a`, la fase 2 sin commit): en Windows
+`testDebugUnitTest assembleDebug` → `BUILD SUCCESSFUL`, **430 casos, 0 fallos** (58 clases); en WSL `ruff check` («All
+checks passed!»), `ruff format --check` («31 files already formatted»), `pytest` (**342 passed, 1 skipped**) y
+`validate53.py --entorno local` → código 0 (P1; C1a 5/5, 5/5, 6/6 y 2/2; C2a 6/6, 4/4 y 2/2; C3a estática + 2/2; C1b y
+C2b omitidas; manuales C3c y C4c); `validate36.py` y `validate51.py --entorno local` siguen con código 0. **Sin probar
+en el teléfono** (lo coordina el maestro).
 
 ---
 
@@ -1597,6 +1711,12 @@ falta aunque `stopAll()` no llame a `alTerminar`: un `alTerminar` ya encolado en
 llega igual (ver `VoiceController` arriba). Copiarlo en cualquier vista con diálogo por voz. Inicio y Escaneo no lo usan (Escaneo comprueba su `fase`).
 
 **Ciclo de vida:** en `ON_STOP` la pantalla llama al ViewModel (`alPausar()`), que hace `voz.stopAll()` y baja `escuchando` (Inicio y Destino, verificado). Destino además sube el `token`; Inicio **no tiene token**, así que un `alTerminar` ya encolado todavía puede llamar a `escuchar()` justo después de pausar (⚠ deducido del comportamiento de `VoiceController`, no reproducido).
+
+**Voz en la guía (FE-5.3):** la 6.5 crea su `VoiceController` y habla a través de `ColaVoz` (§5.7: un texto
+prioritario corta, los demás esperan su turno con el `alTerminar` de `speak`, sin usar `speakEncolado`); calla en
+`ON_STOP` y al terminar o llegar. La 6.6 tiene su propio `LlegadaViewModel` con un `VoiceController`. La 6.3, con ruta,
+llama a `listen` una vez desde el `alTerminar` de lo que dice (ADR-FE-47). La 6.5 vibra con `FeedbackCaptura` al decir
+una alerta y usa `CalidadImagen.evaluarCalidad` (`camera/`) antes de enviar una foto (umbrales sin calibrar).
 
 #### Seguimiento de posición (PDR) (`sensors/PdrEngine.kt`, `sensors/StepDetector.kt`, `sensors/PdrTracker.kt`)
 
@@ -1959,6 +2079,9 @@ pinta sus colores a mano. Un tema propio sería el sitio natural para unificar l
 | `FilaCategorias`, `CampoBusqueda`, `EncabezadoLista`, `FilaLugar`, `EstadoVacio`, `BotonVolver` | `ui/destino/componentes/ListaLugares.kt` | `FilaCategorias(seleccionada: CategoriaLugar?, onElegir: (CategoriaLugar?) -> Unit)` · `CampoBusqueda(texto: String, onCambio: (String) -> Unit)` · `EncabezadoLista(orden: OrdenLugares, onCambiarOrden: () -> Unit)` · `FilaLugar(lugar: LugarDestino, onClick: () -> Unit)` · `EstadoVacio(mensaje: String?, accion: String, onAccion: () -> Unit)` · `BotonVolver(onClick: () -> Unit)` | Verificado contra el código (bache 2). Propios de Destino salvo `EstadoVacio` y `BotonVolver`, que son genéricos. Todos públicos; `ChipCategoria` es privado. Detalle abajo. |
 | `EncabezadoPregunta`, `TarjetaOpciones` | `ui/destino/componentes/PanelesVoz.kt` | `EncabezadoPregunta()` · `TarjetaOpciones(opciones: List<LugarDestino>, onElegir: (LugarDestino) -> Unit)` | Verificadas contra el código (bache 2): las firmas coinciden con las llamadas de `SeleccionDestinoScreen`. `TarjetaOpciones` muestra las coincidencias cuando hay varias (5.5, Destino). Detalle abajo. |
 | `ResultadoUbicacionScreen` / `ResultadoUbicacionContent` | `ui/ubicacion/ResultadoUbicacionScreen.kt` | `ResultadoUbicacionScreen(onVolverAUbicarme, onIrALugar, onInicio, viewModel = viewModel())` · `internal ResultadoUbicacionContent(estado: ResultadoUiState, acciones: ResultadoAcciones, modifier)` | Vista 6.3 completa (FE-3.2; detalle abajo, «Resultado de ubicación»). **No navega**: las tres lambdas las conecta `AppNav` (5.8). Sus botones (`BotonPrincipal`, `BotonSecundario`) son `private`. |
+| `NavegacionScreen` / `NavegacionContent` | `ui/navegacion/NavegacionScreen.kt` (`public` / `internal`) | `NavegacionScreen(camaraOk: Boolean, onTerminar, onLlegada, viewModel = viewModel())` · `NavegacionContent(estado: NavegacionUiState, acciones: NavegacionAcciones, modifier, camara: @Composable () -> Unit = {})` · `internal BotonGrande(texto, principal, onClick)` (ancho completo, ≥ 80 dp, 24 sp; lo usa también la 6.6) | Vista 6.5 (FE-5.3). **No navega**. Crea el `PdrTracker` con el ciclo de vida de su entrada (no en simulación; `fijarPosicion(posicionInicial)` + `iniciar()` y cada `estado` → `onPdr`), el `ImageCapture` con `VistaCamara` (110 dp; `liberarCamara` al salir) y `keepScreenOn`; recoge `eventos` (`TomarFoto` → `tomarFoto(…, prefijo = "guia")`, o `onFotoFallida()` sin cámara; `CorregirPosicion` → `tracker.fijarPosicion`; `Llegada` → `onLlegada`); `ON_STOP` → `alPausar()`, `ON_START` → `alReanudar()`. Contenido: «Hacia <destino>», la instrucción en 34 sp (*live region*, descripción «Instrucción: …»), «Faltan N m por el camino», «Modo de simulación…», el estado de las fotos (14 sp), la vista previa y los botones «Repetir instrucción» (principal) y «Terminar». `NavegacionViewModel` (`AndroidViewModel`): `estado: StateFlow<NavegacionUiState>`, `eventos: Flow<NavegacionEvento>` (`Channel.BUFFERED`), `simulando`, `posicionInicial`, `alAbrir()`, `onPdr(PdrEstado)` (solo con un paso nuevo), `repetir()`, `terminar()`, `alPausar()`, `alReanudar()`, `onFotoTomada(File)`, `onFotoFallida()`, `carpetaFotos()` (`files/camera/guia/`). Un `@Preview` privado |
+| `LlegadaScreen` / `LlegadaContent` | `ui/navegacion/LlegadaScreen.kt` (`public` / `internal`) | `LlegadaScreen(onIrAOtroLugar, onInicio, viewModel: LlegadaViewModel = viewModel())` · `LlegadaContent(texto, onIrAOtroLugar, onInicio, modifier)` | Vista 6.6 (FE-5.3). **No navega**. Dice al abrir (una vez) `LlegadaGuia.texto` (o «Has llegado a tu destino.») + «Puedes tocar «Ir a otro lugar» o «Volver al inicio».»; calla en `ON_STOP` y al tocar. Un `@Preview` privado |
+| 6.3 desde FE-5.3 | `ui/ubicacion/ResultadoUbicacion*.kt` | `ResultadoUbicacionScreen(…, onVerMapa = {}, onGuiarme = {}, viewModel)` · `ResultadoUiState.hayRuta` · `ResultadoAcciones.onGuiarme` · `ResultadoUbicacionViewModel.pedirGuia: Flow<Unit>` (`Channel.CONFLATED`) | Con ruta (`hayRuta`: ubicación + destino + `rutaA` no nula), «Guiarme» va primero (`BotonPrincipal`); tras decir el resultado escucha una vez y «guíame» (`ComandoGuia`) emite `pedirGuia`, que la pantalla convierte en `alPausar()` + `onGuiarme()`. `alPausar()` sube un token que invalida esa escucha |
 | `LugaresScreen` / `LugaresContent` | `ui/admin/lugares/LugaresScreen.kt` (`public`) | `LugaresScreen(onVolver, onNuevo, onEditar: (id: String) -> Unit, modifier, onVerFotos: (id: String) -> Unit = {}, vm = viewModel(factory = LugaresViewModel.Factory()))` (`onVerFotos` desde FE-4.1) · `LugaresContent(estado: LugaresUiState, acciones: LugaresAcciones, modifier)` | Vista 7.6 (FE-3.4; detalle abajo, «Lugares de administración»). **No navega**. Un `@Preview` privado |
 | `LugarFormScreen` / `LugarFormContent` | `ui/admin/lugares/LugarFormScreen.kt` (`public`) | `LugarFormScreen(lugarId: String?, onListo: () -> Unit, modifier, onVerFotos: (id: String) -> Unit = {}, vm = viewModel(key = "lugar-form-<id o nuevo>", factory = LugarFormViewModel.Factory(lugarId)))` (`onVerFotos` desde FE-4.1) · `LugarFormContent(estado: LugarFormUiState, acciones: LugarFormAcciones, modifier, conMapa = true)` | Vista 7.7 (FE-3.4; detalle abajo). `lugarId = null` = lugar nuevo. **No navega**: `onListo` (Atrás, «Cancelar», tras guardar o eliminar). `conMapa = false` dibuja el recuadro sin `WebView` (vista previa). Un `@Preview` privado |
 | `LugarMapaContent`, `LugarMapaEventos`, `lugaresJson` | `ui/admin/lugares/componentes/MapaLugares.kt` (`public`; el puente `LugarPuente` es `internal`) | `LugarMapaContent(lugaresJson: String, punto: Pair<Double, Double>?, editable: Boolean, eventos: LugarMapaEventos, modifier)` · `LugarMapaEventos(onPunto: (lat, lng) -> Unit = {…}, onLugarTocado: (id) -> Unit = {})` · `lugaresJson(lugares: List<LugarDestino>): String` (`[{id, nombre, lat, lng}]` con `org.json`) | Mapa de lugares embebido (FE-3.4; `lugar_mapa.html`, puente `LugarBridge`, §5.9). Crea su propio `rememberMapaWeb()`; `pasarInsets = false`, `manejarAtras = false`. Empuja en este orden `setModo`, `setPunto`/`quitarPunto` y `cargarLugares` (el primer encuadre usa el punto si lo hay) |
@@ -2711,6 +2834,9 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 | `CachePublica`, `AlmacenCacheAlertas`, `AlmacenCacheAlertasArchivo`, `AlmacenCacheAlertasMemoria`, `ReglasCacheAlertas` | `data/local/AlmacenCacheAlertas.kt` | FE-3.6: la caché local de las alertas públicas (`files/alertas/publicas.json`; ADR-FE-40). Detalle abajo («Caché de alertas públicas») |
 | `CacheAlertasPublicas`, `SincronizacionPublica`, `AlertasPublicas` (`object`) | `data/remote/CacheAlertasPublicas.kt` | FE-3.6: sincronización por diferencias y disparadores; una instancia por proceso (`AlertasPublicas.de(context)`). Detalle en §5.10, «Alertas sin conexión» |
 | `PruebaUbicacion` (`object`) | `ui/ubicacion/PruebaUbicacion.kt` | FE-3.6: la ubicación de prueba de «Ubicarme» (solo APK de depuración, ADR-FE-42; §5.8) |
+| `ResultadoFrame` (`Ubicado`, `SinCoincidencias`) | `domain/model/ResultadoFrame.kt` | FE-5.3: la respuesta `200` de `POST /v1/localize/frame`: `Ubicado(lat, lng, radioM, confianza, nivel, distanciaPreviaM, radioBusquedaM, imagenesEnRadio)` o `SinCoincidencias(radioBusquedaM, imagenesEnRadio)` (§5.10) |
+| `LocalizacionFrameRepository` | `data/repository/LocalizacionFrameRepository.kt` | FE-5.3: `suspend localizarFrame(foto: File, rumbo: Double?, previaLat, previaLng, radioM: Double?): ResultadoFrame`; real: `RemoteFrameRepository` (§5.10). Lanza lo de `llamar` y `FotoIlegibleException` |
+| `PruebaGuia` (`object`), `LlegadaGuia` (`object`) | `domain/guia/PruebaGuia.kt`, `ui/navegacion/LlegadaScreen.kt` | FE-5.3, en memoria: los datos de prueba de la guía (solo APK depurable; §5.7, §5.8) y el texto de llegada que la 6.5 deja para la 6.6 (`texto: String?`, `SIN_TEXTO`) |
 
 **`assets/grafo.json` y `GrafoDeLaApp` (FE-5.1; ADR-FE-39 y ADR-FE-43)**
 
@@ -3160,6 +3286,72 @@ Ejemplos con el grafo real v209 (`PlanificadorTest`), desde la posición de prue
   dice «… Está a 40 metros en línea recta, al frente.» y la 6.3, «Desde el camino, Auditorio queda a unos 40 metros en
   línea recta.».
 
+**Guía por voz (FE-5.3; paquete `domain/guia/`, lógica pura sin Android; ADR-FE-44 y ADR-FE-45)**
+
+Se usa así (lo hace `NavegacionViewModel`, §5.5):
+
+```kotlin
+val guia = GuiaNavegacion(calcularRuta /* (lat, lng, rumbo) -> Ruta? */, rutaInicial, ParametrosGuia(), AlertasEnRuta({ cache.estado.value.alertas }), incertidumbreInicialM = radioDeUbicarme)
+procesar(guia.empezar())                                   // cómo llevar el teléfono + destino + primera instrucción
+procesar(guia.alMoverse(lat, lng, metrosCaminados, rumbo)) // en cada paso del PDR (o de la simulación)
+// SalidaGuia.TomarFoto(p) → foto → RemoteFrameRepository.localizarFrame(…) → procesar(guia.alResponderFoto(p, r))
+//                                                       o, con error, procesar(guia.alFallarFoto(p, falloFrameDe(e)))
+```
+
+| Pieza | Firma | Reglas |
+|---|---|---|
+| `ParametrosGuia` | `data class ParametrosGuia(avisoPrevioM = 10.0, enManiobraM = 3.0, llegadaM = 3.0, desvioM = 15.0, lecturasDesvio = 4, metrosEntreFotos = 10.0, dudosaM = 8.0, minMetrosEntreFotos = 3.0, coherenciaBaseM = 8.0, coherenciaPorMetro = 0.5, radioMinM = 40.0, radioMaxM = 100.0, margenRadioM = 10.0, nivelesAceptados = {ALTA, MEDIA}, descartarBorrosas = true, alertaRutaM = 10.0, incertidumbreInicialM = 5.0)` | Valores **de partida** (tabla abajo); se ajustan el día de campo |
+| `COMO_LLEVAR_EL_TELEFONO` | `const val` | «Lleva el teléfono en la mano, frente al pecho, con la cámara hacia adelante.» (decisión del usuario del 2026-10-28; `validate53.py` C3a lo comprueba) |
+| `TrazadoRuta` | `TrazadoRuta(ruta)` · `puntos: List<PuntoRuta>` · `largoM` · `proyectar(lat, lng, avanceAnterior: Double? = null): PosicionEnRuta` · `puntoEn(avanceM): Pair<Double, Double>` · `EMPATE_M = 2.0`, `VENTANA_M = 20.0` | `puntos` = `Ruta.puntos` si `fueraDelCamino`; si no, `Ruta.inicio` seguido de los puntos del camino (sin la persona; si el proyectado se juntó con el siguiente, se le quitan sus metros). Así `largoM` = `desdeM` de la llegada. `proyectar`: el tramo más cercano en un plano local; con `avanceAnterior`, el más cercano a ±20 m de él si está a < 2 m del mejor. `PosicionEnRuta(avanceM, desvioM, lat, lng, segmento)`: avance en metros declarados (escala de `desdeM`), desvío en línea recta |
+| `Anunciador` | `Anunciador(instrucciones, destino, p)` · `alAvanzar(avanceM): List<Anuncio>` · `repetir(avanceM): String` · `siguiente`, `ultimaDicha`, `llegado` | La 0 se dice al empezar. Desde la 1: `Previo` cuando falta ≤ `avisoPrevioM` (una vez), `Maniobra` (el `texto` de la instrucción) cuando falta ≤ `enManiobraM`, `Llegada` cuando falta ≤ `llegadaM` a la última. Un salto sobre varias: solo la última. Tras una maniobra, sin previo de la siguiente si ya está a ≤ `avisoPrevioM`. Retroceder no repite |
+| `Anuncio` | `Previo(indice, texto)`, `Maniobra(indice, texto)`, `Llegada(texto)` | |
+| `TextosGuia` | `object`: `RECALCULANDO`, `SIN_RECALCULO`, `SIN_CONEXION`, `SERVICIO_NO_DISPONIBLE`, `SIN_UBICACION`, `SIN_RUTA`, `RUTAS_DESACTIVADAS`, `TERMINADA` · `inicio(destino, metros, primera)` · `recalculada(primera)` · `accion(ins, destino)` · `previo(ins, faltaM, destino)` · `proxima(ins, faltaM, destino)` | Textos abajo |
+| `ReglaMezcla` | `object` · `limiteCoherenciaM(caminadoM, p)` · `radioM(caminadoM, p)` · `decidir(resultado, caminadoM, previaLat, previaLng, actualLat, actualLng, p): DecisionFrame` | Aceptar = `ok` + nivel en `nivelesAceptados` + `distancia_previa_m` ≤ `coherenciaBaseM` + `coherenciaPorMetro` × metros caminados desde la última posición aceptada. La posición nueva = actual + (foto − previa). `radioM` = límite + `margenRadioM`, en [`radioMinM`, `radioMaxM`] |
+| `DecisionFrame`, `MotivoDescarte` | `Aceptar(lat, lng, limiteM)` · `Descartar(motivo, limiteM)` · `MotivoDescarte(clave)`: `SIN_COINCIDENCIAS`, `NIVEL_BAJO`, `INCOHERENTE` | |
+| `DisparadorFoto` | `DisparadorFoto(p, inicioM = 0.0)` · `debeTomar(caminadoM, desvioM, ocupado): Boolean` · `tomada(caminadoM)` | Cada `metrosEntreFotos` desde la anterior; o desvío ≥ `dudosaM` y ≥ `minMetrosEntreFotos` desde la anterior; nunca con otra en curso. Cuenta desde que se **pide** (aunque falle) |
+| `DetectorDesvio` | `DetectorDesvio(p)` · `lectura(desvioM): Boolean` · `seguidas` · `reiniciar()` | `true` a las `lecturasDesvio` lecturas seguidas con desvío **>** `desvioM` (y reinicia); una cerca reinicia la cuenta |
+| `AvisadorAlertasRuta`, `AvisoAlerta`, `SinAvisosDeAlertas` | `fun interface AvisadorAlertasRuta { fun avisos(lat, lng, incertidumbreM, ruta): List<AvisoAlerta> }` · `data class AvisoAlerta(texto, alta)` | Lo que la guía dice de las alertas |
+| `AlertasEnRuta` | `AlertasEnRuta(alertas: () -> List<Alerta>, p = ParametrosGuia(), ahoraMs = { System.currentTimeMillis() }, registrar: (String) -> Unit = {})` · `seguimiento` · `cercaDeLaRuta(a, trazado)` · `DONDE = "navegacion"` | FE-3.6 en la guía (§4.12, «Para FE-5.3»): **una** `SeguimientoAlertas(ParametrosAlertas(margenSalidaM = 5.0, esperaRepetirMs = 120_000))` por guía; `incluir` = centro de la alerta a ≤ `radio` + `alertaRutaM` de la polilínea de la ruta vigente (decisión abierta 3, ADR-FE-49). Devuelve `texto` (`DetectarAlertasCercanas.texto`) y `alta`, alta primero; registra `lineaAnunciada("navegacion", …)` |
+| `GuiaNavegacion` | `GuiaNavegacion(calcularRuta: (Double, Double, Double?) -> Ruta?, rutaInicial, p = ParametrosGuia(), avisador = SinAvisosDeAlertas, caminadoInicialM = 0.0, incertidumbreInicialM = p.incertidumbreInicialM)` · `empezar()` · `alMoverse(lat, lng, caminadoM, rumbo)` · `alResponderFoto(pedido, resultado)` · `alFallarFoto(pedido, fallo)` · `repetir()` · `estado(): EstadoGuia` · `incertidumbreM()` · `ruta` · `llegado` | Todas devuelven `List<SalidaGuia>`. Posición estimada = la proyectada en la ruta si el desvío ≤ `desvioM`; si no, la cruda. Desvío → `calcularRuta(lat, lng, rumbo)` desde la cruda (sin camino: `SIN_RECALCULO`). Foto aceptada: se pega a la ruta (si ≤ `desvioM`), `CorregirPosicion` y la base de la incertidumbre pasa a su `radio_m`. Incertidumbre = base + `Deriva.estimar(m desde la última aceptada)` (4 %). Sin red / `503`: un aviso de cada uno en toda la guía; `FOTO_NO_VALIDA` / `OTRO`, en silencio. Tras la llegada no devuelve nada |
+| `SalidaGuia` | `Hablar(texto, prioritario = false, vibrar = false)` · `TomarFoto(previaLat, previaLng, rumbo, radioM, caminadoM)` · `CorregirPosicion(lat, lng)` · `RutaNueva(ruta)` · `Llegada(texto)` | Prioritarias: maniobra, recálculo, sin recálculo y la primera alerta si es alta; `vibrar` en las alertas. `Llegada` no se habla aquí (la dice la 6.6) |
+| `EstadoGuia`, `FalloFrame` | `EstadoGuia(destino, instruccion, metrosRestantes, lat, lng, desvioM, fotosPedidas, fotosAceptadas, ultimaFoto, sinConexion, recalculos, llegado)` · `FalloFrame(clave)`: `SIN_CONEXION`, `SERVICIO_NO_DISPONIBLE`, `FOTO_NO_VALIDA`, `OTRO` | `ultimaFoto`: «aceptada (N m)», «descartada (<motivo>)» o «falló (<clave>)» |
+| `ColaVoz` | `ColaVoz(hablar: (String, () -> Unit) -> Unit, maximo = 3)` · `decir(texto, prioritario = false)` · `vaciar()` · `hablando` · `pendientes` | `VoiceController.speak` corta lo anterior: un prioritario vacía la cola y se dice ya; uno normal espera; máximo 3 en espera (se pierde el más viejo); un `alTerminar` de un texto cortado se ignora (token) |
+| `ComandoGuia` | `object` · `PALABRAS` · `esGuiar(texto)` | Sin tildes ni mayúsculas, palabras separadas por cualquier signo: «guiame», «guiarme», «guia», «guiar», «llevame», «vamos», «empezar», «empieza», «comenzar»; un «no» lo anula |
+| `PruebaGuia`, `SimuladorPasos` | `object PruebaGuia` (`destino`, `posicion`, `simulacion: Simulacion(pasoM, intervaloMs)?`, `activa`, `leerSimulacion`, `leerPosicion`, `fijar`, `limpiar`, `PASO_DEFECTO_M = 0.7`, `INTERVALO_DEFECTO_MS = 500`) · `SimuladorPasos(trazado, pasoM)` (`siguiente(): Paso(lat, lng, caminadoM)`, `cambiarRuta(trazado)`) | Solo APK depurable (§5.8, ADR-FE-46). `leerSimulacion`: «0.7,500», «si»/«1»/«true» = por defecto; paso en (0, 5] m e intervalo en [50, 10 000] ms |
+
+**Parámetros de partida (`ParametrosGuia`; se ajustan el día de campo con lo que anote C4c):**
+
+| Parámetro | Valor | Qué decide |
+|---|---|---|
+| `avisoPrevioM` | 10 m | «En N metros, gira…» antes de cada maniobra |
+| `enManiobraM` | 3 m | La instrucción completa al llegar al cruce (~2 s antes a paso normal) |
+| `llegadaM` | 3 m | A ≤ esto del final de la ruta, la Llegada (criterio de la meta: ≤ 5 m de la entrada) |
+| `desvioM`, `lecturasDesvio` | 15 m, 4 | Desvío: 4 pasos seguidos a más de 15 m de la ruta recalculan (el ~15 m de PRIORITY-2) |
+| `metrosEntreFotos` | 10 m | Una foto cada 10 m caminados (decisión abierta 4, propuesta del usuario) |
+| `dudosaM`, `minMetrosEntreFotos` | 8 m, 3 m | Foto antes de tiempo si la posición está a ≥ 8 m de la ruta (y pasaron ≥ 3 m desde la anterior) |
+| `coherenciaBaseM`, `coherenciaPorMetro` | 8 m, 0,5 | Salto admitido = 8 + 0,5 × metros desde la última aceptada (tras 5 m: 10,5 m; un salto de 40 m se descarta) |
+| `radioMinM`, `radioMaxM`, `margenRadioM` | 40, 100, 10 m | `radio_m` pedido = límite + 10, entre 40 (el del backend) y 100 (su máximo) |
+| `nivelesAceptados` | `alta`, `media` | Si en el campo `media` acepta fotos equivocadas, solo `alta` (backend §4.14) |
+| `descartarBorrosas` | `true` | `CalidadImagen.evaluarCalidad` antes de enviar |
+| `alertaRutaM` | 10 m | Alerta en la guía si su centro está a ≤ `radio` + 10 m de la ruta (decisión abierta 3) |
+| `incertidumbreInicialM` | 5 m | Incertidumbre de partida sin «Ubicarme» (la de prueba); con «Ubicarme», su `radio_m` |
+
+**Textos de la guía:** inicio = `COMO_LLEVAR_EL_TELEFONO` + «Vamos a <destino>, a N metros por el camino.» + la primera
+instrucción; previo = «En N metros, <acción>.» con acción «gira (levemente|cerrado) a la (derecha|izquierda)», «date la
+vuelta», «llegas al camino; sigue recto» (giro recto tras ir al camino) o «llegas a <destino>»; maniobra = el `texto` de
+la instrucción (FE-5.1); «Repetir instrucción» = «Sigue N metros; después, <acción>.» (tras llegar, el texto de la
+llegada); recálculo = «Te alejaste de la ruta. Recalculando.» + primera instrucción nueva; `SIN_RECALCULO` = «Te alejaste
+de la ruta y no encontré otro camino. Vuelve hacia atrás.»; `SIN_CONEXION` = «Sin conexión: sigo con tus pasos; la
+precisión puede bajar.»; `SERVICIO_NO_DISPONIBLE` = «El servicio de fotos no está disponible: sigo con tus pasos; la
+precisión puede bajar.»; `SIN_UBICACION` = «No tengo tu ubicación. Vuelve a ubicarte con la vuelta de 360 grados.»;
+`SIN_RUTA` = «No encontré un camino hasta tu destino.»; `RUTAS_DESACTIVADAS` = «Las rutas están desactivadas: el grafo de
+caminos no es válido.». Metros con `Instrucciones.metrosTexto` («1 metro», «N metros»).
+
+Ejemplo (`GuiaNavegacionTest`, grafo real, posición de prueba 6.201434, −75.578707 → `bloque35`, 28,7 m, simulación de
+0,7 m por paso): inicio «… Vamos a bloque 35, a 29 metros por el camino. Camina 14 metros por el camino.», «En N metros,
+gira a la izquierda.», «Gira a la izquierda y sigue recto 14 metros.», «En N metros, llegas a bloque 35.» y la llegada
+«Has llegado a bloque 35.» entre 25,7 y 28,7 m caminados; fotos a los 10,5 y 21 m, con radio 40.
+
 Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(texto, todos)` → `List<LugarDestino>`, `BuscarLugares.filtrar(todos, busqueda)` e `InterpretarRespuesta.interpretar(texto)` → `Respuesta.SI / NO / NINGUNA`; las firmas coinciden con la tabla. Las **reglas** de la tabla se verificaron contra `BuscarLugares.kt` (bache 1). Desde FE-3.4 `filtrar` también es el buscador de la lista 7.6 (a través de `filtrarLugares`, 5.5, con los `LugarDestino` de cada `LugarAdmin`). Dos matices del uso: `mejores` siempre busca en la lista **completa** (ignora la búsqueda y la categoría activas), y el «Di cuál quieres» tras ofrecer opciones vuelve a buscar sobre todos los lugares, no solo sobre las opciones ofrecidas.
 
 **Comportamientos a tener en cuenta en `BuscarLugares`** (leídos en el código y probados con una copia de la lógica en Python; no se ejecutó el Kotlin, y los ejemplos usan nombres de muestra, no los lugares reales del stub):
@@ -3179,7 +3371,9 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 |---|---|---|---|
 | `inicio` | `InicioScreen` | — | `onUbicarme` → `SesionDeNavegacion.quitarDestino()` (FE-3.2: «uno» es solo ubicarse) y `ubicarme`, `onIrALugar` → `destino`, `onAccesoAdministrador` → `login`, `onVerMapa` (FE-3.1: voz «mapa» o acción de TalkBack «Ver mapa») → `navigate("mapa") { launchSingleTop = true }` |
 | `ubicarme` | `EscaneoScreen` | — (pide la cámara antes, `PedirPermisos`) | FE-3.2: `onCompletado(resultado, rumboAlTerminar)` → `SesionDeNavegacion.registrar(resultado, rumboAlTerminar)` y `navigate("resultado") { popUpTo("ubicarme") { inclusive = true } }` (el escaneo sale de la pila: Atrás desde 6.3 no vuelve a la cámara); `onCancelar` → `popBackStack()`; `onAjustes` → `ajustes` (desde FE-3.2) |
-| `resultado` | `ResultadoUbicacionScreen` (6.3, FE-3.2) | Ubicación y destino por `SesionDeNavegacion` (no por la ruta) | `onVolverAUbicarme` → `navigate("ubicarme") { popUpTo("resultado") { inclusive = true } }`; `onIrALugar` → `navigate("destino") { popUpTo("resultado") { inclusive = true } }` (Destino carga con la posición vigente); `onInicio` → `popBackStack("inicio", inclusive = false)`; desde FE-3.6 `onVerMapa` («Caminar con el mapa», solo con ubicación vigente) → `navigate("mapa") { popUpTo("resultado") { inclusive = true } }` (la pila queda `[inicio, mapa]`). Atrás del sistema: el del `NavHost` (vuelve a lo que haya debajo, normalmente Inicio). En el APK de depuración también se abre al arrancar con `--es ruta resultado` (con `ubicacion_prueba`, FE-3.6) |
+| `resultado` | `ResultadoUbicacionScreen` (6.3, FE-3.2) | Ubicación y destino por `SesionDeNavegacion` (no por la ruta) | `onVolverAUbicarme` → `navigate("ubicarme") { popUpTo("resultado") { inclusive = true } }`; `onIrALugar` → `navigate("destino") { popUpTo("resultado") { inclusive = true } }` (Destino carga con la posición vigente); `onInicio` → `popBackStack("inicio", inclusive = false)`; desde FE-3.6 `onVerMapa` («Caminar con el mapa», solo con ubicación vigente) → `navigate("mapa") { popUpTo("resultado") { inclusive = true } }` (la pila queda `[inicio, mapa]`). Atrás del sistema: el del `NavHost` (vuelve a lo que haya debajo, normalmente Inicio). En el APK de depuración también se abre al arrancar con `--es ruta resultado` (con `ubicacion_prueba`, FE-3.6). Desde FE-5.3, `onGuiarme` («Guiarme» o «guíame», solo con ruta) → `navigate("navegacion") { launchSingleTop = true }`: la 6.3 queda debajo |
+| `navegacion` | `NavegacionScreen` (6.5, FE-5.3) | Ubicación y destino por `SesionDeNavegacion` (o, en depuración, los de `PruebaGuia`). Pide la cámara (`PedirPermisos`) y guía igual si se niega (`camaraOk = false`: solo pasos, ADR-FE-48) | `onTerminar` → `popBackStack()` (vuelve a la 6.3); `onLlegada` → `navigate("llegada") { popUpTo("navegacion") { inclusive = true } }`. Atrás del sistema: el del `NavHost` (sin `terminar()`: el ViewModel calla en `onCleared`) |
+| `llegada` | `LlegadaScreen` (6.6, FE-5.3) | El texto por `LlegadaGuia` | `onIrAOtroLugar` → `navigate("destino") { popUpTo("llegada") { inclusive = true } }`; `onInicio` → `popBackStack("inicio", inclusive = false)` |
 | `destino` | `SeleccionDestinoScreen` | — | FE-3.2: `onDestinoConfirmado(lugar)` → `SesionDeNavegacion.elegirDestino(lugar)` y `navigate(siguiente) { popUpTo("destino") { inclusive = true } }` con `siguiente` = `resultado` si hay ubicación vigente (`ubicacionVigente() != null`), si no `ubicarme`; `onAjustes` → `ajustes`, `onVolver` → `popBackStack()` |
 | `login` | `LoginScreen` | — | `onLoginExitoso` → `admin/panel` (quita `login` de la pila), `onVolver` |
 | `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila); `onAbrirSubida(videoId)` (FE-2.1, tarjeta de subidas) → `navigate("admin/recoleccion/resumen?video=<id>")`. Al volver a esta entrada (p. ej. `popBackStack("admin/panel")` desde 7.4 o 7.5) se reutiliza su ViewModel: desde FE-2.2 relee los recorridos locales en `ON_RESUME` y, desde FE-3.4, vuelve a pedir el «Resumen rápido» si cambiaron los lugares (5.5) |
@@ -3266,8 +3460,16 @@ registrada** cierra la app con un error.
   am force-stop com.example.myapplication` y `adb shell am start -n com.example.myapplication/.MainActivity --es ruta
   resultado --es ubicacion_prueba 6.201434,-75.578427` (o `--es ruta mapa …`). El flujo real nunca llama a
   `PruebaUbicacion` (`validate36.py` C4a lo comprueba en el código).
+- **Guía de prueba (FE-5.3, ADR-FE-46):** `navegacion` está en `RUTAS_DE_PRUEBA` (`{"mapa", "resultado",
+  "navegacion"}`); con ella (APK depurable, arranque nuevo) `MainActivity` lee `EXTRA_DESTINO_PRUEBA`,
+  `EXTRA_POSICION_PRUEBA` y `EXTRA_SIMULAR_PASOS` (`"simular_pasos"`: `"0.7,500"` o `si`) y los guarda en `PruebaGuia`; la
+  6.5 los usa en lugar de `SesionDeNavegacion` y los borra al salir. Sin `simular_pasos`, el PDR real camina desde la
+  posición de prueba. Comando: `adb shell am force-stop com.example.myapplication` y `adb shell am start -n
+  com.example.myapplication/.MainActivity --es ruta navegacion --es destino_prueba bloque35 --es posicion_prueba
+  6.201434,-75.578707 --es simular_pasos 0.7,500`. Como es ruta de prueba, `ubicacion_prueba` (FE-3.6) también vale con
+  ella (la 6.5 la usa si no hay `PruebaGuia`). El flujo real nunca escribe `PruebaGuia` (`validate53.py` C3a).
 - **Permisos en la ruta:** `inicio` pide los iniciales y `ubicarme` la cámara antes de mostrar la
-  pantalla (ver 5.3). `admin/recoleccion` pide solo la cámara; la ruta de navegación (6.5) deberá hacer lo mismo. `admin/calibracion` pide solo `Permisos.ACTIVIDAD`.
+  pantalla (ver 5.3). `admin/recoleccion` pide solo la cámara; la ruta de navegación (6.5, FE-5.3) también, pero sigue sin ella. `admin/calibracion` pide solo `Permisos.ACTIVIDAD`.
   `admin/ubicacion-manual` ya pide `Permisos.INICIALES` y descarta el resultado (la 7.3 en sí no necesita
   ninguno: la brújula usa el sensor de rotación; el de actividad física ya no lo usa nadie, porque los pasos salen siempre del acelerómetro; 5.2).
 - **`inicio` (verificado en el código):** `PedirPermisos` va **antes** de `InicioScreen` y su resultado se ignora (`permisosPedidos = true` sea cual sea); mientras tanto no se dibuja nada. Por eso la explicación hablada de `InicioScreen` nunca suena antes del primer diálogo (5.5, Inicio).
@@ -3514,7 +3716,7 @@ ningún navegador ni en el teléfono (FE-3.4 no tenía `node` ni jsdom); se revi
 
 | Pieza | Archivo | Firma y uso |
 |---|---|---|
-| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-2.2: `@GET("admin/stats") estadisticas(): Response<EstadisticasAdminDto>` (protegida). FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). FE-3.2: `@Multipart @POST("localize") localizar(@Part fotos: List<MultipartBody.Part>, @Part("metadatos") metadatos: RequestBody): Response<LocalizacionRespuestaDto>` (las partes van en el orden de la lista y después `metadatos`). FE-3.4 (protegidas): `@GET("admin/places") lugaresAdmin(@Query("q") q: String? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresAdminDto>` (la app no pasa `q` ni `categoria`), `@POST("admin/places") crearLugar(@Body LugarEntradaDto): Response<LugarAdminDto>`, `@PUT("admin/places/{id}") reemplazarLugar(@Path("id") id, @Body LugarEntradaDto): Response<LugarAdminDto>` y `@DELETE("admin/places/{id}") borrarLugar(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`). FE-3.3: `@GET("alerts") alertasPublicas(@Query("desde") desde: String? = null): Response<AlertasPublicasDto>` (**pública**: no pasa por `SesionInterceptor`; desde FE-3.6 `CacheAlertasPublicas` pasa `desde`; 7.4 sigue sin él), `@GET("admin/alerts") alertasAdmin(@Query("q") q: String? = null): Response<ListaAlertasAdminDto>` (la app no pasa `q`) y `@POST("admin/alerts/sincronizar") sincronizarAlertas(@Body SincronizarAlertasDto): Response<SincronizarAlertasRespuestaDto>` (protegidas); `PUT`/`DELETE /v1/admin/alerts/{id}` no se usan. FE-4.1 (protegidas): `@GET("admin/videos") videos(@Query("q") q: String? = null, @Query("orden") orden: String? = null, @Query("dir") dir: String? = null, @Query("pagina") pagina: Int? = null, @Query("por_pagina") porPagina: Int? = null): Response<PaginaVideosDto>`, `@PATCH("admin/videos/{id}") renombrarVideo(@Path("id") id, @Body VideoRenombrarDto): Response<VideoResumenDto>`, `@DELETE("admin/videos/{id}") borrarVideo(@Path("id") id): Response<VideoBorradoDto>` (`202` **con** cuerpo: con `llamar`), `@GET("admin/images") imagenes(@Query("video_id"), @Query("lugar_id"), @Query("estado"), @Query("calidad"), @Query("q"), @Query("pagina"), @Query("por_pagina")): Response<PaginaImagenesDto>` (todos `String?`/`Int?` = `null`, en ese orden en la URL), `@DELETE("admin/images/{id}") borrarImagen(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`) y `@POST("admin/images/lote") loteImagenes(@Body cuerpo: RequestBody): Response<LoteResultadoDto>` (el cuerpo va ya armado, sin pasar por el convertidor: «Videos e imágenes de administración», abajo); `GET /v1/admin/videos/{id}` (`video`) ya existía. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
+| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-2.2: `@GET("admin/stats") estadisticas(): Response<EstadisticasAdminDto>` (protegida). FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). FE-3.2: `@Multipart @POST("localize") localizar(@Part fotos: List<MultipartBody.Part>, @Part("metadatos") metadatos: RequestBody): Response<LocalizacionRespuestaDto>` (las partes van en el orden de la lista y después `metadatos`). FE-3.4 (protegidas): `@GET("admin/places") lugaresAdmin(@Query("q") q: String? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresAdminDto>` (la app no pasa `q` ni `categoria`), `@POST("admin/places") crearLugar(@Body LugarEntradaDto): Response<LugarAdminDto>`, `@PUT("admin/places/{id}") reemplazarLugar(@Path("id") id, @Body LugarEntradaDto): Response<LugarAdminDto>` y `@DELETE("admin/places/{id}") borrarLugar(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`). FE-3.3: `@GET("alerts") alertasPublicas(@Query("desde") desde: String? = null): Response<AlertasPublicasDto>` (**pública**: no pasa por `SesionInterceptor`; desde FE-3.6 `CacheAlertasPublicas` pasa `desde`; 7.4 sigue sin él), `@GET("admin/alerts") alertasAdmin(@Query("q") q: String? = null): Response<ListaAlertasAdminDto>` (la app no pasa `q`) y `@POST("admin/alerts/sincronizar") sincronizarAlertas(@Body SincronizarAlertasDto): Response<SincronizarAlertasRespuestaDto>` (protegidas); `PUT`/`DELETE /v1/admin/alerts/{id}` no se usan. FE-4.1 (protegidas): `@GET("admin/videos") videos(@Query("q") q: String? = null, @Query("orden") orden: String? = null, @Query("dir") dir: String? = null, @Query("pagina") pagina: Int? = null, @Query("por_pagina") porPagina: Int? = null): Response<PaginaVideosDto>`, `@PATCH("admin/videos/{id}") renombrarVideo(@Path("id") id, @Body VideoRenombrarDto): Response<VideoResumenDto>`, `@DELETE("admin/videos/{id}") borrarVideo(@Path("id") id): Response<VideoBorradoDto>` (`202` **con** cuerpo: con `llamar`), `@GET("admin/images") imagenes(@Query("video_id"), @Query("lugar_id"), @Query("estado"), @Query("calidad"), @Query("q"), @Query("pagina"), @Query("por_pagina")): Response<PaginaImagenesDto>` (todos `String?`/`Int?` = `null`, en ese orden en la URL), `@DELETE("admin/images/{id}") borrarImagen(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`) y `@POST("admin/images/lote") loteImagenes(@Body cuerpo: RequestBody): Response<LoteResultadoDto>` (el cuerpo va ya armado, sin pasar por el convertidor: «Videos e imágenes de administración», abajo); `GET /v1/admin/videos/{id}` (`video`) ya existía. FE-5.3: `@Multipart @POST("localize/frame") localizarFrame(@Part foto: MultipartBody.Part, @Part("metadatos") metadatos: RequestBody): Response<FrameRespuestaDto>` (pública; la arma `RemoteFrameRepository`). Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
 | `ClienteApi` | `ClienteApi.kt` (`object`) | `ClienteApi.api: CampusApi` (instancia única, `lazy`, contra `ApiConfig.BASE_URL`, registra con `AppLog.i("Api", …)`; usa el `vigilante` que haya **al crearse**). `ClienteApi.vigilante: VigilanteSesion?` (`@Volatile var`, `null` por defecto; FE-1.2: `MyApp.onCreate` lo asigna antes de que nadie use `api`; sustituye al `proveedorToken` de FE-1.1, que ya no existe). `ClienteApi.crear(urlBase = ApiConfig.BASE_URL, token = { null }, registrar: (String) -> Unit, vigilante: VigilanteSesion? = null): CampusApi` (añade la barra final que exige Retrofit) y `ClienteApi.okHttp(token = { null }, registrar, vigilante = null): OkHttpClient` para pruebas (MockWebServer) o clientes propios. Con `vigilante`, las rutas protegidas pasan por `SesionInterceptor` y `token` no se usa; sin él, por `AutenticacionInterceptor(token)` |
 | `RequestIdInterceptor(registrar)` | `ClienteApi.kt` | Pone `X-Request-Id` y registra **una línea por petición**: `GET /v1/health -> 200 (85 ms) rid=<uuid>` o `GET /v1/health -> falla UnknownHostException (3 ms) rid=<uuid>`. Solo método, ruta sin parámetros, código y duración: nunca encabezados ni cuerpos. `rid` es el de la respuesta si la trae, si no el enviado. `validate11.py` C1a busca esta línea en `files/logs/app.log`: cambiar el formato exige cambiar `PATRON_SALUD` del validador. Una petición que `SesionInterceptor` no deja salir **no** deja línea `Api` (deja la `Sesion` del vigilante) |
 | `AutenticacionInterceptor(token)` | `ClienteApi.kt` | Regex `RUTA_PROTEGIDA` = `.*/v1/(admin\|collect)(/.*)?` sobre la ruta; `/v1/administrar` no la cumple. Solo cuando `ClienteApi` no tiene vigilante |
@@ -3837,6 +4039,7 @@ las formas de `/v1/admin/videos`, `/v1/admin/videos/{id}` y `/v1/admin/images`: 
 | `429` (cuerpo `{"message": …}`) | «Demasiados intentos, espera un momento» |
 | `503 EMBEDDING_NO_DISPONIBLE` | Escaneo (6.2) termina en error hablado: «El servicio de ubicación no está disponible en este momento» (en `dev`, con embeddings apagado o arrancando, infra §3.4). Desde FE-3.2 (`ErrorEscaneo.SERVICIO_NO_DISPONIBLE`), también cualquier otro `503` de `POST /v1/localize` (`BASE_NO_DISPONIBLE`) |
 | `400 FOTOS_INVALIDAS` (`POST /v1/localize`, FE-3.2) | `FalloApi.FotosInvalidas(detalle.indice, detalle.motivo)`; el Escaneo dice «No pude procesar las fotos» y registra el motivo y el `X-Request-Id` |
+| Errores de `POST /v1/localize/frame` (FE-5.3) | La guía no se para: sin red o `503` → un aviso hablado en toda la guía (`TextosGuia.SIN_CONEXION` / `SERVICIO_NO_DISPONIBLE`) y sigue con los pasos; `400`, `422` y respuesta rota → solo una línea «Foto falló (…)» (`falloFrameDe`, «Corrección visual de la guía», abajo) |
 | `409` / `422` | En formularios de admin, mensaje bajo el campo afectado: el `422` lo dice `detalle.campos`; el `409` **no** trae `detalle` (`detalle: null`, backend §5.6), así que el campo sale de su `codigo` (FE-3.4: `409 NOMBRE_DUPLICADO` → campo nombre, `ErroresLugarMapeo`, 5.5). En `POST /v1/localize` (`metadatos`, FE-3.2) es un error de la app: «Algo salió mal» |
 | Cualquier otro | «Algo salió mal» (`LoginError.Desconocido`, `ErrorDestino.DESCONOCIDO`) y se registra el `X-Request-Id` |
 
@@ -3923,6 +4126,39 @@ rumbos normalizados y `null` y sin `app_version`; `app_version` recortada a 40; 
 con referencias en orden; `503 EMBEDDING_NO_DISPONIBLE` con su `X-Request-Id`; `400 FOTOS_INVALIDAS` con índice y
 motivo; `422` de `metadatos`; sin red; `ok` incompleto, `nivel` desconocido y `resultado` desconocido; foto ilegible sin
 petición; 0 o 6 fotos. **Sin comprobar contra el backend real** (en `dev`, con BE-3.2 «Hecho»).
+
+**Corrección visual de la guía (`POST /v1/localize/frame`; FE-5.3, hecho; contrato en backend §5.3, BE-5.1)**:
+`RemoteFrameRepository(api = ClienteApi.api, preparador = Recodificador(MotorImagenAndroid(), LimitesRecodificacion.LOCALIZACION), appVersion: String? = null)` · `localizarFrame(foto: File, rumbo: Double?, previaLat, previaLng, radioM: Double?): ResultadoFrame`
+(interfaz `LocalizacionFrameRepository`, `data/repository/`, §5.6) · `companion`: `PARTE_FOTO = "foto"`, `PREFIJO_ENVIO =
+"envio_"`, `APP_VERSION_MAX = 40`, `RADIO_MIN_M = 10.0`, `RADIO_MAX_M = 100.0`, `resultado(dto: FrameRespuestaDto)`.
+1. Re-codifica la foto con el `preparador` (como «Ubicarse»: 1024 px, calidades 85 → 50, ≤ 1 572 864 bytes; orientación
+   EXIF aplicada) en `<carpeta de la foto>/envio_<nombre>`, en `Dispatchers.IO`; la copia se borra al terminar (también
+   con error). Foto ilegible → `FotoIlegibleException` sin llamar al backend.
+2. `multipart/form-data` (`CampusApi.localizarFrame`): **una** parte `foto` (`image/jpeg`, `filename="envio_<nombre>"`;
+   no `fotos`, que es la de `/v1/localize`: el backend respondería `400` «falta la parte foto») y la parte `metadatos`
+   (`application/json; charset=utf-8`) con `{"rumbo": 84.5, "posicion_previa": {"lat": 6.20018, "lng": -75.57854},
+   "radio_m": 40.0, "app_version": "1.0"}`: `rumbo` **siempre** presente (normalizado con `ConversionRumbo.normalizar`, o
+   `null` si falta o no es finito; el backend lo exige aunque sea `null`); `radio_m` recortado a [10, 100] u omitido;
+   `app_version` recortada a 40 u omitida. Pública: sin `Authorization`. Deja la línea `Api` de siempre (`POST
+   /v1/localize/frame -> 200 (… ms) rid=…`).
+3. `llamar` + `resultado(dto)` (`FrameRespuestaDto`: `resultado`, `posicion` —`PosicionDto`—, `confianza`, `nivel`,
+   `distancia_previa_m`, `radio_busqueda_m`, `imagenes_en_radio`, `version_vector`, `latencia_ms`, todos anulables;
+   `lugar_cercano` y `referencias` no se leen): exige `radio_busqueda_m` e `imagenes_en_radio`; `sin_coincidencias` →
+   `ResultadoFrame.SinCoincidencias(radio, enRadio)`; `ok` → `Ubicado(lat, lng, radioM, confianza, nivel,
+   distanciaPreviaM, radioBusquedaM, imagenesEnRadio)` (exige `posicion` completa, `confianza`, un `nivel` conocido y
+   `distancia_previa_m`); otro `resultado` o un campo que falta → `RespuestaInesperadaException`.
+4. Errores (los de `llamar`) y qué hace la guía (`falloFrameDe(t)`, `ui/navegacion/NavegacionState.kt`, en este orden):
+   tiempo agotado (`NavegacionViewModel.TIMEOUT_FRAME_MS` = 15 s, re-codificar incluido) → `SIN_CONEXION`;
+   `FotoIlegibleException` → `FOTO_NO_VALIDA`; `ApiException` con `http == 503` o `EmbeddingNoDisponible` →
+   `SERVICIO_NO_DISPONIBLE`; con `FotosInvalidas` → `FOTO_NO_VALIDA`; otra `ApiException` (`422`, `400
+   SOLICITUD_INVALIDA`…) → `OTRO`; otra `IOException` (sin red, `SinConexionException`) → `SIN_CONEXION`; el resto
+   (`RespuestaInesperadaException`) → `OTRO`. Sin red y `503` se dicen una vez cada uno; los demás, solo en `app.log`.
+
+Lo cubre `RemoteFrameRepositoryTest` (4; MockWebServer y un `PreparadorFoto` doble): una parte `foto` y `metadatos` con
+el JSON exacto, sin `Authorization`, la respuesta mapeada y la copia borrada; `rumbo` nulo siempre presente, radio
+recortado a 100 y sin `app_version`, y `359,96` → `0.0`; `503`, `400 FOTOS_INVALIDAS`, sin red, `ok` incompleto y nivel
+desconocido; foto ilegible sin petición. `falloFrameDe` lo cubre `ComandoGuiaTest`. **Sin comprobar contra el backend
+real desde la app** (lo hace `validate53.py` C2b en casa).
 
 **Subida de un recorrido (7.5; FE-2.1, hecho)**: cola persistente en `data/local/` (sobrevive al cierre de la app).
 Antes de subir, cada JPEG se re-codifica a lado mayor ≤ 1600 px y calidad 90 (bajando si hace falta) para quedar por
@@ -4270,7 +4506,8 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 FE-4.1: `test_validate41.py`, 20, y `test_comun_fe41.py`, 5, de los que uno se omite sin Pillow; 290 con el arreglo de
 la navegación de FE-4.1: `test_validate41.py`, 28, y `test_comun_fe41.py`, 9: «289 passed, 1 skipped»; 312 con
 FE-5.1: `test_validate51.py`, 23: «312 passed, 1 skipped»; 327 con FE-3.6: `test_validate36.py`, 15:
-«327 passed, 1 skipped»; 329 con la fase 2 de FE-5.1: `test_validate51.py`, 25: «329 passed, 1 skipped»).
+«327 passed, 1 skipped»; 329 con la fase 2 de FE-5.1: `test_validate51.py`, 25: «329 passed, 1 skipped»; 342 con
+FE-5.3: `test_validate53.py`, 13: «342 passed, 1 skipped»).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -4795,6 +5032,30 @@ FE-5.1: `test_validate51.py`, 23: «312 passed, 1 skipped»; 327 con FE-3.6: `te
   diferencias, sin modo avión, 6.3 sin alertas, `--solo C1a,C3a`, JVM que falla, EOF en el paso guiado, BE-3.3 sin
   «Hecho», credenciales malas), más las piezas puras y `comprobar_modo_prueba` contra el código real y variantes rotas;
   comprueban que ni la contraseña ni el token salen por stdout, stderr o el informe y que nunca se llama a `pm clear`.
+- `validate53.py` (FE-5.3; ejemplo de un validador que **lee la secuencia de lo que dijo la app en `app.log`** tras una
+  caminata simulada en el APK de depuración). Comprobaciones: `C1a` (JVM: `TrazadoRutaTest` ≥ 4, `AnunciadorTest` ≥ 5,
+  `GuiaNavegacionTest` ≥ 6, `AlertasEnRutaTest` ≥ 2), `C2a` (`ReglaMezclaTest` ≥ 6, `RemoteFrameRepositoryTest` ≥ 4,
+  `ComandoGuiaTest` ≥ 2), `C3a` (estática `comprobar_estatica` + `ColaVozTest` ≥ 2): `PruebaGuia.fijar(` solo en
+  `MainActivity.kt`, dentro de `if (rutaPrueba == "navegacion")`, `rutaDePrueba` con `FLAG_DEBUGGABLE`, `"navegacion"`
+  en `RUTAS_DE_PRUEBA`, rutas `navegacion` y `llegada` registradas, `BotonPrincipal("Guiarme"` en la 6.3,
+  `@POST("localize/frame")` en `CampusApi` y `COMO_LLEVAR_EL_TELEFONO` igual a `COMO_LLEVAR` (la decisión del usuario).
+  En `dev` (P2 teléfono, P3 `ApiConfig` = `terraform output` y `GET /v1/health`, P4 FE-5.1 y BE-5.1 «Hecho»), si C1a y
+  C3a pasaron: `installDebug`, `pm grant CAMERA`, **un** paso guiado (sostener el teléfono con la cámara hacia una zona
+  iluminada), `am force-stop`, la hora del teléfono (`date`) y `am start -W -n … --es ruta navegacion --es
+  destino_prueba bloque35 --es posicion_prueba 6.201434,-75.578707 --es simular_pasos 0.7,500`; espera «Repetir
+  instrucción» (`LIMITE_INICIO_S` = 30) e «Ir a otro lugar» (la 6.6, `LIMITE_LLEGADA_S` = 120), lee `files/logs/app.log`
+  (`run-as`) desde esa hora y se queda con las líneas desde la última «Guía iniciada…» (`ultima_guia`). `C1b`
+  (`revisar_secuencia`): «Guía iniciada: ruta N m, K instrucciones…simulación», lo dicho (`dichos`: líneas `Voz…:` y
+  `Llegada:` del tag `Guia`, sin los avisos de red `AVISOS_DE_RED`) igual a `INICIO_ESPERADO`, `PREVIO_GIRO` («En N
+  metros, gira a la izquierda.»), `MANIOBRA_ESPERADA` («Gira a la izquierda y sigue recto 14 metros.»), `PREVIO_LLEGADA`
+  («En N metros, llegas a <destino>.») y `LLEGADA_ESPERADA` («Has llegado a <destino>.»), «Llegada mostrada (6.6)» y
+  ninguna línea `CRASH`. `C2b` (`fotos_de` + `revisar_fotos`): al menos un `POST /v1/localize/frame -> 200` (tag `Api`) y
+  cada «Foto: …» con su «Foto aceptada|descartada (…)»; si ninguna foto salió por calidad, lo dice («apunta la cámara a
+  una zona iluminada»). Manuales: `C3c` (capturas de 6.5 y 6.6) y `C4c` (día de campo, criterio de la meta 3). Las
+  pruebas (`tests/ops/test_validate53.py`, 13) simulan Gradle, adb (`date`, `am start` con los extras, `uiautomator`
+  que pasa de la 6.5 a la 6.6, `run-as cat` con un `app.log` de una caminata) y recorren `main()` en `local` y `dev`
+  (feliz, P4 sin FE-5.1 «Hecho» → código 2, fotos con `503` → C2b falla), más las piezas puras (secuencias rotas, CRASH,
+  sin simulación, fotos oscuras) y `comprobar_estatica` contra el código real y variantes rotas.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -5003,6 +5264,15 @@ FE-5.1: `test_validate51.py`, 23: «312 passed, 1 skipped»; 327 con FE-3.6: `te
   `WebView` (son Compose, como el aviso de ruta de FE-5.1), el texto exacto de `settings get global airplane_mode_on`
   en MIUI, y si una línea «sincronizadas» puede tardar más de 45 s con red lenta (repetir).
 
+- **FE-5.3, `validate53.py`:** el paso guiado de C1b lee la entrada estándar (terminal interactiva o una FIFO, como en
+  FE-2.2). **En casa**: la posición y el destino vienen del `Intent` y los pasos los simula la app; las fotos son de la
+  casa (en el campus, con la posición de prueba, el backend responde `sin_coincidencias` o, si una foto se pareciera,
+  la regla de mezcla decide). Necesita `embedding` encendido (si no, C2b falla con `503`) e internet de verdad en el
+  teléfono (cuidado con el portal cautivo, §4.12). Una foto oscura o borrosa no sale: el teléfono, desbloqueado, con la
+  pantalla encendida y la cámara hacia una zona iluminada. La voz (TTS) no se comprueba: se oye en el paso guiado. Cada
+  foto con `200` deja una fila anónima `origen = frame` en `eventos_localizacion` (backend §5.7, caduca a los 180 días).
+  **Sin comprobar en el teléfono**: que `uiautomator` vuelque la 6.5 con la vista previa de la cámara en marcha.
+
 ---
 
 ## 6. Especificación de vistas públicas
@@ -5144,6 +5414,9 @@ de la ruta hasta el punto del grafo más cercano al destino y, si el lugar queda
 recta (§5.5, §5.7). Desde FE-3.6, las alertas cercanas a la posición estimada se muestran en una
 tarjeta «Alertas cercanas» y se dicen al final, después de la ubicación y de la ruta (orden en §4.12), y con una
 ubicación vigente el botón «Caminar con el mapa» abre el mapa público con el seguimiento empezado en esa posición.
+Desde FE-5.3, con ruta, el botón «Guiarme» (el primero) abre la navegación guiada (6.5) y la frase «La navegación guiada
+llegará…» pasa a «Toca «Guiarme» o di «guíame» para que te lleve.»; tras decir el resultado, la vista escucha una vez
+el comando «guíame» (ADR-FE-47).
 
 ---
 
@@ -5239,9 +5512,13 @@ FE-5.3; desde FE-5.1, por el camino si el destino está en el grafo).
 - Avisos si hay poca confianza en la posición o pérdida de conexión (continúa con PDR).
 - Al llegar, navega a la vista de Llegada.
 
-**Implementación actual:** no existe; es de **FE-5.3** (PLAN §2.2). FE-5.1 dejó lo que necesita: la ruta por el grafo,
-la proyección sobre la arista más cercana y las instrucciones con el punto y la distancia de cada maniobra (§4.11,
-«Para FE-5.3», y §5.7, «Grafo y rutas»).
+**Implementación actual (FE-5.3, §4.13 y §5.5):** instrucción actual en texto muy grande, nombre del destino, distancia
+restante, indicador discreto de las fotos (pedidas, aceptadas, la última y «sin conexión»), vista previa pequeña de la
+cámara (la foto es automática) y dos botones grandes, «Repetir instrucción» y «Terminar» (sin confirmación). Todo se
+dice por voz: cómo llevar el teléfono al empezar, aviso previo y maniobra, recálculo, alertas cercanas a la ruta (vibran;
+la alta corta) y sin conexión. Posición por PDR corregida con fotos (§2.3). **Sin hacer:** flecha direccional, tiempo
+estimado, mapa de apoyo y marcadores de alertas, banner de alerta, «Repetir alerta», «Pausar/Reanudar», «Reubicarme»,
+patrones de vibración por giro y comandos de voz dentro de la 6.5.
 
 ---
 
@@ -5259,8 +5536,10 @@ la proyección sobre la arista más cercana y las instrucciones con el punto y l
 - Pregunta opcional de retroalimentación: *"¿Llegaste bien?"* (Sí / No) para mejorar el
   sistema.
 
-**Implementación actual:** no existe; es de FE-5.3. La instrucción de llegada («Has llegado a <destino>.») ya la da
-`Instrucciones` (§5.7).
+**Implementación actual (FE-5.3, §4.13 y §5.5):** el mensaje grande es la instrucción de llegada de la ruta («Has llegado
+a <destino>.» o, si el lugar queda lejos del grafo, «Has llegado al punto del camino más cercano a <destino>. Está a N
+metros en línea recta, …»), se lee al abrir, y los botones «Ir a otro lugar» y «Volver al inicio». **Sin hacer:** la
+descripción de lo que hay alrededor y la pregunta «¿Llegaste bien?».
 
 ---
 
@@ -6504,6 +6783,55 @@ queda para destinos sin coordenadas válidas; `validate51.py` C3b comprueba que 
 y avisa (sin fallar) de los que quedan lejos; 6.4 registra una línea `Grafo` con esos lugares. Un lugar mal ubicado en el
 backend da una ruta a otro sitio: la calidad de las coordenadas de 7.7 importa más que antes.
 
+**ADR-FE-44 — Regla simple de mezcla de pasos y fotos con valores de partida (aceptada por el lote, 2026-10-28, FE-5.3;
+la regla es decisión del usuario del 2026-10-27).**
+La regla («los pasos mueven la posición entre fotos y cada foto confiable y coherente con lo caminado la reemplaza,
+siempre sobre el grafo») es del usuario; el lote fija cómo: se acepta una respuesta `ok` con nivel `alta` o `media` y
+`distancia_previa_m` ≤ 8 m + 0,5 × metros caminados desde la última posición aceptada (el error de los pasos crece con lo
+caminado; 8 m cubren la dispersión de la foto y de la proyección). La corrección se aplica como **desplazamiento**
+(posición actual + (foto − previa)) para no perder los pasos dados durante la petición (~0,5–1,5 s), y se pega a la ruta
+si queda a ≤ 15 m. El `radio_m` pedido sigue al límite (+ 10 m) entre 40 y 100. *Alternativas:* aceptar solo `alta`
+(más segura, menos correcciones: queda como ajuste si el campo lo pide, backend §4.14); un filtro de Kalman o de
+partículas (decisión abierta 5: fuera mientras el campo no lo pida). *Consecuencias:* una foto equivocada pero cercana
+(< límite) sí mueve la posición; los valores se ajustan el día de campo (`ParametrosGuia`).
+
+**ADR-FE-45 — La guía es una máquina de estados pura; el desvío se mide con la posición cruda del PDR (aceptada por el
+lote, 2026-10-28, FE-5.3).**
+`GuiaNavegacion` recibe posiciones y respuestas y devuelve `SalidaGuia` (qué decir y qué hacer): toda la lógica (avance,
+avisos, desvío, mezcla, alertas) se prueba en la JVM, y el ViewModel solo conecta voz, cámara y PDR. El avance se mide
+proyectando sobre la polilínea en la escala de `desdeM` (`TrazadoRuta`). El PDR **no** se re-ancla a la ruta en cada paso:
+re-anclar borraría el error lateral pero también un desvío real, que nunca se detectaría; la posición pegada a la ruta
+solo se usa para el avance, la foto y las alertas. *Consecuencia:* sin fotos aceptadas, la deriva de la brújula
+(decisión abierta 16) puede disparar un recálculo innecesario (§4.13, trampas).
+
+**ADR-FE-46 — Destino, posición y simulación de prueba de la guía solo en el APK de depuración (aceptada por el lote,
+2026-10-28, FE-5.3; extiende ADR-FE-38).**
+La ruta de prueba `navegacion` (en `RUTAS_DE_PRUEBA`, solo con `FLAG_DEBUGGABLE` y arranque nuevo) lee `destino_prueba` y
+`posicion_prueba` (como el mapa de FE-5.1) y `simular_pasos` (`"0.7,500"`): sin sensores, la guía «camina» la ruta para
+comprobar en casa la secuencia de avisos y la llegada. La cámara sigue activa, así que la misma caminata hace llamadas
+reales a `POST /v1/localize/frame`. El flujo real nunca escribe `PruebaGuia` (`validate53.py` C3a). *Alternativa:*
+una pantalla oculta de depuración (más código y algo que se podría abrir por error).
+
+**ADR-FE-47 — La 6.3 escucha «guíame» una vez tras decir el resultado (aceptada por el lote, 2026-10-28, FE-5.3; encargo
+del maestro; excepción acotada a ADR-FE-27).**
+ADR-FE-27 dejó la 6.3 sin comandos de voz (FE-3.5). Para que la guía se pueda empezar sin mirar la pantalla, con ruta la
+6.3 escucha **una sola vez**, al terminar de hablar, y solo reconoce el comando de la guía (`ComandoGuia`); el resto de la
+voz de 6.3 sigue siendo de FE-3.5. Cualquier toque o «Repetir» invalida la escucha (token).
+
+**ADR-FE-48 — Cámara opcional en la 6.5 y avisos de red una vez por guía (aceptada por el lote, 2026-10-28, FE-5.3).**
+La ruta `navegacion` pide la cámara pero, si se niega, guía solo con los pasos (las fotos fallan con `OTRO`, en silencio):
+la guía es útil aunque no corrija. Sin red y `503` se avisan **una vez cada uno en toda la guía** (decisión abierta 6,
+propuesta del usuario: seguir con los pasos y avisar), para no repetir el aviso cada 10 m si la conexión va y viene.
+
+**ADR-FE-49 — En la guía solo se anuncian las alertas cercanas a la ruta (aceptada por el lote, 2026-10-28, FE-5.3;
+resuelve en parte la decisión abierta 3).**
+`AlertasEnRuta` usa `SeguimientoAlertas` de FE-3.6 (una instancia por guía) con `incluir` = el centro de la alerta a ≤ su
+`radio` + `alertaRutaM` (10 m) de la ruta vigente. Así no se anuncian las de un camino paralelo cuando la incertidumbre
+crece (el umbral de FE-3.6 es radio + incertidumbre), y sí las de un obstáculo grande cuyo borde roza la ruta. La 6.3 y el
+mapa siguen anunciando todas las cercanas (FE-3.6). La primera alerta, si es alta, corta lo que se esté diciendo; las
+demás esperan (`ColaVoz`); todas vibran. *Alternativa:* «a ≤ 20 m del centro» (más simple, pero deja fuera un obstáculo
+de radio grande cuyo centro queda lejos del camino).
+
 ### 8.2 Decisiones abiertas
 
 La numeración se conserva: otras secciones y documentos citan «decisión abierta N».
@@ -6523,16 +6851,20 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
    todas, y si se complementa a futuro con detección por cámara (fuera del alcance actual). *Desde FE-3.6* (encargo del
    maestro del 2026-10-28) la 6.3 y el mapa público anuncian **todas** las cercanas; la guía por voz (FE-5.3) lo decide
    y lo aplica pasando `incluir` a `SeguimientoAlertas.actualizar` (§4.12, «Para FE-5.3»), sin reescribir la detección.
+   *Desde FE-5.3* (ADR-FE-49, propuesta del lote): en la guía, solo las de la ruta (centro a ≤ radio + 10 m de ella).
 4. **Frecuencia de corrección visual** durante la navegación (tiempo / distancia /
    incertidumbre) y su impacto en datos móviles y batería. *Se decide en FE-5.3*; propuesta pendiente del usuario
-   (2026-10-27): una foto cada ~10 m caminados, o antes si la posición se vuelve dudosa.
+   (2026-10-27): una foto cada ~10 m caminados, o antes si la posición se vuelve dudosa. *Implementada así en FE-5.3*
+   (`metrosEntreFotos` 10 m; dudosa = a ≥ 8 m de la ruta), con valores de partida a ajustar el día de campo.
 5. **Algoritmo de fusión** PDR + visual: filtro de Kalman vs. filtro de partículas. *Aplazada:* para FE-5.3 el usuario
    decidió el 2026-10-27 una regla simple (los pasos mueven la posición, cada foto confiable y coherente con lo caminado
    la reemplaza, siempre sobre el grafo; §2.3). Un filtro, solo en un lote aparte si el campo muestra que no basta.
+   La regla simple existe desde FE-5.3 (ADR-FE-44).
 6. **Funcionamiento sin conexión:** ¿se permite navegar solo con PDR si se pierde la red?
    Recordar que el mapa base de OSM necesita internet (solo se ve lo que está en caché); la
    navegación por voz sí podría continuar sin teselas. *Se decide en FE-5.3*; propuesta pendiente del usuario: seguir
    guiando solo con pasos y avisar que la precisión bajó. La ruta de FE-5.1 ya se calcula sin red (el grafo va en el APK).
+   *Implementada así en FE-5.3* (un aviso por guía, ADR-FE-48); falta que el usuario la confirme.
 7. **Privacidad de las fotos de ubicación: resuelta.** El backend las descarta tras responder y solo guarda un evento
    anónimo (backend ADR-BE-06). Queda por decidir si la app lo dice en voz alta antes del primer escaneo.
 8. **SDK mínimo/objetivo** y dispositivos soportados (sensores y cámara).
@@ -6560,7 +6892,8 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
     reemplaza el 0,72 m genérico, que queda solo como valor por defecto). **Sigue abierto** (para FE-5.3, que guía con
     pasos): la deriva de la brújula, la deriva
     estimada de 7.4 (heurística provisional del 4 %, que habrá que reemplazar cuando exista corrección visual) y si conviene
-    promediar varias pasadas (ver 7.3b).
+    promediar varias pasadas (ver 7.3b). FE-5.3 no corrige la brújula: la mitigan las fotos aceptadas; la guía usa la
+    misma heurística del 4 % como incertidumbre de las alertas (§4.13, trampas).
 17. **Nombre del producto** *(nueva)*: «Campus Locator» en la documentación y «Campus Navi» en `LoginScreen`.
 18. **Interacción de Inicio: resuelta el 2026-10-26** (ADR-FE-29). Pregunta del maestro: «Decisión abierta 18 (Inicio)
     para FE-3.5: ¿cómo debe ser la pantalla de Inicio?» (opciones «Dos botones (Recomendado)», «Orbe único», «Decidir

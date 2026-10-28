@@ -15,6 +15,7 @@ CASOS = {
     "TrazadoRutaTest": 4,
     "AnunciadorTest": 5,
     "GuiaNavegacionTest": 6,
+    "AlertasEnRutaTest": 2,
     "ReglaMezclaTest": 6,
     "RemoteFrameRepositoryTest": 4,
     "ComandoGuiaTest": 2,
@@ -118,7 +119,7 @@ def test_estatica_con_el_codigo_real():
     with pytest.raises(comun.Falla, match="decisión del usuario"):
         validate53.comprobar_estatica(dict(archivos, **{"domain/guia/ParametrosGuia.kt": "x"}), main_activity)
     with pytest.raises(comun.Falla, match="navegacion"):
-        validate53.comprobar_estatica(archivos, main_activity.replace('setOf("mapa", "navegacion")', 'setOf("mapa")'))
+        validate53.comprobar_estatica(archivos, main_activity.replace(', "navegacion")', ")"))
 
 
 # --- main() con todo simulado ---------------------------------------------------------------------------------------

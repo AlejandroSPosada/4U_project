@@ -1,7 +1,11 @@
 package com.example.myapplication.domain.guia
 
+import com.example.myapplication.domain.model.Alerta
 import com.example.myapplication.domain.model.ResultadoFrame
 import com.example.myapplication.domain.ruta.Ruta
+import com.example.myapplication.domain.usecase.DetectarAlertasCercanas
+import com.example.myapplication.domain.usecase.ParametrosAlertas
+import com.example.myapplication.domain.usecase.SeguimientoAlertas
 
 /** Por qué se descartó la posición de una foto. */
 enum class MotivoDescarte(val clave: String) {
@@ -102,17 +106,54 @@ class DetectorDesvio(private val p: ParametrosGuia = ParametrosGuia()) {
     }
 }
 
+/** Una alerta que hay que decir: [texto] (`DetectarAlertasCercanas.texto`) y si es de prioridad [alta]. */
+data class AvisoAlerta(val texto: String, val alta: Boolean)
+
 /**
- * Alertas cercanas a la ruta (FE-5.3 deja el punto de conexión; lo implementa FE-3.6 con `DetectarAlertasCercanas` en
- * la fase de documentación): la guía lo llama en cada actualización de posición y dice, con prioridad, cada texto
- * devuelto. Quien lo implemente decide cuándo repetir una alerta («una vez por aproximación», 6.5).
+ * Alertas cercanas durante la guía (FE-5.3): la guía lo llama en cada posición estimada (PDR o foto) con la incertidumbre
+ * de esa posición y dice lo que devuelve: la primera, si es [AvisoAlerta.alta], cortando lo que se esté diciendo; las
+ * demás, en cola. La implementación de la app es [AlertasEnRuta].
  */
 fun interface AvisadorAlertasRuta {
-    /** Textos que hay que decir ahora para la persona en ([lat], [lng]), a [avanceM] metros del inicio de [ruta]. */
-    fun avisos(lat: Double, lng: Double, avanceM: Double, ruta: Ruta): List<String>
+    fun avisos(lat: Double, lng: Double, incertidumbreM: Double, ruta: Ruta): List<AvisoAlerta>
 }
 
-/** Implementación vacía mientras FE-3.6 no conecte las alertas. */
+/** Sin alertas (pruebas, o si no se pudo leer la caché). */
 object SinAvisosDeAlertas : AvisadorAlertasRuta {
-    override fun avisos(lat: Double, lng: Double, avanceM: Double, ruta: Ruta): List<String> = emptyList()
+    override fun avisos(lat: Double, lng: Double, incertidumbreM: Double, ruta: Ruta): List<AvisoAlerta> = emptyList()
+}
+
+/**
+ * Alertas públicas de FE-3.6 en la guía (§4.12 «Para FE-5.3»; `AlertasEnRutaTest`): **una** [SeguimientoAlertas] por
+ * guía (una vez por aproximación, con 5 m de margen de salida y 2 min antes de repetir) sobre la caché que da [alertas],
+ * con `incluir` = la alerta está cerca de la ruta: su centro a ≤ `radio` + [ParametrosGuia.alertaRutaM] de la polilínea
+ * de la ruta vigente ([TrazadoRuta]); así no se anuncian las de un camino paralelo aunque la incertidumbre crezca
+ * (decisión abierta 3, propuesta de FE-5.3). [registrar] recibe la línea `DetectarAlertasCercanas.lineaAnunciada`
+ * («Alerta anunciada (navegacion): …») de cada una.
+ */
+class AlertasEnRuta(
+    private val alertas: () -> List<Alerta>,
+    private val p: ParametrosGuia = ParametrosGuia(),
+    private val ahoraMs: () -> Long = { System.currentTimeMillis() },
+    private val registrar: (String) -> Unit = {},
+) : AvisadorAlertasRuta {
+    val seguimiento = SeguimientoAlertas(ParametrosAlertas(margenSalidaM = 5.0, esperaRepetirMs = 120_000L))
+    private var trazado: TrazadoRuta? = null
+
+    /** ¿La alerta [a] está cerca de la ruta de [t]? */
+    fun cercaDeLaRuta(a: Alerta, t: TrazadoRuta): Boolean = t.proyectar(a.lat, a.lng).desvioM <= a.radio + p.alertaRutaM
+
+    override fun avisos(lat: Double, lng: Double, incertidumbreM: Double, ruta: Ruta): List<AvisoAlerta> {
+        val t = trazado?.takeIf { it.ruta === ruta } ?: TrazadoRuta(ruta).also { trazado = it }
+        val cercanas = seguimiento.actualizar(alertas(), lat, lng, incertidumbreM, ahoraMs()) { cercaDeLaRuta(it, t) }
+        return cercanas.map { a ->
+            registrar(DetectarAlertasCercanas.lineaAnunciada(DONDE, a, incertidumbreM))
+            AvisoAlerta(DetectarAlertasCercanas.texto(a.alerta), a.alta)
+        }
+    }
+
+    companion object {
+        /** El `donde` de la línea «Alerta anunciada (…)» (lo lee `validate36.py`, `PATRON_ANUNCIADA`). */
+        const val DONDE = "navegacion"
+    }
 }

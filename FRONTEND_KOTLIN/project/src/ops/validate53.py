@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 
 import comun
 
-CLASES_C1A = ["TrazadoRutaTest", "AnunciadorTest", "GuiaNavegacionTest"]
+CLASES_C1A = ["TrazadoRutaTest", "AnunciadorTest", "GuiaNavegacionTest", "AlertasEnRutaTest"]
 CLASES_C2A = ["ReglaMezclaTest", "RemoteFrameRepositoryTest", "ComandoGuiaTest"]
 CLASES_C3A = ["ColaVozTest"]
 CLASES_POR_COMPROBACION = {"C1a": CLASES_C1A, "C2a": CLASES_C2A, "C3a": CLASES_C3A}
@@ -26,6 +26,7 @@ MINIMO_CASOS = {
     "TrazadoRutaTest": 4,
     "AnunciadorTest": 5,
     "GuiaNavegacionTest": 6,
+    "AlertasEnRutaTest": 2,
     "ReglaMezclaTest": 6,
     "RemoteFrameRepositoryTest": 4,
     "ComandoGuiaTest": 2,

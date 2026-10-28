@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.camera.Calidad
 import com.example.myapplication.camera.evaluarCalidad
 import com.example.myapplication.data.local.GrafoDeLaApp
+import com.example.myapplication.data.remote.AlertasPublicas
+import com.example.myapplication.data.remote.CacheAlertasPublicas
 import com.example.myapplication.data.remote.RemoteFrameRepository
 import com.example.myapplication.data.repository.LocalizacionFrameRepository
 import com.example.myapplication.domain.guia.FalloFrame
@@ -15,7 +17,7 @@ import com.example.myapplication.domain.guia.ParametrosGuia
 import com.example.myapplication.domain.guia.PruebaGuia
 import com.example.myapplication.domain.guia.SalidaGuia
 import com.example.myapplication.domain.guia.SimuladorPasos
-import com.example.myapplication.domain.guia.SinAvisosDeAlertas
+import com.example.myapplication.domain.guia.AlertasEnRuta
 import com.example.myapplication.domain.guia.TextosGuia
 import com.example.myapplication.domain.guia.TrazadoRuta
 import com.example.myapplication.domain.guia.ColaVoz
@@ -29,6 +31,7 @@ import com.example.myapplication.logs.AppLog
 import com.example.myapplication.map.TextosRutaMapa
 import com.example.myapplication.sensors.PdrEstado
 import com.example.myapplication.ui.inicio.VoiceController
+import com.example.myapplication.ui.ubicacion.FeedbackCaptura
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -52,6 +55,8 @@ private const val TAG = "Guia"
  * ([VoiceController] a través de [ColaVoz]), las fotos de corrección ([RemoteFrameRepository] y `CalidadImagen`) y el
  * PDR (la pantalla le pasa cada [PdrEstado]) o, en el APK de depuración, el modo de simulación ([PruebaGuia]).
  *
+ * Alertas: [AlertasEnRuta] sobre la caché de FE-3.6 (`AlertasPublicas`); cada alerta dicha vibra.
+ *
  * Al crearse lee **una vez** la posición de «Ubicarme» (`SesionDeNavegacion.ubicacion`, aunque ya no sea vigente: es la
  * mejor posición que hay) y el destino de 6.4, y calcula la ruta con el rumbo del final del escaneo corregido. Con
  * datos de prueba ([PruebaGuia.activa]) usa su destino y su posición. Líneas `Guia` en `app.log` (sin posiciones; el
@@ -66,6 +71,7 @@ class NavegacionViewModel(app: Application) : AndroidViewModel(app) {
     private val prueba = PruebaGuia.activa
     private val simulacion = if (prueba) PruebaGuia.simulacion else null
     private val carpetaFotos = File(app.filesDir, CARPETA_FOTOS)
+    private val vibracion = FeedbackCaptura(app) // alertas: vibra como el mapa (FE-3.6)
 
     /** `true` en el modo de simulación: la pantalla no crea el PDR. */
     val simulando: Boolean = simulacion != null
@@ -99,6 +105,7 @@ class NavegacionViewModel(app: Application) : AndroidViewModel(app) {
         if (planificador == null) return fallar(TextosGuia.RUTAS_DESACTIVADAS, "grafo no disponible")
         val inicio: Pair<Double, Double>
         val rumbo: Double?
+        var incertidumbre = parametros.incertidumbreInicialM
         val calcular: (Double, Double, Double?) -> Ruta?
         if (prueba) {
             val texto = PruebaGuia.destino!!
@@ -112,6 +119,7 @@ class NavegacionViewModel(app: Application) : AndroidViewModel(app) {
             val ubicado = u?.ubicado ?: return fallar(TextosGuia.SIN_UBICACION, "sin ubicación")
             val destino = SesionDeNavegacion.destino.value ?: return fallar(TextosGuia.SIN_RUTA, "sin destino")
             inicio = ubicado.posicion.lat to ubicado.posicion.lng
+            incertidumbre = ubicado.posicion.radioM
             rumbo = DescribirUbicacion.rumboCorregido(u.rumboAlTerminar, ubicado.correccionRumboGrados)
             destinoTexto = destino.nombre
             calcular = { la, ln, r -> encontrada(planificador.calcular(la, ln, destino, r)) }
@@ -126,7 +134,15 @@ class NavegacionViewModel(app: Application) : AndroidViewModel(app) {
                 (if (prueba) ", datos de prueba" else "") +
                 (simulacion?.let { ", simulación ${it.pasoM} m cada ${it.intervaloMs} ms" } ?: ""),
         )
-        return GuiaNavegacion(calcular, ruta, parametros, SinAvisosDeAlertas)
+        // FE-3.6 en la guía: la caché de alertas públicas (ya cargada por MyApp; se vuelve a pedir por si acaso).
+        val cache = AlertasPublicas.de(app)
+        viewModelScope.launch { runCatching { cache.cargar() } }
+        val avisador = AlertasEnRuta(
+            alertas = { cache.estado.value.alertas },
+            p = parametros,
+            registrar = { AppLog.i(CacheAlertasPublicas.TAG, it) },
+        )
+        return GuiaNavegacion(calcular, ruta, parametros, avisador, incertidumbreInicialM = incertidumbre)
     }
 
     private fun encontrada(r: ResultadoRuta): Ruta? = (r as? ResultadoRuta.Encontrada)?.ruta
@@ -267,7 +283,10 @@ class NavegacionViewModel(app: Application) : AndroidViewModel(app) {
             when (s) {
                 is SalidaGuia.Hablar -> {
                     AppLog.i(TAG, "Voz${if (s.prioritario) " (ya)" else ""}: ${sinDestino(s.texto)}")
-                    if (!pausado && !terminado) cola.decir(s.texto, s.prioritario)
+                    if (!pausado && !terminado) {
+                        cola.decir(s.texto, s.prioritario)
+                        if (s.vibrar) vibracion.confirmar()
+                    }
                 }
                 is SalidaGuia.TomarFoto -> {
                     pedido = s
@@ -300,6 +319,7 @@ class NavegacionViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         trabajoSimulacion?.cancel()
         voz.release()
+        vibracion.liberar()
         if (prueba) PruebaGuia.limpiar()
         carpetaFotos.listFiles()?.forEach { it.delete() }
     }

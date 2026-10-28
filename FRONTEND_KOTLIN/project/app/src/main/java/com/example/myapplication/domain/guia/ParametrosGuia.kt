@@ -29,6 +29,12 @@ import com.example.myapplication.domain.model.NivelConfianza
  *   (al empezar, la de «Ubicarme»): el error de los pasos crece con lo caminado; un salto mayor se descarta (40 m tras
  *   5 m de pasos: límite 10,5 m).
  * - [descartarBorrosas]: una foto oscura o borrosa (`CalidadImagen`) no se envía.
+ *
+ * Alertas (FE-3.6 en la guía) y posición:
+ * - [alertaRutaM]: una alerta cuenta en la guía si su centro está a ≤ su `radio` + esto de la ruta (decisión abierta 3,
+ *   propuesta de FE-5.3: solo las de la ruta, no las de un camino paralelo).
+ * - [incertidumbreInicialM]: la incertidumbre de la posición de partida si no se conoce (la de prueba); con «Ubicarme»
+ *   es su `radio_m`, y tras una foto aceptada, el de la foto. Se le suma la deriva de los pasos (`Deriva`, 4 %).
  */
 data class ParametrosGuia(
     val avisoPrevioM: Double = 10.0,
@@ -46,6 +52,8 @@ data class ParametrosGuia(
     val margenRadioM: Double = 10.0,
     val nivelesAceptados: Set<NivelConfianza> = setOf(NivelConfianza.ALTA, NivelConfianza.MEDIA),
     val descartarBorrosas: Boolean = true,
+    val alertaRutaM: Double = 10.0,
+    val incertidumbreInicialM: Double = 5.0,
 )
 
 /**

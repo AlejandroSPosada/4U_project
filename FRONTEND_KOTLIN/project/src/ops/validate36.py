@@ -57,7 +57,8 @@ PATRON_SINCRONIZADA = re.compile(
 )
 PATRON_NO_SINCRONIZO = re.compile(r"^Alertas públicas: no se pudo sincronizar")
 PATRON_ANUNCIADA = re.compile(
-    r"^Alerta anunciada \((resultado|mapa)\): (\S+) a (\d+) m \(radio (\d+) m, incertidumbre (\d+) m, (\S+)\)$"
+    r"^Alerta anunciada \((resultado|mapa|navegacion)\): (\S+) a (\d+) m "
+    r"\(radio (\d+) m, incertidumbre (\d+) m, (\S+)\)$"
 )
 INICIO_UBICARME = "Inicio desde Ubicarme"
 PATRON_SENSORES = re.compile(r"sensores registrados \((iniciar|primer plano)")
@@ -182,7 +183,7 @@ class Anuncio:
 
 
 def anuncios(lineas: list[LineaLog]) -> list[Anuncio]:
-    """Las líneas «Alerta anunciada (resultado|mapa): <id> …» (`I/AlertasPublicas`)."""
+    """Las líneas «Alerta anunciada (resultado|mapa|navegacion): <id> …» (`I/AlertasPublicas`; la guía desde FE-5.3)."""
     salida = []
     for linea in lineas:
         m = PATRON_ANUNCIADA.match(linea.texto) if linea.tag == TAG_ALERTAS and linea.nivel == "I" else None
