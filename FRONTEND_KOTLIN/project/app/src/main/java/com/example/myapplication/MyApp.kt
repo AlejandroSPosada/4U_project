@@ -3,6 +3,7 @@ package com.example.myapplication
 import android.app.Application
 import android.os.Build
 import com.example.myapplication.data.local.Subidas
+import com.example.myapplication.data.remote.AlertasPublicas
 import com.example.myapplication.data.remote.ClienteApi
 import com.example.myapplication.logs.AppLog
 import com.example.myapplication.session.EventosSesion
@@ -36,6 +37,10 @@ class MyApp : Application() {
         // FE-2.1: cola de subida de recorridos (una por proceso). No sube nada aquí: no hay sesión en un arranque en
         // frío; se retoma al abrir el Panel o la vista 7.5 (ARCHITECTURE §5.10).
         Subidas.iniciar(this, sesion)
+
+        // FE-3.6: caché de alertas públicas (files/alertas/publicas.json) y sus disparadores: al pasar a primer plano,
+        // cada 5 min en primer plano y al volver la conexión (ARCHITECTURE §5.10, «Alertas sin conexión»).
+        AlertasPublicas.iniciar(this)
     }
 
     private companion object {

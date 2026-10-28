@@ -3,14 +3,19 @@ package com.example.myapplication.ui.ubicacion
 import android.app.Application
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.GrafoDeLaApp
+import com.example.myapplication.data.remote.AlertasPublicas
+import com.example.myapplication.data.remote.CacheAlertasPublicas
 import com.example.myapplication.domain.model.LugarDestino
 import com.example.myapplication.domain.model.SesionDeNavegacion
 import com.example.myapplication.domain.model.UbicacionEstimada
 import com.example.myapplication.domain.ruta.Planificador
 import com.example.myapplication.domain.ruta.ResultadoRuta
+import com.example.myapplication.domain.usecase.AlertaCercana
 import com.example.myapplication.domain.usecase.ConversionRumbo
 import com.example.myapplication.domain.usecase.DescribirUbicacion
+import com.example.myapplication.domain.usecase.DetectarAlertasCercanas
 import com.example.myapplication.logs.AppLog
 import com.example.myapplication.sensors.Declinacion
 import com.example.myapplication.ui.inicio.VoiceController
@@ -18,6 +23,7 @@ import com.example.myapplication.ui.ubicacion.EscaneoConfig.INCLINACION_MAX
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 private const val TAG = "ResultadoVM"
@@ -34,14 +40,20 @@ private const val TAG = "ResultadoVM"
  * FE-5.1: con un destino que está en el grafo (`GrafoDeLaApp`), dice la distancia **por el camino** y la primera
  * instrucción en lugar de la línea recta; deja una línea `Ruta` al abrir (sin posición ni nombres).
  *
+ * FE-3.6: las alertas activas y vigentes de la caché local (`AlertasPublicas`, sin red) cuyo radio más el radio de la
+ * posición estimada alcanza esa posición se muestran y se dicen **al final**, después de la ubicación y de la ruta. Se
+ * calculan una vez, al abrir (la posición de 6.3 no se mueve); hasta leer la caché del disco no se habla. Una línea
+ * `AlertasPublicas` por alerta («Alerta anunciada (resultado): <id> …»).
+ *
  * Qué NO hace: no navega (las acciones van a `AppNav`), no escucha comandos de voz (FE-3.5, decisión del usuario del
- * 2026-10-26) y no muestra mapa ni alertas (FE-3.6).
+ * 2026-10-26) y no muestra mapa.
  */
 class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
 
     private val voz = VoiceController(app)
     private val ubicacion: UbicacionEstimada? = SesionDeNavegacion.ubicacion.value
     private val destino: LugarDestino? = SesionDeNavegacion.destino.value
+    private val mapaDisponible: Boolean = SesionDeNavegacion.ubicacionVigente() != null
     private val declinacion = Declinacion.paraLaUltimaPosicion()
     // FE-5.1: null si el grafo es inválido o no se pudo leer (rutas desactivadas; nunca lanza).
     private val planificador: Planificador? = runCatching { GrafoDeLaApp.planificador(app) }.getOrNull()
@@ -49,6 +61,10 @@ class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
     private var rumboVivo: Double? = null     // rumbo verdadero de la brújula (sin corregir), o null sin lectura
     private var ultimaActualizacion = 0L      // para no recalcular los textos a 50 Hz
     private var abierto = false
+
+    // FE-3.6: alertas cercanas a la posición estimada (null = todavía leyendo la caché).
+    private var alertas: List<AlertaCercana>? = if (ubicacion?.ubicado == null) emptyList() else null
+    private var hablarAlCargar = false
 
     private val _estado = MutableStateFlow(calcular())
     val estado: StateFlow<ResultadoUiState> = _estado.asStateFlow()
@@ -60,6 +76,24 @@ class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
                 ", destino ${if (destino != null) "sí" else "no"}",
         )
         if (destino != null) registrarRuta()
+        val p = ubicacion?.ubicado?.posicion
+        if (p != null) {
+            viewModelScope.launch {
+                val cache = runCatching { AlertasPublicas.de(app).cargar().alertas }
+                    .onFailure { AppLog.w(TAG_ALERTAS, "Alertas públicas: no se pudo leer la caché en 6.3 (${it.javaClass.simpleName})") }
+                    .getOrDefault(emptyList())
+                val cercanas = DetectarAlertasCercanas.cercanas(cache, p.lat, p.lng, p.radioM, System.currentTimeMillis())
+                cercanas.forEach {
+                    AppLog.i(TAG_ALERTAS, DetectarAlertasCercanas.lineaAnunciada("resultado", it, p.radioM))
+                }
+                alertas = cercanas
+                _estado.value = calcular()
+                if (hablarAlCargar) {
+                    hablarAlCargar = false
+                    hablar()
+                }
+            }
+        }
     }
 
     /** Línea `Ruta` (FE-5.1): si hay ruta por el grafo, sus metros e instrucciones; si no, por qué (sin posición ni nombres). */
@@ -84,7 +118,8 @@ class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
     fun alAbrir() {
         if (abierto) return
         abierto = true
-        hablar()
+        // FE-3.6: hasta tener las alertas (lectura del disco, milisegundos) no se habla, así se dicen al final.
+        if (alertas == null) hablarAlCargar = true else hablar()
     }
 
     /** «Repetir en voz alta»: recalcula las direcciones con el rumbo actual y lo vuelve a decir. */
@@ -101,8 +136,11 @@ class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** `ON_STOP` de la pantalla o antes de navegar: calla la voz. */
-    fun alPausar() = voz.stopAll()
+    /** `ON_STOP` de la pantalla o antes de navegar: calla la voz (y no habla si la caché llega después). */
+    fun alPausar() {
+        hablarAlCargar = false
+        voz.stopAll()
+    }
 
     private fun hablar() {
         val e = calcular()
@@ -113,8 +151,9 @@ class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
     private fun calcular(): ResultadoUiState {
         val rumbo = rumboVivo ?: ubicacion?.rumboAlTerminar
         return ResultadoUiState(
-            descripcion = DescribirUbicacion.describir(ubicacion, rumbo, destino, planificador),
+            descripcion = DescribirUbicacion.describir(ubicacion, rumbo, destino, planificador, alertas.orEmpty()),
             hayPosicion = ubicacion?.ubicado != null,
+            mapaDisponible = mapaDisponible,
         )
     }
 
@@ -125,5 +164,6 @@ class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         const val ACTUALIZAR_CADA_MS = 1_000L
         const val TAG_RUTA = "Ruta"
+        const val TAG_ALERTAS = CacheAlertasPublicas.TAG
     }
 }

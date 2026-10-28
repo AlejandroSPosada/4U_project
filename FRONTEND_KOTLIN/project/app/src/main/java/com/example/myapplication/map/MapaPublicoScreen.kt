@@ -32,13 +32,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.myapplication.data.local.GrafoDeLaApp
+import com.example.myapplication.data.remote.AlertasPublicas
+import com.example.myapplication.data.remote.CacheAlertasPublicas
 import com.example.myapplication.domain.model.SesionDeNavegacion
 import com.example.myapplication.domain.ruta.ResultadoRuta
+import com.example.myapplication.domain.usecase.Deriva
+import com.example.myapplication.domain.usecase.DetectarAlertasCercanas
+import com.example.myapplication.domain.usecase.SeguimientoAlertas
 import com.example.myapplication.logs.AppLog
 import com.example.myapplication.sensors.PdrEvento
 import com.example.myapplication.sensors.PdrTracker
+import com.example.myapplication.ui.inicio.VoiceController
+import com.example.myapplication.ui.ubicacion.FeedbackCaptura
+import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -80,6 +90,14 @@ private fun WebView.js(codigo: String) {
  * (`onNativeRuta(json|null)`) y muestra arriba un aviso en Compose con la distancia por el camino y la primera
  * instrucción ([TextosRutaMapa]). La página avisa que está lista con `AndroidBridge.listo()`; en el APK de depuración,
  * la posición de prueba se envía con `onNativeInicio(lat, lng)` (como un toque).
+ *
+ * FE-3.6 (ADR-FE-41): con una ubicación vigente de «Ubicarme» (`SesionDeNavegacion.ubicacionVigente()`, y sin posición
+ * de prueba de FE-5.1) el seguimiento empieza **sin tocar el mapa**: Kotlin fija esa posición en el [PdrTracker] y lo
+ * inicia al abrir (no depende de la página ni de la red); cuando la página está lista, `onNativeRastreoIniciado(lat,
+ * lng)` la pone en «Rastreando». En cada cambio de posición, [SeguimientoAlertas] busca en la caché local
+ * (`AlertasPublicas`) las alertas que empiezan una aproximación (radio + incertidumbre = radio de «Ubicarme» o 0 tras
+ * un toque, más la deriva del 4 % de lo caminado desde ese punto) y las anuncia: voz (la primera de prioridad alta
+ * corta lo que se esté diciendo; las demás se encolan), vibración y un aviso «Alerta: …» arriba.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -88,8 +106,23 @@ fun MapaPublicoScreen(modifier: Modifier = Modifier) {
     // FE-3.1 (ADR-FE-22): el tracker sigue el ciclo de vida de esta pantalla (la entrada de la pila), no el del
     // proceso: si el mapa queda en la pila sin ser lo visible (o en otra tarea), sus sensores no vuelven al primer plano.
     val cicloPantalla = LocalLifecycleOwner.current.lifecycle
+    val lifecycleOwner = LocalLifecycleOwner.current
     val tracker = remember { PdrTracker(ctx, cicloDeVida = cicloPantalla) }
     var webView by remember { mutableStateOf<WebView?>(null) }
+
+    // FE-3.6: inicio desde «Ubicarme» (la posición de prueba de FE-5.1, si la hay, gana: se usa como un toque).
+    val inicioUbicarme = remember {
+        if (PruebaMapa.posicion == null) SesionDeNavegacion.ubicacionVigente()?.ubicado?.posicion else null
+    }
+    val alertasPublicas = remember { AlertasPublicas.de(ctx) }
+    val cacheAlertas by alertasPublicas.estado.collectAsState()
+    val seguimiento = remember { SeguimientoAlertas() }
+    val voz = remember { VoiceController(ctx) }
+    val vibracion = remember { FeedbackCaptura(ctx) }
+    // Incertidumbre del punto de partida y distancia del PDR en ese momento (la deriva cuenta desde ahí).
+    var radioInicialM by remember { mutableStateOf(inicioUbicarme?.radioM ?: 0.0) }
+    var anclaDistanciaM by remember { mutableStateOf(0.0) }
+    var ultimaAlerta by remember { mutableStateOf<String?>(null) }
 
     // FE-5.1: ruta por el grafo. `null` = rutas desactivadas (grafo inválido o ilegible; nunca lanza).
     val planificador = remember { runCatching { GrafoDeLaApp.planificador(ctx) }.getOrNull() }
@@ -104,6 +137,51 @@ fun MapaPublicoScreen(modifier: Modifier = Modifier) {
             tracker.liberar()
             webView?.destroy()
             PruebaMapa.limpiar()
+            voz.release()
+            vibracion.liberar()
+        }
+    }
+
+    // FE-3.6: al dejar de verse el mapa, calla (los sensores ya se quitan solos, ADR-FE-22).
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) voz.stopAll() }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
+    // FE-3.6: con una ubicación vigente de «Ubicarme», el seguimiento empieza aquí sin tocar el mapa ni pulsar ▶.
+    LaunchedEffect(Unit) {
+        val p = inicioUbicarme ?: return@LaunchedEffect
+        tracker.fijarPosicion(p.lat, p.lng)
+        tracker.iniciar()
+        AppLog.i(TAG, "Inicio desde Ubicarme (radio ${p.radioM.roundToInt()} m): seguimiento iniciado sin tocar el mapa")
+        voz.speak(INICIO_UBICARME)
+    }
+
+    // FE-3.6: el punto de partida (y el estado de las aproximaciones) cambia si la persona toca el mapa.
+    val alFijarPosicion: (Double, Double) -> Unit = { _, _ ->
+        radioInicialM = 0.0
+        anclaDistanciaM = tracker.estado.value.distanciaMetros
+        seguimiento.reiniciar()
+    }
+
+    // FE-3.6: alertas al cambiar la posición o la caché (la vigencia se evalúa ahora).
+    LaunchedEffect(posicionActual, cacheAlertas.alertas) {
+        val pos = posicionActual ?: return@LaunchedEffect
+        val caminado = (tracker.estado.value.distanciaMetros - anclaDistanciaM).coerceAtLeast(0.0)
+        val incertidumbre = radioInicialM + Deriva.estimar(caminado).derivaM
+        val avisos = seguimiento.actualizar(
+            cacheAlertas.alertas, pos.first, pos.second, incertidumbre, System.currentTimeMillis(),
+        )
+        avisos.forEachIndexed { i, a ->
+            AppLog.i(CacheAlertasPublicas.TAG, DetectarAlertasCercanas.lineaAnunciada("mapa", a, incertidumbre))
+            val texto = DetectarAlertasCercanas.texto(a.alerta)
+            // La primera, si es de prioridad alta, corta lo que se esté diciendo; las demás esperan su turno.
+            if (i == 0 && a.alta) voz.speak(texto) else voz.speakEncolado(texto)
+        }
+        if (avisos.isNotEmpty()) {
+            vibracion.confirmar()
+            ultimaAlerta = DetectarAlertasCercanas.texto(avisos.first().alerta)
         }
     }
 
@@ -123,6 +201,17 @@ fun MapaPublicoScreen(modifier: Modifier = Modifier) {
     LaunchedEffect(paginaLista, webView) {
         val w = webView ?: return@LaunchedEffect
         if (!paginaLista) return@LaunchedEffect
+        // FE-3.6: el seguimiento ya empezó en Kotlin desde «Ubicarme»: la página dibuja el inicio y la posición actual
+        // y se pone en «Rastreando» sin volver a fijar la posición (no salta atrás si ya se caminó).
+        inicioUbicarme?.let { p ->
+            w.js("onNativeRastreoIniciado(${p.lat},${p.lng})")
+            val e = tracker.estado.value
+            val la = e.lat
+            val ln = e.lng
+            if (la != null && ln != null) {
+                w.js("onNativePosition($la,$ln,${e.pasos},${e.distanciaMetros},${e.velocidadMps})")
+            }
+        }
         val p = PruebaMapa.posicion ?: return@LaunchedEffect
         PruebaMapa.posicion = null
         w.js("onNativeInicio(${p.first},${p.second})")
@@ -204,6 +293,7 @@ fun MapaPublicoScreen(modifier: Modifier = Modifier) {
             .systemBarsPadding(),
     ) {
         aviso?.let { AvisoRutaMapa(it) }
+        ultimaAlerta?.let { AvisoAlertaMapa(it) }
         AndroidView(
             modifier = Modifier
                 .fillMaxWidth()
@@ -228,7 +318,10 @@ fun MapaPublicoScreen(modifier: Modifier = Modifier) {
                         // Geolocalización: sin sobrescribir onGeolocationPermissionsShowPrompt el
                         // botón GPS falla con un aviso (decisión abierta 14 de ARCHITECTURE.md).
                     }
-                    addJavascriptInterface(PuentePdr(tracker) { paginaLista = true }, "AndroidBridge")
+                    addJavascriptInterface(
+                        PuentePdr(tracker, alListo = { paginaLista = true }, alFijarPosicion = alFijarPosicion),
+                        "AndroidBridge",
+                    )
                     loadUrl("file:///android_asset/index.html")
                     webView = this
                 }
@@ -250,4 +343,28 @@ private fun AvisoRutaMapa(aviso: AvisoRuta) {
         Text(aviso.titulo, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         aviso.detalle?.let { Text(it, color = Color(0xFFB9F6CA), fontSize = 16.sp) }
     }
+}
+
+/** FE-3.6: lo que se dice al abrir el mapa con el seguimiento empezado desde «Ubicarme». */
+internal const val INICIO_UBICARME = "Sigo tus pasos desde tu última ubicación."
+
+/** FE-3.6: prefijo del aviso de la última alerta anunciada (lo lee `validate36.py` con `uiautomator`). */
+internal const val PREFIJO_ALERTA = "Alerta: "
+
+/**
+ * FE-3.6: la última alerta anunciada, sobre el mapa. Sin *live region*: ya la dice la voz de la app (TalkBack la lee si
+ * se toca).
+ */
+@Composable
+private fun AvisoAlertaMapa(texto: String) {
+    Text(
+        text = "$PREFIJO_ALERTA$texto",
+        color = Color(0xFF1A1200),
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFFFC94D))
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+    )
 }

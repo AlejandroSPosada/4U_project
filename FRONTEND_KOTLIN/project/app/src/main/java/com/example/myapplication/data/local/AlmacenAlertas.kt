@@ -101,7 +101,8 @@ class AlmacenAlertasArchivo(
             cargado = true,
         )
 
-        private fun alertaJson(a: Alerta) = JsonObject().apply {
+        /** Una alerta en las claves del archivo (también las usa la caché pública de FE-3.6, `AlmacenCacheAlertasArchivo`). */
+        internal fun alertaJson(a: Alerta) = JsonObject().apply {
             addProperty("id", a.id)
             addProperty("lat", a.lat)
             addProperty("lng", a.lng)
@@ -116,7 +117,7 @@ class AlmacenAlertasArchivo(
             a.actualizadoEnMs?.let { addProperty("actualizado_en_ms", it) }
         }
 
-        private fun alertaDe(o: JsonObject): Alerta = Alerta(
+        internal fun alertaDe(o: JsonObject): Alerta = Alerta(
             id = o.get("id").asString,
             lat = o.get("lat").asDouble,
             lng = o.get("lng").asDouble,

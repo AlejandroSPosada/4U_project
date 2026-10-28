@@ -96,13 +96,14 @@
         showToast('📍 Posición establecida', 'success');
     }
 
-    function setUserPosition(lat, lng) {
+    /** Punto de partida. Con avisar = false (FE-3.6) solo dibuja: Kotlin ya lo fijó (inicio desde «Ubicarme»). */
+    function setUserPosition(lat, lng, avisar = true) {
         state.startLat = lat;
         state.startLng = lng;
         state.currentLat = lat;
         state.currentLng = lng;
         state.positionSet = true;
-        bridgeCall('setPosition', lat, lng);
+        if (avisar) bridgeCall('setPosition', lat, lng);
 
         if (state.userMarker) state.map.removeLayer(state.userMarker);
         if (state.startMarker) state.map.removeLayer(state.startMarker);
@@ -189,7 +190,8 @@
         else startTracking();
     };
 
-    function startTracking() {
+    /** Con pedirSensores = false (FE-3.6) solo pone la interfaz en «Rastreando»: Kotlin ya inició el seguimiento. */
+    function startTracking(pedirSensores = true) {
         if (!window.AndroidBridge) {
             showToast('⚠️ El seguimiento solo funciona dentro de la app', 'error');
             return;
@@ -209,7 +211,7 @@
 
         state.timerInterval = setInterval(updateTimer, 1000);
 
-        startSensors();
+        if (pedirSensores) startSensors();
         showToast('🏃 Rastreo iniciado', 'info');
     }
 
@@ -313,6 +315,20 @@
         if (splash) { splash.classList.add('dismissed'); splash.style.display = 'none'; }
         $('top-bar').classList.remove('hidden');
         setUserPosition(lat, lng);
+    };
+
+    /**
+     * FE-3.6: Kotlin ya fijó el punto de partida (la posición de «Ubicarme») e inició el seguimiento. Quita la portada,
+     * dibuja el inicio sin avisar a Kotlin (no vuelve a fijar la posición) y pone la interfaz en «Rastreando» sin pedir
+     * los sensores. Lo que siga llega por onNativePosition / onNativeHeading.
+     */
+    window.onNativeRastreoIniciado = function (lat, lng) {
+        if (!state.map) return;
+        const splash = $('splash-screen');
+        if (splash) { splash.classList.add('dismissed'); splash.style.display = 'none'; }
+        $('top-bar').classList.remove('hidden');
+        setUserPosition(lat, lng, false);
+        if (!state.isTracking) startTracking(false);
     };
 
     /** Desviación de la aceleración respecto a la gravedad (m/s²), solo para la gráfica. */

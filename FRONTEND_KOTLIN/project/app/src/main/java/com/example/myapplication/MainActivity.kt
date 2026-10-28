@@ -28,6 +28,7 @@ import androidx.navigation.navArgument
 import com.example.myapplication.ui.inicio.InicioScreen
 import com.example.myapplication.ui.destino.SeleccionDestinoScreen
 import com.example.myapplication.ui.ubicacion.EscaneoScreen
+import com.example.myapplication.ui.ubicacion.PruebaUbicacion
 import com.example.myapplication.ui.ubicacion.ResultadoUbicacionScreen
 import com.example.myapplication.ui.auth.LoginScreen
 import com.example.myapplication.ui.admin.panel.PanelAdminScreen
@@ -64,6 +65,13 @@ class MainActivity : ComponentActivity() {
         if (rutaPrueba == "mapa") {
             PruebaMapa.fijar(intent?.getStringExtra(EXTRA_DESTINO_PRUEBA), intent?.getStringExtra(EXTRA_POSICION_PRUEBA))
         }
+        // FE-3.6 (ADR-FE-42): con una ruta de prueba (`resultado` o `mapa`), una ubicación de prueba de «Ubicarme»
+        // (`--es ubicacion_prueba 6.201434,-75.578427`) registrada como si fuera la respuesta del escaneo. Solo aquí.
+        if (rutaPrueba != null) {
+            PruebaUbicacion.resultado(intent?.getStringExtra(EXTRA_UBICACION_PRUEBA))?.let {
+                SesionDeNavegacion.registrar(it, rumboAlTerminar = null)
+            }
+        }
         setContent {
             MaterialTheme {
                 AppNav(rutaInicial = rutaPrueba)
@@ -81,13 +89,16 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_RUTA = "ruta"
 
         /** Rutas que se pueden abrir así; cualquier otra se ignora (navegar a una no registrada cierra la app). */
-        val RUTAS_DE_PRUEBA = setOf("mapa")
+        val RUTAS_DE_PRUEBA = setOf("mapa", "resultado")
 
         /** FE-5.1: destino de prueba del mapa (el `lugar` de una entrada del grafo; se compara normalizado). */
         const val EXTRA_DESTINO_PRUEBA = "destino_prueba"
 
         /** FE-5.1: posición de prueba del mapa, `"<lat>,<lng>"` con punto decimal. */
         const val EXTRA_POSICION_PRUEBA = "posicion_prueba"
+
+        /** FE-3.6: ubicación de prueba de «Ubicarme» (rutas `resultado` y `mapa`), `"<lat>,<lng>"` con punto decimal. */
+        const val EXTRA_UBICACION_PRUEBA = "ubicacion_prueba"
     }
 }
 
@@ -203,6 +214,9 @@ fun AppNav(rutaInicial: String? = null) {
                 onVolverAUbicarme = { nav.navigate("ubicarme") { popUpTo("resultado") { inclusive = true } } },
                 onIrALugar = { nav.navigate("destino") { popUpTo("resultado") { inclusive = true } } },
                 onInicio = { nav.popBackStack("inicio", inclusive = false) },
+                // FE-3.6: «Caminar con el mapa» (solo con ubicación vigente): el mapa empieza en esta posición y la 6.3
+                // sale de la pila (Atrás desde el mapa vuelve a Inicio).
+                onVerMapa = { nav.navigate("mapa") { popUpTo("resultado") { inclusive = true } } },
             )
         }
 

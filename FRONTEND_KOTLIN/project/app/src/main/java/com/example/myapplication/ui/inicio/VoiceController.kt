@@ -52,7 +52,7 @@ class VoiceController(private val context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private var tts: TextToSpeech? = null
     private var ttsListo = false
-    private var pendiente: (() -> Unit)? = null
+    private val pendientes = mutableListOf<() -> Unit>()
     private var recognizer: SpeechRecognizer? = null
     private val locale = Locale("es", "CO")
 
@@ -61,13 +61,25 @@ class VoiceController(private val context: Context) {
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = locale
                 ttsListo = true
-                pendiente?.invoke()
-                pendiente = null
+                val lista = pendientes.toList()
+                pendientes.clear()
+                lista.forEach { it() }
             }
         }
     }
 
-    fun speak(texto: String, alTerminar: () -> Unit = {}) {
+    /** Dice [texto] cortando lo que se esté diciendo (`QUEUE_FLUSH`). Solo el último `speak` tiene [alTerminar]. */
+    fun speak(texto: String, alTerminar: () -> Unit = {}) = decir(texto, encolar = false, alTerminar)
+
+    /**
+     * FE-3.6 (alertas de prioridad normal): dice [texto] cuando termine lo que se esté diciendo (`QUEUE_ADD`), sin
+     * cortarlo. Si el TTS aún no está listo, se suma a lo pendiente (un [speak] lo reemplaza). Como [speak], solo el
+     * último tiene [alTerminar].
+     */
+    fun speakEncolado(texto: String, alTerminar: () -> Unit = {}) = decir(texto, encolar = true, alTerminar)
+
+    private fun decir(texto: String, encolar: Boolean, alTerminar: () -> Unit) {
+        val modo = if (encolar) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH
         val accion = {
             val id = UUID.randomUUID().toString()
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -80,10 +92,14 @@ class VoiceController(private val context: Context) {
                     if (utteranceId == id) main.post(alTerminar)
                 }
             })
-            tts?.speak(texto, TextToSpeech.QUEUE_FLUSH, null, id)
+            tts?.speak(texto, modo, null, id)
             Unit
         }
-        if (ttsListo) accion() else pendiente = accion
+        when {
+            ttsListo -> accion()
+            encolar -> pendientes += accion
+            else -> { pendientes.clear(); pendientes += accion }
+        }
     }
 
     /**

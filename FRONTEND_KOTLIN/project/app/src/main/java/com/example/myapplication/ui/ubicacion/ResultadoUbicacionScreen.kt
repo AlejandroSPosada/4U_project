@@ -52,7 +52,8 @@ import com.example.myapplication.ui.theme.CampusColors
  *
  * Dice y muestra dónde está la persona (lugar cercano, referencias con dirección relativa, confianza) y, si eligió un
  * destino en 6.4, su distancia y dirección en línea recta (la navegación guiada es de FE-5.1). Sin mapa ni comandos de
- * voz (decisión del usuario del 2026-10-26; voz: FE-3.5; alertas cercanas: FE-3.6).
+ * voz (decisión del usuario del 2026-10-26; voz: FE-3.5). FE-3.6: alertas cercanas al final (tarjeta y voz) y, con una
+ * ubicación vigente, «Caminar con el mapa» (abre el mapa público con el seguimiento empezado aquí).
  *   - Textos               -> domain/usecase/DescribirUbicacion
  *   - Datos (ubicación)    -> domain/model/SesionDeNavegacion (decisión abierta 15)
  *   - Estado y acciones    -> ResultadoUbicacionState
@@ -63,6 +64,7 @@ fun ResultadoUbicacionScreen(
     onVolverAUbicarme: () -> Unit,
     onIrALugar: () -> Unit,
     onInicio: () -> Unit,
+    onVerMapa: () -> Unit = {},
     viewModel: ResultadoUbicacionViewModel = viewModel(),
 ) {
     val ctx = LocalContext.current
@@ -94,10 +96,15 @@ fun ResultadoUbicacionScreen(
             onVolverAUbicarme = { viewModel.alPausar(); onVolverAUbicarme() },
             onIrALugar = { viewModel.alPausar(); onIrALugar() },
             onInicio = { viewModel.alPausar(); onInicio() },
+            onVerMapa = { viewModel.alPausar(); onVerMapa() },
         )
     }
     ResultadoUbicacionContent(estado = estado, acciones = acciones)
 }
+
+/** FE-3.6: título de la tarjeta de alertas de 6.3 y texto del botón que abre el mapa (los lee `validate36.py`). */
+internal const val TITULO_ALERTAS = "Alertas cercanas"
+internal const val BOTON_MAPA = "Caminar con el mapa"
 
 /** Contenido sin lógica de la vista 6.3. Botones de 64 dp o más; TalkBack lee el texto de cada botón. */
 @Composable
@@ -154,6 +161,27 @@ internal fun ResultadoUbicacionContent(
             )
         }
 
+        // FE-3.6: alertas cercanas, después de la ubicación (como se dicen).
+        if (d.alertas.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(CampusColors.Superficie, RoundedCornerShape(20.dp))
+                    .border(2.dp, CampusColors.Peligro, RoundedCornerShape(20.dp))
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = TITULO_ALERTAS,
+                    color = CampusColors.Peligro,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics { heading() },
+                )
+                d.alertas.forEach { Text(it, color = CampusColors.TextoPrincipal, fontSize = 20.sp, lineHeight = 26.sp) }
+            }
+        }
+
         Spacer(Modifier.height(4.dp))
         val irALugar = if (estado.hayPosicion) "Ir a un lugar desde aquí" else "Ir a un lugar"
         // Con confianza baja, sin coincidencias o sin ubicación, «Volver a ubicarme» va primero y relleno.
@@ -164,6 +192,8 @@ internal fun ResultadoUbicacionContent(
         } else {
             BotonPrincipal("Repetir en voz alta", acciones.onRepetir)
             BotonSecundario(irALugar, acciones.onIrALugar)
+            // FE-3.6: con una ubicación vigente, el mapa empieza aquí y sigue los pasos sin tocarlo.
+            if (estado.mapaDisponible) BotonSecundario(BOTON_MAPA, acciones.onVerMapa)
             BotonSecundario("Volver a ubicarme", acciones.onVolverAUbicarme)
         }
         BotonSecundario("Volver al inicio", acciones.onInicio)

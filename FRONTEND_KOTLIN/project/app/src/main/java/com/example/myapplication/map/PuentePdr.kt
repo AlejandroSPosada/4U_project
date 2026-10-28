@@ -12,7 +12,12 @@ import com.example.myapplication.sensors.PdrTracker
  * así que cada uno reenvía al hilo principal, que es donde vive [PdrTracker].
  * Kotlin → Web está en `MapaPublicoScreen.kt` (`onNativePosition`, `onNativeHeading`, ...).
  */
-class PuentePdr(private val tracker: PdrTracker, private val alListo: () -> Unit = {}) {
+class PuentePdr(
+    private val tracker: PdrTracker,
+    private val alListo: () -> Unit = {},
+    /** FE-3.6: la persona fijó el punto de partida en la página (toque o GPS), ya en el hilo principal y tras fijarlo. */
+    private val alFijarPosicion: (lat: Double, lng: Double) -> Unit = { _, _ -> },
+) {
     private val principal = Handler(Looper.getMainLooper())
 
     /** FE-5.1: la página terminó de arrancar (`boot()` de app.js): ya acepta `window.onNative*`. */
@@ -28,7 +33,12 @@ class PuentePdr(private val tracker: PdrTracker, private val alListo: () -> Unit
 
     /** Punto de partida elegido en el mapa (toque o GPS). */
     @JavascriptInterface
-    fun setPosition(lat: Double, lng: Double) { principal.post { tracker.fijarPosicion(lat, lng) } }
+    fun setPosition(lat: Double, lng: Double) {
+        principal.post {
+            tracker.fijarPosicion(lat, lng)
+            alFijarPosicion(lat, lng)
+        }
+    }
 
     /** Rumbo de la rueda manual (solo cuando el teléfono no tiene brújula). */
     @JavascriptInterface

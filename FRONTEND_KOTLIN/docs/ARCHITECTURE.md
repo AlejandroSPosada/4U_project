@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.15.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.16.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-28 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; validado en `dev` con el Xiaomi el 2026-10-27; la recarga del Panel, sin comprobar en el teléfono). Desde FE-3.3 las alertas de administración son «local primero» de verdad: un repositorio único del proceso (`AlertasRepository`, en disco en `files/alertas/editor.json`, ADR-FE-33) con una operación pendiente por id que se envía con `POST /v1/admin/alerts/sincronizar`; el editor 7.8 carga las alertas y los lugares reales, «Mi posición» usa la última posición del PDR de 7.4, el formulario 7.9 tiene dictado, «Escuchar cómo sonará», vigencia y «Ajustar en el mapa», existe la lista 7.10 y 7.4 guarda sus alertas en disco y dibuja las existentes con la ruta pública `GET /v1/alerts`, sin llamar a rutas protegidas (ADR-FE-34) (§4.9; validado en `dev` con el Xiaomi el 2026-10-27). Desde FE-4.1 Galería, Lista y Detalle de video (7.11, 7.13 y 7.14) usan el backend (`RemoteVideoRepository`, `GET`/`PATCH`/`DELETE /v1/admin/videos`, `/v1/admin/images` y su lote): la Lista junta los videos del servidor con los recorridos del teléfono sin subir (un recorrido sale una sola vez), 7.14 renombra y elimina de verdad (en el servidor o, en uno local, en disco) sin cerrar la app si falla y sin salir antes de que el servidor confirme, la Galería pagina y filtra en el servidor con «Reasignar» a lugares reales, «Ver fotos» de 7.6 y 7.7 abre la Galería filtrada, las miniaturas de los recorridos locales ya se ven en 7.14 y `EdicionesLocales` y `assets/videos/` desaparecen (§4.10; validado en `dev` con el Xiaomi el 2026-10-27; «Reasignar», el error del borrado y TalkBack, sin probar en el teléfono). Desde FE-5.1 la app lee el grafo de caminos de `assets/grafo.json` (versión 180, de solo lectura, `GrafoDeLaApp`), calcula en el teléfono y sin red la ruta más corta desde la arista más cercana hasta la entrada más cercana del destino, con instrucciones por los ángulos entre tramos (`domain/ruta/`), la dibuja en el mapa público con la distancia por el camino y la primera instrucción, y la 6.3 dice esa distancia y la primera instrucción cuando el destino está en el grafo (§4.11; probado en la JVM y con `validate51.py --entorno local`, **sin probar en el teléfono ni en `dev`**). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; validado en `dev` con el Xiaomi el 2026-10-27; la recarga del Panel, sin comprobar en el teléfono). Desde FE-3.3 las alertas de administración son «local primero» de verdad: un repositorio único del proceso (`AlertasRepository`, en disco en `files/alertas/editor.json`, ADR-FE-33) con una operación pendiente por id que se envía con `POST /v1/admin/alerts/sincronizar`; el editor 7.8 carga las alertas y los lugares reales, «Mi posición» usa la última posición del PDR de 7.4, el formulario 7.9 tiene dictado, «Escuchar cómo sonará», vigencia y «Ajustar en el mapa», existe la lista 7.10 y 7.4 guarda sus alertas en disco y dibuja las existentes con la ruta pública `GET /v1/alerts`, sin llamar a rutas protegidas (ADR-FE-34) (§4.9; validado en `dev` con el Xiaomi el 2026-10-27). Desde FE-4.1 Galería, Lista y Detalle de video (7.11, 7.13 y 7.14) usan el backend (`RemoteVideoRepository`, `GET`/`PATCH`/`DELETE /v1/admin/videos`, `/v1/admin/images` y su lote): la Lista junta los videos del servidor con los recorridos del teléfono sin subir (un recorrido sale una sola vez), 7.14 renombra y elimina de verdad (en el servidor o, en uno local, en disco) sin cerrar la app si falla y sin salir antes de que el servidor confirme, la Galería pagina y filtra en el servidor con «Reasignar» a lugares reales, «Ver fotos» de 7.6 y 7.7 abre la Galería filtrada, las miniaturas de los recorridos locales ya se ven en 7.14 y `EdicionesLocales` y `assets/videos/` desaparecen (§4.10; validado en `dev` con el Xiaomi el 2026-10-27; «Reasignar», el error del borrado y TalkBack, sin probar en el teléfono). Desde FE-5.1 la app lee el grafo de caminos de `assets/grafo.json` (versión 180, de solo lectura, `GrafoDeLaApp`), calcula en el teléfono y sin red la ruta más corta desde la arista más cercana hasta la entrada más cercana del destino, con instrucciones por los ángulos entre tramos (`domain/ruta/`), la dibuja en el mapa público con la distancia por el camino y la primera instrucción, y la 6.3 dice esa distancia y la primera instrucción cuando el destino está en el grafo (§4.11; probado en la JVM y con `validate51.py --entorno local`, **sin probar en el teléfono ni en `dev`**). Desde FE-3.6 la app guarda las alertas públicas en una caché local (`files/alertas/publicas.json`, `AlertasPublicas`) que se sincroniza por diferencias con `GET /v1/alerts` al pasar a primer plano, cada 5 min en primer plano y al volver la conexión, y funciona sin red; la vista 6.3 muestra y dice al final las alertas cercanas a la posición estimada, el mapa público empieza el seguimiento en la posición de «Ubicarme» sin tocarlo (también desde el botón «Caminar con el mapa» de 6.3) y anuncia por voz, con vibración y un aviso, las alertas al entrar en su radio (una vez por aproximación; la de prioridad alta interrumpe), con la lógica pura `DetectarAlertasCercanas` / `SeguimientoAlertas` que reutilizará FE-5.3 (§4.12; probado en la JVM y con `validate36.py --entorno local`, **sin probar en el teléfono ni en `dev`**). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -207,16 +207,17 @@ usuario ciego cuando está cerca.
 | Vigencia (opcional) | Fecha de inicio/fin para obstáculos temporales |
 
 **Cómo funciona en el flujo público** (lote FE-3.6, fuera del núcleo desde el 2026-10-25: «No necesitamos las alertas
-por el momento»; en el backend, BE-3.3):
+por el momento»; en el backend, BE-3.3; **hecho en el código desde 0.16.0**, §4.12):
 - La app descarga las alertas (`GET /v1/alerts`, por diferencias; §5.10) y las **guarda en local** para que funcionen sin conexión.
-- Durante la **navegación guiada** (y opcionalmente al mostrar el resultado de ubicación),
-  se compara la posición estimada del usuario con las alertas: si entra al radio de una
-  alerta (sumando la incertidumbre actual de la posición), la app **lee el mensaje por voz**
-  y vibra.
+- En el **Resultado de ubicación** (6.3) se dicen, al final, las alertas cuyo radio alcanza la posición estimada (más
+  su radio de dispersión); en el **mapa público** (posición por PDR) y, con FE-5.3, en la **navegación guiada**, se
+  compara cada posición con las alertas: si entra al radio de una alerta (sumando la incertidumbre actual de la
+  posición), la app **lee el mensaje por voz** y vibra.
 - Cada alerta se anuncia **una sola vez por aproximación** (con un tiempo de espera antes de
   repetirse) para no saturar al usuario.
 - Las alertas de prioridad alta **interrumpen** la instrucción de voz en curso.
-- Se priorizan las alertas que están **en la ruta** o cerca de ella.
+- Se priorizan las alertas que están **en la ruta** o cerca de ella: con FE-5.3 (decisión abierta 3; FE-3.6 anuncia
+  todas las cercanas, y en 6.3 las de prioridad alta van primero).
 
 **Cómo las crea el admin:** desde el **Editor de mapa y alertas** (vista 7.8) o desde la
 vista de **Recolección en curso** con el botón "Agregar alerta aquí" (ver sección 7).
@@ -253,7 +254,8 @@ vista de **Recolección en curso** con el botón "Agregar alerta aquí" (ver sec
 
 | Función | Detalle |
 |---|---|
-| Posición inicial | Toque en el mapa (solo si no se está rastreando) o botón GPS (`navigator.geolocation`). Al abrir, intenta usar el GPS automáticamente. Desde FE-5.1, en el APK de depuración, también la posición de prueba (`onNativeInicio`, ADR-FE-38) |
+| Posición inicial | Toque en el mapa (solo si no se está rastreando) o botón GPS (`navigator.geolocation`). Al abrir, intenta usar el GPS automáticamente. Desde FE-5.1, en el APK de depuración, también la posición de prueba (`onNativeInicio`, ADR-FE-38). **Desde FE-3.6, con una ubicación vigente de «Ubicarme», la fija Kotlin al abrir y el seguimiento empieza solo** (sin tocar el mapa ni ▶; la página se entera con `onNativeRastreoIniciado`, ADR-FE-41) |
+| Alertas (FE-3.6) | **Las detecta Kotlin** (`SeguimientoAlertas`, §5.7) con la caché local en cada cambio de posición; las dice la voz de la app y las muestra un aviso de Compose arriba del `WebView` («Alerta: …»). La página no las dibuja (capa pendiente) |
 | Seguimiento por pasos (PDR) | **Ya no lo calcula la página.** Kotlin (`PdrEngine`) avanza una longitud de paso (la calibrada en 7.3b, o 0,72 m por defecto) por paso en la dirección del rumbo y envía la posición con `onNativePosition`; la página mueve el marcador, dibuja la trayectoria y calcula las estadísticas de pantalla (cadencia, calorías) |
 | Rumbo | El promedio circular de las últimas 6 lecturas lo hace Kotlin (`PdrEngine`); la página solo suaviza la flecha del marcador con un filtro adaptativo. Si Kotlin avisa que no hay brújula (`onNativeBrujula(false)`), aparece una **rueda manual de rumbo** que envía `setManualHeading` |
 | Trayectoria | Polilínea punteada con todos los puntos recorridos; botón de reinicio que vuelve al punto inicial |
@@ -384,20 +386,20 @@ com.example.myapplication/
 │
 ├── domain/                      # Lógica de negocio pura (sin Android)
 │   ├── model/                   # Posicion, Lugar, Alerta, Ruta, Video, Foto, Usuario...
-│   ├── usecase/                 # UbicarUsuario, CalcularRuta, IniciarRecoleccion, DetectarAlertasCercanas...
+│   ├── usecase/                 # UbicarUsuario, CalcularRuta, IniciarRecoleccion; desde FE-3.6, DetectarAlertasCercanas y SeguimientoAlertas (§5.7)...
 │   ├── ruta/                    # FE-5.1: grafo (Nodo, Arista, Grafo), lectura y validación, proyección, ruta más corta, instrucciones y emparejamiento con los lugares (§5.7)
 │   └── fusion/                  # Fusión PDR + posición visual (Kalman/partículas)
 │
 ├── data/                        # Acceso a datos
-│   ├── remote/                  # Cliente HTTP (Retrofit + OkHttp, ADR-FE-12), DTOs, mapeo de errores y datos (§5.10)
+│   ├── remote/                  # Cliente HTTP (Retrofit + OkHttp, ADR-FE-12), DTOs, mapeo de errores y datos (§5.10); desde FE-3.6, CacheAlertasPublicas y AlertasPublicas (caché pública de alertas y sus disparadores)
 │   ├── repository/              # Implementaciones de repositorios
-│   └── local/                   # Desde FE-2.1: cola de subida de recorridos sobre los manifests de files/recoleccion/ (§5.10); desde FE-3.3, AlmacenAlertas (files/alertas/editor.json, §5.6); desde FE-4.1, MiniaturasLocales (cacheDir/miniaturas, §5.6); desde FE-5.1, GrafoDeLaApp (assets/grafo.json, §5.6); la caché pública de alertas es de FE-3.6
+│   └── local/                   # Desde FE-2.1: cola de subida de recorridos sobre los manifests de files/recoleccion/ (§5.10); desde FE-3.3, AlmacenAlertas (files/alertas/editor.json, §5.6); desde FE-4.1, MiniaturasLocales (cacheDir/miniaturas, §5.6); desde FE-5.1, GrafoDeLaApp (assets/grafo.json, §5.6); desde FE-3.6, AlmacenCacheAlertas (files/alertas/publicas.json, §5.6)
 │
 ├── sensors/                     # Sensores y PDR
 │   ├── PdrEngine, StepDetector, PdrTracker, OrientationProvider, InterruptorSensores (FE-2.3), ObservadorPrimerPlano (FE-3.1), Declinacion (FE-3.2)
 │
 ├── camera/                      # CameraX, captura automática (una carpeta por escaneo), calidad de imagen (sin uso por ahora)
-├── map/                         # WebView del mapa Leaflet/OSM, AndroidBridge y datos de capas (usuario, ruta, lugares, alertas). Hoy: MapaPublicoScreen, PuentePdr, MapaWebView (fábrica común de los WebView de mapa, 5.9) y, desde FE-5.1, RutaEnMapa (PruebaMapa, TextosRutaMapa, AvisoRuta; 5.7)
+├── map/                         # WebView del mapa Leaflet/OSM, AndroidBridge y datos de capas (usuario, ruta, lugares, alertas). Hoy: MapaPublicoScreen, PuentePdr, MapaWebView (fábrica común de los WebView de mapa, 5.9) y, desde FE-5.1, RutaEnMapa (PruebaMapa, TextosRutaMapa, AvisoRuta; 5.7); desde FE-3.6 el mapa anuncia las alertas y empieza desde «Ubicarme»
 ├── voice/                       # Wrappers de TextToSpeech y SpeechRecognizer
 └── session/                     # Sesión (token, rol, expira_en): SessionManager, AlmacenSesion, VigilanteSesion y EventosSesion (§5.3)
 ```
@@ -417,8 +419,9 @@ y `ui/admin/panel/RecargaResumenTest`, desde FE-3.3 las cuatro de alertas, y des
 `data/remote/RemoteVideoRepositoryTest`, `data/local/MiniaturasLocalesTest`, `ui/admin/videos/TextosVideosTest` y
 `ui/admin/recoleccion/HistorialRecoleccionTest` (`data/repository/VideoRepositoryCompuestoTest` reescrita), y desde
 FE-5.1 `domain/ruta/` (`LectorGrafoTest`, `ProyeccionRutaTest`, `InstruccionesTest`, `EmparejamientoTest`,
-`PlanificadorTest`, con la ayuda `GrafosDePrueba`, que lee el `assets/grafo.json` real) y `map/RutaEnMapaTest` (lista y
-conteos en §4.1).
+`PlanificadorTest`, con la ayuda `GrafosDePrueba`, que lee el `assets/grafo.json` real) y `map/RutaEnMapaTest`, y desde
+FE-3.6 `data/remote/CacheAlertasPublicasTest` y `domain/usecase/` (`DetectarAlertasCercanasTest`,
+`AlertasEnResultadoTest`) (lista y conteos en §4.1).
 
 > Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
 > (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`), de la calibración (`calibracion_mapa.html/js`) y, desde FE-3.4, de los lugares (`lugar_mapa.html/js`), y la base común `mapa_base.js` (5.9). Desde FE-5.1 también el grafo de caminos `grafo.json` (un dato de solo lectura, no código: formato en §5.6). Desde FE-4.1 ya **no** hay `assets/videos/` (los videos de ejemplo, ~9,4 MB, sin uso: §4.10).
@@ -500,7 +503,14 @@ almacenamiento externo.
   desactivadas»; y, una vez por proceso al cargar 6.4, «Grafo: N de M lugares del grafo sin lugar en el backend: …», con
   los nombres del grafo, que son datos del campus y no la ubicación de nadie) y `Ruta` (`ResultadoUbicacionViewModel`, al
   abrir 6.3 con destino: «Resultado: ruta por el camino: 60 m, 3 instrucciones[, fuera del camino]» o «Resultado: sin
-  ruta (destino fuera del grafo|sin posición|grafo no disponible|sin camino)»; sin posición ni nombres).
+  ruta (destino fuera del grafo|sin posición|grafo no disponible|sin camino)»; sin posición ni nombres). Desde FE-3.6
+  `AlertasPublicas` (`CacheAlertasPublicas`, §5.10: `AppLog.i` «Alertas públicas sincronizadas (<motivo>): completa|diferencias
+  desde <t>, R recibidas, E eliminadas, N en caché (generado_en <t>)» —la lee `validate36.py`—; `AppLog.w` «Alertas públicas:
+  no se pudo sincronizar (<motivo>): <Excepción>», «…: el backend no aceptó desde=… ; se pide la foto completa» y
+  «publicas.json ilegible (…)»; y, al anunciar, `AppLog.i` «Alerta anunciada (resultado|mapa): <id> a <d> m (radio <r> m,
+  incertidumbre <i> m, <prioridad>)», sin el mensaje: el id y la distancia dicen que la persona estuvo cerca de esa
+  alerta, como la línea `Ruta`, y solo quedan en el `app.log` del teléfono) y, en `MapaPublico`, «Inicio desde Ubicarme
+  (radio <r> m): seguimiento iniciado sin tocar el mapa» (sin la posición).
 - Registrar transiciones y decisiones, **no** cada lectura de sensor (50 por segundo).
 - No registrar datos sensibles (tokens, credenciales) **ni la ubicación de la persona** (FE-3.2, HU-23: las líneas del
   escaneo y del Resultado no llevan posición, rumbos de la respuesta ni nombres de lugares).
@@ -594,7 +604,10 @@ FE-4.1: `data/remote/RemoteVideoRepositoryTest` (15), `data/local/MiniaturasLoca
 `data/repository/VideoRepositoryCompuestoTest` reescrita (de 3 a 11: la mezcla servidor + teléfono); las otras 300 no
 cambian. Total al terminar el código de FE-4.1: **337** casos. Desde FE-5.1: `domain/ruta/LectorGrafoTest` (7),
 `ProyeccionRutaTest` (9), `InstruccionesTest` (8), `EmparejamientoTest` (3), `PlanificadorTest` (7) y
-`map/RutaEnMapaTest` (3); las otras 337 no cambian. Total al terminar el código de FE-5.1: **374** casos (47 clases). No usan
+`map/RutaEnMapaTest` (3); las otras 337 no cambian. Total al terminar el código de FE-5.1: **374** casos (47 clases). Desde
+FE-3.6: `data/remote/CacheAlertasPublicasTest` (7), `domain/usecase/DetectarAlertasCercanasTest` (7) y
+`domain/usecase/AlertasEnResultadoTest` (4); las otras 374 no cambian. Total al terminar el código de FE-3.6: **392**
+casos (50 clases). No usan
   Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
   `EncryptedSharedPreferences` (la sesión se prueba con un `AlmacenSesion` en memoria, §5.3); lo de FE-2.3 es lógica
   pura (`PdrEngine`, `StepDetector`, `CalibracionPaso`, `DisparadorCaptura`, `Deriva`, `RetomarRecoleccion`,
@@ -784,10 +797,12 @@ sensores.
   Inicio (`alAbrir` en cada composición, ⚠ de 5.5).
 - Con TalkBack activo, `adb shell input swipe` puede no desplazar la lista (TalkBack convierte los gestos de un dedo en
   exploración táctil; **sin comprobar** en el Xiaomi): el paso guiado de C1b pide desactivarlo antes de pulsar Enter.
-- **El mapa público no sirve todavía a una persona ciega** (visto con el usuario al validar, 2026-10-26): el
-  seguimiento solo empieza si se **toca** un punto del mapa (o el botón GPS, decisión abierta 14) y se pulsa ▶, y sin
-  alertas (FE-3.6) el mapa no le anuncia nada. El punto de inicio debe salir de «Ubicarme» (FE-3.2) y el rastreo
-  empezar sin tocar la pantalla: pasó a FE-3.6 (PLAN §2.2) por decisión del usuario.
+- **El mapa público no servía a una persona ciega** (visto con el usuario al validar, 2026-10-26): el
+  seguimiento solo empezaba si se **tocaba** un punto del mapa (o el botón GPS, decisión abierta 14) y se pulsaba ▶, y
+  sin alertas el mapa no le anunciaba nada. Pasó a FE-3.6 (PLAN §2.2) por decisión del usuario y está **hecho en el
+  código desde 0.16.0** (§4.12): con una ubicación vigente de «Ubicarme» el seguimiento empieza solo al abrir el mapa
+  (desde Inicio con «mapa» o con «Caminar con el mapa» de 6.3) y las alertas se anuncian por voz; sin ella, sigue
+  haciendo falta tocar el mapa y ▶.
 - MIUI puede apagar «Instalar vía USB» por su cuenta entre sesiones (el primer intento en `dev` dio
   `INSTALL_FAILED_USER_RESTRICTED`, código 3): comprobarlo antes de cada validación con teléfono.
 
@@ -1128,8 +1143,8 @@ pedido. Al volver al Panel, «Alertas activas» se recarga si el servidor aplic�
 - **«Mi posición» sin GPS:** solo hay posición si en este proceso se grabó en 7.4 o se hizo «Ubicarme»; si no, `Toast`
   «No hay una posición reciente…». Tras matar el proceso se pierde.
 - **La vigencia es de días enteros en la zona del teléfono:** «Desde» = 00:00:00 del día elegido y «Hasta» = 23:59:59 del
-  suyo; se envían en UTC con `Z` y sin fracciones. La app no la evalúa en 7.4 ni en 7.8 (las dibuja igual): la evaluará
-  FE-3.6 al anunciar.
+  suyo; se envían en UTC con `Z` y sin fracciones. La app no la evalúa en 7.4 ni en 7.8 (las dibuja igual): la evalúa
+  FE-3.6 al anunciar (`DetectarAlertasCercanas.vigente`, §5.7).
 - **La lista de tipos sigue duplicada en cuatro sitios:** `FormularioAlerta.TIPOS`, `TIPOS`/`TIPO_NOMBRE` de
   `editor_mapa.js`, el `<select id="f-tipo">` de `editor_mapa.html` y la tabla de `Alerta` (§5.6).
 - **7.10 → 7.8 recrea el `WebView`:** al volver, el mapa empieza otra vez (encuadre inicial) y después atiende el pedido.
@@ -1138,11 +1153,11 @@ pedido. Al volver al Panel, «Alertas activas» se recarga si el servidor aplic�
   las filas de 7.10 y la hoja (lo necesita C3b).
 
 **Para los lotes siguientes:**
-- **FE-3.6 (alertas públicas):** `CampusApi.alertasPublicas(desde)` y `AlertasPublicasDto` ya existen (con `completo` y
-  `eliminadas`), igual que `MapeoDatosApi.alerta` (con vigencia, `version` y `actualizadoEnMs`). La caché pública es otra
-  cosa que el almacén del editor (que guarda también inactivas y pendientes): puede ser otro archivo con el mismo patrón
-  (`AlmacenAlertasArchivo` como modelo) o Room (§5.10, «Alertas sin conexión»; ADR-FE-33 deja Room como alternativa). Si
-  7.4 debe anunciar alertas, que lo haga desde esa caché, no desde el editor.
+- **FE-3.6 (alertas públicas), hecho en 0.16.0 (§4.12):** usó `CampusApi.alertasPublicas(desde)`, `AlertasPublicasDto`
+  y `MapeoDatosApi.alerta`; la caché pública es otro archivo con el patrón de `AlmacenAlertasArchivo`
+  (`files/alertas/publicas.json`, ADR-FE-40), cuyas claves de alerta reutiliza (`alertaJson`/`alertaDe`, ahora
+  `internal`). 7.4 sigue sin anunciar alertas: si un día debe hacerlo, desde esa caché (`AlertasPublicas`), no desde el
+  editor.
 - **FE-4.3:** mover `AlertaFormSheet`, `FormularioAlerta` y `MAX_MENSAJE` a `ui/components/` si otra vista más los usa
   (hoy 7.4, 7.8 y 7.10); unificar la lista de tipos.
 
@@ -1331,8 +1346,9 @@ del PDR la recalcula. Sin destino, el mapa es el de antes (sin aviso). Con un de
 hasta X: no está en el grafo.»; con el grafo inválido: «Rutas desactivadas: el grafo de caminos no es válido.».
 
 **Trampas.**
-- **El mapa no toma la posición de «Ubicarme»** (eso es de FE-3.6): la ruta del mapa sale del punto tocado (o del GPS, que
-  hoy falla: decisión abierta 14) o, en depuración, de la posición de prueba.
+- **Desde FE-3.6 el mapa toma la posición de «Ubicarme»** si es vigente (§4.12): la ruta sale de ahí y se recalcula con
+  cada paso; sin ella, del punto tocado (o del GPS, que hoy falla: decisión abierta 14) o, en depuración, de la posición
+  de prueba (que gana a la de «Ubicarme»).
 - **La primera instrucción del mapa no da dirección mientras no se rastrea** (sin rumbo: «Camina N metros por el
   camino.»); con ▶ usa el rumbo del PDR en el momento del paso. La de 6.3 sí usa el rumbo corregido (brújula +
   `correccion_rumbo_grados`), recalculado como mucho una vez por segundo.
@@ -1371,7 +1387,8 @@ hasta X: no está en el grafo.»; con el grafo inválido: «Rutas desactivadas: 
 - El mapa ya dibuja cualquier `Ruta` con `onNativeRuta(ruta.json())` y muestra `TextosRutaMapa.aviso(…)`.
 - Lo que falta: vistas 6.5 y 6.6; voz en movimiento; foto cada ~10 m con `POST /v1/localize/frame` (BE-5.1) y la regla
   simple de mezcla (§2.3); recalcular tras ~15 m de desvío varias lecturas seguidas; «has llegado» hablado; sin red;
-  reactivar `CalidadImagen.kt`; la posición de «Ubicarme» como inicio del mapa (FE-3.6).
+  reactivar `CalidadImagen.kt`. (La posición de «Ubicarme» como inicio del mapa y las alertas ya están: FE-3.6, §4.12,
+  «Para FE-5.3».)
 
 Verificado en local el 2026-10-28 (worktree de FE-5.1 sobre `bef5853`, sin commit): en Windows `testDebugUnitTest
 assembleDebug` → `BUILD SUCCESSFUL`, **374 casos, 0 fallos** (47 clases; los avisos del compilador son los de antes,
@@ -1380,6 +1397,94 @@ formatted»), `pytest` (**312 passed, 1 skipped**) y `validate51.py --entorno lo
 «assets/grafo.json v180: 26 nodos, 31 aristas (0 bloqueadas), 8 entradas con lugar (7 lugares), 650 m, un solo
 componente»; C2a 9/9 y 8/8; C3a 3/3; C4a estática + 7/7 y 3/3; C3b y C4b omitidas; manual C4c). En `dev`, solo la
 lectura pública de `GET /v1/places` (un lugar, «Bloque 35»). **Sin probar en el teléfono** (lo coordina el maestro).
+
+### 4.12 Alertas públicas (FE-3.6)
+
+Qué se construyó (detalle y firmas en §5.2, §5.5, §5.6, §5.7, §5.8, §5.9, §5.10 y §5.11; validación en
+[`validation-3-6`](./validation/validation-3-6.md)). Contratos que consume: `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.3
+`GET /v1/alerts` (pública) y §4.11, «Para la app (FE-3.3 y FE-3.6)»; el validador usa además §5.5
+`/v1/admin/alerts` (`sincronizar` y `DELETE`) para sus alertas de prueba. Decisiones del lote: ADR-FE-40 (caché en un
+archivo y sus disparadores), ADR-FE-41 (detección en Kotlin, una vez por aproximación, y el mapa que empieza desde
+«Ubicarme») y ADR-FE-42 (ubicación de prueba de «Ubicarme» solo en el APK de depuración). Encargo del maestro del
+2026-10-28 («lo más rápido posible»: que quien se ubica con «Ubicarme» oiga las alertas cercanas y que se anuncien al
+caminar por el mapa); la decisión abierta 3 (¿solo las de la ruta?) queda para FE-5.3: hoy se anuncian todas las
+cercanas.
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| Detección (lógica pura) | `domain/usecase/DetectarAlertasCercanas.kt` (nuevo) | `DetectarAlertasCercanas` (sin estado: `cercanas`, `vigente`, `umbralM`, `texto`, `lineaAnunciada`, `ORDEN`), `AlertaCercana`, `SeguimientoAlertas` (una vez por aproximación, con histéresis y espera) y `ParametrosAlertas` (§5.7) |
+| Caché pública: almacén y reglas | `data/local/AlmacenCacheAlertas.kt` (nuevo) | `CachePublica`, `AlmacenCacheAlertas`, `AlmacenCacheAlertasArchivo` (`files/alertas/publicas.json`), `AlmacenCacheAlertasMemoria`, `ReglasCacheAlertas.aplicar` (§5.6) |
+| Caché pública: sincronización y disparadores | `data/remote/CacheAlertasPublicas.kt` (nuevo) | `CacheAlertasPublicas` (`cargar`, `sincronizar(motivo, forzar)`, `haceFalta`, `estado`), `SincronizacionPublica` y `object AlertasPublicas` (`de(context)`, `iniciar(context)`) (§5.10, «Alertas sin conexión») |
+| Arranque | `MyApp.kt` | `AlertasPublicas.iniciar(this)`: lee el disco y sincroniza al pasar a primer plano, cada 5 min en primer plano y al volver la conexión |
+| Voz | `ui/inicio/VoiceController.kt` | `speakEncolado(texto, alTerminar)` (nuevo, `QUEUE_ADD`): las alertas de prioridad normal esperan a que termine lo que se está diciendo; `speak` no cambia (§5.2) |
+| Vista 6.3 | `domain/usecase/DescribirUbicacion.kt`, `ui/ubicacion/ResultadoUbicacionViewModel.kt`, `ResultadoUbicacionState.kt`, `ResultadoUbicacionScreen.kt` | Alertas cercanas a la posición estimada (incertidumbre = su radio) en una tarjeta «Alertas cercanas» y **al final** de lo hablado; botón «Caminar con el mapa» con una ubicación vigente (§5.5, §5.7) |
+| Mapa público | `map/MapaPublicoScreen.kt`, `map/PuentePdr.kt`, `assets/app.js` | Inicio desde «Ubicarme» sin tocar el mapa (Kotlin fija la posición y arranca el PDR; la página se pone en «Rastreando» con `onNativeRastreoIniciado`); en cada posición, `SeguimientoAlertas` con la caché: voz, vibración (`FeedbackCaptura`) y aviso «Alerta: …» (§5.9) |
+| Rutas | `MainActivity.kt` | `resultado` → `onVerMapa` → `mapa` (6.3 sale de la pila); ruta de prueba `resultado` y extra `ubicacion_prueba` (con `resultado` o `mapa`), solo APK depurable (§5.8, ADR-FE-42) |
+| Ubicación de prueba | `ui/ubicacion/PruebaUbicacion.kt` (nuevo) | `PruebaUbicacion.resultado("lat,lng")` → un `Ubicado` de confianza alta, radio `RADIO_M` = 5 m, sin lugares (§5.8) |
+| Pruebas | `CacheAlertasPublicasTest` (7), `DetectarAlertasCercanasTest` (7), `AlertasEnResultadoTest` (4) | C1, C2 y C4 en la JVM y el criterio C3 (§4.1) |
+| Validador | `src/ops/validate36.py` (sin ayudas nuevas en `comun.py`) | Local: C1a, C3a y C4a (JVM + estática). Dev, con el teléfono en casa: C1b, C1c, C2b (modo avión, dos pasos guiados), C4b y C5a; manual C5 (TalkBack) (§5.11) |
+
+**Flujo.** Al abrir la app (y cada 5 min en primer plano, y al volver la red) `GET /v1/alerts[?desde=…]` pone al día
+`files/alertas/publicas.json`. Inicio → «uno» → Ubicarme → 6.3: «Estás cerca de X, … Confianza alta. [destino o ruta]
+Alerta cercana: Ten cuidado, hay un lago alrededor de la biblioteca.» y, abajo de la confianza, la tarjeta «Alertas
+cercanas». «Caminar con el mapa» (o volver a Inicio y decir «mapa» antes de 2 min) → el mapa dice «Sigo tus pasos desde
+tu última ubicación.», empieza a seguir los pasos desde ese punto y, al entrar en el radio de una alerta (radio + 5 m
+de «Ubicarme» + 4 % de lo caminado), dice su mensaje, vibra y muestra «Alerta: …» arriba. Una alerta de prioridad alta
+corta lo que se esté diciendo; las normales esperan su turno. Sin red, lo mismo con la última caché.
+
+**Orden de lo hablado en 6.3** (`DescribirUbicacion`, §5.7): 1) dónde está (título + distancia), 2) referencias,
+3) confianza, 4) aviso de confianza baja, 5) destino en línea recta o, con ruta (FE-5.1), distancia por el camino +
+primera instrucción + «La navegación guiada llegará…», 6) **alertas**: «Alerta cercana: <mensaje>» o «Alertas
+cercanas: <m1> <m2>…», las de prioridad alta primero y después por distancia. En 6.3 una alerta alta **no** interrumpe:
+el criterio C4 pide que se lean después de la ubicación.
+
+**Trampas.**
+- **La caché vive en disco y la última sincronización correcta en memoria:** cada proceso nuevo sincroniza al pasar a
+  primer plano (así la siguiente sincronización tras un `am force-stop` + `am start` es inmediata; lo usa
+  `validate36.py`). Un fallo (sin red) no cuenta: «al volver la conexión» vuelve a pedir en el acto.
+- **Retrofit codifica `:` como `%3A`** en `?desde=` (`CacheAlertasPublicasTest` lo ve así); el backend lo decodifica y
+  recibe el `generado_en` tal cual. **Sin comprobar en `dev`**: lo prueba `validate36.py` C1c (si el backend no aceptara
+  `desde`, la app pediría la foto completa y C1c fallaría con «no fue por diferencias»).
+- **El mapa solo empieza desde «Ubicarme» con una ubicación vigente** (alta o media y ≤ 2 min, `SesionDeNavegacion`,
+  ADR-FE-24): tras 2 min, o con confianza baja, hay que tocar el mapa y ▶ como antes. La posición de prueba de FE-5.1
+  (`posicion_prueba`) gana a la de «Ubicarme» (`validate51.py` no cambia).
+- **La incertidumbre del mapa** = el radio de «Ubicarme» (o 0 tras un toque) + `Deriva.estimar(metros caminados desde
+  ese punto)` (4 %, la heurística provisional de 7.4, decisión abierta 16). Tocar otro punto reinicia las aproximaciones.
+- **Una aproximación por pantalla:** `SeguimientoAlertas` vive con el mapa; la misma alerta que se dijo en 6.3 se vuelve
+  a decir al abrir el mapa en ese punto (a propósito: es otra pantalla, y la 6.3 no la «gasta»).
+- **El seguimiento lo arranca Kotlin, no la página:** funciona sin red aunque Leaflet (`unpkg.com`) no cargue; la página,
+  si carga, recibe `onNativeRastreoIniciado` y la posición actual al estar lista. ⏸ / ▶ de la página siguen funcionando.
+- **Voz:** el mapa crea su propio `VoiceController` (no había voz en el mapa) y calla en `ON_STOP` de su pantalla. Con
+  TalkBack, la voz de la app y la de TalkBack pueden solaparse (el aviso «Alerta: …» no es *live region* para no
+  duplicarlo): **sin comprobar** (FE-3.5).
+- **La capa de alertas no se dibuja en el mapa** (solo el aviso de Compose): pendiente, no lo pedía el criterio.
+- **`validate31.py` C2b lee `MapaPublicoScreen.kt`**: exige `PdrTracker(… cicloDeVida = …)` y el texto
+  `LocalLifecycleOwner.current.lifecycle`; por eso la pantalla toma `LocalLifecycleOwner.current` dos veces.
+- **Registro:** «Alerta anunciada (…): <id> a N m …» dice que la persona estuvo cerca de esa alerta (sin coordenadas ni
+  mensaje), como la línea `Ruta` de FE-5.1; solo en el `app.log` del teléfono (§3.2).
+- **Sin probar en el teléfono:** todo lo de este lote. Lo comprueba `validate36.py --entorno dev` en casa.
+
+**Para FE-5.3** (contrato de las alertas en la guía por voz; firmas en §5.7):
+- Leer la caché: `AlertasPublicas.de(context).estado.value.alertas` (o recoger `estado`, un `StateFlow<CachePublica>`;
+  `cargar()` si hace falta esperar al disco). No sincronizar a mano: ya lo hacen los disparadores de `MyApp` (si se
+  quiere forzar, `sincronizar("navegación")`, que respeta los 5 min).
+- Una instancia de `SeguimientoAlertas(ParametrosAlertas(margenSalidaM = 5.0, esperaRepetirMs = 120_000))` por recorrido
+  y, en cada posición estimada (PDR o foto), `actualizar(alertas, lat, lng, incertidumbreM, ahoraMs, incluir)`:
+  devuelve las que empiezan una aproximación, ya ordenadas (alta primero). `incertidumbreM` = la de la posición (radio
+  de la foto o deriva de los pasos). Para la decisión abierta 3, `incluir = { a -> distancia de a a la ruta ≤ X }` con
+  `Proyeccion.masCercana` o los `puntos` de la `Ruta` (§5.7, «Grafo y rutas»).
+- Anunciar como el mapa: `DetectarAlertasCercanas.texto(a.alerta)`; la primera, si `a.alta`, con `voz.speak` (corta la
+  instrucción en curso), las demás con `voz.speakEncolado`; `FeedbackCaptura.confirmar()` para vibrar; registrar con
+  `DetectarAlertasCercanas.lineaAnunciada("navegacion", a, incertidumbre)` (si se usa otro `donde`, actualizar
+  `PATRON_ANUNCIADA` de los validadores que lo lean).
+- Sin estado y para una sola posición (p. ej. al recalcular): `DetectarAlertasCercanas.cercanas(...)`.
+
+Verificado en local el 2026-10-28 (worktree de FE-3.6 sobre `56e685a`, sin commit): en Windows `testDebugUnitTest
+assembleDebug --rerun-tasks` → `BUILD SUCCESSFUL`, **392 casos, 0 fallos** (50 clases; los avisos del compilador son
+los de antes, ninguno en archivos del lote); en WSL `ruff check` («All checks passed!»), `ruff format --check` («29
+files already formatted»), `pytest` (**327 passed, 1 skipped**) y `validate36.py --entorno local` → código 0 (P1; C1a
+7/7; C3a 7/7; C4a estática + 4/4; C1b, C1c, C2b, C4b y C5a omitidas; manual C5). **Sin probar en el teléfono ni en
+`dev`** (lo coordina el maestro).
 
 ---
 
@@ -1432,7 +1537,7 @@ sus pantallas pasan `LocalContext.current.applicationContext`); `RecoleccionView
 
 | Pieza | Ubicación | Cómo se usa | Cuidado |
 |---|---|---|---|
-| `VoiceController` | `ui/inicio/VoiceController.kt` (paquete `ui.inicio`, aunque lo usan 4 vistas: Inicio, Escaneo, Destino y, desde FE-3.2, Resultado) | `VoiceController(context)` · `speak(texto: String, alTerminar: () -> Unit = {})` · `listen(onResult: (String) -> Unit, onFail: () -> Unit, soloMejor: Boolean = false)` (`soloMejor` desde FE-3.3) · `stopListening()` · `stopAll()` · `release()` en `onCleared`. Envuelve `TextToSpeech` y `SpeechRecognizer` en español de Colombia (`es-CO`). **Solo desde el hilo principal.** Un controlador por ViewModel. | Verificado contra el código. Comportamiento exacto:<br>• `speak` usa `QUEUE_FLUSH`: **corta** lo que se esté diciendo y el `alTerminar` anterior **no** se llama. Solo el último `speak` tiene callback.<br>• `alTerminar` se llama al terminar **o si hay un error** de TTS (no se distinguen).<br>• `stopAll()` no dispara `alTerminar` (no se sobreescribe `onStop`), pero un `alTerminar` que ya estaba encolado en el hilo principal sí llega: por eso el token (abajo) sigue siendo necesario.<br>• Si el TTS aún no está listo, `speak` queda pendiente y **solo se guarda el último**. Si el TTS falla al iniciar, `speak` nunca habla ni llama a `alTerminar`: un flujo que encadena `speak → listen` se queda parado. Poner siempre una salida por toque.<br>• Tras `release()` `speak` no hace nada (tampoco llama a `alTerminar`).<br>• `listen` cancela el reconocimiento anterior, **no** detiene el TTS (escuchar mientras habla capta la propia voz: llamar a `listen` desde el `alTerminar`) y **no** comprueba `RECORD_AUDIO` (sin permiso responde `onFail`).<br>• `onResult` recibe hasta **3 hipótesis unidas por espacio** (`"sí no sí"`); esto importa para `InterpretarRespuesta` (5.7). Con `soloMejor = true` (FE-3.3, dictado de `AlertaFormSheet`) recibe solo la primera (la más probable).<br>• Desde FE-3.3 también crea uno `AlertaFormSheet` (7.9), que vive lo que la hoja está abierta (`DisposableEffect` → `release()`).<br>• `onFail` cubre: reconocimiento no disponible (se llama **de forma síncrona**, antes de que `listen` retorne), error, silencio y sin resultados.<br>Candidato a mover a `voice/`. |
+| `VoiceController` | `ui/inicio/VoiceController.kt` (paquete `ui.inicio`, aunque lo usan 4 vistas: Inicio, Escaneo, Destino y, desde FE-3.2, Resultado; desde FE-3.6 también el mapa público) | `VoiceController(context)` · `speak(texto: String, alTerminar: () -> Unit = {})` · desde FE-3.6 `speakEncolado(texto: String, alTerminar: () -> Unit = {})` (`QUEUE_ADD`: dice el texto cuando termine lo que se está diciendo, sin cortarlo; las alertas de prioridad normal; si el TTS aún no está listo se **suma** a lo pendiente, mientras que un `speak` lo reemplaza) · `listen(onResult: (String) -> Unit, onFail: () -> Unit, soloMejor: Boolean = false)` (`soloMejor` desde FE-3.3) · `stopListening()` · `stopAll()` · `release()` en `onCleared`. Envuelve `TextToSpeech` y `SpeechRecognizer` en español de Colombia (`es-CO`). **Solo desde el hilo principal.** Un controlador por ViewModel. | Verificado contra el código. Comportamiento exacto:<br>• `speak` usa `QUEUE_FLUSH`: **corta** lo que se esté diciendo y el `alTerminar` anterior **no** se llama. Solo el último `speak` tiene callback.<br>• `alTerminar` se llama al terminar **o si hay un error** de TTS (no se distinguen).<br>• `stopAll()` no dispara `alTerminar` (no se sobreescribe `onStop`), pero un `alTerminar` que ya estaba encolado en el hilo principal sí llega: por eso el token (abajo) sigue siendo necesario.<br>• Si el TTS aún no está listo, `speak` queda pendiente y **solo se guarda el último**. Si el TTS falla al iniciar, `speak` nunca habla ni llama a `alTerminar`: un flujo que encadena `speak → listen` se queda parado. Poner siempre una salida por toque.<br>• Tras `release()` `speak` no hace nada (tampoco llama a `alTerminar`).<br>• `listen` cancela el reconocimiento anterior, **no** detiene el TTS (escuchar mientras habla capta la propia voz: llamar a `listen` desde el `alTerminar`) y **no** comprueba `RECORD_AUDIO` (sin permiso responde `onFail`).<br>• `onResult` recibe hasta **3 hipótesis unidas por espacio** (`"sí no sí"`); esto importa para `InterpretarRespuesta` (5.7). Con `soloMejor = true` (FE-3.3, dictado de `AlertaFormSheet`) recibe solo la primera (la más probable).<br>• Desde FE-3.3 también crea uno `AlertaFormSheet` (7.9), que vive lo que la hoja está abierta (`DisposableEffect` → `release()`).<br>• `onFail` cubre: reconocimiento no disponible (se llama **de forma síncrona**, antes de que `listen` retorne), error, silencio y sin resultados.<br>Candidato a mover a `voice/`. |
 | `Comando` / `ComandoParser` | **Dentro de `ui/inicio/VoiceController.kt`** (no existe `ComandoParser.kt` aparte) | `ComandoParser.parse(texto): Comando` → `UBICARME`, `IR_A_LUGAR`, `VER_MAPA` (FE-3.1) o `NINGUNO`. | Quita tildes y pasa a minúsculas. `UBICARME` si hay la palabra "uno"/"1" o el texto contiene "ubic", "donde estoy", "donde estamos". `IR_A_LUGAR` si hay "dos"/"2" o contiene "ir a", "llevar", "lugar", "destino", "llegar". `VER_MAPA` (FE-3.1) si hay la **palabra completa** "mapa" o "mapas" ("mapamundi" no cuenta). Si coinciden **dos o más** o **ninguno** → `NINGUNO` ("mapa del lugar" o "mi ubicación en el mapa" dan `NINGUNO`). Cuidado: "ir a", "ubic" y "lugar" se buscan como *fragmento* del texto, así que también aciona con "salir a", "venir a" o "ubicación". Desde FE-3.1 las palabras se separan por cualquier carácter que no sea letra ni número (`"uno,"` y `"¡dos!"` cuentan; antes, solo por espacios). Lo cubre `ComandoParserTest` (5). Solo sirve para el menú de Inicio; para nombres de lugares y sí/no, ver 5.7. Añadir un valor a `Comando` obliga a ampliar el `when` de `InicioViewModel.escuchar`. |
 | `FeedbackCaptura` | `ui/ubicacion/FeedbackCaptura.kt` | `FeedbackCaptura(ctx)` · `confirmar()` (vibra 120 ms + pitido de 120 ms) · `liberar()` | Verificado. Es `internal` (visible en todo el módulo), así que otra vista puede usarla. Liberar en `onCleared`. El pitido sale por el canal de **notificaciones** (volumen 80): con el teléfono en silencio solo vibra. Si el sistema no puede crear el generador de tonos, simplemente no suena (no falla). `liberar()` solo libera el tono; no usarla después de liberar. Necesita `VIBRATE` en el Manifest (§3.2). |
 | `AppLog` | `logs/AppLog.kt` (`object`) | `AppLog.d(TAG, msg)` · `AppLog.i(TAG, msg)` · `AppLog.w(TAG, msg, t = null)` · `AppLog.e(TAG, msg, t = null)` · `AppLog.nuevaSesion(prefijo): String` · `AppLog.sesion` (lectura/escritura) · `AppLog.init(context)` (solo `MyApp`) | Verificado. **`d` e `i` no reciben excepción**: para registrar una usar `w` o `e`. Cada línea va a Logcat (`[sesion] texto`) y a `files/logs/app.log` con hora, nivel, tag, hilo y sesión. Rota a ~1 MB (pasa a `app.log.1`, que pisa al anterior: historial máximo ≈ 2 MB). **Antes de `AppLog.init` solo escribe en Logcat.** La escritura al archivo es **síncrona en el hilo que llama**: no registrar en bucles calientes (el sensor de orientación llega a ~50 Hz). `nuevaSesion` genera `prefijo-NNNNN` con 5 dígitos del reloj: sirve para seguir una vuelta, **no garantiza unicidad**. Los errores de escritura se tragan en silencio. ⚠ El `SimpleDateFormat` interno es compartido y no es seguro entre hilos: con registros simultáneos desde varios hilos la hora de una línea puede salir corrupta. **No hay función de exportar**: el archivo se consulta como dice la §3.2. Tags en uso: `App`, `CRASH`, `EscaneoVM`, `Camara`, `DestinoVM`, `Api` (FE-1.1: `RequestIdInterceptor`, §5.10, registra cada petición HTTP con `AppLog.i`, también el sondeo de Inicio cada 15 s) y `Sesion` (FE-1.2: `VigilanteSesion`, §5.3, con `AppLog.w`, p. ej. `GET /v1/admin/stats -> 401 TOKEN_EXPIRADO: sesión cerrada`); después se añadieron `Pdr` (FE-2.3), `Subida` (FE-2.1), `Lugares` (FE-3.1) y `ResultadoVM` (FE-3.2): la lista completa, con el formato de cada uno, está en §3.2 («Registro de eventos»). Verificado: `InicioViewModel`, `LoginViewModel` y `VideosViewModel` **no registran nada** por sí mismos. No registrar tokens ni lecturas de sensores. Se inicia en `MyApp.onCreate` (`AppLog.init(this)`, que además registra fabricante, modelo y versión de Android con el tag `App`). Las excepciones no capturadas se registran con el tag `CRASH` y luego se pasan al manejador anterior del sistema (la app se cierra igual). |
@@ -2384,25 +2489,29 @@ Cuidados:
 
 | Pieza | Detalle |
 |---|---|
-| `ResultadoUbicacionViewModel(app)` | `AndroidViewModel`, sin `Factory`. Al crearse lee **una vez** `SesionDeNavegacion.ubicacion.value` y `.destino.value` (5.6) y calcula la declinación (`Declinacion.paraLaUltimaPosicion()`). Crea su `VoiceController` (lo libera en `onCleared`). Registra una línea `I/ResultadoVM … Resultado: <alta\|media\|baja\|sin_coincidencias\|sin ubicación>, destino <sí\|no>`. ⚠ Empieza por `Resultado:` como la de `EscaneoVM`: quien cuente resultados en `app.log` debe filtrar por el tag `EscaneoVM` (así lo hace `validate32.resultados_escaneo`). |
+| `ResultadoUbicacionViewModel(app)` | `AndroidViewModel`, sin `Factory`. Al crearse lee **una vez** `SesionDeNavegacion.ubicacion.value` y `.destino.value` (5.6), si la ubicación es vigente (`mapaDisponible`, FE-3.6) y calcula la declinación (`Declinacion.paraLaUltimaPosicion()`). Crea su `VoiceController` (lo libera en `onCleared`). **FE-3.6:** con posición, lee la caché de alertas (`AlertasPublicas.de(app).cargar()`, en `viewModelScope`; si falla, ninguna y una línea `AlertasPublicas`) y calcula una vez `DetectarAlertasCercanas.cercanas(alertas, lat, lng, incertidumbre = posicion.radioM, ahora)`, con una línea «Alerta anunciada (resultado): …» por alerta; `alAbrir()` **espera** a tenerlas para hablar (lectura del disco, milisegundos), así se dicen al final; `alPausar()` también anula ese aviso pendiente. Registra una línea `I/ResultadoVM … Resultado: <alta\|media\|baja\|sin_coincidencias\|sin ubicación>, destino <sí\|no>`. ⚠ Empieza por `Resultado:` como la de `EscaneoVM`: quien cuente resultados en `app.log` debe filtrar por el tag `EscaneoVM` (así lo hace `validate32.resultados_escaneo`). |
 | Salidas | `estado: StateFlow<ResultadoUiState>`; sin eventos. |
 | Entradas | `alAbrir()` (idempotente: dice el resultado una sola vez; al volver a la pantalla no lo repite) · `repetir()` («Repetir en voz alta»: recalcula con el rumbo actual y lo dice) · `onOrientacion(acimut, cabeceo)` (de `EscucharOrientacion`: solo cuenta con el cabeceo dentro de ±`INCLINACION_MAX`; recalcula los textos como mucho cada `ACTUALIZAR_CADA_MS` = 1 000 ms) · `alPausar()` (`voz.stopAll()`). |
-| `ResultadoUiState` | `descripcion: DescripcionUbicacion` (5.7) y `hayPosicion` (con posición, el botón dice «Ir a un lugar desde aquí»; si no, «Ir a un lugar»). |
-| `ResultadoAcciones` | `data class` con `onRepetir`, `onVolverAUbicarme`, `onIrALugar`, `onInicio` (valores `{}` por defecto). La pantalla calla la voz (`alPausar`) antes de cada navegación. |
+| `ResultadoUiState` | `descripcion: DescripcionUbicacion` (5.7; desde FE-3.6 con `alertas`), `hayPosicion` (con posición, el botón dice «Ir a un lugar desde aquí»; si no, «Ir a un lugar») y, desde FE-3.6, `mapaDisponible: Boolean = false` (ubicación vigente: se muestra «Caminar con el mapa»). |
+| `ResultadoAcciones` | `data class` con `onRepetir`, `onVolverAUbicarme`, `onIrALugar`, `onInicio` y, desde FE-3.6, `onVerMapa` (valores `{}` por defecto). La pantalla calla la voz (`alPausar`) antes de cada navegación. `ResultadoUbicacionScreen(onVolverAUbicarme, onIrALugar, onInicio, onVerMapa = {}, viewModel)`. |
+| Textos de FE-3.6 | `internal const val TITULO_ALERTAS = "Alertas cercanas"` y `BOTON_MAPA = "Caminar con el mapa"` (`ResultadoUbicacionScreen.kt`; los lee `validate36.py`). |
 | Rumbo usado | `DescribirUbicacion.describir(ubicacion, rumboBrujula, destino)` con `rumboBrujula` = el último rumbo **verdadero** de la brújula en 6.3 o, sin lectura, `ubicacion.rumboAlTerminar` (el del final del escaneo); `describir` le suma `correccion_rumbo_grados`. |
 
 Pantalla (`ResultadoUbicacionContent`, `CampusColors`): columna con desplazamiento y `systemBarsPadding`; «Tu ubicación»
 (18 sp, encabezado), el título (30 sp, negrita, encabezado para TalkBack), con posición las `coordenadas` del punto
 estimado (14 sp, `TextoSecundario`; desde 0.11.0, para verificar en el campus), el subtítulo de distancia (22 sp), una tarjeta
 con los `detalles` (20 sp, una línea por frase), la confianza (20 sp; `Exito` o, con `sugerirRepetir`, `Peligro`) y los
+desde FE-3.6, si hay alertas cercanas, una tarjeta con borde `Peligro` (2 dp): «Alertas cercanas» (20 sp, negrita,
+`Peligro`, encabezado para TalkBack) y un `Text` por mensaje (20 sp, en el orden en que se dicen), y los
 botones de 64 dp o más: con `sugerirRepetir` (confianza baja, `sin_coincidencias` o sin ubicación) «Volver a ubicarme»
 (relleno) → «Repetir en voz alta» → «Ir a un lugar…»; si no, «Repetir en voz alta» (relleno) → «Ir a un lugar…» →
-«Volver a ubicarme»; siempre al final «Volver al inicio». TalkBack lee el texto de cada botón (sin `contentDescription`
+(FE-3.6, solo con `mapaDisponible`) «Caminar con el mapa» → «Volver a ubicarme»; siempre al final «Volver al inicio». TalkBack lee el texto de cada botón (sin `contentDescription`
 propia). La brújula escucha solo con la pantalla en `STARTED` (`currentStateAsState()`); en `ON_STOP` calla la voz.
 
 Cuidados:
-- **Sin mapa ni comandos de voz** (decisión del usuario del 2026-10-26, ADR-FE-27): la voz en 6.3 es de FE-3.5 y las
-  alertas cercanas, de FE-3.6.
+- **Sin mapa ni comandos de voz** (decisión del usuario del 2026-10-26, ADR-FE-27): la voz en 6.3 es de FE-3.5. Desde
+  FE-3.6, las alertas cercanas (al final) y el botón «Caminar con el mapa», que **lleva** al mapa público (no muestra
+  un mapa en 6.3).
 - La voz del `VoiceController` y TalkBack pueden solaparse al abrir (los textos no son *live region*, pero TalkBack lee
   el foco): **sin comprobar** (FE-3.5).
 - Si Android mata el proceso y restaura la pila en `resultado`, el holder está vacío: la vista dice «No tengo una
@@ -2509,7 +2618,7 @@ Cuidados:
 ### 5.6 Datos: repositorios y modelos
 
 Convención: `interface XRepository` + `XRepositoryStub` (o `AssetsX` si lee de `assets/`) + TODO `RemoteX`
-en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean su repositorio directamente (desde FE-4.1, las `Factory` de Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp()` y la de la Galería con `RemoteVideoRepository()`, `VideoRepositoryCompuesto.deLaApp()` y `RemoteLugaresAdminRepository()`). `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1), la `Factory` de Login, `RemoteAuthRepository` (FE-1.2), `SeleccionDestinoViewModel`, `RemoteLugaresRepository` (FE-3.1; con posición desde FE-3.2), `EscaneoViewModel`, `RemoteLocalizacionRepository` (FE-3.2), la `Factory` del Panel, `RemoteAdminRepository` (FE-2.2), y las de 7.6 y 7.7, `RemoteLugaresAdminRepository` (FE-3.4; sin *stub*); desde FE-3.3, 7.4 (`RecoleccionViewModel`, sin `Factory`), 7.8 y 7.10 comparten `Alertas.de(context)` (`RemoteAlertasRepository`, sin *stub*).
+en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy crean su repositorio directamente (desde FE-4.1, las `Factory` de Lista y Detalle de video y de 7.3 con `VideoRepositoryCompuesto.deLaApp()` y la de la Galería con `RemoteVideoRepository()`, `VideoRepositoryCompuesto.deLaApp()` y `RemoteLugaresAdminRepository()`). `InicioViewModel` ya usa `RemoteBackendHealth` (FE-1.1), la `Factory` de Login, `RemoteAuthRepository` (FE-1.2), `SeleccionDestinoViewModel`, `RemoteLugaresRepository` (FE-3.1; con posición desde FE-3.2), `EscaneoViewModel`, `RemoteLocalizacionRepository` (FE-3.2), la `Factory` del Panel, `RemoteAdminRepository` (FE-2.2), y las de 7.6 y 7.7, `RemoteLugaresAdminRepository` (FE-3.4; sin *stub*); desde FE-3.3, 7.4 (`RecoleccionViewModel`, sin `Factory`), 7.8 y 7.10 comparten `Alertas.de(context)` (`RemoteAlertasRepository`, sin *stub*); desde FE-3.6, la vista 6.3 y el mapa público leen la caché pública con `AlertasPublicas.de(context)` (`CacheAlertasPublicas`, sin interfaz de repositorio ni *stub*: las pruebas usan `AlmacenCacheAlertasMemoria` y MockWebServer).
 
 | Repositorio | Métodos | Implementación actual | Usado por |
 |---|---|---|---|
@@ -2550,6 +2659,9 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 | `SesionNavegacion` (clase) y `SesionDeNavegacion` (`object`) | `domain/model/SesionNavegacion.kt` | FE-3.2: holder en memoria del flujo público (decisión abierta 15, ADR-FE-24). Detalle abajo |
 | `Nodo`, `Arista`, `Grafo`, `TiposNodo`, `CargaGrafo` | `domain/ruta/Grafo.kt`, `domain/ruta/LectorGrafo.kt` | FE-5.1: el grafo de caminos y el resultado de leerlo (§5.7, «Grafo y rutas») |
 | `GrafoDeLaApp` (`object`) | `data/local/GrafoDeLaApp.kt` | FE-5.1: `assets/grafo.json` leído una vez por proceso. Detalle abajo («`assets/grafo.json` y `GrafoDeLaApp`») |
+| `CachePublica`, `AlmacenCacheAlertas`, `AlmacenCacheAlertasArchivo`, `AlmacenCacheAlertasMemoria`, `ReglasCacheAlertas` | `data/local/AlmacenCacheAlertas.kt` | FE-3.6: la caché local de las alertas públicas (`files/alertas/publicas.json`; ADR-FE-40). Detalle abajo («Caché de alertas públicas») |
+| `CacheAlertasPublicas`, `SincronizacionPublica`, `AlertasPublicas` (`object`) | `data/remote/CacheAlertasPublicas.kt` | FE-3.6: sincronización por diferencias y disparadores; una instancia por proceso (`AlertasPublicas.de(context)`). Detalle en §5.10, «Alertas sin conexión» |
+| `PruebaUbicacion` (`object`) | `ui/ubicacion/PruebaUbicacion.kt` | FE-3.6: la ubicación de prueba de «Ubicarme» (solo APK de depuración, ADR-FE-42; §5.8) |
 
 **`assets/grafo.json` y `GrafoDeLaApp` (FE-5.1; ADR-FE-39)**
 
@@ -2576,6 +2688,29 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
   con los lugares del grafo que no casan con ninguno del backend; la llama 6.4 dentro de `runCatching`). Líneas de
   registro: §3.2. Lo usan `ResultadoUbicacionViewModel` (6.3), `MapaPublicoScreen` (los dos dentro de `runCatching`: si
   algo fallara, la vista sigue sin rutas) y `SeleccionDestinoViewModel`.
+
+**Caché de alertas públicas (FE-3.6, ADR-FE-40; `data/local/AlmacenCacheAlertas.kt`; `CacheAlertasPublicasTest`)**
+
+- `CachePublica(alertas: List<Alerta> = emptyList(), generadoEn: String? = null, cargada: Boolean = false)`: las
+  alertas **activas** de `GET /v1/alerts` (también las de vigencia pasada o futura: la vigencia se evalúa al anunciar,
+  `DetectarAlertasCercanas.vigente`) y el `generado_en` de la última respuesta, **tal cual** llegó (es el `desde` de la
+  siguiente). `cargada` = ya se leyó el disco. No es el almacén del editor (FE-3.3), que guarda inactivas y pendientes.
+- `interface AlmacenCacheAlertas { suspend leer(): CachePublica; suspend guardar(cache) }` (`leer` sin archivo da una
+  vacía, siempre con `cargada = true`; `guardar` lanza `IOException`).
+- `AlmacenCacheAlertasArchivo(archivo: File, registrar = {})`: en la app `files/alertas/publicas.json`
+  (`AlmacenCacheAlertasArchivo.NOMBRE`), con el patrón de `AlmacenAlertasArchivo`: Gson en `Dispatchers.IO`,
+  `publicas.json.tmp` + renombrar; un archivo ilegible se aparta como `publicas.json.danado`, se anota con `registrar` y
+  se empieza vacío (sin `generado_en`, la siguiente sincronización es completa). **Forma (versión 1):**
+  `{"version": 1, "generado_en": "2026-10-28T15:04:05Z", "alertas": [{"id": "…", "lat": 6.2011, "lng": -75.579,
+  "mensaje": "…", "tipo": "agua", "prioridad": "alta", "radio": 15, "activa": true, "vigencia_hasta_ms": 1761…,
+  "version": 3, "actualizado_en_ms": 1761…}]}`: cada alerta con las claves del editor (`AlmacenAlertasArchivo.alertaJson`
+  y `alertaDe`, `internal` desde FE-3.6; las nulas se omiten); `generado_en` se omite si es nulo. La lee `validate36.py`
+  con `run-as … cat files/alertas/publicas.json`.
+- `AlmacenCacheAlertasMemoria(guardada)` (pruebas): `guardada`, `escrituras`.
+- `ReglasCacheAlertas.aplicar(actual, completo, alertas, eliminadas): List<Alerta>` (puro; backend §4.11, «Para la
+  app»): `completo` → las activas de `alertas`, sin ids repetidos; si no, cada alerta reemplaza por `id` a la que había
+  (o se añade al final) si está activa, o la quita si llega con `activa = false`, y se quitan los ids de `eliminadas`
+  (pueden no estar). Repetir una diferencia ya aplicada (margen de 60 s del backend) no cambia nada.
 
 **`ResultadoUbicacion` y `SesionDeNavegacion` en detalle (FE-3.2)**
 
@@ -2847,7 +2982,7 @@ Qué casos **no** ejercitan estos datos de prueba (con el backend real, desde FE
 | `Deriva.estimar(distanciaDesdeAnclaM)` | ídem | `EstimacionDeriva(derivaM, precisionM, nivel)`: `derivaM` = 4 % de la distancia, `precisionM` = máx(25 % de la deriva; 1 m), `NivelCalidad` por la **deriva**: `ALTA` (< 15 m), `MEDIA` (< 30 m) o `BAJA`. | Heurística **provisional** (decisión 16). **`DerivaTest`** (6, FE-2.3): valores, precisión mínima, niveles (374 m → ALTA, 376 → MEDIA, 749 → MEDIA, 751 → BAJA), distancia negativa → 0, etiquetas |
 | `RetomarRecoleccion.estado(video: VideoEnCurso): EstadoRetomado` | `domain/usecase/RetomarRecoleccion.kt` | FE-2.3: con qué estado vuelve 7.4 a un video `en_curso`. `EstadoRetomado(lat, lng, rumbo, pasos, distanciaMetros, duracionSegundos, distanciaAnclaM, indiceAnclaFoto, indiceAnclaTrayectoria, trayectoria, modo, conProgreso)` | Con `progress`: se toma tal cual (rumbo normalizado a 0…360; índices recortados a `0..tamaño`; `distanciaAnclaM` entre 0 y la distancia; trayectoria vacía → el punto de partida); si la última foto es **posterior** al progreso (segundos enteros, `capturadaEnMs / 1000 > guardadoEnMs / 1000`), la posición y el rumbo salen de ella y su punto se añade a la trayectoria. Sin `progress`: posición y rumbo de la última foto (o el punto y rumbo de partida), trayectoria = partida + fotos, contadores y duración en 0, intervalo por defecto y el ancla **al final** (un re-anclaje no mueve las fotos que ya había). **`RetomarRecoleccionTest`** (6) |
 | `ConversionRumbo` | `domain/usecase/ConversionRumbo.kt` (`object`) | FE-3.2: `normalizar(grados): Double` · `magneticoAVerdadero(acimutMagnetico, declinacionGrados): Double` · `diferencia(a, b): Double` | `normalizar`: cualquier ángulo finito → [0, 360) redondeado a 0,1° (`roundToLong`); lo que el redondeo lleve a 360 sale 0 (359,96 → 0,0; −0,04 → 0,0); `NaN` o infinito → `IllegalArgumentException`. `magneticoAVerdadero` = `normalizar(acimut + declinación)` (declinación positiva al este; −180 y 180 sin declinación dan 180; 3° con −7,6° da 355,4°). `diferencia` = `a − b` en (−180, 180]. **`ConversionRumboTest`** (7, criterio C2): −180, 180 y 0; declinaciones positivas y negativas que cruzan el norte; barrido de −180 a 180 con cinco declinaciones siempre en [0, 360); redondeo; `NaN`; `diferencia`. `SubidaRecorrido.rumboContrato` (FE-2.1) hace lo mismo que `normalizar` para la subida y no se tocó |
-| `DescribirUbicacion` | `domain/usecase/DescribirUbicacion.kt` (`object`) | FE-3.2: `describir(ubicacion: UbicacionEstimada?, rumboBrujula: Double?, destino: LugarDestino?, planificador: Planificador? = null): DescripcionUbicacion` (`planificador` desde FE-5.1) · `direccion(rumboAbsoluto, rumboActual): DireccionRelativa` · `rumboInicial(lat1, lng1, lat2, lng2)` · `metros(d)` · `rumboCorregido(rumboBrujula, correccion)`; constantes de texto `SIN_UBICACION`, `SIN_COINCIDENCIAS`, `NINGUN_LUGAR_JUNTO`, `NINGUN_LUGAR_CERCA`, `POCO_SEGURA`, `REPETIR_VUELTA`, `LLEGARA_NAVEGACION` | Textos de la vista 6.3 (reglas abajo). **`DescribirUbicacionTest`** (11): sectores y bordes, rumbo inicial a los cuatro puntos cardinales, `metros`, alta con cercano y referencias con el rumbo corregido, la corrección que cambia el sector, sin rumbo, baja, sin lugar cercano (la primera referencia es el más cercano, backend §5.3), sin lugares, con destino, `sin_coincidencias` y sin ubicación |
+| `DescribirUbicacion` | `domain/usecase/DescribirUbicacion.kt` (`object`) | FE-3.2: `describir(ubicacion: UbicacionEstimada?, rumboBrujula: Double?, destino: LugarDestino?, planificador: Planificador? = null, alertas: List<AlertaCercana> = emptyList()): DescripcionUbicacion` (`planificador` desde FE-5.1; `alertas` desde FE-3.6) · `direccion(rumboAbsoluto, rumboActual): DireccionRelativa` · `rumboInicial(lat1, lng1, lat2, lng2)` · `metros(d)` · `rumboCorregido(rumboBrujula, correccion)` · desde FE-3.6 `habladoAlertas(textos)`; constantes de texto `SIN_UBICACION`, `SIN_COINCIDENCIAS`, `NINGUN_LUGAR_JUNTO`, `NINGUN_LUGAR_CERCA`, `POCO_SEGURA`, `REPETIR_VUELTA`, `LLEGARA_NAVEGACION` y, desde FE-3.6, `ALERTA_CERCANA` («Alerta cercana:») y `ALERTAS_CERCANAS` («Alertas cercanas:»); `DescripcionUbicacion` gana `alertas: List<String> = emptyList()` | Textos de la vista 6.3 (reglas abajo). **`DescribirUbicacionTest`** (11): sectores y bordes, rumbo inicial a los cuatro puntos cardinales, `metros`, alta con cercano y referencias con el rumbo corregido, la corrección que cambia el sector, sin rumbo, baja, sin lugar cercano (la primera referencia es el más cercano, backend §5.3), sin lugares, con destino, `sin_coincidencias` y sin ubicación |
 
 **Reglas de `DescribirUbicacion`** (FE-3.2):
 - `DireccionRelativa` por la diferencia `d = diferencia(rumboAbsoluto, rumboActual)`: `|d| ≤ 45` → `AL_FRENTE` «al frente»,
@@ -2868,11 +3003,24 @@ Qué casos **no** ejercitan estos datos de prueba (con el backend real, desde FE
   `confianza` = «Confianza alta|media|baja»; `sugerirRepetir` = `BAJA`. `coordenadas` (desde 0.11.0) =
   `coordenadas(posicion.lat, posicion.lng)` = «Punto estimado: 6.20131, -75.57897» (5 decimales, `Locale.ROOT`, latitud
   primero); solo se muestra, no entra en `hablado`. Sin posición (`sin_coincidencias` o sin ubicación) es `null`.
-- `hablado` = primera frase (título + distancia) + referencias + «Confianza ….» + aviso de baja + destino, separados por
-  espacios.
+- `hablado` = primera frase (título + distancia) + referencias + «Confianza ….» + aviso de baja + destino (o ruta) y,
+  desde FE-3.6, **al final** las alertas: `habladoAlertas(textos)` = «Alerta cercana: <m>» (una) o «Alertas cercanas:
+  <m1> <m2>…» (varias), separados por espacios. `alertas` (la tarjeta de 6.3) = `DetectarAlertasCercanas.texto` de cada
+  `AlertaCercana`, en el orden recibido (el de `cercanas`: alta primero, después la más cercana); **no** entran en
+  `detalles`. Sin alertas el texto es el de siempre, palabra por palabra (`AlertasEnResultadoTest`).
 - `SinCoincidencias`: «No reconocí este lugar» + `REPETIR_VUELTA` (+ «Para llevarte a Z primero necesito saber dónde
   estás.» con destino); sin ubicación (`null`): «No tengo una ubicación reciente» + «Toca «Volver a ubicarme» para dar la
-  vuelta.». Los dos con `sugerirRepetir` y sin `confianza`.
+  vuelta.». Los dos con `sugerirRepetir` y sin `confianza`; las `alertas` se ignoran (sin posición no hay cercanas).
+
+**Alertas cercanas (FE-3.6; `domain/usecase/DetectarAlertasCercanas.kt`, lógica pura con `Geo` y sin Android;
+ADR-FE-41; `DetectarAlertasCercanasTest`, criterio C3)**
+
+| Pieza | Firma | Reglas |
+|---|---|---|
+| `AlertaCercana` | `data class AlertaCercana(alerta: Alerta, distanciaM: Double)` · `alta` (`prioridad == "alta"`) | `distanciaM`: de la posición al punto de la alerta, en línea recta (`Geo.distancia`, haversine) |
+| `DetectarAlertasCercanas` | `object` · `PRIORIDAD_ALTA = "alta"` · `vigente(alerta, ahoraMs): Boolean` · `umbralM(alerta, incertidumbreM): Double` · `cercanas(alertas, lat, lng, incertidumbreM, ahoraMs, incluir: (Alerta) -> Boolean = { true }): List<AlertaCercana>` · `ORDEN: Comparator<AlertaCercana>` · `texto(alerta): String` · `lineaAnunciada(donde, a, incertidumbreM): String` | `vigente` = `activa` y `vigenciaDesdeMs` nula o ≤ ahora y `vigenciaHastaMs` nula o > ahora (backend §5.3). `umbralM` = `radio + max(incertidumbre, 0)`. `cercanas` (sin estado): sin ids repetidos, vigentes, que pasan `incluir` y con `distanciaM ≤ umbralM`, en `ORDEN` = alta primero, después la más cercana, después por id. `texto` = el mensaje del admin tal cual (§2.5), recortado y con «.» al final si no termina en «.», «!», «?» o «…». `lineaAnunciada` = «Alerta anunciada (<donde>): <id> a <d> m (radio <r> m, incertidumbre <i> m, <prioridad>)» con metros enteros (la del registro, §3.2; `donde` = `resultado` o `mapa`) |
+| `ParametrosAlertas` | `data class ParametrosAlertas(margenSalidaM = 5.0, esperaRepetirMs = 120_000L)` | Valores **de partida** (FE-5.3 los ajusta en el campo): histéresis de salida y espera mínima entre dos avisos de la misma alerta |
+| `SeguimientoAlertas` | `class SeguimientoAlertas(parametros = ParametrosAlertas())` · `actualizar(alertas, lat, lng, incertidumbreM, ahoraMs, incluir = { true }): List<AlertaCercana>` · `enCurso: Set<String>` · `reiniciar()` | «Una vez por aproximación», con estado (un hilo; una instancia por pantalla o recorrido). Para cada alerta vigente que pasa `incluir`, con `u = umbralM`: `d ≤ u` y no estaba dentro → entra y se **devuelve** si nunca se anunció o si pasaron `esperaRepetirMs` desde su último aviso (si no, entra en silencio); `d > u + margenSalidaM` → sale; entre los dos, sigue como estaba. Una alerta que deja de estar en la lista, de ser vigente o de pasar `incluir` sale. Devuelve en `ORDEN` (quien anuncia: la primera, si es alta, corta la voz; las demás se encolan). `reiniciar` olvida aproximaciones y avisos |
 
 Se pueden probar sin emulador (solo Kotlin).
 
@@ -2963,7 +3111,7 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 |---|---|---|---|
 | `inicio` | `InicioScreen` | — | `onUbicarme` → `SesionDeNavegacion.quitarDestino()` (FE-3.2: «uno» es solo ubicarse) y `ubicarme`, `onIrALugar` → `destino`, `onAccesoAdministrador` → `login`, `onVerMapa` (FE-3.1: voz «mapa» o acción de TalkBack «Ver mapa») → `navigate("mapa") { launchSingleTop = true }` |
 | `ubicarme` | `EscaneoScreen` | — (pide la cámara antes, `PedirPermisos`) | FE-3.2: `onCompletado(resultado, rumboAlTerminar)` → `SesionDeNavegacion.registrar(resultado, rumboAlTerminar)` y `navigate("resultado") { popUpTo("ubicarme") { inclusive = true } }` (el escaneo sale de la pila: Atrás desde 6.3 no vuelve a la cámara); `onCancelar` → `popBackStack()`; `onAjustes` → `ajustes` (desde FE-3.2) |
-| `resultado` | `ResultadoUbicacionScreen` (6.3, FE-3.2) | Ubicación y destino por `SesionDeNavegacion` (no por la ruta) | `onVolverAUbicarme` → `navigate("ubicarme") { popUpTo("resultado") { inclusive = true } }`; `onIrALugar` → `navigate("destino") { popUpTo("resultado") { inclusive = true } }` (Destino carga con la posición vigente); `onInicio` → `popBackStack("inicio", inclusive = false)`. Atrás del sistema: el del `NavHost` (vuelve a lo que haya debajo, normalmente Inicio) |
+| `resultado` | `ResultadoUbicacionScreen` (6.3, FE-3.2) | Ubicación y destino por `SesionDeNavegacion` (no por la ruta) | `onVolverAUbicarme` → `navigate("ubicarme") { popUpTo("resultado") { inclusive = true } }`; `onIrALugar` → `navigate("destino") { popUpTo("resultado") { inclusive = true } }` (Destino carga con la posición vigente); `onInicio` → `popBackStack("inicio", inclusive = false)`; desde FE-3.6 `onVerMapa` («Caminar con el mapa», solo con ubicación vigente) → `navigate("mapa") { popUpTo("resultado") { inclusive = true } }` (la pila queda `[inicio, mapa]`). Atrás del sistema: el del `NavHost` (vuelve a lo que haya debajo, normalmente Inicio). En el APK de depuración también se abre al arrancar con `--es ruta resultado` (con `ubicacion_prueba`, FE-3.6) |
 | `destino` | `SeleccionDestinoScreen` | — | FE-3.2: `onDestinoConfirmado(lugar)` → `SesionDeNavegacion.elegirDestino(lugar)` y `navigate(siguiente) { popUpTo("destino") { inclusive = true } }` con `siguiente` = `resultado` si hay ubicación vigente (`ubicacionVigente() != null`), si no `ubicarme`; `onAjustes` → `ajustes`, `onVolver` → `popBackStack()` |
 | `login` | `LoginScreen` | — | `onLoginExitoso` → `admin/panel` (quita `login` de la pila), `onVolver` |
 | `admin/panel` | `PanelAdminScreen` | — | `onRecolector` → `admin/ubicacion-manual`, `onLugares` → `admin/lugares`, `onMapaAlertas` → `admin/mapa`, `onImagenes` → `admin/imagenes`, `onVideos` → `admin/videos`, `onEstadisticas` → `admin/estadisticas`, `onAjustes` → `ajustes`; `onVolverModoPublico` y `onSesionCerrada` → vuelven a `inicio`; `onSinSesion` → `login` (quita el panel de la pila); `onAbrirSubida(videoId)` (FE-2.1, tarjeta de subidas) → `navigate("admin/recoleccion/resumen?video=<id>")`. Al volver a esta entrada (p. ej. `popBackStack("admin/panel")` desde 7.4 o 7.5) se reutiliza su ViewModel: desde FE-2.2 relee los recorridos locales en `ON_RESUME` y, desde FE-3.4, vuelve a pedir el «Resumen rápido» si cambiaron los lugares (5.5) |
@@ -2978,7 +3126,7 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 | `admin/imagenes?lugar={lugar}&video={video}` (FE-4.1; antes `admin/imagenes`) | `GaleriaScreen` | `lugar` y `video`: ids (UUID) para abrir filtrada, opcionales (`navArgument` anulables, `defaultValue = null`); `navigate("admin/imagenes")` sin argumentos también vale (el Panel) | `onVolver` → `popBackStack()`. 7.12 no existe: tocar una foto muestra un `Toast` (FE-4.4) |
 | `admin/videos` | `VideosScreen` | — | `onVolver` → `popBackStack()`, `onAbrirVideo(id)` → `admin/videos/<id>`, `onNuevoVideo` (FE-4.1, «Nuevo video») → `navigate("admin/ubicacion-manual")` |
 | `admin/videos/{videoId}` | `VideoDetalleScreen` | `videoId` (argumento de ruta, texto): UUID del backend o, desde FE-2.1, `rec_NNNN` de un recorrido del teléfono | `onVolver` → `popBackStack()` (Atrás o «Volver» del JS; y, desde FE-4.1, tras eliminar el video cuando el servidor lo confirmó). Desde FE-4.1 ya no tiene `onAbrirImagen` (7.12 es de FE-4.4) |
-| `mapa` | `MapaPublicoScreen` (2.6) | Desde FE-5.1, el destino por `SesionDeNavegacion` (o, en depuración, el de prueba de `PruebaMapa`) | Ruta pública registrada en FE-2.3. Desde FE-3.1 la abre `inicio` (`onVerMapa`); en el APK de depuración también se abre al arrancar con el extra `ruta` (abajo) y, desde FE-5.1, con un destino y una posición de prueba. Queda encima de `inicio`: Atrás (del sistema; la página no tiene botón Volver) vuelve a Inicio, que repite la bienvenida. No entrega nada |
+| `mapa` | `MapaPublicoScreen` (2.6) | Desde FE-5.1, el destino por `SesionDeNavegacion` (o, en depuración, el de prueba de `PruebaMapa`); desde FE-3.6, la ubicación vigente de «Ubicarme» (`SesionDeNavegacion.ubicacionVigente()`, leída al componer) como punto de partida, con el seguimiento ya empezado (si no hay posición de prueba) | Ruta pública registrada en FE-2.3. Desde FE-3.1 la abre `inicio` (`onVerMapa`) y, desde FE-3.6, también `resultado` («Caminar con el mapa»); en el APK de depuración también se abre al arrancar con el extra `ruta` (abajo) y, desde FE-5.1, con un destino y una posición de prueba. Queda encima de `inicio`: Atrás (del sistema; la página no tiene botón Volver) vuelve a Inicio, que repite la bienvenida. No entrega nada |
 
 Rutas con placeholder vacío (pantalla en blanco, no cierran la app): `admin/estadisticas` y `ajustes` (desde FE-2.1
 `admin/recoleccion/resumen` ya no lo es, y desde FE-3.4 tampoco `admin/lugares`). Registrar una ruta **dos veces** hace que la última
@@ -2999,9 +3147,11 @@ registrada** cierra la app con un error.
   7.5 recibe el id por la ruta (FE-2.1) y solo usa el holder si no viene.
 - **El flujo público tampoco (FE-3.2, decisión abierta 15 resuelta por el usuario, ADR-FE-24):** el destino de 6.4 y la
   ubicación de 6.2 viajan por `SesionDeNavegacion` (5.6), en memoria. Quién escribe: `inicio` («uno»: `quitarDestino`),
-  `destino` (`elegirDestino`) y `ubicarme` (`registrar`); quién lee: `resultado` (`ResultadoUbicacionViewModel`, al
-  crearse), la ruta `destino` (`ubicacionVigente`), `SeleccionDestinoViewModel` (`posicionVigente`, proveedor de
-  `RemoteLugaresRepository`) y `Declinacion` (`ultimaPosicion`). Tras matar el proceso se pierde: la 6.3 restaurada dice
+  `destino` (`elegirDestino`) y `ubicarme` (`registrar`) y, desde FE-3.6, solo en el APK de depuración, `MainActivity`
+  con la ubicación de prueba (ADR-FE-42); quién lee: `resultado` (`ResultadoUbicacionViewModel`, al crearse; desde
+  FE-3.6 también `ubicacionVigente` para «Caminar con el mapa»), la ruta `destino` (`ubicacionVigente`),
+  `SeleccionDestinoViewModel` (`posicionVigente`, proveedor de `RemoteLugaresRepository`), `Declinacion`
+  (`ultimaPosicion`) y, desde FE-3.6, `MapaPublicoScreen` (`ubicacionVigente`, punto de partida). Tras matar el proceso se pierde: la 6.3 restaurada dice
   «No tengo una ubicación reciente».
 - **Sin protección al entrar en las rutas `admin/*`:** `AppNav` no comprueba la sesión al entrar en `admin/mapa`,
   `admin/imagenes`, `admin/videos[/{id}]` ni (FE-3.4) `admin/lugares[/form]` (estas dos llaman a `/v1/admin/places`
@@ -3022,7 +3172,7 @@ registrada** cierra la app con un error.
 - **Ruta de prueba al arrancar (FE-2.3, ADR-FE-18):** `MainActivity` lee el extra `MainActivity.EXTRA_RUTA` (`"ruta"`)
   solo si la app es depurable (`ApplicationInfo.FLAG_DEBUGGABLE`) y `savedInstanceState == null` (arranque nuevo: no al
   rotar ni al restaurar), y solo si el valor está en `MainActivity.RUTAS_DE_PRUEBA` (hoy `{"mapa"}`; otro valor se
-  ignora, porque navegar a una ruta no registrada cierra la app). `AppNav(rutaInicial)` la abre con
+  ignora, porque navegar a una ruta no registrada cierra la app; desde FE-3.6, `{"mapa", "resultado"}`). `AppNav(rutaInicial)` la abre con
   `LaunchedEffect(nav, rutaInicial) { nav.navigate(rutaInicial) }`, encima de `inicio` (que no se compone, así que no pide
   permisos hasta volver). Comando: `adb shell am force-stop com.example.myapplication` y `adb shell am start -n
   com.example.myapplication/.MainActivity --es ruta mapa` (sin el `force-stop`, una tarea viva solo pasa al frente y el
@@ -3037,6 +3187,16 @@ registrada** cierra la app con un error.
   com.example.myapplication` y `adb shell am start -n com.example.myapplication/.MainActivity --es ruta mapa --es
   destino_prueba bloque35 --es posicion_prueba 6.201434,-75.578427`. El flujo real nunca escribe `PruebaMapa`
   (`validate51.py` C4a lo comprueba en el código).
+- **Ubicación de prueba de «Ubicarme» (FE-3.6, ADR-FE-42):** con una ruta de prueba (`mapa` o `resultado`; misma
+  condición de APK depurable y arranque nuevo), `MainActivity` lee `EXTRA_UBICACION_PRUEBA` (`"ubicacion_prueba"`:
+  `"<lat>,<lng>"` con punto decimal) y, si es válida, registra `PruebaUbicacion.resultado(texto)` en
+  `SesionDeNavegacion.registrar(resultado, rumboAlTerminar = null)` **antes** de componer (como si fuera la respuesta de
+  `POST /v1/localize`: `Ubicado` de confianza `ALTA`, 0,9, radio `PruebaUbicacion.RADIO_M` = 5 m, sin lugar cercano ni
+  referencias, sin corrección de rumbo): la 6.3 dice «No hay lugares conocidos cerca.», sus alertas y ofrece «Caminar con
+  el mapa»; el mapa empieza ahí con el seguimiento iniciado. Vale 2 min, como una ubicación real. Comandos: `adb shell
+  am force-stop com.example.myapplication` y `adb shell am start -n com.example.myapplication/.MainActivity --es ruta
+  resultado --es ubicacion_prueba 6.201434,-75.578427` (o `--es ruta mapa …`). El flujo real nunca llama a
+  `PruebaUbicacion` (`validate36.py` C4a lo comprueba en el código).
 - **Permisos en la ruta:** `inicio` pide los iniciales y `ubicarme` la cámara antes de mostrar la
   pantalla (ver 5.3). `admin/recoleccion` pide solo la cámara; la ruta de navegación (6.5) deberá hacer lo mismo. `admin/calibracion` pide solo `Permisos.ACTIVIDAD`.
   `admin/ubicacion-manual` ya pide `Permisos.INICIALES` y descarta el resultado (la 7.3 en sí no necesita
@@ -3129,7 +3289,7 @@ Cuidados:
 |---|---|---|
 | Web → Kotlin | `AndroidBridge.startSensors()` | Empieza a leer pasos, aceleración y rumbo |
 | Web → Kotlin | `AndroidBridge.stopSensors()` | Detiene los sensores |
-| Web → Kotlin | `AndroidBridge.setPosition(lat, lng)` | Punto de partida (toque en el mapa o GPS) |
+| Web → Kotlin | `AndroidBridge.setPosition(lat, lng)` | Punto de partida (toque en el mapa o GPS). Desde FE-3.6, además de fijarlo en el `PdrTracker`, llama a `alFijarPosicion` de `PuentePdr` (el mapa pone la incertidumbre a 0 y reinicia las aproximaciones a las alertas) |
 | Web → Kotlin | `AndroidBridge.setManualHeading(grados)` | Rumbo de la rueda manual (solo si no hay brújula) |
 | Web → Kotlin | `AndroidBridge.reset()` | Vuelve al punto de partida con los pasos en cero |
 | Web → Kotlin | `AndroidBridge.listo()` | FE-5.1: la página terminó `boot()` (al final, tras crear el mapa) y ya acepta `window.onNative*`; Kotlin envía entonces la posición de prueba y la ruta. Sin Leaflet (sin red) `initMap` falla antes y no llega: el mapa no muestra ruta |
@@ -3140,12 +3300,15 @@ Cuidados:
 | Kotlin → Web | `window.onNativeStepUnavailable(motivo)` | El teléfono no tiene acelerómetro (`'no_sensor'`); solo muestra un aviso. Ya no se envía `'permission_denied'` (el acelerómetro no necesita permiso) |
 | Kotlin → Web | `window.onNativeRuta(ruta)` | FE-5.1: `ruta` = el objeto de `Ruta.json()` (`{destino, metros, primera, puntos: [[lat, lng], …]}`, §5.7) o `null`. Quita la ruta anterior y dibuja una polilínea verde (`#22c55e`, grosor 6) y un círculo en la llegada; con `null` o menos de 2 puntos solo la quita. Se envía tras `listo()` en cada cambio de posición o de destino |
 | Kotlin → Web | `window.onNativeInicio(lat, lng)` | FE-5.1, solo con la posición de prueba (APK de depuración, ADR-FE-38): quita la portada («Comenzar») y hace lo mismo que un toque (`setUserPosition`, que llama a `setPosition`) |
+| Kotlin → Web | `window.onNativeRastreoIniciado(lat, lng)` | FE-3.6 (ADR-FE-41): Kotlin ya fijó el punto de partida (la posición de «Ubicarme») e inició el seguimiento. Quita la portada, dibuja el inicio **sin** llamar a `setPosition` (`setUserPosition(lat, lng, false)`: no vuelve a fijar la posición, así no salta atrás si ya se caminó) y pone la interfaz en «Rastreando» **sin** pedir los sensores (`startTracking(false)`); ⏸ / ▶ siguen funcionando. Se envía una vez tras `listo()`, seguida de `onNativePosition` con la posición actual |
 
 Se eliminaron `onNativeStep(count)` y la firma anterior `onNativeAccel(x, y, z)`.
 
 Requisitos del lado Kotlin (`map/MapaPublicoScreen.kt` y `map/PuentePdr.kt`): JavaScript activado en
-el `WebView`, `addJavascriptInterface(PuentePdr(tracker) { paginaLista = true }, "AndroidBridge")` (desde FE-5.1
-`PuentePdr(tracker, alListo: () -> Unit = {})`: `listo()` llama a `alListo` en el hilo principal) y llamar a las funciones
+el `WebView`, `addJavascriptInterface(PuentePdr(tracker, alListo = { paginaLista = true }, alFijarPosicion = …),
+"AndroidBridge")` (desde FE-5.1 `PuentePdr(tracker, alListo: () -> Unit = {})`: `listo()` llama a `alListo` en el hilo
+principal; desde FE-3.6 `PuentePdr(tracker, alListo = {}, alFijarPosicion: (lat, lng) -> Unit = { _, _ -> })`, que
+`setPosition` llama en el hilo principal tras fijar la posición) y llamar a las funciones
 `window.onNative*` con `evaluateJavascript` **desde el hilo principal**. Los métodos
 `@JavascriptInterface` llegan en un hilo del `WebView`, así que `PuentePdr` los reenvía al hilo
 principal, que es donde vive `PdrTracker`. El mapa se carga con `file:///android_asset/index.html`.
@@ -3156,6 +3319,20 @@ negrita, detalle verde claro 16 sp, `liveRegion = Polite`) y debajo el `WebView`
 página. Recalcula la ruta en un `LaunchedEffect(paginaLista, webView, posicionActual, destinoSesion)`; `posicionActual`
 sale de `tracker.estado` (solo latitud y longitud, sin el rumbo, para no recalcular a 20 Hz) y el rumbo de la primera
 instrucción es el del PDR si el rastreo está activo, o ninguno.
+
+**Inicio desde «Ubicarme» y alertas en el mapa (FE-3.6, ADR-FE-41):** al componer, `MapaPublicoScreen` toma
+`SesionDeNavegacion.ubicacionVigente()?.ubicado?.posicion` (solo si `PruebaMapa.posicion` es nula); si hay, en un
+`LaunchedEffect(Unit)` hace `tracker.fijarPosicion(lat, lng)` + `tracker.iniciar()`, registra `I/MapaPublico «Inicio
+desde Ubicarme (radio R m): seguimiento iniciado sin tocar el mapa»` y dice `INICIO_UBICARME` («Sigo tus pasos desde tu
+última ubicación.») con su propio `VoiceController` (liberado al salir; `stopAll()` en `ON_STOP` de la pantalla). En
+`LaunchedEffect(posicionActual, cacheAlertas.alertas)` (con `AlertasPublicas.de(ctx).estado` recogido como estado),
+`SeguimientoAlertas.actualizar(alertas, lat, lng, incertidumbre, ahora)` con `incertidumbre = radioInicialM +
+Deriva.estimar(distanciaMetros − anclaDistanciaM).derivaM` (`radioInicialM` = el radio de «Ubicarme», o 0 tras
+`alFijarPosicion`, que también fija `anclaDistanciaM` y llama a `seguimiento.reiniciar()`). Por cada alerta devuelta:
+línea «Alerta anunciada (mapa): …» (§3.2) y voz (la primera, si es alta, `speak`; las demás `speakEncolado`); si hubo
+alguna, `FeedbackCaptura.confirmar()` (vibración + pitido) y el aviso `AvisoAlertaMapa` debajo del de la ruta:
+`PREFIJO_ALERTA + texto` («Alerta: validacion-3-6-c2.», 18 sp en negrita sobre ámbar `#FFC94D`, ancho completo, **sin**
+*live region*; lo lee `validate36.py` con `uiautomator`). La página no dibuja las alertas.
 
 #### Funciones de `EditorBridge` (editor de mapa y alertas, 7.8)
 
@@ -3238,7 +3415,8 @@ ningún navegador ni en el teléfono (FE-3.4 no tenía `node` ni jsdom); se revi
 > Panel (`GET /v1/admin/stats`, `RemoteAdminRepository`); desde FE-3.4, los lugares de administración
 > (`/v1/admin/places`, `RemoteLugaresAdminRepository`); desde FE-3.3, las alertas de administración
 > (`/v1/admin/alerts`, `sincronizar` y `GET /v1/alerts`, `RemoteAlertasRepository`); desde FE-4.1, los videos y las
-> imágenes de administración (`/v1/admin/videos`, `/v1/admin/images` y su lote, `RemoteVideoRepository`). Los demás
+> imágenes de administración (`/v1/admin/videos`, `/v1/admin/images` y su lote, `RemoteVideoRepository`); desde FE-3.6,
+> la caché pública de alertas (`GET /v1/alerts?desde=`, `CacheAlertasPublicas`). Los demás
 > repositorios siguen siendo *stubs* o datos locales (§5.6) hasta su lote.
 
 **Configuración y cliente**
@@ -3265,7 +3443,7 @@ ningún navegador ni en el teléfono (FE-3.4 no tenía `node` ni jsdom); se revi
 
 | Pieza | Archivo | Firma y uso |
 |---|---|---|
-| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-2.2: `@GET("admin/stats") estadisticas(): Response<EstadisticasAdminDto>` (protegida). FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). FE-3.2: `@Multipart @POST("localize") localizar(@Part fotos: List<MultipartBody.Part>, @Part("metadatos") metadatos: RequestBody): Response<LocalizacionRespuestaDto>` (las partes van en el orden de la lista y después `metadatos`). FE-3.4 (protegidas): `@GET("admin/places") lugaresAdmin(@Query("q") q: String? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresAdminDto>` (la app no pasa `q` ni `categoria`), `@POST("admin/places") crearLugar(@Body LugarEntradaDto): Response<LugarAdminDto>`, `@PUT("admin/places/{id}") reemplazarLugar(@Path("id") id, @Body LugarEntradaDto): Response<LugarAdminDto>` y `@DELETE("admin/places/{id}") borrarLugar(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`). FE-3.3: `@GET("alerts") alertasPublicas(@Query("desde") desde: String? = null): Response<AlertasPublicasDto>` (**pública**: no pasa por `SesionInterceptor`; la app aún no usa `desde`), `@GET("admin/alerts") alertasAdmin(@Query("q") q: String? = null): Response<ListaAlertasAdminDto>` (la app no pasa `q`) y `@POST("admin/alerts/sincronizar") sincronizarAlertas(@Body SincronizarAlertasDto): Response<SincronizarAlertasRespuestaDto>` (protegidas); `PUT`/`DELETE /v1/admin/alerts/{id}` no se usan. FE-4.1 (protegidas): `@GET("admin/videos") videos(@Query("q") q: String? = null, @Query("orden") orden: String? = null, @Query("dir") dir: String? = null, @Query("pagina") pagina: Int? = null, @Query("por_pagina") porPagina: Int? = null): Response<PaginaVideosDto>`, `@PATCH("admin/videos/{id}") renombrarVideo(@Path("id") id, @Body VideoRenombrarDto): Response<VideoResumenDto>`, `@DELETE("admin/videos/{id}") borrarVideo(@Path("id") id): Response<VideoBorradoDto>` (`202` **con** cuerpo: con `llamar`), `@GET("admin/images") imagenes(@Query("video_id"), @Query("lugar_id"), @Query("estado"), @Query("calidad"), @Query("q"), @Query("pagina"), @Query("por_pagina")): Response<PaginaImagenesDto>` (todos `String?`/`Int?` = `null`, en ese orden en la URL), `@DELETE("admin/images/{id}") borrarImagen(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`) y `@POST("admin/images/lote") loteImagenes(@Body cuerpo: RequestBody): Response<LoteResultadoDto>` (el cuerpo va ya armado, sin pasar por el convertidor: «Videos e imágenes de administración», abajo); `GET /v1/admin/videos/{id}` (`video`) ya existía. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
+| `CampusApi` | `CampusApi.kt` | Interfaz Retrofit. Hoy: `@GET("health") suspend fun salud(): Response<SaludDto>` y (FE-1.2) `@POST("auth/login") suspend fun login(@Body cuerpo: LoginPeticionDto): Response<LoginRespuestaDto>`. FE-2.1: `@POST("collect/videos") crearVideo(@Body VideoCrearDto): Response<VideoResumenDto>`, `@POST("collect/videos/{id}/images") registrarImagenes(@Path("id") videoId, @Body ImagenesRegistrarDto): Response<ImagenesRegistradasDto>`, `@POST("collect/videos/{id}/complete") completarSubida(@Path("id") videoId): Response<SubidaCompletadaDto>` (sin `@Body`: Retrofit envía un cuerpo vacío) y `@GET("admin/videos/{id}") video(@Path("id") videoId): Response<VideoResumenDto>`. FE-2.2: `@GET("admin/stats") estadisticas(): Response<EstadisticasAdminDto>` (protegida). FE-3.1: `@GET("places") lugares(@Query("lat") lat: Double? = null, @Query("lng") lng: Double? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresDto>` (Retrofit omite los `@Query` nulos: sin posición la URL es `/v1/places`). FE-3.2: `@Multipart @POST("localize") localizar(@Part fotos: List<MultipartBody.Part>, @Part("metadatos") metadatos: RequestBody): Response<LocalizacionRespuestaDto>` (las partes van en el orden de la lista y después `metadatos`). FE-3.4 (protegidas): `@GET("admin/places") lugaresAdmin(@Query("q") q: String? = null, @Query("categoria") categoria: String? = null): Response<ListaLugaresAdminDto>` (la app no pasa `q` ni `categoria`), `@POST("admin/places") crearLugar(@Body LugarEntradaDto): Response<LugarAdminDto>`, `@PUT("admin/places/{id}") reemplazarLugar(@Path("id") id, @Body LugarEntradaDto): Response<LugarAdminDto>` y `@DELETE("admin/places/{id}") borrarLugar(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`). FE-3.3: `@GET("alerts") alertasPublicas(@Query("desde") desde: String? = null): Response<AlertasPublicasDto>` (**pública**: no pasa por `SesionInterceptor`; desde FE-3.6 `CacheAlertasPublicas` pasa `desde`; 7.4 sigue sin él), `@GET("admin/alerts") alertasAdmin(@Query("q") q: String? = null): Response<ListaAlertasAdminDto>` (la app no pasa `q`) y `@POST("admin/alerts/sincronizar") sincronizarAlertas(@Body SincronizarAlertasDto): Response<SincronizarAlertasRespuestaDto>` (protegidas); `PUT`/`DELETE /v1/admin/alerts/{id}` no se usan. FE-4.1 (protegidas): `@GET("admin/videos") videos(@Query("q") q: String? = null, @Query("orden") orden: String? = null, @Query("dir") dir: String? = null, @Query("pagina") pagina: Int? = null, @Query("por_pagina") porPagina: Int? = null): Response<PaginaVideosDto>`, `@PATCH("admin/videos/{id}") renombrarVideo(@Path("id") id, @Body VideoRenombrarDto): Response<VideoResumenDto>`, `@DELETE("admin/videos/{id}") borrarVideo(@Path("id") id): Response<VideoBorradoDto>` (`202` **con** cuerpo: con `llamar`), `@GET("admin/images") imagenes(@Query("video_id"), @Query("lugar_id"), @Query("estado"), @Query("calidad"), @Query("q"), @Query("pagina"), @Query("por_pagina")): Response<PaginaImagenesDto>` (todos `String?`/`Int?` = `null`, en ese orden en la URL), `@DELETE("admin/images/{id}") borrarImagen(@Path("id") id): Response<Unit>` (`204`: con `llamarSinCuerpo`) y `@POST("admin/images/lote") loteImagenes(@Body cuerpo: RequestBody): Response<LoteResultadoDto>` (el cuerpo va ya armado, sin pasar por el convertidor: «Videos e imágenes de administración», abajo); `GET /v1/admin/videos/{id}` (`video`) ya existía. Cada lote añade aquí sus rutas, **sin barra inicial** (`"auth/login"`, no `"/auth/login"`: con barra Retrofit descarta el `/v1`) y devolviendo siempre `Response<T>` |
 | `ClienteApi` | `ClienteApi.kt` (`object`) | `ClienteApi.api: CampusApi` (instancia única, `lazy`, contra `ApiConfig.BASE_URL`, registra con `AppLog.i("Api", …)`; usa el `vigilante` que haya **al crearse**). `ClienteApi.vigilante: VigilanteSesion?` (`@Volatile var`, `null` por defecto; FE-1.2: `MyApp.onCreate` lo asigna antes de que nadie use `api`; sustituye al `proveedorToken` de FE-1.1, que ya no existe). `ClienteApi.crear(urlBase = ApiConfig.BASE_URL, token = { null }, registrar: (String) -> Unit, vigilante: VigilanteSesion? = null): CampusApi` (añade la barra final que exige Retrofit) y `ClienteApi.okHttp(token = { null }, registrar, vigilante = null): OkHttpClient` para pruebas (MockWebServer) o clientes propios. Con `vigilante`, las rutas protegidas pasan por `SesionInterceptor` y `token` no se usa; sin él, por `AutenticacionInterceptor(token)` |
 | `RequestIdInterceptor(registrar)` | `ClienteApi.kt` | Pone `X-Request-Id` y registra **una línea por petición**: `GET /v1/health -> 200 (85 ms) rid=<uuid>` o `GET /v1/health -> falla UnknownHostException (3 ms) rid=<uuid>`. Solo método, ruta sin parámetros, código y duración: nunca encabezados ni cuerpos. `rid` es el de la respuesta si la trae, si no el enviado. `validate11.py` C1a busca esta línea en `files/logs/app.log`: cambiar el formato exige cambiar `PATRON_SALUD` del validador. Una petición que `SesionInterceptor` no deja salir **no** deja línea `Api` (deja la `Sesion` del vigilante) |
 | `AutenticacionInterceptor(token)` | `ClienteApi.kt` | Regex `RUTA_PROTEGIDA` = `.*/v1/(admin\|collect)(/.*)?` sobre la ruta; `/v1/administrar` no la cumple. Solo cuando `ClienteApi` no tiene vigilante |
@@ -3277,6 +3455,7 @@ ningún navegador ni en el teléfono (FE-3.4 no tenía `node` ni jsdom); se revi
 | `RemoteLocalizacionRepository(api = ClienteApi.api, preparador: PreparadorFoto = Recodificador(MotorImagenAndroid(), LimitesRecodificacion.LOCALIZACION), appVersion: String? = null, gson = Gson())` | `RemoteLocalizacionRepository.kt` (FE-3.2) | `LocalizacionRepository` real (abajo, «Ubicarse») · `companion`: `MAX_FOTOS = 5`, `PARTE_FOTOS = "fotos"`, `ORIGEN = "escaneo"`, `PREFIJO_ENVIO = "envio_"`, `APP_VERSION_MAX = 40`. No registra nada propio (solo la línea `Api`) |
 | `RemoteLugaresAdminRepository(api = ClienteApi.api, cambios: ContadorCambios = CambiosLugares, registrar = { AppLog.w("Lugares", it) })` | `RemoteLugaresAdminRepository.kt` (FE-3.4) | `LugaresAdminRepository` real (abajo, «Lugares de administración») · `TAG = "Lugares"` (el mismo de `RemoteLugaresRepository`) |
 | `RemoteAlertasRepository(almacen: AlmacenAlertas, api = ClienteApi.api, cambios: ContadorCambios = CambiosAlertas, registrar = { AppLog.i("Alertas", it) })` · `object Alertas` (`de(context)`) | `RemoteAlertasRepository.kt` (FE-3.3) | `AlertasRepository` real «local primero» (abajo, «Alertas de administración») · `TAG = "Alertas"`. `Alertas.de(context)` crea la instancia única del proceso con `AlmacenAlertasArchivo(files/alertas/editor.json, registrar = AppLog.w)` y `ClienteApi.api` |
+| `CacheAlertasPublicas(almacen, api = ClienteApi.api, reloj, registrar)` · `object AlertasPublicas` (`de(context)`, `iniciar(context)`) | `CacheAlertasPublicas.kt` (FE-3.6) | Caché pública de alertas con sincronización por diferencias y sus disparadores (abajo, «Alertas sin conexión») · `TAG = "AlertasPublicas"` |
 | `RemoteVideoRepository(api = ClienteApi.api, cambios: ContadorCambios = CambiosVideos, cambiosLugares: ContadorCambios = CambiosLugares)` | `RemoteVideoRepository.kt` (FE-4.1) | `VideosServidor` e `ImagenesRepository` reales (abajo, «Videos e imágenes de administración») · `companion`: `POR_PAGINA = 100`, `MAX_PAGINAS = 50`, `LOTE_MAX = 200`, `cuerpoLote(accion, ids, lugarId)` (`internal`). No registra nada propio (solo la línea `Api`) |
 | `llamar(peticion): T` | `ErroresApi.kt` (función `suspend` de nivel superior) | `llamar { api.salud() }` devuelve el cuerpo de un 2xx o lanza: `SinConexionException` (red, *timeout*, 5xx de API Gateway), `CredencialesInvalidasException` (la de `data/repository/AuthRepository.kt`), `ApiException` (el resto, también la sesión perdida de `SesionInterceptor`) o `RespuestaInesperadaException` (2xx sin cuerpo o JSON roto). La cancelación de la corrutina se propaga |
 | `llamarSinCuerpo(peticion)` | `ErroresApi.kt` | Igual, para rutas `204` declaradas `Response<Unit>` (en un 204 Retrofit da `body() == null` y `llamar` lo trataría como respuesta inesperada) |
@@ -3798,18 +3977,48 @@ vence (12 h) o el backend la rechaza a mitad de la subida: la cola queda en `sub
 tras volver a entrar. En 7.5, `ESPERANDO_SESION` muestra «Iniciar sesión», que emite `EventosSesion` (Login); el Panel,
 si sigue vivo en la pila sin sesión, va a Login él solo (5.5).
 
-**Alertas sin conexión (2.5)**: caché local de las alertas públicas (FE-3.6). Hasta FE-3.3 decía «en Room, base
-`campus_locator.db`, tablas `alertas` y `sincronizacion` (clave `alertas_generado_en`)»; desde ADR-FE-33 el editor
-guarda en un archivo JSON sin Room, y cómo se guarda la caché pública lo decide FE-3.6 (otro archivo con el patrón de
-`AlmacenAlertasArchivo` o Room; no es el almacén del editor, que tiene inactivas y pendientes). Primera vez,
-`GET /v1/alerts` (foto completa); después, `GET /v1/alerts?desde=<generado_en anterior>`. Si la respuesta trae
-`completo = true`, se reemplaza la caché; si no, se actualiza, se quitan las que llegan con `activa = false` y se
-borran los ids de `eliminadas`. **Cuándo sincroniza:** al arrancar la app (Inicio), al volver la conexión y como mucho
-una vez cada 5 minutos mientras está en primer plano. La vigencia se evalúa al anunciar. **Dónde se anuncian:** en el
-mapa público (`MapaPublicoScreen`, ruta `mapa`, posición por PDR) y en el Resultado (6.3) desde FE-3.6 (antes del
-2026-10-25 se repartían entre FE-3.1 y FE-3.2); en la navegación (6.5) con FE-5.3. Todo esto es de FE-3.6, que no
-está en el núcleo: hasta entonces la app no descarga ni anuncia alertas. `POST /v1/localize` **no** trae alertas
-(backend §5.3: `lugar_cercano` y `referencias`): las de 6.3 salen de esta caché y de la posición estimada.
+**Alertas sin conexión (2.5; hecho en FE-3.6, ADR-FE-40): `CacheAlertasPublicas`** (contratos: backend §5.3
+`GET /v1/alerts` y §4.11, «Para la app»). Caché local de las alertas públicas en `files/alertas/publicas.json` (forma
+en §5.6, «Caché de alertas públicas»; sin Room). Hasta FE-3.3 decía «en Room, base `campus_locator.db`, tablas
+`alertas` y `sincronizacion`»: ADR-FE-40 eligió un archivo con el patrón de `AlmacenAlertasArchivo` (ADR-FE-33).
+1. `CacheAlertasPublicas(almacen: AlmacenCacheAlertas, api = ClienteApi.api, reloj: () -> Long = { System.nanoTime() /
+   1_000_000 }, registrar = { AppLog.i("AlertasPublicas", it) })`: `estado: StateFlow<CachePublica>` · `suspend
+   cargar(): CachePublica` (lee el disco la primera vez) · `haceFalta(): Boolean` (nunca se sincronizó en este proceso,
+   o la última correcta fue hace `INTERVALO_MS` = 300 000 ms o más) · `suspend sincronizar(motivo: String, forzar:
+   Boolean = false): SincronizacionPublica?` · `companion`: `TAG = "AlertasPublicas"`, `INTERVALO_MS`,
+   `lineaSincronizada(motivo, r)`.
+2. `sincronizar`: devuelve `null` sin pedir nada si otra está en curso (`Mutex.tryLock`) o si `!forzar && !haceFalta()`.
+   Si no: `cargar()`; `desde` = `generado_en` guardado (la primera vez, o con un archivo dañado, `null`); `llamar {
+   api.alertasPublicas(desde) }` (Retrofit envía `?desde=` con `:` codificado como `%3A`; sin `desde`, `/v1/alerts`);
+   un `ApiException` con `FalloApi.Validacion` (un `422` por `desde`) **con** `desde` → una línea «…el backend no aceptó
+   desde=…; se pide la foto completa» y otra petición sin `desde`. Sin `generado_en` (o en blanco), `completo` o
+   `alertas` → `RespuestaInesperadaException`; cada alerta con `MapeoDatosApi.alerta` (falta `id`, `lat`, `lng` o
+   `mensaje` → la misma excepción); `eliminadas` ausente = vacía. Con el cerrojo del disco:
+   `ReglasCacheAlertas.aplicar(actual, completo, alertas, eliminadas)`, `almacen.guardar` y **después** publica en
+   `estado`. Marca la sincronización correcta (en memoria) y registra `lineaSincronizada`. Devuelve
+   `SincronizacionPublica(completa, desde (null si completa), recibidas, eliminadas, total, generadoEn)`. Cualquier
+   error sale tal cual (los de `llamar`, §5.10) y la caché queda como estaba (no cuenta como correcta).
+3. **Cuándo sincroniza** (`object AlertasPublicas`, `iniciar(context)` desde `MyApp.onCreate`, en el hilo principal;
+   nunca lanza): lee el disco en un ámbito propio (`SupervisorJob` + `Dispatchers.IO`); al pasar el **proceso** a primer
+   plano (`ProcessLifecycleOwner`, `onStart`; también al arrancar) lanza un bucle: `sincronizar("primer plano")` (con la
+   regla de los 5 min) y después, cada `INTERVALO_MS`, `sincronizar("cada 5 min", forzar = true)` (el bucle ya espaciado
+   5 min); `onStop` lo cancela. **Al volver la conexión** (`ConnectivityManager.registerDefaultNetworkCallback`,
+   `onAvailable`; permiso `ACCESS_NETWORK_STATE`, que ya estaba) `sincronizar("conexión")` con la regla de los 5 min
+   (tras un fallo sin red, pide en el acto). Un error deja `W/AlertasPublicas «Alertas públicas: no se pudo
+   sincronizar (<motivo>): <Excepción>»` y nada más. `de(context)` = la instancia única del proceso, con
+   `AlmacenCacheAlertasArchivo(files/alertas/publicas.json, registrar = AppLog.w)`.
+4. La vigencia se evalúa al anunciar (`DetectarAlertasCercanas.vigente`, §5.7). **Dónde se anuncian:** en la vista 6.3
+   (`ResultadoUbicacionViewModel`, §5.5) y en el mapa público (`MapaPublicoScreen`, §5.9); en la navegación (6.5) con
+   FE-5.3 (§4.12, «Para FE-5.3»). `POST /v1/localize` **no** trae alertas (backend §5.3): las de 6.3 salen de esta caché
+   y de la posición estimada.
+5. Sin `Authorization` (ruta pública): nunca da `401` ni lleva a Login. Solo registra su línea y la `Api` de cada
+   petición (sin mensajes ni ids).
+Lo cubre `CacheAlertasPublicasTest` (7; MockWebServer, almacén en memoria y en una carpeta temporal): primera vez
+completa y después por diferencias con `desde` tal cual y sin `Authorization` (alerta cambiada, inactiva que sale,
+nueva, borrada que no estaba, línea del registro exacta); borrada en el backend → desaparece; como mucho una cada 5 min
+salvo `forzar`; sin red → excepción, caché intacta y «al volver la conexión» pide en el acto; respuesta sin
+`generado_en` → `RespuestaInesperadaException`; `422` con `desde` → foto completa; el archivo sobrevive a un proceso
+nuevo (sin red) y uno dañado se aparta; las reglas (completo solo activas; una diferencia repetida no cambia nada).
 
 **Editor de alertas (7.8; hecho en FE-3.3)**: los UUID se generan en la app. «Guardar / Sincronizar» envía los
 pendientes con `POST /v1/admin/alerts/sincronizar`; cada id sale de «pendientes» solo si su resultado es `ok` y su
@@ -3989,7 +4198,8 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 `test_validate22.py`, 32; 241 con FE-3.4: `test_validate34.py`, 19; 253 con FE-3.3: `test_validate33.py`, 12; 278 con
 FE-4.1: `test_validate41.py`, 20, y `test_comun_fe41.py`, 5, de los que uno se omite sin Pillow; 290 con el arreglo de
 la navegación de FE-4.1: `test_validate41.py`, 28, y `test_comun_fe41.py`, 9: «289 passed, 1 skipped»; 312 con
-FE-5.1: `test_validate51.py`, 23: «312 passed, 1 skipped»).
+FE-5.1: `test_validate51.py`, 23: «312 passed, 1 skipped»; 327 con FE-3.6: `test_validate36.py`, 15:
+«327 passed, 1 skipped»).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -4442,6 +4652,70 @@ FE-5.1: `test_validate51.py`, 23: «312 passed, 1 skipped»).
   y omite el teléfono; `--solo C1a,C2a` sin teléfono ni API; EOF en el paso guiado; BE-3.1 sin «Hecho»), además de las
   piezas puras con el `grafo.json` y el `MainActivity.kt`/`app.js` reales y variantes rotas; comprueban que nunca se llama
   a `pm clear`.
+- `validate36.py` (FE-3.6; ejemplo de un validador que **crea datos por la API y los comprueba en un archivo privado de
+  la app** —la caché `files/alertas/publicas.json`— tras un arranque en frío, con un **paso guiado de modo avión** y las
+  rutas de prueba `mapa` y `resultado` con `ubicacion_prueba`): IDs `C1a, C1b, C1c, C2b, C3a, C4a, C4b, C5a` con grupos
+  `C1 → [C1a, C1b, C1c]`, `C2 → [C2b]`, `C3 → [C3a]`, `C4 → [C4a, C4b]` y `C5 → [C5a]`; manual `C5` (TalkBack, se
+  imprime también en `local`); entornos `local` y `dev`; sin ayudas nuevas en `comun.py`. Constantes: `CLASES_C1A`
+  (`CacheAlertasPublicasTest`), `CLASES_C3A` (`DetectarAlertasCercanasTest`), `CLASES_C4A` (`AlertasEnResultadoTest`),
+  `MINIMO_CASOS` (5, 5 y 3; hoy 7, 7 y 4), `PREFIJO_PRUEBA` (`validacion-3-6`, el `q` de la limpieza), `MENSAJE_C1`
+  (`validacion-3-6-c1`, normal: se crea y se borra) y `MENSAJE_C2` (`validacion-3-6-c2`, alta: se queda hasta la
+  limpieza), `MENSAJES_PRUEBA` (lo único que borra, por mensaje normalizado exacto), `RADIO_PRUEBA` (15),
+  `POSICION_PRUEBA` (6.201434, −75.578427: la ubicación de prueba, la misma posición de prueba de FE-5.1) y
+  `POSICION_ALERTAS` (6.201484, −75.578427: ~6 m al norte), `CACHE` (`files/alertas/publicas.json`), los tags
+  (`AlertasPublicas`, `MapaPublico`, `ResultadoVM`, `Pdr`), `PATRON_LINEA` (la de `validate33`), `PATRON_SINCRONIZADA`,
+  `PATRON_NO_SINCRONIZO`, `PATRON_ANUNCIADA` (las líneas de §3.2), `INICIO_UBICARME`, `PATRON_SENSORES` («sensores
+  registrados (iniciar|primer plano»), `RESULTADO_ALTA`, los textos de la app (`TITULO_SIN_LUGARES` «No hay lugares
+  conocidos cerca», `TITULO_ALERTAS`, `BOTON_MAPA`, `PREFIJO_ALERTA` «Alerta: »), `LIMITE_SINCRONIZACION_S` (45),
+  `LIMITE_ALERTA_S` (30), `LIMITE_RESULTADO_S` (20), `PAUSA_LOG_S` (2), `MAX_DESPLAZAMIENTOS` (3),
+  `COMPROBACIONES_TELEFONO` e instrucciones `INSTRUCCION_C2B_AVION`, `INSTRUCCION_C2B_RED` e `INSTRUCCION_C5`. Piezas
+  puras: `normalizar` y `alertas_de_prueba` (como `validate33`), `lineas_log(texto, desde)` → `[LineaLog]`,
+  `sincronizaciones(lineas)` → `[Sincronizacion(motivo, completa, desde, recibidas, eliminadas, total, generado_en)]`,
+  `fallos_sincronizacion(lineas)`, `anuncios(lineas)` → `[Anuncio(donde, id, distancia_m, radio_m, incertidumbre_m,
+  prioridad)]`, `leer_cache(texto)` → `({id: alerta}, generado_en)`, `comprobar_modo_prueba(archivos_kotlin,
+  main_activity, mapa, app_js)` (C4a: `PruebaUbicacion.resultado(` solo en `MainActivity.kt`, una vez, dentro de `if
+  (rutaPrueba != null)`; `rutaDePrueba` con `FLAG_DEBUGGABLE`; `RUTAS_DE_PRUEBA` con `"resultado"`; `onVerMapa = {
+  nav.navigate("mapa")`; `MapaPublicoScreen.kt` con `SesionDeNavegacion.ubicacionVigente()` y
+  `onNativeRastreoIniciado(`; `app.js` con `window.onNativeRastreoIniciado = function`) y `ordenados_de_arriba_abajo`.
+  Precondiciones, en orden y sin seguir si una falla: P1 Gradle (3); en `dev` y solo si alguna comprobación con
+  teléfono está incluida (si no, P2–P5 «no evaluada»): P2 dispositivo físico (3), P3 URL vigente + `ApiConfig.BASE_URL`
+  igual + `GET /health` (2, o 3 sin URL), P4 login del admin por la API (401 o rol → 3; otro → 2) y P5 FE-3.1 «Hecho» en
+  `PLAN_APP` + BE-3.3 «Hecho» en `PLAN_BACKEND` + `GET /alerts` → 200 con `generado_en`, `completo = true` y `alertas`
+  (2). **FE-3.2 no es precondición:** la ubicación de prueba reemplaza a `POST /v1/localize` (ADR-FE-42).
+  Comprobaciones: C1a, C3a y C4a con **una sola** ejecución de Gradle; si alguna falla, las del teléfono quedan
+  `omitida`. Después, en este orden (si C1b falla, las siguientes quedan `omitida`): `preparar_datos()` (una vez:
+  registra `am force-stop` y «poner al día la caché del teléfono» en la limpieza, `installDebug` sin `pm clear` ni
+  permisos, borra los restos de `MENSAJES_PRUEBA` con `GET /admin/alerts?q=validacion-3-6` y `DELETE`, y crea c1 y c2
+  con `POST /admin/alerts/sincronizar` —un `upsert` con UUID nuevo; su `DELETE` va a la limpieza en cuanto se pide—).
+  `sincronizar_telefono()` = hora del teléfono (`date +%Y-%m-%d_%H:%M:%S`), cuántas líneas «sincronizadas» hay ya
+  desde esa hora, `am force-stop` + `am start -W -n ACTIVIDAD --es ruta mapa` (arranque en frío: el proceso nuevo
+  sincroniza) y esperar hasta 45 s una línea «sincronizadas» **más** (si no, falla con la última «no se pudo
+  sincronizar» si la hay). **C1b**: `sincronizar_telefono()` y `run-as … cat files/alertas/publicas.json` con c1 y c2
+  (mensaje y `radio` 15) y `generado_en`. **C1c**: lee la caché y su `generado_en`, `DELETE` de c1,
+  `sincronizar_telefono()`; exige que esa sincronización sea por **diferencias** con `eliminadas ≥ 1`, que c1 ya no esté
+  y c2 sí, y que `GET /alerts?desde=<generado_en anterior>` traiga c1 en `eliminadas`. **C2b**: (c2 en la caché; si no,
+  sincroniza) paso guiado `INSTRUCCION_C2B_AVION`; exige `settings get global airplane_mode_on` = 1; `am start … --es
+  ruta mapa --es ubicacion_prueba 6.201434,-75.578427`; espera hasta 30 s «Alerta anunciada (mapa): <c2>», exige
+  «Inicio desde Ubicarme …» (MapaPublico), **ninguna** sincronización correcta desde esa hora (si la hay → «¿hay red?»)
+  y, si C1c pasó, que c1 no se anunciara; espera el aviso «Alerta: validacion-3-6-c2.» con `uiautomator`; paso guiado
+  `INSTRUCCION_C2B_RED` (si sigue en modo avión, solo un aviso). **C4b**: `am start … --es ruta resultado --es
+  ubicacion_prueba …`, espera «No hay lugares conocidos cerca» (20 s) y, hasta 5 s más (después hasta 3
+  desplazamientos), «Alertas cercanas» con un `TextView` «validacion-3-6-c2.»; si el título, el encabezado y la alerta
+  están en el mismo volcado, exige ese orden de arriba abajo; y en `app.log` «Alerta anunciada (resultado): <c2>» y
+  «Resultado: alta» (ResultadoVM). **C5a**: desde la 6.3 (si C4b no la dejó abierta, la abre), busca «Caminar con el
+  mapa» (hasta 3 desplazamientos), lo toca y espera hasta 30 s «Inicio desde Ubicarme …», «sensores registrados
+  (iniciar|primer plano» (Pdr) y «Alerta anunciada (mapa): <c2>», y el aviso «Alerta: …». Limpieza (orden inverso):
+  `DELETE` de c2 y c1, «poner al día la caché del teléfono» (`sincronizar_telefono()`; si falla, solo un aviso: se
+  pone al día en la próxima sincronización) y `am force-stop`; nunca `pm clear` ni alertas de otros mensajes (una que
+  solo **contiene** el prefijo se queda). Las pruebas (`tests/ops/test_validate36.py`, 15) simulan el backend de
+  alertas (`sincronizar`, `DELETE` con *tombstone*, `GET /alerts` completo o por diferencias, `?q=`), el teléfono (la
+  app al arrancar: sincroniza o, en modo avión, falla; `app.log` con el formato de `AppLog`;
+  `files/alertas/publicas.json`; el mapa desde «Ubicarme» con sus líneas y el aviso; la 6.3 con la tarjeta y el botón;
+  `input tap`; `settings get`; `date`; `wm size`), Gradle y los dos pasos guiados (activan y desactivan el modo avión);
+  recorren `main()` en `local` y `dev` (feliz con un resto y una alerta ajena con el prefijo, la app que no guarda, sin
+  diferencias, sin modo avión, 6.3 sin alertas, `--solo C1a,C3a`, JVM que falla, EOF en el paso guiado, BE-3.3 sin
+  «Hecho», credenciales malas), más las piezas puras y `comprobar_modo_prueba` contra el código real y variantes rotas;
+  comprueban que ni la contraseña ni el token salen por stdout, stderr o el informe y que nunca se llama a `pm clear`.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -4634,6 +4908,20 @@ FE-5.1: `test_validate51.py`, 23: «312 passed, 1 skipped»).
   `am start -W` con extras en MIUI (el validador solo mira el código de salida y «Error»). Si el `force-stop` de la
   limpieza llega con la app en otra pantalla, no pasa nada (no hay datos que guardar).
 
+- **FE-3.6, `validate36.py`:** los dos pasos guiados de C2b leen la entrada estándar (terminal interactiva o una FIFO,
+  como en FE-2.2; activar y desactivar el modo avión también se puede hacer por `adb` si MIUI lo deja —p. ej. `adb shell
+  cmd connectivity airplane-mode enable|disable`, **sin comprobar** en el Xiaomi—: el validador solo lee `settings get
+  global airplane_mode_on`). Con el modo avión puesto, `adb` por USB sigue funcionando. **En casa**: la posición viene
+  del `Intent` (`ubicacion_prueba`), no de la cámara ni del backend; las alertas de prueba van en el campus, a ~6 m de
+  esa posición. C1b y C1c necesitan internet de verdad en el teléfono (la app sincroniza al arrancar); C2b, C4b y C5a
+  no (la caché basta; sin internet el mapa no carga Leaflet, pero el aviso de Compose y la voz sí funcionan). Cada
+  `DELETE` deja un *tombstone* (como `validate33`): no correrlo a la vez que `validate33.py` (C2b de FE-3.3 vería los
+  *tombstones* de FE-3.6 como rastro) ni que `validate22.py` (cuenta `alertas_activas`). El teléfono tiene que estar
+  desbloqueado y con la pantalla encendida (trampa de FE-4.1). La voz (TTS) no se comprueba: se oye en el paso guiado.
+  **Sin comprobar en el teléfono**: que `uiautomator` vuelque la tarjeta de 6.3 y el aviso «Alerta: …» sobre el
+  `WebView` (son Compose, como el aviso de ruta de FE-5.1), el texto exacto de `settings get global airplane_mode_on`
+  en MIUI, y si una línea «sincronizadas» puede tardar más de 45 s con red lenta (repetir).
+
 ---
 
 ## 6. Especificación de vistas públicas
@@ -4754,7 +5042,7 @@ FE-5.1: `test_validate51.py`, 23: «312 passed, 1 skipped»).
 - **Mapa del campus** con el punto del usuario, flecha de orientación y puntos de interés
   cercanos.
 - **Indicador de confianza** (alta/media/baja) en texto simple.
-- **Alertas cercanas** (si hay alguna dentro del radio): se muestran y se leen después de la ubicación, ej. *"Ten cuidado, hay un lago alrededor de la biblioteca"*. Lote FE-3.6 (fuera del núcleo; FE-3.2 hace la vista sin ellas); salen de la caché local de alertas (§5.10), no de `POST /v1/localize`.
+- **Alertas cercanas** (si hay alguna dentro del radio): se muestran y se leen después de la ubicación, ej. *"Ten cuidado, hay un lago alrededor de la biblioteca"*. Lote FE-3.6 (fuera del núcleo; FE-3.2 hace la vista sin ellas; hechas en el código desde 0.16.0); salen de la caché local de alertas (§5.10), no de `POST /v1/localize`.
 - Botón **"Repetir en voz alta"**.
 - Botón **"Ir a un lugar desde aquí"** (→ Selección de destino, con posición ya fijada).
 - Botón **"Volver a ubicarme"** (si la confianza es baja o el usuario no está de acuerdo).
@@ -4771,7 +5059,9 @@ y «Volver al inicio». Por decisión del usuario del 2026-10-26 (ADR-FE-27): **
 en 6.3 es de FE-3.5), y como la navegación guiada (6.5) es de FE-5.3, con un destino elegido en 6.4 la vista **no
 avanza**: dice la distancia y la dirección en línea recta al destino y «La navegación guiada llegará en una próxima
 versión.» Desde FE-5.1, si el destino está en el grafo, dice en cambio la distancia **por el camino** y la primera
-instrucción de la ruta (§5.5, §5.7). Las alertas cercanas son de FE-3.6.
+instrucción de la ruta (§5.5, §5.7). Desde FE-3.6, las alertas cercanas a la posición estimada se muestran en una
+tarjeta «Alertas cercanas» y se dicen al final, después de la ubicación y de la ruta (orden en §4.12), y con una
+ubicación vigente el botón «Caminar con el mapa» abre el mapa público con el seguimiento empezado en esa posición.
 
 ---
 
@@ -5979,7 +6269,8 @@ interfaz `AlmacenAlertas`: el mismo patrón ya probado, se prueba entero en la J
 dependencias ni *plugins* de compilación, y son decenas de alertas que se leen y escriben enteras. *Consecuencias:* cada
 cambio reescribe el archivo completo; un archivo dañado se aparta (`.danado`) y se empieza vacío; Room queda como
 alternativa reversible (cambiar una clase: `AlmacenAlertasArchivo`; versiones que habría que añadir, **sin comprobar**
-en este build: KSP 2.0.21-1.0.28 y Room 2.6.1); la caché pública de FE-3.6 es otra pieza y decide su almacenamiento.
+en este build: KSP 2.0.21-1.0.28 y Room 2.6.1); la caché pública de FE-3.6 es otra pieza y decide su almacenamiento
+(desde 0.16.0, también un archivo con este patrón: ADR-FE-40).
 
 **ADR-FE-34 — Pendientes con una operación por id; 7.4 solo guarda en local y lee la ruta pública (aceptada,
 2026-10-26, FE-3.3; decisión del maestro).**
@@ -6072,6 +6363,49 @@ vuelca), y la página solo dibuja. *Consecuencias:* sin dependencias nuevas de G
 sin red; cambiar el grafo es cambiar un archivo del APK (subiendo `version`); un lugar del grafo sin lugar en el backend
 no tiene ruta (6.3 da la línea recta) y se avisa con una línea `Grafo`.
 
+**ADR-FE-40 — Caché de alertas públicas en un archivo JSON, sincronizada por diferencias desde el proceso (aceptada
+por el lote, 2026-10-28, FE-3.6; a confirmar por el maestro).**
+PLAN dejaba a este lote elegir entre otro archivo con el patrón de `AlmacenAlertasArchivo` (ADR-FE-33) o Room. Se eligió
+el archivo (`files/alertas/publicas.json`, versión 1): son decenas de alertas que se leen enteras y se reemplazan de una
+vez, el patrón ya está probado en la JVM y no añade dependencias (Room sumaría KSP, migraciones y pruebas
+instrumentadas). La caché guarda solo las activas y el `generado_en` tal cual (el `desde` de la siguiente); las reglas
+de aplicar una respuesta son puras (`ReglasCacheAlertas`). Disparadores (§5.10): al pasar el proceso a primer plano (y
+al arrancar), cada 5 min en primer plano (`ProcessLifecycleOwner`) y al volver la conexión
+(`registerDefaultNetworkCallback`), con la regla «como mucho una cada 5 min» salvo el bucle; la última sincronización
+correcta vive **en memoria**, así cada proceso nuevo sincroniza al arrancar (un fallo no cuenta). *Consecuencias:* sin
+Room; Room sigue siendo la alternativa si la caché crece mucho; el validador puede provocar «la siguiente
+sincronización» con un arranque en frío y leer la caché con `run-as cat`.
+
+**ADR-FE-41 — Las alertas las detecta Kotlin, una vez por aproximación; el mapa empieza desde «Ubicarme» en Kotlin
+(aceptada por el lote, 2026-10-28, FE-3.6; a confirmar por el maestro).**
+(a) **Detección pura y reutilizable:** `DetectarAlertasCercanas.cercanas` (sin estado: vigencia, radio + incertidumbre,
+filtro `incluir`, orden alta primero) y `SeguimientoAlertas` (estado de las aproximaciones: entra con `d ≤ radio +
+incertidumbre`, sale con `d > radio + incertidumbre + 5 m`, y no se repite antes de 2 min), en `domain/usecase/`, como
+pide PLAN para FE-5.3, que la llamará en cada paso con su posición y su incertidumbre y decidirá con `incluir` la
+decisión abierta 3. (b) **6.3**: todas las cercanas a la posición estimada, al final de lo hablado (C4: «después de la
+ubicación»; en 6.3 una alta no interrumpe). (c) **Mapa**: con una ubicación vigente de «Ubicarme», Kotlin fija la
+posición y arranca el `PdrTracker` al abrir (sin depender de la página ni de la red: sin internet Leaflet no carga) y la
+página solo se entera (`onNativeRastreoIniciado`, que no vuelve a fijar la posición); la incertidumbre del mapa es el
+radio de «Ubicarme» más la deriva del 4 % de 7.4; el aviso visual es de Compose (lo lee `uiautomator`) y no *live
+region* (ya habla la voz de la app). Alternativas descartadas: un evento nuevo de la página para empezar (dependería de
+Leaflet y de la red), escribir la posición desde la página con `setPosition` (saltaría atrás si ya se caminó), y una
+regla «una vez por sesión» (no volvería a avisar al regresar a la zona). (d) Botón «Caminar con el mapa» en 6.3: con
+TalkBack, por toque, hoy no se llega a «Ver mapa» de Inicio (§4.5); desde 6.3 sí. *Consecuencias:* contrato de
+`AndroidBridge` ampliado (`onNativeRastreoIniciado`; `setPosition` avisa a Kotlin con `alFijarPosicion`); el mapa tiene
+voz propia; ADR-FE-27 (6.3 sin mapa) no cambia: el botón lleva al mapa, no lo muestra.
+
+**ADR-FE-42 — Ubicación de prueba de «Ubicarme» solo en el APK de depuración (aceptada por el lote, 2026-10-28, FE-3.6;
+a confirmar por el maestro).**
+La validación es en casa (encargo del maestro): hace falta «estar» dentro del radio de una alerta sin caminar ni
+ubicarse en el campus. La posición de prueba de FE-5.1 (`posicion_prueba`, ADR-FE-38) es un **toque** en el mapa y no
+sirve para 6.3 ni para el inicio desde «Ubicarme». Se añadió el extra `ubicacion_prueba` (con `--es ruta resultado` o
+`--es ruta mapa`, misma condición: APK depurable y arranque nuevo) que registra en `SesionDeNavegacion` un `Ubicado` de
+prueba (`PruebaUbicacion`), como si fuera la respuesta de `POST /v1/localize`. A diferencia de ADR-FE-38 (que evitó
+escribir en `SesionDeNavegacion`), aquí lo que se prueba **es** cómo consumen ese holder la 6.3 y el mapa; solo se escribe
+en el APK de depuración y antes de componer. *Consecuencias:* `RUTAS_DE_PRUEBA` = `{"mapa", "resultado"}`;
+`validate36.py` C4a comprueba en el código que solo `MainActivity` llama a `PruebaUbicacion`, dentro de la condición de
+ruta de prueba; FE-3.6 se valida sin FE-3.2 «Hecho» (la cámara y `POST /v1/localize` no intervienen).
+
 ### 8.2 Decisiones abiertas
 
 La numeración se conserva: otras secciones y documentos citan «decisión abierta N».
@@ -6088,7 +6422,9 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
    `version` dice si es el último.
 3. **Alertas de obstáculo:** son puntos manuales en el mapa con mensaje. **Radio por defecto: 15 m** (lo fija el
    contrato del backend, §5.5 de su documento). Queda por decidir si se anuncian solo las alertas cercanas a la ruta o
-   todas, y si se complementa a futuro con detección por cámara (fuera del alcance actual).
+   todas, y si se complementa a futuro con detección por cámara (fuera del alcance actual). *Desde FE-3.6* (encargo del
+   maestro del 2026-10-28) la 6.3 y el mapa público anuncian **todas** las cercanas; la guía por voz (FE-5.3) lo decide
+   y lo aplica pasando `incluir` a `SeguimientoAlertas.actualizar` (§4.12, «Para FE-5.3»), sin reescribir la detección.
 4. **Frecuencia de corrección visual** durante la navegación (tiempo / distancia /
    incertidumbre) y su impacto en datos móviles y batería. *Se decide en FE-5.3*; propuesta pendiente del usuario
    (2026-10-27): una foto cada ~10 m caminados, o antes si la posición se vuelve dudosa.

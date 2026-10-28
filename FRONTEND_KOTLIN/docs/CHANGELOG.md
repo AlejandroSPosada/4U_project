@@ -23,6 +23,76 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.16.0] — 2026-10-28
+
+- **Lote que la motivó:** FE-3.6 (Alertas públicas), sobre `main` en `56e685a` (0.15.0). Encargo del maestro del
+  2026-10-28: «lo más rápido posible», que quien se ubica con «Ubicarme» oiga las alertas de obstáculo cercanas y que se
+  anuncien al caminar por el mapa; código y documentos en una sola fase.
+- **Contratos que consume:** backend §5.3 `GET /v1/alerts` (pública) y §4.11, «Para la app (FE-3.3 y FE-3.6)»; el
+  validador, §5.5 `/v1/admin/alerts` (`sincronizar` y `DELETE`) para sus alertas de prueba. No hizo falta nada fuera del
+  §5 del backend.
+- **Decisiones del lote (ADR nuevas, a confirmar por el maestro):** ADR-FE-40 — caché pública en
+  `files/alertas/publicas.json` (sin Room), sincronizada por diferencias al pasar a primer plano, cada 5 min en primer
+  plano y al volver la conexión; la última sincronización correcta en memoria. ADR-FE-41 — detección en Kotlin con
+  `DetectarAlertasCercanas` (sin estado) y `SeguimientoAlertas` (una vez por aproximación, histéresis de 5 m, espera de
+  2 min, alta primero), 6.3 con las alertas al final, el mapa que empieza desde «Ubicarme» en Kotlin
+  (`onNativeRastreoIniciado`) y el botón «Caminar con el mapa» en 6.3. ADR-FE-42 — ubicación de prueba de «Ubicarme»
+  (`ubicacion_prueba`, rutas de prueba `resultado` y `mapa`) solo en el APK de depuración, registrada en
+  `SesionDeNavegacion`.
+- **Qué cambió:**
+  - Código (`project/`): nuevos `domain/usecase/DetectarAlertasCercanas.kt` (`AlertaCercana`, `DetectarAlertasCercanas`,
+    `ParametrosAlertas`, `SeguimientoAlertas`), `data/local/AlmacenCacheAlertas.kt` (`CachePublica`,
+    `AlmacenCacheAlertas`, `…Archivo`, `…Memoria`, `ReglasCacheAlertas`), `data/remote/CacheAlertasPublicas.kt`
+    (`CacheAlertasPublicas`, `SincronizacionPublica`, `object AlertasPublicas`) y `ui/ubicacion/PruebaUbicacion.kt`;
+    `MyApp` (`AlertasPublicas.iniciar`); `VoiceController.speakEncolado`; `DescribirUbicacion.describir(…, alertas =
+    emptyList())`, `DescripcionUbicacion.alertas`, `habladoAlertas`, `ALERTA_CERCANA`, `ALERTAS_CERCANAS`;
+    `ResultadoUbicacionViewModel` (lee la caché, alertas al final, `mapaDisponible`), `ResultadoUiState.mapaDisponible`,
+    `ResultadoAcciones.onVerMapa`, `ResultadoUbicacionScreen` (tarjeta «Alertas cercanas», botón «Caminar con el mapa»,
+    `onVerMapa = {}`); `MapaPublicoScreen` (inicio desde «Ubicarme», detección y anuncio, voz y vibración, aviso
+    «Alerta: …»); `PuentePdr(…, alFijarPosicion)`; `assets/app.js` (`onNativeRastreoIniciado`, `setUserPosition(…,
+    avisar)`, `startTracking(pedirSensores)`); `MainActivity` (`RUTAS_DE_PRUEBA` con `resultado`,
+    `EXTRA_UBICACION_PRUEBA`, `onVerMapa` de `resultado`); `AlmacenAlertasArchivo.alertaJson`/`alertaDe` pasan a
+    `internal`. Sin dependencias nuevas de Gradle.
+  - Pruebas JVM nuevas: `CacheAlertasPublicasTest` (7), `DetectarAlertasCercanasTest` (7) y `AlertasEnResultadoTest` (4).
+    Total 392 (50 clases); las 374 de antes no cambian.
+  - Validadores: `src/ops/validate36.py` (local: C1a, C3a, C4a; `dev`, con el teléfono en casa: además C1b, C1c, C2b
+    —modo avión, dos pasos guiados—, C4b y C5a; manual C5), sin ayudas nuevas en `comun.py`;
+    `tests/ops/test_validate36.py` (15). Total 327 + 1 omitida.
+  - Documento: encabezado; §2.5 y §2.6 (filas «Posición inicial» y «Alertas»); §3.2 (paquetes, pruebas, tags
+    `AlertasPublicas` y la línea de `MapaPublico`); §4.1 (392 casos); §4.5, §4.9 y §4.11 (trampas y notas que remitían a
+    FE-3.6); **§4.12 nuevo** (orden de lo hablado en 6.3, trampas y «Para FE-5.3»); §5.2 (`speakEncolado`); §5.5
+    (Resultado); §5.6 (caché de alertas públicas y su archivo); §5.7 (`DescribirUbicacion` con alertas; «Alertas
+    cercanas»); §5.8 (`resultado` → `mapa`, `mapa` desde «Ubicarme», ruta de prueba `resultado` y `ubicacion_prueba`);
+    §5.9 (`onNativeRastreoIniciado`, `alFijarPosicion`, inicio y alertas del mapa); §5.10 («Alertas sin conexión»
+    reescrita; `CampusApi.alertasPublicas` con `desde`); §5.11 (`validate36.py`, 327 casos, trampas de FE-3.6); §6.3;
+    ADR-FE-33 (nota), ADR-FE-40, 41 y 42; §8.2 (decisión 3).
+  - `validation-3-6` reescrita en el formato nuevo (el de `validation-5-1`).
+  - `PLAN.md`: «Alineado con» v0.16.0; §2.1: FE-3.6 se valida con FE-3.1 y BE-3.3 (sin FE-3.2, ADR-FE-42); §2.2: «Hecho en
+    el código» de FE-3.6 y cómo cubre cada criterio; §3: FE-3.6 «En curso».
+- **Contradicciones corregidas:** §5.10 decía que la caché iba «en Room, base `campus_locator.db`» hasta FE-3.3 y que
+  la app «aún no usa `desde`»; `validation-3-6` (formato viejo) leía la caché con `sqlite3` de una base de Room que no
+  existe y pedía FE-3.2 «Hecho» y `embedding` para C4: ahora la caché es un archivo (ADR-FE-40) y C4 se valida en casa
+  con la ubicación de prueba (ADR-FE-42). §4.11 decía que el mapa no toma la posición de «Ubicarme» y §4.5 que el mapa
+  no servía a una persona ciega: actualizados.
+- **Contratos tocados (§5):** nuevos — `DetectarAlertasCercanas`, `SeguimientoAlertas`, `ParametrosAlertas`,
+  `AlertaCercana` (§5.7), `CachePublica`/`AlmacenCacheAlertas*`/`ReglasCacheAlertas` y el formato de
+  `files/alertas/publicas.json` (§5.6), `CacheAlertasPublicas`/`AlertasPublicas` (§5.10), `PruebaUbicacion` y el extra
+  `ubicacion_prueba` con la ruta de prueba `resultado` (§5.8), `window.onNativeRastreoIniciado` (§5.9),
+  `VoiceController.speakEncolado` (§5.2). Compatibles — `DescribirUbicacion.describir(…, alertas = emptyList())`,
+  `DescripcionUbicacion.alertas`, `ResultadoUiState.mapaDisponible`, `ResultadoAcciones.onVerMapa`,
+  `ResultadoUbicacionScreen(…, onVerMapa = {})`, `PuentePdr(…, alFijarPosicion = …)` (todos con valor por defecto).
+  Menor.
+- **Cómo se verificó (2026-10-28, worktree de FE-3.6 sobre `56e685a`, sin commit):** en Windows `testDebugUnitTest
+  assembleDebug --rerun-tasks` → `BUILD SUCCESSFUL`, 392 casos, 0 fallos (50 clases; avisos del compilador, los de
+  antes); en WSL `ruff check` («All checks passed!»), `ruff format --check` («29 files already formatted») y `pytest`
+  (327 passed, 1 skipped); `validate36.py --entorno local` → código 0 (P1; C1a 7/7; C3a 7/7; C4a estática + 4/4; C1b,
+  C1c, C2b, C4b y C5a omitidas; manual C5). `git diff --stat` igual a `--stat --ignore-cr-at-eol`. Sin teléfono ni
+  escrituras en `dev`.
+- **Pendiente:** `validate36.py --entorno dev` con el teléfono en casa (lo coordina el maestro: pasos guiados por `adb`
+  con una FIFO) y la manual C5 con TalkBack (cómo se abren las acciones en TalkBack 17, `dumpsys sensorservice`); sin
+  probar en el teléfono todo lo de §4.12; la capa de alertas dibujada en el mapa (no la pedía ningún criterio);
+  confirmar ADR-FE-40, 41 y 42.
+
 ## [0.15.0] — 2026-10-28
 
 - **Lote que la motivó:** FE-5.1 (Grafo y rutas: la «App 1» de la meta «Guía en tiempo real (fotos + pasos)»), sobre

@@ -31,6 +31,8 @@ enum class DireccionRelativa(val texto: String) {
  * - [hablado]: todo junto, para `VoiceController.speak`.
  * - [coordenadas]: el punto estimado («Punto estimado: 6.20131, -75.57897»), o `null` sin posición. Solo se muestra
  *   (en letra pequeña, para verificar en el campus); no se dice.
+ * - [alertas] (FE-3.6): el mensaje de cada alerta cercana a la posición estimada, en el orden en que se dicen (alta
+ *   primero, después la más cercana); vacía sin posición o sin alertas. Se dicen **al final** de [hablado].
  */
 data class DescripcionUbicacion(
     val titulo: String,
@@ -40,6 +42,7 @@ data class DescripcionUbicacion(
     val sugerirRepetir: Boolean,
     val hablado: String,
     val coordenadas: String? = null,
+    val alertas: List<String> = emptyList(),
 )
 
 /**
@@ -61,6 +64,10 @@ object DescribirUbicacion {
     const val NINGUN_LUGAR_CERCA = "No hay lugares conocidos cerca"
     const val POCO_SEGURA = "La ubicación no es segura: toca «Volver a ubicarme» para dar la vuelta otra vez."
     const val REPETIR_VUELTA = "Toca «Volver a ubicarme» y da la vuelta otra vez, despacio y con el celular vertical."
+
+    /** FE-3.6: lo que se dice antes de los mensajes de las alertas cercanas (una o varias). */
+    const val ALERTA_CERCANA = "Alerta cercana:"
+    const val ALERTAS_CERCANAS = "Alertas cercanas:"
 
     /** Sector de [rumboAbsoluto] visto desde [rumboActual]: ±45° al frente, más de 135° detrás (los bordes, al frente y detrás). */
     fun direccion(rumboAbsoluto: Double, rumboActual: Double): DireccionRelativa {
@@ -100,20 +107,30 @@ object DescribirUbicacion {
     /**
      * [ubicacion] = la de `SesionDeNavegacion` (o `null`); [rumboBrujula] = rumbo **verdadero** sin corregir (el del
      * sensor en 6.3 o, sin lectura, el del final del escaneo); [destino] = el elegido en 6.4, o `null`; [planificador]
-     * (FE-5.1) = el del grafo de la app, o `null` (sin rutas: solo la línea recta).
+     * (FE-5.1) = el del grafo de la app, o `null` (sin rutas: solo la línea recta); [alertas] (FE-3.6) = las cercanas a
+     * la posición estimada (`DetectarAlertasCercanas.cercanas`, ya ordenadas), que se dicen al final; sin posición se
+     * ignoran.
      */
     fun describir(
         ubicacion: UbicacionEstimada?,
         rumboBrujula: Double?,
         destino: LugarDestino?,
         planificador: Planificador? = null,
+        alertas: List<AlertaCercana> = emptyList(),
     ): DescripcionUbicacion {
         val resultado = ubicacion?.resultado
         return when (resultado) {
             null -> sinPosicion(SIN_UBICACION, listOf("Toca «Volver a ubicarme» para dar la vuelta."), destino)
             is ResultadoUbicacion.SinCoincidencias -> sinPosicion(SIN_COINCIDENCIAS, listOf(REPETIR_VUELTA), destino)
-            is ResultadoUbicacion.Ubicado -> ubicado(resultado, rumboBrujula, destino, planificador)
+            is ResultadoUbicacion.Ubicado -> ubicado(resultado, rumboBrujula, destino, planificador, alertas)
         }
+    }
+
+    /** FE-3.6: «Alerta cercana: <mensaje>» o «Alertas cercanas: <m1> <m2>…»; vacío sin alertas. */
+    fun habladoAlertas(textos: List<String>): String = when (textos.size) {
+        0 -> ""
+        1 -> "$ALERTA_CERCANA ${textos.first()}"
+        else -> "$ALERTAS_CERCANAS ${textos.joinToString(" ")}"
     }
 
     private fun sinPosicion(titulo: String, avisos: List<String>, destino: LugarDestino?): DescripcionUbicacion {
@@ -135,6 +152,7 @@ object DescribirUbicacion {
         rumboBrujula: Double?,
         destino: LugarDestino?,
         planificador: Planificador?,
+        alertas: List<AlertaCercana>,
     ): DescripcionUbicacion {
         val rumbo = rumboCorregido(rumboBrujula, u.correccionRumboGrados)
         val baja = u.nivel == NivelConfianza.BAJA
@@ -184,13 +202,18 @@ object DescribirUbicacion {
             detalles += LLEGARA_NAVEGACION
         }
         val confianza = "Confianza ${u.nivel.etiqueta}"
-        // Orden hablado: dónde está, referencias, confianza, aviso de confianza baja y destino.
+        // Orden hablado: dónde está, referencias, confianza, aviso de confianza baja, destino (o ruta, FE-5.1) y, al
+        // final, las alertas cercanas (FE-3.6).
         val referencias = detalles.take(u.referencias.size)
         val resto = detalles.drop(u.referencias.size)
-        val hablado = (listOf(primera) + referencias + "$confianza." + resto).joinToString(" ")
+        val textosAlertas = alertas.map { DetectarAlertasCercanas.texto(it.alerta) }
+        val hablado = (listOf(primera) + referencias + "$confianza." + resto + habladoAlertas(textosAlertas))
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
         return DescripcionUbicacion(
             titulo, subtitulo, detalles, confianza, baja, hablado,
             coordenadas = coordenadas(u.posicion.lat, u.posicion.lng),
+            alertas = textosAlertas,
         )
     }
 }
