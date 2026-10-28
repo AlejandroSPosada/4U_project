@@ -239,9 +239,14 @@ def test_login_con_json_roto_es_400(cliente_jwt):
 
 
 # --- reservados -------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize(
-    ("metodo", "ruta"), [("POST", "/v1/localize/frame"), ("GET", "/v1/route"), ("POST", "/v1/eventos")]
-)
+@pytest.mark.parametrize(("metodo", "ruta"), [("GET", "/v1/route"), ("POST", "/v1/eventos")])
 def test_reservados_publicos_responden_501_sin_token(cliente, metodo, ruta):
     r = cliente.request(metodo, ruta)
     assert (r.status_code, _error(r)) == (501, "NO_IMPLEMENTADO")
+
+
+def test_localize_frame_ya_no_es_reservado(cliente):
+    """Desde BE-5.1 (0.16.0) `POST /v1/localize/frame` existe: sin cuerpo, `400 FOTOS_INVALIDAS` (no `501`)."""
+    r = cliente.post("/v1/localize/frame")
+    assert (r.status_code, _error(r)) == (400, "FOTOS_INVALIDAS")
+    assert r.json()["error"]["detalle"]["indice"] == 0

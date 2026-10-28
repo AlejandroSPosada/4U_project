@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     loc_lugar_cercano_m: float = 60.0
     loc_referencias_m: float = 150.0
     loc_referencias_max: int = 3
+    # `POST /v1/localize/frame` (BE-5.1): radio por defecto alrededor de `posicion_previa` y rango admitido (ADR-BE-21)
+    loc_frame_radio_m: float = 40.0
+    loc_frame_radio_min_m: float = 10.0
+    loc_frame_radio_max_m: float = 100.0
     rec_max_fotos_video: int = 200
     rec_max_lote: int = 50
     rec_max_bytes_foto: int = 4_194_304

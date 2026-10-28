@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.15.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-27 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.4, BE-3.1 y BE-3.3 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`; BE-3.3, alertas, fuera del núcleo, con `validate33.py` sobre `4885ad6`, §4.11), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. BE-4.1 (administración de videos e imágenes y purga, §4.12) está validado en `dev` con `validate41.py` sobre `c5f6517` (2026-10-27). Lo de los demás lotes es diseño propuesto |
+| Versión del documento | **0.16.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-28 |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.4, BE-3.1 y BE-3.3 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`; BE-3.3, alertas, fuera del núcleo, con `validate33.py` sobre `4885ad6`, §4.11), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. BE-4.1 (administración de videos e imágenes y purga, §4.12) está validado en `dev` con `validate41.py` sobre `c5f6517` (2026-10-27). BE-5.1 (`POST /v1/localize/frame`, corrección visual con una foto y la posición previa, §4.14) está construido en 0.16.0, probado en local sin base y **sin validar en `dev`** (`validate51.py`; no depende del dataset real). Lo de los demás lotes es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -106,11 +106,11 @@ BACKEND_FASTAPI/
     │   │   ├── api/
     │   │   │   ├── dependencias.py  obtener_ajustes, obtener_motor, obtener_cola_hash (BE-1.3, §4.4); obtener_almacen (BE-2.1, §4.5)
     │   │   │   ├── cuerpo.py    leer_cuerpo: el cuerpo de la petición en memoria, con tope (BE-2.4, §4.8)
-    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9), localizar (BE-3.2: `router` en /v1, público, §4.10), admin_estadisticas (BE-2.3: `router` en RUTAS_ADMIN, §4.7), alertas (BE-3.3: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.11), admin_videos con `PATCH`/`DELETE` y admin_imagenes (BE-4.1, en RUTAS_ADMIN, §4.12); __init__.py monta /admin y /collect con requiere_admin (§4.4)
-    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizacion (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7); alertas (BE-3.3, §4.11); videos.py crece con BE-4.1 (§4.12)
+    │   │   │   └── v1/          Routers: salud (BE-1.1), auth y reservados (BE-1.3), collect y admin_videos (BE-2.1), admin_diagnostico (BE-2.4), lugares (BE-3.1: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.9), localizar (BE-3.2: `router` en /v1, público, §4.10; BE-5.1 le añade `POST /v1/localize/frame`, §4.14), admin_estadisticas (BE-2.3: `router` en RUTAS_ADMIN, §4.7), alertas (BE-3.3: `router_publico` en /v1 y `router_admin` en RUTAS_ADMIN, §4.11), admin_videos con `PATCH`/`DELETE` y admin_imagenes (BE-4.1, en RUTAS_ADMIN, §4.12); __init__.py monta /admin y /collect con requiere_admin (§4.4)
+    │   │   ├── esquemas/        Modelos Pydantic de entrada y salida (son el contrato de §5.3–§5.5): errores, salud, auth (BE-1.3); comun y videos (BE-2.1, §4.5); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizacion (BE-3.2, §4.10; `MetadatosFrame` y `FrameRespuesta` desde BE-5.1, §4.14); estadisticas (BE-2.3, §4.7); alertas (BE-3.3, §4.11); videos.py crece con BE-4.1 (§4.12)
     │   │   ├── dominio/         Lógica pura y probable sin red ni base: enumerados.py, validaciones.py (BE-1.2 y BE-1.3; qué ofrecen, en §4.3 y §4.4); recoleccion.py (BE-2.1, §4.5); imagenes.py (Pillow) y mensajes.py (BE-2.2, §4.6); multipart.py y fotos.py (BE-2.4, §4.8); lugares.py y geo.py (BE-3.1, §4.9); localizacion.py (BE-3.2: el algoritmo, con la corrección de rumbo, §4.10); alertas.py (BE-3.3, §4.11)
-    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar (BE-3.2, §4.10); estadisticas (BE-2.3, §4.7); alertas (BE-3.3, §4.11); imagenes y purga (BE-4.1: la purga del `worker` y el reconciliador de `api`, §4.12), y renombrar/borrar en videos
-    │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas.py (la búsqueda de vecinos, BE-2.4, §4.8)
+    │   │   ├── servicios/       Casos de uso: migracion (BE-1.2); autenticacion, usuarios y auditoria (BE-1.3, §4.4); recoleccion, videos y limpieza (BE-2.1, §4.5); ingesta (BE-2.2, §4.6); diagnostico (BE-2.4, §4.8); lugares (BE-3.1, §4.9); localizar (BE-3.2, §4.10; `localizar_frame` desde BE-5.1, §4.14); estadisticas (BE-2.3, §4.7); alertas (BE-3.3, §4.11); imagenes y purga (BE-4.1: la purga del `worker` y el reconciliador de `api`, §4.12), y renombrar/borrar en videos
+    │   │   ├── db/              modelos.py (SQLAlchemy), sesion.py (motor, conexiones y `transaccion`), esquema.py (§5.7 comprobable), qué ofrecen en §4.3 y §4.4; consultas.py (la búsqueda de vecinos, BE-2.4, §4.8; la búsqueda exacta en un radio, BE-5.1, §4.14)
     │   │   ├── clientes/        embedding.py (httpx: `esta_listo` desde BE-1.1, `vectorizar` desde BE-2.2); s3.py (boto3 en hilos de anyio, BE-2.1, §4.5; `descargar` y `escribir` desde BE-2.2); sqs.py (BE-2.2, §4.6; `enviar` y `Colas` desde BE-4.1); s3 `firmar_get` desde BE-4.1
     │   │   ├── seguridad/       hash.py (argon2id, §4.3), tokens.py (JWT, §5.2) y dependencias.py (requiere_admin), BE-1.3 (§4.4)
     │   │   ├── worker.py        Bucle de consumo de `ingesta` (python -m app.worker, BE-2.2, §4.6) y de `purga` (BE-4.1, §4.12)
@@ -1175,7 +1175,7 @@ radio y reutiliza el resto; BE-5.2 lee `eventos_localizacion`).
 
 | Elemento | Qué hace |
 |---|---|
-| `app.dominio.localizacion.localizar(vecinos_por_foto, rumbos, parametros)` → `Localizacion` | Pasos 3–8. Python puro: se prueba sin base (`tests/unit/test_localizacion.py`). Para BE-5.1 (una foto y una posición previa) basta con filtrar los vecinos por distancia a esa posición antes de llamarlo |
+| `app.dominio.localizacion.localizar(vecinos_por_foto, rumbos, parametros)` → `Localizacion` | Pasos 3–8. Python puro: se prueba sin base (`tests/unit/test_localizacion.py`). Para BE-5.1 (una foto y una posición previa) basta con filtrar los vecinos por distancia a esa posición antes de llamarlo (BE-5.1 lo hizo **en la consulta**, no sobre los `LOC_TOP_K` globales: `buscar_vecinos_en_radio`, ADR-BE-21, §4.14) |
 | `app.dominio.localizacion.contexto(posicion, lugares, parametros)` → `(LugarContexto \| None, [LugarContexto])` | Paso 9 con cualquier lista de objetos con `lat`/`lng` (en el orden de desempate que se quiera) |
 | `app.servicios.localizar.localizar(motor, ajustes, fotos, rumbos, *, origen, app_version, inicio, request_id=None, vectorizar=None)` | Pasos 2–10 (embeddings, búsqueda, algoritmo, contexto y evento en una transacción). `origen` va tal cual a `eventos_localizacion.origen` (`escaneo`; BE-5.1, `frame`) |
 | `app.servicios.localizar.parametros_de(ajustes)` | Los `LOC_*` de `Settings` como `Parametros` |
@@ -1617,11 +1617,137 @@ Trampas:
   exacto de sus encabezados de cuarto nivel: la prueba busca su primera aparición.
 
 ### 4.13 Lotes diferidos (Fase 5)
-- **BE-5.1** `POST /v1/localize/frame`: una foto + posición previa; restringe la búsqueda a un radio alrededor de esa
-  posición. Hoy responde `501`.
+- **BE-5.1** `POST /v1/localize/frame`: ya no está diferido; construido en 0.16.0 (§4.14). Hasta 0.15.x respondía `501`.
 - **BE-5.2** `POST /v1/eventos` y `GET /v1/admin/stats/uso`: eventos anónimos de uso (rutas iniciadas y completadas,
   destinos buscados, alertas anunciadas) para la vista 7.15. Hoy `501`.
-- **BE-5.3** `GET /v1/route`: grafo de caminos y ruta más corta (decisión abierta 2 del frontend). Hoy `501`.
+- **BE-5.3** `GET /v1/route`: grafo de caminos y ruta más corta. Hoy `501`. **No hace falta por ahora**: por decisión
+  del usuario (2026-10-27, confirmada el 2026-10-28; `PRIORITY-2.md` §6, decisión 3) el grafo lo entrega el equipo y la ruta se calcula en el
+  teléfono (FE-5.1). Se retoma si un día el grafo se sirve desde el backend.
+
+### 4.14 BE-5.1 — Corrección visual (`POST /v1/localize/frame`)
+`POST /v1/localize/frame` (§5.3, público) recibe **una** foto, su rumbo y la posición que la app cree tener
+(`posicion_previa`), y devuelve la posición calculada solo con las imágenes del dataset a ≤ `radio_m` de esa posición,
+con la confianza, el nivel, el lugar cercano y lo que la app necesita para aceptarla (`distancia_previa_m`) o saber si
+la zona tiene dataset (`imagenes_en_radio`). Lo consume la guía por voz (vista 6.5, FE-5.3): cada ~10 m caminados la
+app toma una foto y, si la respuesta es confiable y coherente con los pasos, reemplaza su posición (`PRIORITY-2.md`
+§6, decisión 2). Decisiones en ADR-BE-21; parámetros propios `LOC_FRAME_RADIO_*` (§5.10).
+
+**Estado (0.16.0): construido, sin validar en `dev`.** Probado en local (WSL) **sin** base:
+`tests/api/test_localizar_frame.py` (validación de la petición en el orden de §5.3, público, la respuesta y el evento
+de log con el servicio sustituido, y la traducción de los errores de embeddings), `tests/contrato/
+test_contrato_localizacion.py` (§5.3, §5.6 y §5.10 contra los esquemas, `Settings` y el OpenAPI) y
+`tests/ops/test_validate51.py` (el validador contra un mundo falso). **Sin ejecutar** (no hay Docker ni PostgreSQL en la
+máquina): `tests/base/test_frame_base.py` (la búsqueda en el radio, el borde por haversine, `imagenes_en_radio`, el
+evento con `origen = frame` y que el plan no usa HNSW); corren en el CI de `backend.yml` de un PR. No necesita el
+dataset real: `validate51.py` crea sus propias fotos.
+
+**Una petición**, en este orden (cada paso responde su error de §5.3 y no sigue):
+1. Router `api/v1/localizar.localizar_frame` (en el mismo `router` que `/v1/localize`, en `router_v1`, sin
+   `requiere_admin`). `inicio = time.perf_counter()`.
+2. `partes_del_frame`: `leer_cuerpo(request, LOC_MAX_BYTES_FOTO + MARGEN_MULTIPART)` (1 638 400 bytes; si pasa, `400
+   FOTOS_INVALIDAS` `indice` 0) y `partes_multipart` (`NoEsMultipart` → `400 FOTOS_INVALIDAS` «falta la parte foto (se
+   espera multipart/form-data)»; `MultipartInvalido` → `400 SOLICITUD_INVALIDA`). Comparte `_partes` con
+   `partes_de_la_peticion` de `/v1/localize`.
+3. `foto_del_frame`: las partes `foto` (una parte `fotos` no cuenta): ninguna → `indice` 0; dos o más → `indice` 1;
+   `motivo_foto_no_valida` → `indice` 0.
+4. `metadatos_del_frame`: la parte `metadatos` con `_metadatos_validados(partes, MetadatosFrame)` (la misma lectura que
+   `metadatos_de` de `/v1/localize`: una sola parte, ≤ 16 384 bytes, JSON UTF-8, errores `422` con `metadatos.<campo>`
+   o `400 SOLICITUD_INVALIDA`); después, `radio_m` `None` → `LOC_FRAME_RADIO_M`, y fuera de [`LOC_FRAME_RADIO_MIN_M`,
+   `LOC_FRAME_RADIO_MAX_M`] → `422` con `metadatos.radio_m` («Debe estar entre 10 y 100.»). El rango se mira aquí y
+   no en el modelo porque sale de `Settings`.
+5. `obtener_motor(request)`: sin motor, `503 BASE_NO_DISPONIBLE`.
+6. `servicios.localizar.localizar_frame(motor, ajustes, foto, rumbo, lat=, lng=, radio_m=, app_version=, inicio=,
+   request_id=)`: `_vectorizar` (la misma llamada que `/v1/localize`: **una** `embedding.vectorizar([foto],
+   prioridad="alta")` con el tope de 20 s y la comprobación de `version_vector`); **una** transacción con
+   `consultas.buscar_vecinos_en_radio(c, vector, lat=, lng=, radio_m=, k=LOC_TOP_K, version_vector=)` (abajo), el
+   algoritmo `dominio.localizacion.localizar([vecinos], [rumbo], parametros)` **sin cambios**, `_contexto` (lugares solo
+   si hay posición), `distancia_previa_m = geo.distancia_m(previa, posicion)` y `_guardar_evento(…, origen="frame")`.
+7. Errores de embeddings con `_errores_del_servicio` (el mismo gestor de contexto que `/v1/localize`: `ImagenRechazada`
+   → `400 FOTOS_INVALIDAS` con su `indice`, 0; `EmbeddingNoDisponible`/`RespuestaNoValida`/`VersionVectorDistinta` →
+   `503 EMBEDDING_NO_DISPONIBLE` con sus eventos de log). Ningún error escribe en `eventos_localizacion`.
+8. `respuesta_del_frame` (redondeos de abajo) y evento de log `frame_calculado` (§5.10).
+
+**La búsqueda** (`db.consultas.sql_vecinos_en_radio`; parámetros `:vector`, `:lat`, `:lng`, `:radio`, `:k`):
+```sql
+WITH cerca AS MATERIALIZED (
+  SELECT i.id, i.video_id, i.lat, i.lng, i.rumbo, i.lugar_id, e.vector
+  FROM embeddings e JOIN imagenes i ON i.id = e.imagen_id
+  WHERE e.version_vector = '<EMBEDDING_VERSION_VECTOR>'
+    AND 2 * 6371008.8 * asin(least(1.0, sqrt(power(sin(radians(i.lat - :lat) / 2), 2)
+        + cos(radians(:lat)) * cos(radians(i.lat)) * power(sin(radians(i.lng - :lng) / 2), 2)))) <= :radio)
+SELECT id, video_id, lat, lng, rumbo, lugar_id, vector <=> CAST(:vector AS vector) AS distancia,
+       count(*) OVER () AS en_radio
+FROM cerca ORDER BY distancia, id LIMIT :k
+```
+(los `:lat`, `:lng` y `:radio` van como `CAST(… AS double precision)`; es la sentencia que compila SQLAlchemy con el
+dialecto asyncpg, impresa en local). Haversine con la fórmula y el radio de `geo.distancia_m` (así el borde del radio
+es el mismo que se documenta). La CTE materializada impide el índice HNSW (no hay `ORDER BY … LIMIT` sobre
+`embeddings`): la búsqueda es **exacta** dentro del radio; `count(*) OVER ()` cuenta todas las imágenes del radio
+antes del `LIMIT` (`imagenes_en_radio`). No mira `imagenes.estado` ni el video, como `sql_vecinos`: solo hay vector de
+fotos `procesada` de videos sin borrar. `ef_search` no se usa. Coste: recorre `imagenes` entera (sin índice
+geográfico) y calcula la distancia coseno solo de las del radio (R19). El plan con el dataset real, a verificar con
+`EXPLAIN` en `dev` (`busqueda_ms` del evento `frame_calculado` lo dice sin `EXPLAIN`).
+
+**El algoritmo con una foto** (§4.10 pasos 3–9, sin tocar): coincidencias = vecinos del radio con similitud ≥
+`LOC_SIM_MIN`; grupos de `LOC_RADIO_GRUPO_M`; mejor grupo = el de mayor similitud (con una foto, la puntuación es la
+mejor similitud del grupo); posición = media ponderada de sus miembros (dentro del radio, así que `distancia_previa_m`
+≤ `radio_m`); `c` = 1 en cuanto hay coincidencia (0 si no), así que la confianza = 0,3 + 0,5·`s` + 0,2·`m`: con una
+coincidencia de similitud ≥ `LOC_SIM_ALTA` y un solo grupo, 1,0 y `alta`; con dos grupos igual de parecidos dentro del
+radio (`m` = 0) y `s` = 0, 0,3 y `baja`. La corrección de rumbo es siempre `None` (hacen falta ≥ 2 fotos) y no se
+devuelve; el `rumbo` de la petición entra en el algoritmo pero hoy no cambia nada.
+
+**Salida** (`respuesta_del_frame`): `posicion`, `confianza`, `nivel`, `lugar_cercano` y `referencias` con los mismos
+redondeos que `/v1/localize` (helpers compartidos `_posicion_salida`, `_cercano_salida`, `_referencias_salida`);
+`distancia_previa_m` con `DECIMALES_DISTANCIA` (1); `radio_busqueda_m` con `DECIMALES_RADIO` (1).
+
+**Fila de `eventos_localizacion`** (§5.7, «filas de BE-5.1»): `origen = frame`, `fotos_usadas = 1`,
+`fotos_con_coincidencia` 1 u 0, la posición redondeada a 5 decimales con `ok`; nada de la posición previa ni del radio.
+
+**Nombres internos** (para depurar o extender sin abrir el código):
+- `db/consultas.py`: `sql_vecinos_en_radio(version)`, `buscar_vecinos_en_radio(conexion, vector, *, lat, lng, radio_m,
+  k, version_vector)` → `(list[Vecino], en_radio)` (`ValueError` si `k` < 1, `radio_m` no finito o < 0, versión o
+  vector no válidos); `_vecino(fila)` arma un `Vecino` (lo usa también `buscar_vecinos`).
+- `servicios/localizar.py`: `localizar_frame(…)` → `ResultadoFrame(localizacion, lugar_cercano, referencias,
+  distancia_previa_m, radio_busqueda_m, imagenes_en_radio, version_vector, embedding_ms, busqueda_ms, latencia_ms)`;
+  piezas compartidas con `localizar`: `_vectorizar`, `_contexto`, `_guardar_evento(conexion, ajustes, resultado, *,
+  origen, app_version, latencia_ms)`. `vectorizar=` sustituye a embeddings como en `localizar`.
+- `esquemas/localizacion.py`: `PARTE_FOTO` (`foto`), `Latitud`, `Longitud`, `PosicionPrevia(lat, lng)`,
+  `MetadatosFrame(rumbo, posicion_previa, radio_m=None, app_version=None)` (campos de más ignorados),
+  `FrameRespuesta` (prohíbe campos de más; el orden de sus campos es el del ejemplo de §5.3) y
+  `app_version_admitida(valor)` (la regla de `app_version`, compartida con `MetadatosLocalizacion`).
+- `api/v1/localizar.py`: `localizar_frame`, `partes_del_frame`, `foto_del_frame`, `metadatos_del_frame(partes,
+  ajustes)` → `(MetadatosFrame, radio)`, `respuesta_del_frame`; compartidos con `/v1/localize`: `_partes`,
+  `_metadatos_validados`, `_errores_del_servicio`, `_RESPUESTAS_ERROR`. `_CUERPO_FRAME` declara el multipart en el
+  OpenAPI (`foto` binaria y `metadatos`).
+- `config.py`: `loc_frame_radio_m`, `loc_frame_radio_min_m`, `loc_frame_radio_max_m`.
+- `api/v1/reservados.py` ya no tiene `/localize/frame`.
+
+**Calibración (qué cambia cuando se calibren los `LOC_*` de BE-3.2/EMB-3.2).** Nada de código: el frame usa
+`parametros_de(ajustes)`, así que los `LOC_SIM_MIN`, `LOC_SIM_ALTA` y cortes de nivel nuevos valen aquí desde el mismo
+commit de la calibración (§4.10, «Calibración»). Lo que **no** se calibra con EMB-3.2 es el frame en sí: su nivel sale
+más alto que el de un escaneo con la misma similitud (`c` = 1, ADR-BE-21); si el día de campo de FE-5.3 muestra que la
+app acepta fotos equivocadas con `media`, la opción es cortes propios (`LOC_FRAME_NIVEL_*`, a crear, menor del
+CHANGELOG) o que la app acepte solo `alta`. El radio (`LOC_FRAME_RADIO_*`) se ajusta con ese mismo día de campo.
+`validate51.py` no depende de la calibración (usa fotos idénticas: similitud ~0,999 ≥ cualquier `LOC_SIM_ALTA`
+razonable, y un solo grupo en el radio).
+
+**Trampas**:
+- La parte se llama `foto` (como `vecinos`), no `fotos`: una app que reutilice el código de `/v1/localize` sin
+  cambiar el nombre recibe `400 FOTOS_INVALIDAS` «falta la parte foto».
+- `rumbo` es obligatorio aunque pueda ser `null`: si falta, `422` `metadatos.rumbo`.
+- Pydantic, en modo laxo, acepta números en texto (`"radio_m": "40"`), como en el resto de la API.
+- Sin dataset en la zona (`imagenes_en_radio = 0`) la respuesta es `sin_coincidencias` (200), igual que con dataset sin
+  parecido: la diferencia la da `imagenes_en_radio`.
+- Las fotos de prueba de otros validadores (`validacion-…`, fuera del campus) también están en el índice: solo
+  afectarían a un frame cuya posición previa estuviera cerca de ellas (no pasa en el campus).
+- `validate51.py` deja filas en `eventos_localizacion` (una por `200`, `app_version = validacion-51-<sello>`) que
+  caducan a los 180 días; no hay endpoint para borrarlas.
+- El `INSERT` del evento va en la transacción de la búsqueda (como ADR-BE-18): si la base cae ahí, `503` y nada
+  guardado.
+
+**Para los lotes siguientes**: BE-5.2 (estadísticas de uso) puede separar escaneos y frames por `origen`. Si un lote
+añade un filtro por rumbo (descartar vecinos con rumbo opuesto), va en `buscar_vecinos_en_radio` o antes de
+`localizar`, sin cambiar el contrato (`rumbo` ya está en la petición).
 
 ---
 
@@ -1680,7 +1806,7 @@ Trampas:
 | `POST /v1/localize` | Escaneo 360° → Resultado (6.2, 6.3) | BE-3.2 |
 | `GET /v1/places` | Selección de destino (6.4) | BE-3.1 |
 | `GET /v1/alerts` | Caché local de alertas (2.5, 6.3, 6.5) | BE-3.3 (fuera del núcleo) |
-| `POST /v1/localize/frame` | Corrección visual en navegación (6.5) | BE-5.1 (hasta entonces `501`) |
+| `POST /v1/localize/frame` | Corrección visual durante la guía (6.5; la consume FE-5.3) | BE-5.1 (desde 0.16.0; antes `501`) |
 | `GET /v1/route` | Ruta a un destino (6.5) | BE-5.3 (hasta entonces `501`) |
 | `POST /v1/eventos` | Estadísticas de uso (7.15) | BE-5.2 (hasta entonces `501`) |
 
@@ -1812,6 +1938,98 @@ Errores, en este orden (el primero que aplica):
    «embeddings la rechazó (IMAGEN_INVALIDA)») si embeddings no pudo decodificar una foto.
 4. `503 BASE_NO_DISPONIBLE` (sin base, durante la búsqueda o al guardar el evento).
 
+#### `POST /v1/localize/frame`
+Corrección visual durante la guía (6.5; la consume FE-5.3): **una** foto, su rumbo y la posición que la app cree tener;
+busca **solo** entre las imágenes del dataset a ≤ `radio_m` de esa posición. Pensado para llamarse cada ~10 m mientras
+se camina: un solo embedding y una búsqueda acotada. Desde BE-5.1 (ARCHITECTURE 0.16.0; cómo funciona, §4.14; por qué
+así, ADR-BE-21).
+
+`multipart/form-data` con:
+- `foto`: **una** parte `image/jpeg` ≤ 1,5 MB. Recomendado, como en `/v1/localize`: lado mayor 1024 px, calidad 85.
+- `metadatos`: una parte de texto con JSON:
+```json
+{ "rumbo": 84.5, "posicion_previa": { "lat": 6.200180, "lng": -75.578540 }, "radio_m": 40, "app_version": "1.0" }
+```
+
+`200`:
+```json
+{
+  "resultado": "ok",
+  "posicion": { "lat": 6.200104, "lng": -75.578612, "radio_m": 5.0 },
+  "confianza": 0.86,
+  "nivel": "alta",
+  "distancia_previa_m": 11.6,
+  "radio_busqueda_m": 40.0,
+  "imagenes_en_radio": 37,
+  "lugar_cercano": { "id": "3f2a…", "nombre": "Biblioteca Central", "distancia_m": 12.4 },
+  "referencias": [
+    { "id": "9b0c…", "nombre": "Bloque de los Trillizos", "distancia_m": 35.2, "rumbo_grados": 95.0 }
+  ],
+  "version_vector": "dinov2-vits14/pp-v1",
+  "latencia_ms": 240
+}
+```
+- `resultado` ∈ {`ok`, `sin_coincidencias`}. Con `sin_coincidencias` (ninguna imagen dentro del radio llega a
+  `LOC_SIM_MIN`, o no hay ninguna): `posicion`, `nivel`, `distancia_previa_m` y `lugar_cercano` son `null`,
+  `confianza` es `0` y `referencias` está vacía. **No es un error**: la app lo ignora y sigue con los pasos.
+- Una imagen del dataset **fuera** del radio nunca cuenta, por parecida que sea: un lugar lejano igual al de la foto no
+  puede mover la posición.
+
+En detalle (desde BE-5.1, ARCHITECTURE 0.16.0; el cálculo, en §4.14):
+- **Petición.** Público: no pide token e ignora `Authorization` (también uno no válido). **Exactamente una** parte
+  `foto` con `Content-Type: image/jpeg` (se ignoran parámetros como `; charset=…`), no vacía, de como mucho
+  `LOC_MAX_BYTES_FOTO` (1 572 864 bytes) y que empiece por `FF D8 FF`; el nombre de archivo da igual. El cuerpo entero,
+  como mucho `LOC_MAX_BYTES_FOTO` + 64 KiB. Las partes con otro nombre se ignoran (también una parte `fotos`, la de
+  `/v1/localize`: sin `foto` la respuesta es `400 FOTOS_INVALIDAS` «falta la parte foto»).
+- **`metadatos`**: exactamente una parte, de como mucho 16 384 bytes, con un objeto JSON en UTF-8 (su `Content-Type` no
+  se mira):
+  - `rumbo` (obligatorio, puede ser `null`): el rumbo de la foto, número en [0, 360) (norte verdadero, §5.1). Hoy no
+    cambia el resultado (con una sola foto no hay corrección de brújula: hacen falta ≥ 2, §4.10 paso 8); está en el
+    contrato para poder usarlo más adelante sin cambiarlo.
+  - `posicion_previa` (obligatorio): objeto con `lat` ∈ [−90, 90] y `lng` ∈ [−180, 180] (números): la posición que la
+    app cree tener **ahora** (la última aceptada más lo caminado con el PDR). Se usa solo para acotar la búsqueda: no
+    se guarda en ningún sitio.
+  - `radio_m` (opcional): número en [`LOC_FRAME_RADIO_MIN_M`, `LOC_FRAME_RADIO_MAX_M`] = [10, 100] metros; si falta o
+    es `null`, `LOC_FRAME_RADIO_M` = 40 (por qué esos valores, ADR-BE-21).
+  - `app_version` (opcional): texto de hasta 40 caracteres tras recortar (vacío = `null`), sin NUL.
+  - Los demás campos se ignoran (también `origen`: el evento siempre dice `frame`); `NaN` o infinitos no valen.
+- **Búsqueda.** Las imágenes con vector de la versión activa a ≤ `radio_m` (haversine, como `GET /v1/places`) de
+  `posicion_previa`; de ellas, las `LOC_TOP_K` (10) más parecidas a la foto, por búsqueda **exacta** (no usa el índice
+  HNSW). Después, el mismo cálculo que `/v1/localize` con una foto (§4.10, pasos 3–9): umbral `LOC_SIM_MIN`, grupos de
+  `LOC_RADIO_GRUPO_M`, posición, confianza, nivel y contexto, con los parámetros de §5.10.
+- **`posicion`, `confianza`, `nivel`, `lugar_cercano`, `referencias`, `version_vector`, `latencia_ms`**: como en
+  `/v1/localize` (mismos redondeos, mismo truncado de la confianza y mismos cortes de nivel). Con una sola foto el
+  término `c` de la confianza vale 1 en cuanto hay coincidencia: `confianza` = 0,3 + 0,5·`s` + 0,2·`m`, **más alta** que
+  la de un escaneo de 5 fotos con la misma similitud; no se comparan entre sí.
+- **`distancia_previa_m`**: distancia (haversine, m, 1 decimal) de `posicion_previa` a `posicion`; como la posición es
+  una media de imágenes dentro del radio, no pasa de `radio_busqueda_m`. Es lo que la app compara con lo caminado.
+- **`radio_busqueda_m`**: el radio usado (el enviado o el por defecto), 1 decimal.
+- **`imagenes_en_radio`**: cuántas imágenes con vector hay a ≤ `radio_busqueda_m` de `posicion_previa`, antes de mirar
+  la similitud. `0` = esa zona no tiene dataset: allí una foto no va a ubicar.
+- No trae `correccion_rumbo_grados`, `fotos_usadas` ni `fotos_con_coincidencia` (con una foto serían siempre `null`, 1
+  y 0/1).
+- Cada `200` deja una fila anónima en `eventos_localizacion` con `origen = frame` (§5.7, «filas de BE-5.1»), sin
+  `posicion_previa` ni el radio; un error no deja ninguna. La foto no se guarda en ningún sitio (ADR-BE-06).
+- **Para la app (propuesta; lo decide FE-5.3):** aceptar solo `ok` con `nivel` `alta` o `media` y con
+  `distancia_previa_m` coherente con lo caminado desde la última posición aceptada (`PRIORITY-2.md` §6, decisión 2: un
+  salto de 40 m tras 5 m de pasos se descarta). El radio por defecto vale mientras la posición esté al día; tras muchos
+  metros sin una foto aceptada, la app puede subirlo (hasta 100). Latencia esperada en el servidor: unos cientos de
+  milisegundos (un embedding de una foto y una búsqueda acotada); **sin medir en `dev`** (`validate51.py` C6 la
+  comprueba ≤ 1 s).
+
+Errores, en este orden (el primero que aplica):
+1. `400 FOTOS_INVALIDAS` con `detalle = {"indice": i, "motivo": "…"}`: el cuerpo pasa del tope o no es
+   `multipart/form-data` (`indice` 0), falta la parte `foto` (0), hay más de una (`indice` 1) o la foto no vale (0).
+   `400 SOLICITUD_INVALIDA` si el multipart está mal formado.
+2. `422 VALIDACION` (`detalle.campos` con `metadatos` o `metadatos.<campo>`: `metadatos.rumbo`,
+   `metadatos.posicion_previa`, `metadatos.posicion_previa.lat`, `metadatos.posicion_previa.lng`, `metadatos.radio_m`,
+   `metadatos.app_version`) si falta la parte `metadatos`, está repetida, pesa de más o un campo no vale (también
+   `radio_m` fuera de [10, 100]); `400 SOLICITUD_INVALIDA` si no es JSON en UTF-8.
+3. `503 EMBEDDING_NO_DISPONIBLE` (apagado, caído, saturado, sin respuesta a tiempo, respuesta fuera de contrato o con
+   otra `version_vector`; como `/v1/localize`), o `400 FOTOS_INVALIDAS` (`indice` 0, `motivo` «embeddings la rechazó
+   (IMAGEN_INVALIDA)») si embeddings no pudo decodificar la foto.
+4. `503 BASE_NO_DISPONIBLE` (sin base, durante la búsqueda o al guardar el evento).
+
 #### `GET /v1/places`
 Público: no pide token e ignora `Authorization` (también uno no válido). Parámetros opcionales: `lat`, `lng` (ambos o
 ninguno), `categoria`.
@@ -1888,8 +2106,9 @@ la evalúa la app** en el momento de anunciar, porque una alerta puede empezar a
 servidor.
 
 #### Endpoints reservados
-`POST /v1/localize/frame`, `GET /v1/route` y `POST /v1/eventos` responden hoy `501 NO_IMPLEMENTADO`, sin mirar el
-cuerpo ni los parámetros. Su contrato se definirá aquí antes de implementarlos (Fase 5). El reservado de
+`GET /v1/route` y `POST /v1/eventos` responden hoy `501 NO_IMPLEMENTADO`, sin mirar el cuerpo ni los parámetros. Su
+contrato se definirá aquí antes de implementarlos (Fase 5). `POST /v1/localize/frame` fue reservado hasta 0.15.x: desde
+0.16.0 tiene su contrato arriba (BE-5.1). El reservado de
 administración, `GET /v1/admin/stats/uso` (§5.5), exige primero el token de admin (`401`/`403`, §5.2) y después
 responde `501`. Existen desde BE-1.3 (antes daban `404`). Un `501` es un 5xx para la métrica de API Gateway y su
 alarma (infra §5.10: más de 5 en 5 min; sin comprobar en `dev`): `validate13.py` provoca uno por ejecución.
@@ -2326,7 +2545,7 @@ Errores, en este orden (el primero que aplica):
 | HTTP | `codigo` | Cuándo |
 |---|---|---|
 | 400 | `SOLICITUD_INVALIDA` | Cuerpo mal formado (JSON inválido, multipart roto) |
-| 400 | `FOTOS_INVALIDAS` | `/v1/localize` y `/v1/admin/diagnostico/vecinos`: cantidad, tipo o tamaño de fotos, o `rumbos` incoherente; `detalle.indice` señala la foto y `detalle.motivo` dice por qué (en `vecinos` desde BE-2.4, en `localize` desde BE-3.2) |
+| 400 | `FOTOS_INVALIDAS` | `/v1/localize`, `/v1/localize/frame` y `/v1/admin/diagnostico/vecinos`: cantidad, tipo o tamaño de fotos, o `rumbos` incoherente; `detalle.indice` señala la foto y `detalle.motivo` dice por qué (en `vecinos` desde BE-2.4, en `localize` desde BE-3.2, en `localize/frame` desde BE-5.1) |
 | 401 | `NO_AUTENTICADO` · `TOKEN_INVALIDO` · `TOKEN_EXPIRADO` | §5.2 (con `WWW-Authenticate: Bearer`) |
 | 401 | `CREDENCIALES_INVALIDAS` | Login fallido (cuerpo fijo, §5.3) |
 | 403 | `SIN_PERMISOS` | Token válido de un usuario activo sin rol `admin` (§5.2) |
@@ -2334,7 +2553,7 @@ Errores, en este orden (el primero que aplica):
 | 405 | `SOLICITUD_INVALIDA` | Método no permitido en una ruta que existe; `detalle.metodos_permitidos` (p. ej. `["GET"]`) y encabezado `Allow` |
 | 409 | `IMAGEN_NO_SUBIDA` | `POST /v1/admin/images/{id}/reprocesar` de una foto que sigue `pendiente_subida` (BE-4.1, §5.5; `detalle: null`) |
 | 409 | `NOMBRE_DUPLICADO` · `VIDEO_ELIMINADO` · `CONFLICTO_VERSION` | Lugar repetido al crear o editar (BE-3.1, §5.5; `detalle: null`) · registrar fotos, completar la subida o volver a crear (mismo `ref_cliente`) un video borrado (§5.4) · `PUT /v1/admin/alerts/{id}` con `If-Match` que no coincide con la `version` de la alerta o de una alerta que no existe (BE-3.3, §5.5; `detalle: null`) |
-| 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]`. En `/v1/localize` (BE-3.2), la parte `metadatos`: `campo` = `metadatos` o `metadatos.<campo>`. Un encabezado no válido lleva su nombre: `If-Match` (alertas, BE-3.3) |
+| 422 | `VALIDACION` | Campos fuera de rango; `detalle.campos` = `[{"campo": "radio_m", "motivo": "…"}]`. En `/v1/localize` (BE-3.2) y `/v1/localize/frame` (BE-5.1), la parte `metadatos`: `campo` = `metadatos` o `metadatos.<campo>`. Un encabezado no válido lleva su nombre: `If-Match` (alertas, BE-3.3) |
 | 500 | `ERROR_INTERNO` | Fallo no previsto (el `X-Request-Id` permite encontrarlo en los logs); también configuración que falta en `api` (`JWT_SECRET`, §5.2; `S3_BUCKET_DATASET` en las rutas de §5.4 que usan S3; desde BE-4.1, `SQS_URL_PURGA`/`SQS_URL_INGESTA` en las rutas de §5.5 que encolan) y, en `DELETE /v1/admin/images/{id}` y `reprocesar` (BE-4.1), SQS que no aceptó el mensaje (nada cambia) |
 | 501 | `NO_IMPLEMENTADO` | Endpoints reservados |
 | 503 | `EMBEDDING_NO_DISPONIBLE` · `BASE_NO_DISPONIBLE` | Dependencia caída, apagada o lenta. `BASE_NO_DISPONIBLE`, en cualquier endpoint que use la base (desde BE-1.3, §4.4) |
@@ -2513,6 +2732,18 @@ búsqueda; un error no deja fila; §4.10):
 | `lat`, `lng` | la posición de la respuesta redondeada a 5 decimales; nulas con `sin_coincidencias` |
 | `fotos_usadas`, `fotos_con_coincidencia`, `latencia_ms`, `version_vector` | los de la respuesta |
 | `app_version` | la de `metadatos` (recortada; nula si no viene o queda vacía). Los validadores envían `validacion-32` |
+
+**`eventos_localizacion`: filas de BE-5.1** (una por cada `POST /v1/localize/frame` con `200`, en la misma transacción
+que la búsqueda; un error no deja fila; §4.14). Igual que las de BE-3.2, salvo:
+
+| Columna | Valor |
+|---|---|
+| `origen` | `frame` (lo pone la ruta; `metadatos.origen` se ignora) |
+| `fotos_usadas` / `fotos_con_coincidencia` | `1` / `1` con `ok` y `0` con `sin_coincidencias` |
+| `app_version` | la de `metadatos`. `validate51.py` envía `validacion-51-<AAAAMMDD-HHMMSS>` (una por ejecución) |
+
+No se guardan `posicion_previa`, `radio_m`, `distancia_previa_m` ni `imagenes_en_radio` (la tabla no cambia: no hay
+migración).
 
 **`auditoria`**
 
@@ -2724,6 +2955,7 @@ que no se puede leer (p. ej. `DB_PORT=abc`) hace que la CLI termine con 3 y que 
 | `LOC_NIVEL_ALTA_MIN` / `LOC_NIVEL_MEDIA_MIN` (cortes de nivel) | 0,70 / 0,45 | `alta` ≥ 0,70 · `media` ≥ 0,45 · `baja` < 0,45, sobre la confianza truncada a 2 decimales (§4.10, paso 7). Iniciales: se calibran con EMB-3.2 como `LOC_SIM_MIN` |
 | `LOC_DISPERSION_RUMBO_MAX` | 30° | Desviación estándar circular máxima de las diferencias de rumbo para devolver `correccion_rumbo_grados` (§4.10, paso 8) |
 | `LOC_LUGAR_CERCANO_M` / `LOC_REFERENCIAS_M` / `LOC_REFERENCIAS_MAX` | 60 / 150 / 3 | `lugar_cercano` a ≤ 60 m; hasta 3 `referencias` a ≤ 150 m sin repetirlo (§4.10, paso 9) |
+| `LOC_FRAME_RADIO_M` / `LOC_FRAME_RADIO_MIN_M` / `LOC_FRAME_RADIO_MAX_M` | 40 / 10 / 100 | `POST /v1/localize/frame` (BE-5.1, desde 0.16.0): radio (m) alrededor de `posicion_previa` si la petición no trae `radio_m`, y el rango admitido de `radio_m` (fuera, `422`). Por qué esos valores: ADR-BE-21. El resto del cálculo usa los `LOC_*` de arriba (`LOC_TOP_K`, `LOC_SIM_MIN`, cortes…) y cambia con ellos al calibrar |
 | `REC_MAX_FOTOS_VIDEO` / `REC_MAX_LOTE` | 200 / 50 | 200 coincide con `MAX_FOTOS_VIDEO` de la app. `images` (BE-2.1) rechaza con `422` un `orden` > `min(REC_MAX_FOTOS_VIDEO, 200)` (200 es el `CHECK` de §5.7) y un lote de más de `REC_MAX_LOTE` |
 | `REC_MAX_BYTES_FOTO` / `REC_LADO_MIN_PX` | 4 194 304 (4 MB) / 320 | `images` rechaza un `bytes` declarado mayor (`422`); el tamaño real (sin descargar lo que pasa del máximo) y el lado menor tras EXIF los valida el `worker` (BE-2.2, §4.6; una URL PUT no limita tamaño) |
 | `PRESIGN_PUT_TTL_S` / `PRESIGN_GET_TTL_S` | 900 / 3600 | Vida de las URL `PUT` de `images` (BE-2.1) y de las GET de `ImagenAdmin` (BE-4.1: `url`, `url_miniatura`). C3a de la validación espera 900 s + 10 s |
@@ -2767,6 +2999,7 @@ de PostgreSQL sustituido por `(omitido)`, porque puede copiar los valores de la 
 | `vecinos_consultados` | `api` | `k`, `devueltos`, `similitud_max` (`null` sin vecinos), `bytes` (de la foto), `embedding_ms`, `busqueda_ms`, `latencia_ms` | `POST /v1/admin/diagnostico/vecinos` con `200` (BE-2.4, `INFO`). Nunca ids, bytes ni nada de la foto salvo su tamaño |
 | `embedding_no_disponible` | `api` | `motivo` (p. ej. `sin EMBEDDING_URL`, `sin respuesta en 5 s`, `503 SATURADO`, `respuesta no válida: …`) | Una llamada de `api` a `/v1/embed` falló: `vecinos` (BE-2.4) y `localize` (BE-3.2) responden `503 EMBEDDING_NO_DISPONIBLE` (`WARNING`; `ERROR` si la respuesta no cumple el contrato). Va seguido de `error_api` |
 | `localizacion_calculada` | `api` | `resultado`, `nivel_confianza` (`null` con `sin_coincidencias`), `confianza`, `fotos_usadas`, `fotos_con_coincidencia`, `coincidencias` (vecinos sobre `LOC_SIM_MIN`), `grupos`, `similitud_max` (6 decimales o `null`), `bytes` (de todas las fotos), `embedding_ms`, `busqueda_ms`, `latencia_ms` | `POST /v1/localize` con `200` (BE-3.2, `INFO`). Nunca la posición, ids, rumbos ni nada de las fotos salvo su tamaño total |
+| `frame_calculado` | `api` | `resultado`, `nivel_confianza` (`null` con `sin_coincidencias`), `confianza`, `radio_busqueda_m`, `imagenes_en_radio`, `coincidencias`, `grupos`, `similitud_max` (6 decimales o `null`), `distancia_previa_m` (`null` con `sin_coincidencias`), `bytes` (de la foto), `embedding_ms`, `busqueda_ms`, `latencia_ms` | `POST /v1/localize/frame` con `200` (BE-5.1, `INFO`). Nunca la posición, la posición previa, ids, el rumbo ni nada de la foto salvo su tamaño (`distancia_previa_m` es relativa: no ubica a nadie) |
 | `base_no_disponible` | `api`, `migrate` | `motivo` (clase y mensaje del error, sin secretos) | La base no respondió. En `api`, en `/v1/health/ready` y, desde BE-1.3, en cualquier endpoint que la use (`WARNING`; responde `503`); en `migrate` (toda la CLI, también `limpiar-validacion`), la CLI termina con 2 (`ERROR`) |
 | `configuracion_incompleta` | `migrate`, `api`, `worker` | `faltan`, `invalidas` (nombres de variables o, para la contraseña de `crear-usuario`, `CREAR_USUARIO_PASSWORD` o `terminal`), `motivo` (sin el valor recibido) | En `migrate`: faltan `DB_*` (o `ADMIN_INICIAL_*` cuando hay que crear el admin), una variable tiene un valor no válido, como `DB_SSLMODE` o `DB_PORT`, falta o no vale la contraseña de `crear-usuario`, o falta `S3_BUCKET_DATASET` en `limpiar-validacion` (`ERROR`); la CLI termina con 3. En `api` (BE-1.3): falta `JWT_SECRET` en un login o una ruta protegida; desde BE-2.1, falta `S3_BUCKET_DATASET` (o no se pudo crear el cliente de S3) en `images` o `complete` (`ERROR`; responde `500`). En `worker` (BE-2.2), al arrancar sin `SQS_URL_INGESTA`, `S3_BUCKET_DATASET`, `EMBEDDING_URL` o `DB_*` (`faltan`; `motivo = la ingesta no puede empezar`), y sigue con latidos sin consumir (`ERROR`); desde BE-4.1, sin `SQS_URL_PURGA` (`motivo = la purga no puede empezar`, `WARNING`: solo ingiere). En `api` (BE-4.1), falta `SQS_URL_PURGA` o `SQS_URL_INGESTA` en una ruta que encola (`ERROR`; responde `500`) |
 | `video_creado` | `api` | `video_id`, `numero`, `nuevo` (`false` si ya existía con ese `ref_cliente`) | `POST /v1/collect/videos` con `201` o `200` (BE-2.1) |
@@ -3277,6 +3510,58 @@ reconciliador sin ids (otro video borrado a la vez también lo produciría). Mie
 `dev`. `--sin-limpieza` deja el escalado de `worker` como esté (si C3 se interrumpió, suspendido: lo reanuda la
 preparación de la siguiente ejecución) y `embedding` como esté. C4b depende de C1b (con `--solo C4b`, falla).
 
+**`validate51.py`** (validation-5-1, BE-5.1; solo `dev`; **sin ejecutar todavía en `dev`**). Es el ejemplo de un
+validador que localiza con **sus propios** datos (no depende del dataset real ni de la calibración). No añade ayudas a
+`comun.py`: usa `Validador`, `EmbeddingDev`, `ClienteApi`, `EntornoBackend.sql`, `RecorridoPrueba` (subclase),
+`jpeg_patron`, `png_sintetico`, `videos_validacion`, `credenciales_admin`, `url_api`, `red_tareas`, `lote_hecho`,
+`hora_bogota`, `embedding_en_api`, `describir_respuesta`, `codigo_error`, `es_acceso_denegado` y `codigo_error_aws`.
+Lo que tiene y no está en `comun.py`:
+- Orden: P1 credenciales → P2 BE-2.2 y BE-4.1 «Hecho» (2), hora antes de las 21:00 en Bogotá (3) y
+  `/v1/health/ready` con `"db": "ok"` (2) → P3 login de admin (`401` es 3) y BE-5.1 desplegado (`POST
+  /v1/localize/frame` con una sola parte `otra` → `400 FOTOS_INVALIDAS`; `404` o `501` es 2; no llama a embeddings ni
+  deja evento) → P4 red de tareas y `campus-locator-dev-validacion` (para el SQL de C5) → P5 `embedding` (como
+  `validate41.py`). Preparación: `DELETE` de los videos `validacion-51-…` (nombre **y** `ref_cliente`; nunca los de
+  otros lotes). Comprobaciones en orden: C4, C1, C2, C3, C6, C5.
+- Constantes: `PREFIJO` (`validacion-51-`), `FOTOS` (1–4), `FOTOS_A` (1, 2), `DISTANCIA_B_M` (300), `PREVIA_C1_M`
+  (15, al este de A), `PREVIA_C2_M` (10, al este de B), `PREVIA_C3_M` (60, al sur de A), `RADIO_C3_CORTO`/`_LARGO`
+  (30/100), `RADIO_POR_DEFECTO` (40), `ERROR_MAX_M` (10), `COHERENCIA_M` (1), `LEJOS_DE_A_M` (100),
+  `LATENCIA_MAX_MS` (1000), `HORA_LIMITE` (21), `LIMITE_PROCESADO_S` (20 min), `PAUSA_SONDEO_S` (15),
+  `RADIO_TIERRA_M` (copia del de `geo`), `CAMPOS_RESPUESTA` (los de `FrameRespuesta`). Datos: el video
+  `validacion-51-<AAAAMMDD-HHMMSS>` (UTC) con 4 fotos `jpeg_patron(semilla · 1000 + orden)`: 1 y 2 en A = (2,0 +
+  (semilla % 997) · 0,001, −101,0) y 3 y 4 en B, 300 m al norte (océano Pacífico, lejos del campus y de los
+  (1.x, −100) de `validate41.py`); `app_version` de cada petición = el mismo nombre (marca las filas de C5).
+- Funciones: `haversine_m` (copia de `geo.distancia_m`; una prueba las compara), `desplazar(lat, lng, norte_m,
+  este_m)`. `RecorridoFrame(comun.RecorridoPrueba)`: `foto(orden)` con `jpeg_patron` y `elemento(orden)` con la
+  coordenada de `coordenadas[orden]`.
+- `Contexto`: `asegurar_datos()` (crea el video, sube las 4 fotos, `complete` y sondea `GET /v1/admin/videos/{id}`
+  hasta `procesada`; una vez), `metadatos(previa, radio_m=None, **cambios)`, `enviar(partes)` (sin token),
+  `frame(que, foto, metadatos)` (exige `200` con `CAMPOS_RESPUESTA` y guarda la `Respuesta` en `respuestas`),
+  `restos()`, `preparacion()`, `limpiar()` (borra el video con `DELETE` y deja `embedding` como estaba), `sql()`,
+  `punto_a()`/`punto_b()`, `app_version`.
+- C1: foto 1 con la previa a 15 m de A → `ok` a ≤ 10 m de A, `nivel = alta`, `radio_busqueda_m` 40,
+  `imagenes_en_radio` ≥ 2 y `distancia_previa_m` a ≤ 1 m de la distancia real. C2: la misma foto con la previa a 10 m
+  de B → nunca a ≤ 100 m de A (`sin_coincidencias` u `ok` en B), con `imagenes_en_radio` ≥ 2 (las de B: el filtro, no
+  el vacío, deja fuera a A). C3: previa a 60 m al sur de A: `radio_m` 30 → `sin_coincidencias`, 0 imágenes y
+  `radio_busqueda_m` 30; `radio_m` 100 → `ok` a ≤ 10 m de A y `distancia_previa_m` coherente. C4: 7 peticiones mal
+  formadas (sin `metadatos`, sin `posicion_previa`, `lat` 91, `radio_m` 500, `rumbo` 360 → `422` con su campo; dos
+  partes `foto` → `400` `indice` 1; una PNG → `400` `indice` 0). C5: `SELECT origen, resultado, fotos_usadas,
+  fotos_con_coincidencia FROM eventos_localizacion WHERE app_version = '<app_version>' ORDER BY id` → una fila por
+  cada `200`, en orden, con `frame`, el mismo `resultado`, `1` y `1`/`0` (los errores de C4, ninguna). C6: todas las
+  `latencia_ms` de los `200` ≤ 1000 (el detalle da la mediana, la máxima y la mediana medida en el cliente). C5 y C6,
+  con `--solo` y sin respuestas, hacen antes la petición de C1.
+- Pruebas: `tests/ops/test_validate51.py` (sin base ni AWS): `Mundo` (recolección con un `worker` que procesa al
+  subir, `GET`/`DELETE` de videos, `POST /v1/localize/frame` con el contrato de §5.3 —0,999 con la foto idéntica, 0,3
+  con las demás, solo dentro del radio— y `eventos_localizacion`), `EmbFalso`, `BackendFalso` (el SQL de C5) y
+  `ContextoFalso`. Interruptores: `sin_radio` (C2), `ignora_radio_m` (C3), `acepta_todo` (C4), `sin_evento` y
+  `evento_de_error` (C5), `lento` (C6), `no_encuentra` (C1), `desplegado` (P3 → 2); y los casos de código 3
+  (contraseña, hora), `--solo C4` sin datos, `--solo C5` y la preparación que solo borra `validacion-51-`.
+
+Trampas de BE-5.1: el `worker` tiene que procesar las 4 fotos (con `embedding` encendido y la cola `ingesta` sin
+atasco; si el usuario sube sus recorridos a la vez, C1 puede tardar más, hasta 20 min). C2 pasa también si las fotos de
+B se parecen a la 1 (`ok` en B): lo que no puede salir es A. Cada ejecución completa deja 4 filas en
+`eventos_localizacion` (`app_version = validacion-51-<sello>`) que caducan a los 180 días. `--sin-limpieza` deja el
+video de prueba (lo borra la preparación de la siguiente ejecución) y `embedding` como esté.
+
 **Trampa del arranque de `embedding`: Cloud Map sin configuración de salud (0.9.1 y 0.9.2).** El servicio de Cloud
 Map de `embedding` (`srv-josm7lql7ddxgzm6`, `embedding.campus-locator.local`, registro A con TTL 10 s) **no tiene
 `HealthCheckConfig` ni `HealthCheckCustomConfig`** (comprobado en `dev` con `servicediscovery get-service`,
@@ -3340,7 +3625,7 @@ para las pruebas de permisos.
 | Lugares | `DELETE /v1/admin/places/{id}` (BE-3.1; `comun.borrar_lugares`); al empezar, `comun.borrar_lugares_restos` |
 | Alertas | `DELETE /v1/admin/alerts/{id}` (BE-3.3; `comun.borrar_alertas`); al empezar, `comun.borrar_alertas_restos`. Queda su *tombstone* `ALERTAS_TOMBSTONE_DIAS` (sin contenido; no se puede quitar antes) y su auditoría |
 | Videos de prueba, antes de BE-4.1 | `limpiar-validacion --video <id> …` en una tarea suelta con la definición `campus-locator-dev-worker` (§5.9) |
-| Videos de prueba, con BE-4.1 hecho | `DELETE /v1/admin/videos/{id}`; su purga limpia S3 (cuando corre el `worker`, es decir, con `embedding` encendido). Así lo hace `validate41.py` (BE-4.1, también con los restos de otros lotes); los validadores anteriores siguen con `limpiar-validacion` hasta que se cambien |
+| Videos de prueba, con BE-4.1 hecho | `DELETE /v1/admin/videos/{id}`; su purga limpia S3 (cuando corre el `worker`, es decir, con `embedding` encendido). Así lo hace `validate41.py` (BE-4.1, también con los restos de otros lotes) y `validate51.py` (BE-5.1, solo los suyos, `validacion-51-`); los validadores anteriores siguen con `limpiar-validacion` hasta que se cambien |
 | Usuario `validacion+user@campus.edu.co` | Lo crea o reactiva `crear-usuario --rol user` (contraseña aleatoria en `CREAR_USUARIO_PASSWORD`, nunca impresa) y lo desactiva `desactivar-usuario` al terminar, ambos en una tarea suelta de `migrate` (en `local`, con `docker compose run`): `crear_usuario_validacion` y `desactivar_usuario_validacion` de `comun.py`. La fila queda inactiva entre ejecuciones; reactivarla devuelve la validez a sus tokens sin vencer (§5.2), que solo tuvo el validador |
 
 Al empezar, cada validador que crea videos borra los `validacion-` que haya dejado una ejecución interrumpida
@@ -3605,6 +3890,43 @@ Fija lo que ADR-BE-07, §4.12 anterior y §5.8 no decían:
 - *Consecuencias:* sin `embedding` encendido no hay `worker` y la purga espera (los objetos siguen en S3, fuera de toda
   búsqueda); un `purgar_imagen` que llegue a la DLQ deja 2 objetos huérfanos hasta que se borre su video (R18).
 
+**ADR-BE-21 — Corrección visual: búsqueda exacta acotada por radio, radio de 40 m (10–100) y el algoritmo de BE-3.2
+sin cambios (aceptada, BE-5.1; decisión del esclavo de BE-5.1, a revisar por el maestro).** `POST /v1/localize/frame`
+(§5.3, §4.14):
+- **Filtrar por distancia en la consulta, no después.** La guía de §4.10 decía «filtrar los vecinos por distancia antes
+  de llamar a `localizar`». Filtrar los `LOC_TOP_K` vecinos globales del índice HNSW dejaría sin nada cerca justo en el
+  caso que importa: si un lugar lejano se parece más, ocupa los 10 puestos y las imágenes del radio ni aparecen. Por
+  eso `db.consultas.buscar_vecinos_en_radio` filtra por haversine en el `WHERE` y ordena por similitud **dentro** del
+  radio. *Alternativa descartada:* pedir más vecinos globales (`k` grande) y filtrar: sigue sin garantizar nada y
+  cuesta más.
+- **Búsqueda exacta, sin HNSW.** Con el filtro geográfico pgvector no puede usar bien el índice (HNSW filtra después de
+  buscar; `hnsw.iterative_scan` existe en 0.8 pero no garantiza el resultado). A cambio, la consulta recorre `imagenes`
+  (unas miles de filas hoy: el campus tiene 2 videos y 18 fotos al 2026-10-27, y los 12 recorridos sin subir llegarán a
+  unas 2 000) y calcula la distancia coseno solo de las que caen en el radio (decenas a cientos): milisegundos, y el
+  resultado es exacto. *Consecuencia:* si el dataset creciera a cientos de miles de fotos, habría que añadir un índice
+  sobre (`lat`, `lng`) o una caja previa (R19).
+- **Radio por defecto 40 m, admitido 10–100 m** (`LOC_FRAME_RADIO_*`, §5.10). La app manda su posición estimada (la
+  última aceptada más lo caminado con el PDR). Su error esperado suma el de la última ubicación (objetivo de BE-3.2:
+  mediana ≤ 15 m), la deriva del PDR en ~10 m de pasos (unos metros) y el error de GPS con que se grabaron las fotos del
+  dataset (5–10 m): ~30 m; 40 m deja margen. Con `LOC_RADIO_GRUPO_M` = 20, en 40 m caben ~2 grupos, así que el margen
+  `m` de la confianza sigue diciendo si dentro del radio hay dos zonas parecidas. Máximo 100 m: más allá vuelve la
+  confusión con lugares parecidos lejanos que el endpoint quiere evitar, y la regla de la app descarta saltos mayores de
+  todos modos (`PRIORITY-2.md` §6, decisión 2). Mínimo 10 m: por debajo del error de GPS del dataset no encontraría nada.
+  *Sin medir*: se ajustan con el día de campo de FE-5.3 (cambiar §5.10 y `config.py` a la vez; la prueba de contrato
+  los compara).
+- **El algoritmo de BE-3.2 sin cambios** (`dominio.localizacion.localizar` y `contexto`, ADR-BE-18) y los mismos
+  `LOC_*`: lo que se calibre para `/v1/localize` vale aquí sin tocar nada. *Consecuencia conocida:* con una foto, `c` =
+  1 en cuanto hay coincidencia y la confianza sale más alta que en un escaneo con la misma similitud (§5.3); la app no
+  debe comparar las dos. Si el campo muestra que el nivel de un frame engaña, se calibran cortes propios
+  (`LOC_FRAME_NIVEL_*`, a crear) en un lote aparte.
+- **Respuesta propia** (`FrameRespuesta`): lo de `/v1/localize` que aplica más `distancia_previa_m`,
+  `radio_busqueda_m` e `imagenes_en_radio` (lo que la app necesita para aceptar o descartar la foto, y para saber si la
+  zona tiene dataset); sin `correccion_rumbo_grados` ni los contadores de fotos, que con una foto no dicen nada.
+  `sin_coincidencias` es un `200`, no un error.
+- **Evento en `eventos_localizacion`** con `origen = frame`, en la misma transacción (como ADR-BE-18), sin la posición
+  previa ni el radio: la tabla no cambia y sigue siendo anónima. Evento de log propio (`frame_calculado`) para no
+  cambiar el de `/v1/localize`.
+
 ---
 
 ## 7. Riesgos
@@ -3629,3 +3951,4 @@ Fija lo que ADR-BE-07, §4.12 anterior y §5.8 no decían:
 | R16 | La búsqueda HNSW es aproximada: con muchos vectores, algún vecino exacto puede faltar en `vecinos` y en `/v1/localize`; con pocos, PostgreSQL puede no usar el índice (§4.8) | Media | Bajo | `ef_search` = 64 ≥ `k` (§4.8); la herramienta de evaluación de embeddings compara con fuerza bruta (`SERVICE_EMBEDDING/docs/ARCHITECTURE.md` §4.5); si el *recall* no alcanza, subir `LOC_EF_SEARCH` (variable de §5.10). `EXPLAIN` en `dev` con un dataset real: a verificar |
 | R18 | Purga pendiente u objetos huérfanos en S3 (BE-4.1): sin `embedding` no hay `worker` y la purga espera; un `purgar_imagen` que acaba en la DLQ (5 fallos de S3 o de la base) no lo reenvía nadie | Media | Bajo | Los vectores salen en la transacción del `DELETE` (la búsqueda nunca ve lo borrado); el reconciliador reenvía los `purgar_video` cada 10 min; la alarma de la DLQ de `purga` avisa (infra §5.10) y se re-envía con *redrive*; borrar el video purga su prefijo entero (también lo que dejó una imagen). Sin medir en `dev` |
 | R17 | Sincronización de alertas por marca de tiempo: un cambio cuya transacción confirma más de 60 s después de empezar no sale en ninguna diferencia, y la app no lo ve hasta pedir otra foto completa | Baja | Medio | Margen de 60 s en `desde` (ADR-BE-19, §4.11); las transacciones de alertas duran milisegundos. Si un día pasara, la app lo arregla con una foto completa (sin `desde`) |
+| R19 | `POST /v1/localize/frame` recorre `imagenes` entera para filtrar por distancia (sin índice geográfico, ADR-BE-21): con cientos de miles de fotos la búsqueda dejaría de ser de milisegundos | Baja | Bajo | Hoy son unas miles; `busqueda_ms` sale en el evento `frame_calculado` (§5.10). Si crece, un índice sobre (`lat`, `lng`) con una caja previa en el `WHERE`, sin cambiar el contrato |
