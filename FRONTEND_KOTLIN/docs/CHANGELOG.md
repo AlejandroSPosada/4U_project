@@ -23,6 +23,23 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.14.1] — 2026-10-27
+- Lote que la motivó: FE-4.1 (cierre: `validate41.py --entorno dev` sobre `7578938`).
+- Qué cambió (solo documentos y la evidencia): encabezado (FE-4.1 validado en `dev`); §4.10 con las tres ejecuciones
+  en `dev`, lo visto en el teléfono y tres hallazgos sin arreglar (fecha de 7.14 en UTC frente a la de 7.13, distancia de
+  7.14 calculada frente a la del servidor en 7.13, título de 7.13 bajo la barra de estado), que pasan a FE-4.4; §5.11,
+  trampas de FE-4.1: `focused="true"` del buscador comprobado y la trampa nueva del teléfono bloqueado (`mWakefulness`,
+  y que `isKeyguardShowing` no sirve en MIUI); `validation-4-1` §3 con la captura de C2c
+  (`evidencia/fe-4-1/c2c-lista-tras-borrar.png`); PLAN: FE-4.1 «Hecho» y los hallazgos en FE-4.4.
+- Contratos tocados (§5): ninguno (parche).
+- Cómo se verificó: `validate41.py --entorno dev` sobre `7578938` sin `-dirty` (2026-10-27, Xiaomi 23028RA60L). La
+  segunda ejecución dio código 1 con el teléfono bloqueado; la tercera, **código 0** (22:42–22:48 de Bogotá, informe
+  `FE-4.1-20261028-034252.json`): P1–P6, C1a 11/11, C2a 5/5, C3a 15/15, C1b, C3b y C2b en verde, y la manual C2c con la
+  captura de 7.13 (la Galería sin `validacion-4-1-b` la comprobó C2b por la pantalla y la API). Los pasos guiados los
+  hizo el maestro por `adb` con la entrada en una FIFO. La limpieza borró los dos videos de prueba (la purga de S3
+  espera al `worker`, que solo corre con `embedding` encendido).
+- Pendiente: nada de FE-4.1; lo que quedó fuera y los hallazgos, en FE-4.4.
+
 ## [0.14.0] — 2026-10-27
 
 - **Lote que la motivó:** FE-4.1 (Videos e imágenes contra el backend, 7.11–7.14), sobre `main` en `97791a0` (0.13.1).

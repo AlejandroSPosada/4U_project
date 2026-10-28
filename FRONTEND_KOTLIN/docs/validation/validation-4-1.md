@@ -53,6 +53,11 @@ entra al Panel con el admin **por la interfaz** (como `validation-3-4`).
 |---|---|---|
 | C2c | Dos capturas por `adb exec-out screencap -p` después del borrado: 7.13 con `validacion-4-1` en el buscador (solo `validacion-4-1-renombrado`), tomada en el paso guiado 2 **antes de pulsar Enter** (la app ya volvió sola a 7.13 y conserva la búsqueda); y la Galería con la misma búsqueda (sus 3 fotos). El script pasa por la Galería unos segundos y al terminar borra los videos, así que para la segunda: correr con `--sin-limpieza`, al terminar (la app queda en el Panel) abrir «Imágenes», escribir `validacion-4-1`, capturar, y limpiar con `--solo C1b` (§4) | Las dos capturas, sin datos privados (solo nombres de prueba; nada de la cámara). Opcional: el informe ya trae C2b comprobado por la pantalla y la API |
 
+Evidencia del cierre (2026-10-27, `dev`, sobre `7578938`): [7.13 tras el borrado](./evidencia/fe-4-1/c2c-lista-tras-borrar.png),
+tomada en el paso guiado 2 antes de pulsar Enter (solo `validacion-4-1-renombrado`, «1 video»). La captura de la
+Galería no se tomó: decisión del maestro, porque C2b ya comprobó por la pantalla y la API que la Galería con
+`validacion-4-1` mostraba 3 imágenes y ninguna de `validacion-4-1-b`.
+
 ## 4. Datos de prueba y limpieza
 
 - **Videos `validacion-4-1-a` y `validacion-4-1-b`** (`nombre`), creados por el script con la API de recolección
