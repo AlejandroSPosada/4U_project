@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.16.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Versión del documento | **0.16.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
 | Fecha | 2026-10-28 |
-| Estado | En construcción: hay código de BE-1.1 a BE-2.4, BE-3.1 y BE-3.3 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`; BE-3.3, alertas, fuera del núcleo, con `validate33.py` sobre `4885ad6`, §4.11), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. BE-4.1 (administración de videos e imágenes y purga, §4.12) está validado en `dev` con `validate41.py` sobre `c5f6517` (2026-10-27). BE-5.1 (`POST /v1/localize/frame`, corrección visual con una foto y la posición previa, §4.14) está construido en 0.16.0, probado en local sin base y **sin validar en `dev`** (`validate51.py`; no depende del dataset real). Lo de los demás lotes es diseño propuesto |
+| Estado | En construcción: hay código de BE-1.1 a BE-2.4, BE-3.1 y BE-3.3 (`project/`), todo validado en `dev` (BE-3.1 con `validate31.py` sobre `86fc024`; BE-2.3 con `validate23.py` sobre `012e0ae`; BE-3.3, alertas, fuera del núcleo, con `validate33.py` sobre `4885ad6`, §4.11), y de BE-3.2 (`POST /v1/localize` y `validate32.py`, §4.10), probado en local y **sin validar en `dev`**: espera el dataset real (FE-2.1), el conjunto de EMB-3.2 y la calibración de los umbrales. BE-4.1 (administración de videos e imágenes y purga, §4.12) está validado en `dev` con `validate41.py` sobre `c5f6517` (2026-10-27). BE-5.1 (`POST /v1/localize/frame`, corrección visual con una foto y la posición previa, §4.14) está validado en `dev` (`validate51.py` con código 0 sobre `92b9cee` el 2026-10-28; no depende del dataset real). Lo de los demás lotes es diseño propuesto |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 El backend es la **única puerta** de la app hacia los datos: autentica, guarda metadatos y vectores en PostgreSQL
@@ -1632,7 +1632,19 @@ la zona tiene dataset (`imagenes_en_radio`). Lo consume la guía por voz (vista 
 app toma una foto y, si la respuesta es confiable y coherente con los pasos, reemplaza su posición (`PRIORITY-2.md`
 §6, decisión 2). Decisiones en ADR-BE-21; parámetros propios `LOC_FRAME_RADIO_*` (§5.10).
 
-**Estado (0.16.0): construido, sin validar en `dev`.** Probado en local (WSL) **sin** base:
+**Estado (0.16.1): validado en `dev`.** `validate51.py --entorno dev` con código 0 sobre `92b9cee` (2026-10-28,
+15:20–15:21 UTC, informe `.validacion/BE-5.1-20261028-152156.json`, el maestro, tras el despliegue de `backend.yml`):
+P1–P5, C4 (5 errores `422` y 2 `400` con el campo o el índice esperados), C1 (fotos procesadas en 0,3 min; previa a 15 m:
+`ok` a 0,0 m de A, confianza 1,0 `alta`, `distancia_previa_m` 15,0, `imagenes_en_radio` 2, 420 ms), C2 (previa en B, a
+300 m: `ok` en B, nunca A), C3 (previa a 60 m: radio 30 → `sin_coincidencias`; radio 100 → `ok` en A a 60,0 m), C6
+(`latencia_ms` mediana 262 y máxima 420 en el servidor; 488 ms de mediana en el cliente, que no cuenta) y C5 (4 filas
+`origen = frame`, `fotos_usadas = 1`, en orden; ninguna de los errores). Las pruebas con base (`tests/base/
+test_frame_base.py`) corrieron en el CI del PR 12 (borrador, cerrado tras integrar por *ff-only*; «lint y pruebas» en
+verde). Ojo al desplegar: durante el despliegue, `GET /v1/health` ya daba el *commit* nuevo mientras una tarea vieja
+aún respondía `501` a `POST /v1/localize/frame` (dos despliegues en marcha); un minuto después, todas respondían `400`.
+Antes de validar, esperar a que `api` tenga un solo despliegue o repetir la comprobación del `501`.
+
+Probado en local (WSL) **sin** base:
 `tests/api/test_localizar_frame.py` (validación de la petición en el orden de §5.3, público, la respuesta y el evento
 de log con el servicio sustituido, y la traducción de los errores de embeddings), `tests/contrato/
 test_contrato_localizacion.py` (§5.3, §5.6 y §5.10 contra los esquemas, `Settings` y el OpenAPI) y

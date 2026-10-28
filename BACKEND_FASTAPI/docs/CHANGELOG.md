@@ -20,6 +20,19 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.16.1] — 2026-10-28
+
+- **Lote que la motivó:** BE-5.1 (cierre: `validate51.py --entorno dev` con código 0 sobre `92b9cee`, PLAN §3).
+- **Qué cambió:** encabezado y §4.14 (BE-5.1 validado en `dev`, con lo medido y la trampa del despliegue: `/v1/health`
+  con el *commit* nuevo mientras una tarea vieja aún responde `501` al frame); PLAN: fila BE-5.1 «Hecho» y «Alineado con
+  v0.16.1».
+- **Contratos tocados (§5):** ninguno (versión de parche).
+- **Cómo se verificó:** `validate51.py --entorno dev` con código 0 sobre `92b9cee` sin `-dirty` (2026-10-28,
+  15:20–15:21 UTC, informe `.validacion/BE-5.1-20261028-152156.json`; el maestro, tras el despliegue de `backend.yml`):
+  P1–P5, C4, C1, C2, C3, C6 (mediana 262 ms y máxima 420 ms en el servidor) y C5 en verde; limpieza del video
+  `validacion-51-` (la purga limpia S3) y `embedding` encendido como estaba (decisión del usuario: todo el día). Pruebas
+  con base en el CI del PR 12 («lint y pruebas» en verde).
+
 ## [0.16.0] — 2026-10-28
 
 - **Lote que la motivó:** BE-5.1 (Corrección visual, `POST /v1/localize/frame`), construcción; es el lote del backend
