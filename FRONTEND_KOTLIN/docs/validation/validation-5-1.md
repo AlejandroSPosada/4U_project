@@ -51,6 +51,11 @@ C1a, C2a, C3a y C4a corren en una sola ejecución de Gradle (las clases de las i
 |---|---|---|
 | C4c | Captura del mapa con la ruta verde y el aviso, en el paso guiado de C4b **antes** de pulsar Enter: `adb exec-out screencap -p > c4c-mapa-ruta.png`, en `validation/evidencia/fe-5-1/` | La captura, sin datos privados: muestra el campus y la posición de prueba, no la de la persona (el teléfono está en casa, pero el mapa está en el campus) |
 
+Evidencia del cierre (2026-10-28, `dev`, sobre `e34cc28`): [mapa con el aviso de la ruta](./evidencia/fe-5-1/c4c-mapa-ruta.png),
+tomada en el paso guiado de C4b antes de pulsar Enter. El aviso «Ruta a bloque 35: 29 m por el camino» / «Camina 14
+metros por el camino.» se lee; la línea verde no se distingue porque el mapa no encuadra la ruta (hallazgo en
+ARCHITECTURE §4.11).
+
 ## 4. Datos de prueba y limpieza
 
 - **Nada en el backend:** solo lee `GET /v1/places` (pública). No crea ni corrige lugares: si C3b falla (un lugar sin

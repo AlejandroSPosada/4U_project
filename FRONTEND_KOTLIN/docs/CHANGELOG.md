@@ -23,6 +23,22 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.17.1] — 2026-10-28
+- Lote que la motivó: FE-5.1 (cierre: `validate51.py --entorno dev` sobre `e34cc28`) y FE-3.6 (resultado parcial en
+  `dev`: `validate36.py --solo C1,C4` sobre `1c514b8`).
+- Qué cambió (solo documentos y la evidencia): encabezado; §4.11 con la ejecución en `dev` de FE-5.1 y el hallazgo del
+  mapa que no encuadra la ruta; §4.12 con el resultado parcial de FE-3.6 y dos trampas (`INSTALL_FAILED_USER_RESTRICTED`
+  de MIUI pese a los 4 intentos del envoltorio; Wi-Fi con portal cautivo: `ConnectException` aunque `ping` funcione);
+  `validation-5-1` §3 con la captura de C4c (`evidencia/fe-5-1/c4c-mapa-ruta.png`); PLAN: FE-5.1 «Hecho» y FE-3.6 con lo
+  que falta (C2b, C5a, C5).
+- Contratos tocados (§5): ninguno (parche).
+- Cómo se verificó: `validate51.py --entorno dev` con código 0 a la primera sobre `e34cc28` sin `-dirty` (2026-10-28,
+  16:06–16:08 UTC, informe `FE-5.1-20261028-160637.json`, Xiaomi): P1–P4, C1a, C1b, C2a, C3a, C4a, C3b (3 lugares, ≤ 4
+  m del grafo) y C4b, y la manual C4c. `validate36.py --entorno dev --solo C1,C4` con código 0 sobre `1c514b8` (tercera
+  ejecución, 16:03–16:04 UTC, informe `FE-3.6-20261028-160312.json`): C1a, C1b, C1c, C4a y C4b. Pasos guiados por `adb`
+  con una FIFO.
+- Pendiente: FE-3.6 C2b, C5a y C5; encuadrar la ruta en el mapa (sin lote).
+
 ## [0.17.0] — 2026-10-28
 
 - **Lote que la motivó:** FE-5.1, fase 2 (Grafo y rutas), rebasado sobre `main` en `1c514b8` (FE-3.6, 0.16.0). La fase 1
