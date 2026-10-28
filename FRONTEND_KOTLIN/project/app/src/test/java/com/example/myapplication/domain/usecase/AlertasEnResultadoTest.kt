@@ -55,13 +55,17 @@ class AlertasEnResultadoTest {
             alerta("lejos", 40.0, "No debería oírse"),
         )
         val cercanas = DetectarAlertasCercanas.cercanas(alertas, latPrueba, lngPrueba, 5.0, ahora)
-        val d = DescribirUbicacion.describir(ubicado(), 10.0, bloque35, Planificador(GrafosDePrueba.real()), cercanas)
+        val planificador = Planificador(GrafosDePrueba.real())
+        val d = DescribirUbicacion.describir(ubicado(), 10.0, bloque35, planificador, cercanas)
+        // La primera instrucción depende del grafo (FE-5.1); aquí importa el orden: ruta y después alertas.
+        // Brújula 10° + corrección −10° = norte.
+        val primera = planificador.rutaA(bloque35, latPrueba, lngPrueba, 0.0)!!.primera.texto
         assertEquals(listOf("Ten cuidado, hay un lago alrededor de la biblioteca.", "Hay bancas cerca."), d.alertas)
         // Las alertas no van en los detalles (tarjeta aparte) y se dicen al final, tras la ruta.
         assertTrue(d.detalles.none { it.contains("lago") })
         assertTrue(
             d.hablado.endsWith(
-                "Gira a tu izquierda y sigue recto 45 metros. ${DescribirUbicacion.LLEGARA_NAVEGACION} " +
+                "$primera ${DescribirUbicacion.LLEGARA_NAVEGACION} " +
                     "${DescribirUbicacion.ALERTAS_CERCANAS} Ten cuidado, hay un lago alrededor de la biblioteca. Hay bancas cerca.",
             ),
         )

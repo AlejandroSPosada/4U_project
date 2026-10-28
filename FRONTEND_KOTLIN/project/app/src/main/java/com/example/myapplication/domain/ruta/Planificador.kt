@@ -179,11 +179,30 @@ class Planificador(val grafo: Grafo, val parametros: ParametrosRuta = Parametros
     private fun metrosEntre(a: String, b: String): Double =
         grafo.adyacencia[a].orEmpty().filter { it.otro(a) == b }.minOfOrNull { it.metros } ?: 0.0
 
-    /** Quita los puntos a menos de [ParametrosRuta.puntoRepetidoM] del anterior (por sus metros), salvo el primero. */
+    /**
+     * Quita los puntos a menos de [ParametrosRuta.puntoRepetidoM] del último que quedó (por sus metros), salvo el primero.
+     * Los metros de un punto quitado no se pierden: pasan al siguiente que queda o, si era el final, al último; así la
+     * suma de los metros de las instrucciones es siempre la de [Camino.metros].
+     */
     private fun sinRepetidos(puntos: List<PuntoRuta>): List<PuntoRuta> {
         val r = mutableListOf<PuntoRuta>()
+        var pendiente = 0.0
         for (p in puntos) {
-            if (r.isEmpty() || p.metrosDesdeAnterior >= parametros.puntoRepetidoM) r += p
+            if (r.isEmpty()) {
+                r += p
+                continue
+            }
+            val m = pendiente + p.metrosDesdeAnterior
+            if (m >= parametros.puntoRepetidoM) {
+                r += p.copy(metrosDesdeAnterior = m)
+                pendiente = 0.0
+            } else {
+                pendiente = m
+            }
+        }
+        if (pendiente > 0.0 && r.size > 1) {
+            val ultimo = r.removeAt(r.lastIndex)
+            r += ultimo.copy(metrosDesdeAnterior = ultimo.metrosDesdeAnterior + pendiente)
         }
         return r
     }

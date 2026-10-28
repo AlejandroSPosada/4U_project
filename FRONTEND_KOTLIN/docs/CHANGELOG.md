@@ -23,6 +23,69 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.17.0] — 2026-10-28
+
+- **Lote que la motivó:** FE-5.1, fase 2 (Grafo y rutas), rebasado sobre `main` en `1c514b8` (FE-3.6, 0.16.0). La fase 1
+  (solo código, `5b42fe5`, rebasada sin choques) se escribió mientras FE-3.6 tenía los docs; esta entrada documenta las dos.
+- **Decisiones del usuario (2026-10-28):** (1) literal: «no creo que importen tanto los nombres dentro del grafo, sino el
+  camino en sí; cuando una persona quiera ir a X, coge las coordenadas del lugar X (propias de la app) y asígnale el lugar
+  más cercano dentro del grafo; ese será el objetivo» (reemplaza a la de corregir los nombres de `lugar`, aplicada en la
+  0.15.0); (2) un `grafo.json` mejor hecho (versión 209) que se copia tal cual. Del maestro: proyección de la meta sobre la
+  arista (no el nodo), aviso sin fallar de los lugares lejos del grafo en C3b y, en 6.3, decir el tramo final en línea
+  recta sin cambiar el orden de lo hablado de FE-3.6.
+- **Decisión del lote (ADR nueva):** ADR-FE-43 — la meta es la proyección de las coordenadas del destino sobre la arista
+  usable más cercana (nodo virtual de llegada); ADR-FE-39 (e) queda reemplazado.
+- **Qué cambió:**
+  - Datos: `assets/grafo.json` = el v209 del usuario, byte a byte (28 nodos, 33 aristas, 647,2 m, un componente; `lugar`
+    informativo, de nuevo «bloque 35» en minúscula).
+  - Código, fase 1: `CalculoRuta.masCorta(grafo, inicio, fin)` (de punto a punto; directo en la misma arista); `Camino`
+    con `fin` y sin `entrada`; `Instrucciones.generar(…, llegada)` y `Llegada` («Has llegado al punto del camino más
+    cercano a X. Está a N metros en línea recta, <dirección>.»), `direccionRelativa`; `Ruta` con `fin`, `metrosAlDestino`
+    y `destinoLejos` y sin `entrada`; `Planificador.calcular(lat, lng, destinoLat, destinoLng, nombre, rumbo)`, la
+    variante por texto que acepta `"lat,lng"` o un `lugar`, y `nodoConLugar` (sin `entradasDe`);
+    `EmparejarLugares.emparejar(grafo, lugares)` → `LugarEnGrafo` por coordenadas (sin `Emparejamiento` por nombre);
+    `LectorGrafo` y `Grafo`: `lugar` opcional en cualquier nodo; `GrafoDeLaApp.avisarEmparejamiento` registra los lugares
+    a más de 15 m del grafo; `TextosRutaMapa.DESTINO_DE_PRUEBA` y `nombrePrueba` con coordenadas; `MapaPublicoScreen`
+    pasa el destino de la sesión por sus coordenadas (una línea, con el OK del maestro).
+  - Código, fase 2: `DescribirUbicacion` (6.3) añade «Desde el camino, X queda a unos M metros en línea recta.» tras la
+    primera instrucción si el destino queda lejos (las alertas siguen al final); la línea `Ruta` dice «destino a N m del
+    camino»; `Planificador` junta los puntos repetidos sin perder sus metros (la suma de las instrucciones = la ruta).
+  - Pruebas JVM: las seis clases de FE-5.1 reescritas para la meta por coordenadas y el grafo v209 (`ProyeccionRutaTest`
+    10, `InstruccionesTest` 12, `PlanificadorTest` 8); `AlertasEnResultadoTest` (FE-3.6) ya no fija la primera instrucción
+    exacta (la toma del planificador; sigue comprobando el orden ruta → alertas). Total 398 (50 clases).
+  - Validadores: `validate51.py` — C1b sin exigir `lugar`; C3b nuevo (cada lugar de `GET /v1/places` tiene ruta;
+    distancia al grafo; aviso sin fallar a más de 15 m) con `proyectar`, `principal_usable` y `revisar_lugares`; posición
+    de prueba de C4b `6.201434,-75.578707` (sobre a0032) y textos «Ruta a bloque 35: 29 m por el camino» / «Camina 14
+    metros por el camino.»; `test_validate51.py` 25. `validate36.py`: solo el comentario de su posición de prueba (sigue
+    dentro del grafo v209). Total 329 + 1 omitida.
+  - Documento: encabezado; §2.2; §3.2 (líneas `Grafo` y `Ruta`); §4.1 (398); **§4.11 reescrita** (decisiones, el grafo
+    v209, piezas, flujo, trampas —meta en la arista, empates, tramos cortos del v209—, «Para FE-5.3» con `fin`,
+    `metrosAlDestino` y `destinoLejos`); §4.12 (orden de lo hablado con el tramo en línea recta); §5.5 (Resultado); §5.6
+    (`assets/grafo.json` v209 y `GrafoDeLaApp`); §5.7 («Grafo y rutas» reescrito; regla de `DescribirUbicacion`); §5.8
+    (`destino_prueba` con coordenadas y la posición nueva); §5.9 (el destino de la sesión por coordenadas); §5.11
+    (`validate51.py`, 329 casos, trampa de FE-5.1); §6.3; ADR-FE-39 (e) y ADR-FE-43 nueva.
+  - `validation-5-1`: C1a, C1b, C2a, C3a, C4a y C4b con el grafo v209; C3b nuevo; §5 con 329/398, salida esperada con
+    código 0 y casos previstos de C3b.
+  - `PLAN.md`: «Alineado con» v0.17.0; §2.2 FE-5.1 (alcance con la meta por coordenadas y el grafo v209; C1 sin
+    «entradas sin lugar»; C3 = cada lugar del backend tiene ruta y se avisa de los lejanos); §3 FE-5.1 (sin «C3b hoy
+    falla»).
+- **Contradicciones corregidas:** §4.11 y PLAN decían que C3b fallaba mientras `dev` no tuviera los seis lugares del
+  grafo, y que un destino que el grafo no nombraba no tenía ruta: con la meta por coordenadas, ya no. §5.7 decía que la
+  suma de los metros de las instrucciones era `Ruta.metros`; no lo era cuando se quitaba un punto a menos de 0,5 m
+  (hasta 0,5 m de diferencia): ahora sí. `validate51.py` mantenía un `normalizar` que ya no usaba.
+- **Contratos tocados (§5):** §5.7 **incompatible** (`Camino`, `CalculoRuta.masCorta`, `Ruta` sin `entrada`,
+  `Planificador` sin `entradasDe`, `EmparejarLugares.emparejar` y su resultado; nuevos `Llegada`, `LugarEnGrafo`,
+  `nodoConLugar`, `direccionRelativa`, `DESTINO_DE_PRUEBA`); §5.6 (`lugar` opcional; significado de
+  `avisarEmparejamiento`); §5.8 (`destino_prueba` acepta `"lat,lng"`). Por ser `0.x`, sube la menor.
+- **Cómo se verificó (2026-10-28, worktree de FE-5.1 rebasado sobre `1c514b8`, docs sin commit):** en Windows
+  `testDebugUnitTest assembleDebug --rerun-tasks` → `BUILD SUCCESSFUL`, 398 casos, 0 fallos (50 clases); en WSL `ruff
+  check` («All checks passed!»), `ruff format --check` («29 files already formatted») y `pytest` (329 passed, 1 skipped);
+  `validate51.py --entorno local` → código 0. `git diff --stat main` igual a `--stat --ignore-cr-at-eol`.
+- **Pendiente:** `validate51.py --entorno dev` (C3b y C4b en casa; lo coordina el maestro) y la captura C4c; confirmar los
+  criterios C1–C4; sin probar en el teléfono todo lo de §4.11; FE-5.3 (en curso en otro worktree, sobre `5b42fe5`): al
+  rebasar recibe lo de la fase 2 (el tramo en línea recta de 6.3, la línea `Ruta` y `sinRepetidos`, que puede subir hasta
+  0,5 m los metros de una instrucción).
+
 ## [0.16.0] — 2026-10-28
 
 - **Lote que la motivó:** FE-3.6 (Alertas públicas), sobre `main` en `56e685a` (0.15.0). Encargo del maestro del

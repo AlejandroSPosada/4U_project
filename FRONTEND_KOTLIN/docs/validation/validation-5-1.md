@@ -12,7 +12,10 @@ Contrato común de los validadores: `INFRASTRUCTURA_TERRAFORM/docs/ARCHITECTURE.
 `ARCHITECTURE.md` §4.11 (piezas en §5.6, «`assets/grafo.json` y `GrafoDeLaApp`»; §5.7, «Grafo y rutas»; §5.8, «Destino y
 posición de prueba del mapa»; §5.9, `AndroidBridge` y «Aviso de ruta del mapa»). Contrato que consume:
 `BACKEND_FASTAPI/docs/ARCHITECTURE.md` §5.3 (`GET /v1/places`, solo lectura). El validador no recalcula rutas en Python:
-compara el aviso del mapa con lo que fija `PlanificadorTest` en la JVM para la misma posición y el mismo destino.
+compara el aviso del mapa con lo que fija `PlanificadorTest` en la JVM para la misma posición y el mismo destino; en C3b
+solo proyecta cada lugar sobre el grafo (las reglas de `Proyeccion`) y mira si esa arista se alcanza. Desde la 0.17.0 la
+meta de una ruta es el punto del grafo más cercano a las coordenadas del destino (decisión del usuario del 2026-10-28,
+ADR-FE-43) y el grafo es la versión 209 del usuario.
 
 ## 1. Precondiciones
 
@@ -34,13 +37,13 @@ C1a, C2a, C3a y C4a corren en una sola ejecución de Gradle (las clases de las i
 
 | ID | Qué hace el script | Pasa si |
 |---|---|---|
-| C1a | `<VALIDACION_GRADLE> testDebugUnitTest --tests '*.LectorGrafoTest'` (junto con C2a, C3a y C4a) y lee su XML | 0 fallos, errores u omitidos y ≥ 6 casos (hoy 7): el grafo real de `assets/` es válido (26 nodos, 31 aristas, 8 entradas, un componente, versión 180) y los inválidos (JSON roto, formato distinto, ids repetidos, aristas a nodos inexistentes, componentes aislados, entradas sin lugar, nodos sin coordenadas) dan `Invalido` sin lanzar |
-| C1b | Estática sobre `app/src/main/assets/grafo.json` con las reglas de `LectorGrafo` (`revisar_grafo`): formato 1, `version` entera, ids únicos, aristas a nodos que existen y no a sí mismas, `metros` > 0, toda `entrada` con `lugar`, al menos una entrada y un solo componente | El archivo cumple todo; el detalle da versión, nodos, aristas (bloqueadas), entradas, lugares, metros totales |
-| C2a | Las clases `ProyeccionRutaTest` e `InstruccionesTest` | 0 fallos, errores u omitidos y ≥ 7 y ≥ 6 casos (hoy 9 y 8): proyección sobre la arista (no el nodo más cercano), Dijkstra a la entrada más cercana sin aristas bloqueadas, y los textos de las instrucciones por umbrales (C2) |
-| C3a | La clase `EmparejamientoTest` | 0 fallos, errores u omitidos y ≥ 3 casos (hoy 3): normalización, nombre o alias, exactos, y los lugares de `dev` de hoy |
-| C4a | Estática: `PruebaMapa.fijar(` solo en `MainActivity.kt`, una vez, dentro de `if (rutaPrueba == "mapa")`, y `rutaDePrueba` con `FLAG_DEBUGGABLE` (ADR-FE-38); `assets/app.js` con `window.onNativeRuta`, `window.onNativeInicio` y `bridgeCall('listo')`. Después las clases `PlanificadorTest` y `RutaEnMapaTest` | Lo estático se cumple y las clases tienen 0 fallos, errores u omitidos y ≥ 5 y ≥ 3 casos (hoy 7 y 3): la ruta de la validación en casa (59,7 m, «Camina 45 metros por el camino.»), la primera según el rumbo, dos entradas, alias, destino fuera del grafo, el JSON del mapa, la 6.3 con y sin ruta, y los avisos del mapa |
-| C3b | `GET <URL>/places` (pública, sin token) y empareja cada `lugar` del grafo con los lugares (nombre exacto o nombre/alias normalizado, como la app) | Todos los lugares del grafo casan (C3). El detalle separa los exactos de los normalizados. **El 2026-10-28 falla:** `dev` solo tiene «Bloque 35» |
-| C4b | Registra la limpieza `am force-stop`, instala el APK (`installDebug`, sin `pm clear`) y abre el mapa de prueba: `am force-stop` y `am start -W -n com.example.myapplication/.MainActivity --es ruta mapa --es destino_prueba bloque35 --es posicion_prueba 6.201434,-75.578427`. Espera hasta 30 s el aviso de Compose sobre el mapa (`uiautomator dump`). **Paso guiado:** tocar otro punto del mapa; Enter. Espera hasta 15 s un aviso distinto | El aviso dice «Ruta a Bloque 35: 60 m por el camino» y debajo «Camina 45 metros por el camino.» (los de `PlanificadorTest`); tras tocar, otro «Ruta a Bloque 35: N m por el camino» con su primera instrucción (C4: ruta, distancia por el camino, primera instrucción y recálculo) |
+| C1a | `<VALIDACION_GRADLE> testDebugUnitTest --tests '*.LectorGrafoTest'` (junto con C2a, C3a y C4a) y lee su XML | 0 fallos, errores u omitidos y ≥ 6 casos (hoy 7): el grafo real de `assets/` es válido (28 nodos, 33 aristas, 8 entradas, un componente, versión 209, 647,2 m) y los inválidos (JSON roto, formato distinto, ids repetidos, aristas a nodos inexistentes, componentes aislados, nodos sin coordenadas) dan `Invalido` sin lanzar; una entrada sin `lugar` no lo invalida |
+| C1b | Estática sobre `app/src/main/assets/grafo.json` con las reglas de `LectorGrafo` (`revisar_grafo`): formato 1, `version` entera, ids únicos, aristas a nodos que existen y no a sí mismas, `metros` > 0 y un solo componente (`lugar` no se exige) | El archivo cumple todo; el detalle da versión, nodos, aristas (bloqueadas), entradas, nombres de lugar (informativos) y metros totales |
+| C2a | Las clases `ProyeccionRutaTest` e `InstruccionesTest` | 0 fallos, errores u omitidos y ≥ 7 y ≥ 6 casos (hoy 10 y 12): proyección sobre la arista (no el nodo más cercano) de la persona y del destino, Dijkstra entre los dos (también directo en la misma arista) sin aristas bloqueadas, los textos de las instrucciones por umbrales y la llegada con el destino lejos del grafo (C2) |
+| C3a | La clase `EmparejamientoTest` | 0 fallos, errores u omitidos y ≥ 3 casos (hoy 3): normalización, cada lugar con su punto más cercano del grafo y si queda lejos, y «Bloque 35» de `dev` junto al grafo |
+| C4a | Estática: `PruebaMapa.fijar(` solo en `MainActivity.kt`, una vez, dentro de `if (rutaPrueba == "mapa")`, y `rutaDePrueba` con `FLAG_DEBUGGABLE` (ADR-FE-38); `assets/app.js` con `window.onNativeRuta`, `window.onNativeInicio` y `bridgeCall('listo')`. Después las clases `PlanificadorTest` y `RutaEnMapaTest` | Lo estático se cumple y las clases tienen 0 fallos, errores u omitidos y ≥ 5 y ≥ 3 casos (hoy 8 y 3): la ruta de la validación en casa (28,7 m, «Camina 14 metros por el camino.»), la meta por las coordenadas de «Bloque 35», la primera según el rumbo, un lugar lejos del grafo, el JSON del mapa, la 6.3 con y sin ruta (y con el tramo final en línea recta), y los avisos del mapa |
+| C3b | `GET <URL>/places` (pública, sin token) y, para cada lugar, el punto más cercano del grafo (`proyectar`) y si su arista está en el componente principal de las usables | Todos los lugares tienen ruta (C3). El detalle da la distancia de cada uno al grafo; los que quedan a más de 15 m salen como «aviso: …» (también por stderr) **sin** fallar. Falla un lugar sin coordenadas válidas o en una arista que no se alcanza. Sin lugares: pasa («nada que comprobar») |
+| C4b | Registra la limpieza `am force-stop`, instala el APK (`installDebug`, sin `pm clear`) y abre el mapa de prueba: `am force-stop` y `am start -W -n com.example.myapplication/.MainActivity --es ruta mapa --es destino_prueba bloque35 --es posicion_prueba 6.201434,-75.578707`. Espera hasta 30 s el aviso de Compose sobre el mapa (`uiautomator dump`). **Paso guiado:** tocar otro punto del mapa; Enter. Espera hasta 15 s un aviso distinto | El aviso dice «Ruta a bloque 35: 29 m por el camino» y debajo «Camina 14 metros por el camino.» (los de `PlanificadorTest`; «bloque 35» es el `lugar` del nodo n0007 en el grafo v209); tras tocar, otro «Ruta a bloque 35: N m por el camino» con su primera instrucción (C4: ruta, distancia por el camino, primera instrucción y recálculo) |
 
 ## 3. Comprobaciones manuales
 
@@ -50,8 +53,8 @@ C1a, C2a, C3a y C4a corren en una sola ejecución de Gradle (las clases de las i
 
 ## 4. Datos de prueba y limpieza
 
-- **Nada en el backend:** solo lee `GET /v1/places` (pública). No crea lugares: si C3b falla, crear los lugares que faltan
-  es una decisión del usuario (7.7), no del validador.
+- **Nada en el backend:** solo lee `GET /v1/places` (pública). No crea ni corrige lugares: si C3b falla (un lugar sin
+  coordenadas válidas o fuera del alcance del grafo), corregirlo es una decisión del usuario (7.7), no del validador.
 - **En el teléfono:** instala el APK de depuración de este commit (conserva los datos: recorridos sin subir, calibración,
   alertas) y abre la ruta de prueba `mapa` con el destino y la posición de prueba (ADR-FE-38). Nunca usa `pm clear` ni
   concede permisos (el mapa no los pide). Los datos de prueba del mapa (`PruebaMapa`) viven en memoria y se borran al
@@ -106,13 +109,13 @@ paso guiado, 1 min). **No necesita `embedding`** (sin hora límite). El informe 
    ```bash
    uv run --frozen ruff check . && uv run --frozen ruff format --check . && uv run --frozen pytest -q
    ```
-   Esperado: `All checks passed!`, `27 files already formatted` y `312 passed, 1 skipped` (la omitida es la
+   Esperado: `All checks passed!`, `29 files already formatted` y `329 passed, 1 skipped` (la omitida es la
    decodificación con Pillow de `jpeg_sintetico`, que no está en el grupo `ops`).
 3. Compilación y pruebas unitarias de la app:
    ```bash
    cmd.exe /c '.\gradlew.bat' --console=plain testDebugUnitTest assembleDebug
    ```
-   Esperado: `BUILD SUCCESSFUL` (374 casos, sin fallos). Si dice `Unable to delete directory '…\app\build\…'`, borrar
+   Esperado: `BUILD SUCCESSFUL` (398 casos, sin fallos). Si dice `Unable to delete directory '…\app\build\…'`, borrar
    `app/build` y repetir (ARCHITECTURE §4.1, «Trampas»).
 4. Copia de trabajo limpia (si no, el informe sale con `-dirty`):
    ```bash
@@ -132,15 +135,15 @@ paso guiado, 1 min). **No necesita `embedding`** (sin hora límite). El informe 
    $VALIDACION_ADB shell input keyevent 0
    ```
    Esperado: sin salida (una `SecurityException` con `INJECT_EVENTS` = falta la segunda).
-7. Que `dev` responde y qué lugares tiene (para saber de antemano si C3b pasará):
+7. Que `dev` responde y qué lugares tiene (C3b los revisa todos):
    ```bash
    curl -s "$(terraform -chdir=../../INFRASTRUCTURA_TERRAFORM/project/envs/dev output -raw api_base_url)/v1/places" | python3 -c 'import json,sys; print([i["nombre"] for i in json.load(sys.stdin)["items"]])'
    ```
-   Esperado: la lista de nombres. El 2026-10-28 era `['Bloque 35']`: con eso C3b falla (faltan seis lugares del grafo).
+   Esperado: la lista de nombres. El 2026-10-28 era `['Bloque 35']` (a menos de 1 m del grafo: C3b pasa).
 
 **Ejecución.** En una terminal interactiva (o con una FIFO), con el teléfono a mano. El validador instala la app, abre
 el mapa de prueba, comprueba el aviso y se detiene en el **paso guiado** (líneas `· PASO GUIADO — …` por stderr). Cuando
-se detiene, el teléfono muestra el mapa en el campus con la ruta verde hasta Bloque 35 y arriba el aviso:
+se detiene, el teléfono muestra el mapa en el campus con la ruta verde hasta bloque 35 (n0007) y arriba el aviso:
 
 1. **Paso guiado (C4b):** tomar la captura de C4c (`$VALIDACION_ADB exec-out screencap -p > c4c-mapa-ruta.png`). Tocar
    **otro punto del mapa**, a uno o dos dedos del punto azul, **sin** pulsar ▶; esperar a que el aviso de arriba cambie de
@@ -154,8 +157,7 @@ Por `adb` (FIFO): el aviso son dos `TextView` de Compose arriba de la pantalla; 
 uv run --group ops python src/ops/validate51.py --entorno dev
 ```
 
-Esperado **hoy** (código 1 por C3b, mientras `dev` tenga solo «Bloque 35»; por stderr salen además líneas `· …` de
-progreso —paso guiado, limpieza— y la ruta del informe):
+Esperado (código 0; por stderr salen además líneas `· …` de progreso —paso guiado, limpieza— y la ruta del informe):
 
 ```
 [PASA] P1 Gradle 8.7, JVM 21.0.11 (…)
@@ -163,23 +165,22 @@ progreso —paso guiado, limpieza— y la ruta del informe):
 [PASA] P3 ApiConfig = terraform output api_base_url; GET /v1/health -> 200
 [PASA] P4 FE-3.1 y BE-3.1 Hecho
 [PASA] C1a LectorGrafoTest 7/7 (mínimos 6)
-[PASA] C1b assets/grafo.json v180: 26 nodos, 31 aristas (0 bloqueadas), 8 entradas con lugar (7 lugares), 650 m, un solo componente
-[PASA] C2a ProyeccionRutaTest 9/9, InstruccionesTest 8/8 (mínimos 7, 6)
+[PASA] C1b assets/grafo.json v209: 28 nodos, 33 aristas (0 bloqueadas), 8 entradas, 7 nombres de lugar (informativos), 647 m, un solo componente
+[PASA] C2a ProyeccionRutaTest 10/10, InstruccionesTest 12/12 (mínimos 7, 6)
 [PASA] C3a EmparejamientoTest 3/3 (mínimos 3)
-[PASA] C4a PruebaMapa solo en MainActivity (APK depurable, ruta mapa); app.js con onNativeRuta, onNativeInicio y listo; PlanificadorTest 7/7, RutaEnMapaTest 3/3 (mínimos 5, 3)
-[FALLA] C3b 6 de 7 lugares del grafo no existen en GET /v1/places: bloque 33, biblioteca, bloque 38, cocnverso, bloque 34, cafeteria (GET /v1/places -> 1 lugares; exactos: Bloque 35)
-[PASA] C4b con bloque35 y 6.201434,-75.578427: «Ruta a Bloque 35: 60 m por el camino» / «Camina 45 metros por el camino.»; tras tocar otro punto: «Ruta a Bloque 35: N m por el camino» / «…»
+[PASA] C4a PruebaMapa solo en MainActivity (APK depurable, ruta mapa); app.js con onNativeRuta, onNativeInicio y listo; PlanificadorTest 8/8, RutaEnMapaTest 3/3 (mínimos 5, 3)
+[PASA] C3b los 1 lugares tienen ruta (GET /v1/places -> 1 lugares; a ≤ 15 m del grafo: Bloque 35 a 0 m del grafo (a0007))
+[PASA] C4b con bloque35 y 6.201434,-75.578707: «Ruta a bloque 35: 29 m por el camino» / «Camina 14 metros por el camino.»; tras tocar otro punto: «Ruta a bloque 35: N m por el camino» / «…»
 [MANUAL] C4c Captura del mapa con la ruta y el aviso, …
-Resultado: falla (código 1)
+Resultado: pasa (código 0)
 ```
 
-Con los seis lugares creados en `dev` (con esos nombres o con un alias que case, ARCHITECTURE §5.7), C3b pasa con «los 7
-lugares del grafo existen en el backend (…)» y el resultado es `pasa (código 0)`. Para repetir solo C4b (sin API):
-`--solo C4b` (P3 y P4 quedan «no evaluada»); para repetir solo C3b tras crear los lugares: `--solo C3b` (P2 «no
-evaluada», sin teléfono).
+(Con más lugares en `dev`, C3b los lista todos con su distancia; los que queden a más de 15 m van en «aviso: …» y no
+cambian el código.) Para repetir solo C4b (sin API): `--solo C4b` (P3 y P4 quedan «no evaluada»); para repetir solo C3b:
+`--solo C3b` (P2 «no evaluada», sin teléfono).
 
 Casos previstos:
-- `[FALLA] C4b el mapa muestra «Destino: Bloque 35. Toca el mapa para fijar tu posición y ver la ruta.» en vez de la ruta
+- `[FALLA] C4b el mapa muestra «Destino: bloque 35. Toca el mapa para fijar tu posición y ver la ruta.» en vez de la ruta
   (¿sin internet para Leaflet? ¿grafo inválido?)` → la página no llegó a `listo()`: sin internet (Leaflet viene de
   `unpkg.com`) o la página falló al arrancar. Revisar la red del teléfono (paso 5) y `adb exec-out run-as
   com.example.myapplication tail -n 30 files/logs/app.log` (líneas `MapaPublico` con errores de JS y `Grafo`).
@@ -187,12 +188,16 @@ Casos previstos:
   `LectorGrafo` en el teléfono (la línea `Grafo` de `app.log` dice por qué); C1b debería haber fallado antes.
 - `[FALLA] C4b en 30 s no apareció el aviso «Ruta a …» en el mapa; en pantalla: …` → no se abrió el mapa (otra pantalla,
   teléfono bloqueado: paso 5) o el APK instalado no es el de este commit.
-- `[FALLA] C4b el aviso dice «…» / «…»; se esperaba «Ruta a Bloque 35: 60 m por el camino» / «Camina 45 metros por el
-  camino.»` → el grafo o el cálculo cambiaron sin actualizar `PlanificadorTest` y las constantes del validador.
+- `[FALLA] C4b el aviso dice «…» / «…»; se esperaba «Ruta a bloque 35: 29 m por el camino» / «Camina 14 metros por el
+  camino.»` → el grafo o el cálculo cambiaron sin actualizar `PlanificadorTest` y las constantes del validador (o el APK
+  instalado es de antes de la 0.17.0).
 - `[FALLA] C4b en 15 s no apareció un aviso de ruta distinto tras tocar el mapa …` → el toque no llegó al mapa (se tocó el
   aviso o el mismo punto) o la ruta no se recalcula: repetir con `--solo C4b` tocando más lejos.
-- `[FALLA] C3b N de 7 lugares del grafo no existen en GET /v1/places: …` → faltan lugares en `dev` (hoy, seis): decisión
-  del usuario (crearlos en 7.7 o corregir el grafo); no es un fallo de la app.
+- `[FALLA] C3b N de M lugares sin ruta: X (sin coordenadas válidas) …` o `… (la arista aNNNN no se alcanza (aristas
+  bloqueadas))` → un lugar de `dev` sin coordenadas o un grafo con piezas sueltas por aristas bloqueadas: corregir el
+  lugar en 7.7 o el grafo; no es un fallo de la app.
+- `[PASA] C3b … aviso: N a más de 15 m del grafo …: X a 40 m del grafo (aNNNN)` → pasa: la ruta llega al punto del camino
+  más cercano y dice el tramo final en línea recta. Si el lugar no debería estar tan lejos, revisar sus coordenadas.
 - `[ERROR] C4b el paso guiado necesita una terminal: la entrada estándar está cerrada (EOF)` (código 3) → correr el
   validador en una terminal interactiva (o con una FIFO). La limpieza corre igual.
 - `[ERROR] C4b installDebug: INSTALL_FAILED_USER_RESTRICTED …` (código 3) → paso 6.
@@ -200,8 +205,8 @@ Casos previstos:
 
 En `local` (sin teléfono ni API): `uv run --group ops python src/ops/validate51.py --entorno local` da código 0 con
 `[PASA]` en P1, C1a, C1b, C2a, C3a y C4a, `[OMITIDA]` en C3b («solo en dev (GET /v1/places)») y C4b («solo en dev
-(teléfono en casa)») y la manual C4c (comprobado el 2026-10-28 en el worktree de FE-5.1, sobre `bef5853` con los cambios
-sin commit: C1a 7/7, C2a 9/9 y 8/8, C3a 3/3, C4a 7/7 y 3/3).
+(teléfono en casa)») y la manual C4c (comprobado el 2026-10-28 en el worktree de FE-5.1 rebasado sobre `1c514b8`, con los
+docs sin commit: C1a 7/7, C2a 10/10 y 12/12, C3a 3/3, C4a 8/8 y 3/3).
 
 Con el validador en `dev` con código 0 sobre un commit de `main` sin `-dirty`, la fila FE-5.1 de PLAN §3 pasa a «Hecho» y
 se quitan de ARCHITECTURE §4.11, §5.9 y §5.11 los «sin comprobar» que la ejecución confirme.

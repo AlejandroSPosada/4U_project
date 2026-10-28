@@ -133,4 +133,26 @@ class PlanificadorTest {
         val conPlan = DescribirUbicacion.describir(ubicadoEn(latPrueba, lngPrueba), 10.0, otro, planificador)
         assertTrue(conPlan.detalles.first(), conPlan.detalles.first().endsWith(" por el camino."))
     }
+
+    @Test
+    fun laVista63ConElDestinoLejosDiceElTramoEnLineaRecta() {
+        // ~40 m al oeste de n0002: la meta cae sobre a0042, 0,3 m al norte de n0002 (14,7 m por el camino), y faltan
+        // ~40 m en línea recta; las alertas (FE-3.6) van después.
+        val lejos = LugarDestino("x", "Auditorio", CategoriaLugar.AUDITORIO, 6.2014317, -75.5791977)
+        val d = DescribirUbicacion.describir(ubicadoEn(latPrueba, lngPrueba), 10.0, lejos, planificador)
+        assertEquals(
+            listOf(
+                "Tu destino, Auditorio, está a unos 15 metros por el camino.",
+                "Gira a tu izquierda y sigue recto 15 metros.",
+                "Desde el camino, Auditorio queda a unos 40 metros en línea recta.",
+                DescribirUbicacion.LLEGARA_NAVEGACION,
+            ),
+            d.detalles,
+        )
+        assertTrue(d.hablado.endsWith("Desde el camino, Auditorio queda a unos 40 metros en línea recta. " +
+            DescribirUbicacion.LLEGARA_NAVEGACION))
+        // Cerca del grafo (Bloque 35), sin esa frase.
+        val cerca = DescribirUbicacion.describir(ubicadoEn(latPrueba, lngPrueba), 10.0, bloque35, planificador)
+        assertTrue(cerca.detalles.none { it.startsWith("Desde el camino") })
+    }
 }

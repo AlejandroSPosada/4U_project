@@ -39,8 +39,9 @@ MENSAJE_C1 = "validacion-3-6-c1"  # normal: se crea y se borra (C1b, C1c)
 MENSAJE_C2 = "validacion-3-6-c2"  # alta: se queda hasta la limpieza (C2b, C4b, C5a)
 MENSAJES_PRUEBA = (MENSAJE_C1, MENSAJE_C2)  # lo único que se borra (mensaje normalizado exacto)
 RADIO_PRUEBA = 15
-# La ubicación de prueba (`--es ubicacion_prueba`, ADR-FE-42) es la posición de prueba de FE-5.1 (dentro del grafo);
-# las alertas van ~6 m al norte: con radio 15 m y la incertidumbre de 5 m de PruebaUbicacion, alcanzan de sobra.
+# La ubicación de prueba (`--es ubicacion_prueba`, ADR-FE-42) es la que usaba FE-5.1 con el grafo v180; con el v209
+# sigue dentro del grafo (sobre la arista a0044). Las alertas van ~6 m al norte: con radio 15 m y la incertidumbre de
+# 5 m de PruebaUbicacion, alcanzan de sobra.
 POSICION_PRUEBA = (6.201434, -75.578427)
 POSICION_ALERTAS = (6.201484, -75.578427)
 

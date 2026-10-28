@@ -106,7 +106,8 @@ class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
             else -> when (val r = planificador.calcular(p.lat, p.lng, d, null)) {
                 is ResultadoRuta.Encontrada ->
                     "ruta por el camino: ${Math.round(r.ruta.metros)} m, ${r.ruta.instrucciones.size} instrucciones" +
-                        if (r.ruta.fueraDelCamino) ", fuera del camino" else ""
+                        (if (r.ruta.fueraDelCamino) ", fuera del camino" else "") +
+                        if (r.ruta.destinoLejos) ", destino a ${Math.round(r.ruta.metrosAlDestino)} m del camino" else ""
                 ResultadoRuta.DestinoFueraDelGrafo -> "sin ruta (destino fuera del grafo)"
                 ResultadoRuta.SinCamino -> "sin ruta (sin camino)"
             }

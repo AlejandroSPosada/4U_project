@@ -192,6 +192,10 @@ object DescribirUbicacion {
             // FE-5.1: distancia por el camino y primera instrucción (respecto al rumbo corregido).
             detalles += "Tu destino, ${destino.nombre}, está ${metros(ruta.metros)} por el camino."
             detalles += ruta.primera.texto
+            // FE-5.1: si el lugar queda lejos del grafo (más de fueraDelCaminoM), el tramo final en línea recta.
+            if (ruta.destinoLejos) {
+                detalles += "Desde el camino, ${destino.nombre} queda ${metros(ruta.metrosAlDestino)} en línea recta."
+            }
             detalles += LLEGARA_NAVEGACION
         } else if (destino != null) {
             val d = CalibracionPaso.distanciaEntre(p.lat, p.lng, destino.lat, destino.lng)
