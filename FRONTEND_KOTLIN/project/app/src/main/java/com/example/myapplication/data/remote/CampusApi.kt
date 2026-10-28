@@ -169,4 +169,15 @@ interface CampusApi {
         @Part fotos: List<MultipartBody.Part>,
         @Part("metadatos") metadatos: RequestBody,
     ): Response<LocalizacionRespuestaDto>
+
+    /**
+     * `POST /v1/localize/frame` (backend §5.3, BE-5.1; FE-5.3). Ruta pública. `multipart/form-data`: **una** parte [foto]
+     * (`foto`, `image/jpeg`) y la parte [metadatos] (JSON). Las arma `RemoteFrameRepository`.
+     */
+    @Multipart
+    @POST("localize/frame")
+    suspend fun localizarFrame(
+        @Part foto: MultipartBody.Part,
+        @Part("metadatos") metadatos: RequestBody,
+    ): Response<FrameRespuestaDto>
 }

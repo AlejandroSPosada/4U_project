@@ -116,12 +116,12 @@ class PlanificadorTest {
             listOf(
                 "Tu destino, Bloque 35, está a unos 31 metros por el camino.",
                 "Gira a tu izquierda y sigue recto 14 metros.",
-                DescribirUbicacion.LLEGARA_NAVEGACION,
+                DescribirUbicacion.GUIA_DISPONIBLE,
             ),
             d.detalles,
         )
         assertTrue(d.hablado.endsWith("Confianza alta. Tu destino, Bloque 35, está a unos 31 metros por el camino. " +
-            "Gira a tu izquierda y sigue recto 14 metros. ${DescribirUbicacion.LLEGARA_NAVEGACION}"))
+            "Gira a tu izquierda y sigue recto 14 metros. ${DescribirUbicacion.GUIA_DISPONIBLE}"))
     }
 
     @Test
@@ -145,12 +145,12 @@ class PlanificadorTest {
                 "Tu destino, Auditorio, está a unos 15 metros por el camino.",
                 "Gira a tu izquierda y sigue recto 15 metros.",
                 "Desde el camino, Auditorio queda a unos 40 metros en línea recta.",
-                DescribirUbicacion.LLEGARA_NAVEGACION,
+                DescribirUbicacion.GUIA_DISPONIBLE,
             ),
             d.detalles,
         )
         assertTrue(d.hablado.endsWith("Desde el camino, Auditorio queda a unos 40 metros en línea recta. " +
-            DescribirUbicacion.LLEGARA_NAVEGACION))
+            DescribirUbicacion.GUIA_DISPONIBLE))
         // Cerca del grafo (Bloque 35), sin esa frase.
         val cerca = DescribirUbicacion.describir(ubicadoEn(latPrueba, lngPrueba), 10.0, bloque35, planificador)
         assertTrue(cerca.detalles.none { it.startsWith("Desde el camino") })

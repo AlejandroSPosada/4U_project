@@ -65,7 +65,7 @@ class AlertasEnResultadoTest {
         assertTrue(d.detalles.none { it.contains("lago") })
         assertTrue(
             d.hablado.endsWith(
-                "$primera ${DescribirUbicacion.LLEGARA_NAVEGACION} " +
+                "$primera ${DescribirUbicacion.GUIA_DISPONIBLE} " +
                     "${DescribirUbicacion.ALERTAS_CERCANAS} Ten cuidado, hay un lago alrededor de la biblioteca. Hay bancas cerca.",
             ),
         )

@@ -65,6 +65,7 @@ fun ResultadoUbicacionScreen(
     onIrALugar: () -> Unit,
     onInicio: () -> Unit,
     onVerMapa: () -> Unit = {},
+    onGuiarme: () -> Unit = {},
     viewModel: ResultadoUbicacionViewModel = viewModel(),
 ) {
     val ctx = LocalContext.current
@@ -80,6 +81,10 @@ fun ResultadoUbicacionScreen(
     )
 
     LaunchedEffect(Unit) { viewModel.alAbrir() }
+    // FE-5.3: «guíame» por voz.
+    LaunchedEffect(Unit) {
+        viewModel.pedirGuia.collect { viewModel.alPausar(); onGuiarme() }
+    }
 
     // Al dejar de verse la pantalla, calla.
     DisposableEffect(lifecycleOwner) {
@@ -97,6 +102,7 @@ fun ResultadoUbicacionScreen(
             onIrALugar = { viewModel.alPausar(); onIrALugar() },
             onInicio = { viewModel.alPausar(); onInicio() },
             onVerMapa = { viewModel.alPausar(); onVerMapa() },
+            onGuiarme = { viewModel.alPausar(); onGuiarme() },
         )
     }
     ResultadoUbicacionContent(estado = estado, acciones = acciones)
@@ -184,6 +190,8 @@ internal fun ResultadoUbicacionContent(
 
         Spacer(Modifier.height(4.dp))
         val irALugar = if (estado.hayPosicion) "Ir a un lugar desde aquí" else "Ir a un lugar"
+        // FE-5.3: con ruta por el grafo, la guía va primero.
+        if (estado.hayRuta) BotonPrincipal("Guiarme", acciones.onGuiarme)
         // Con confianza baja, sin coincidencias o sin ubicación, «Volver a ubicarme» va primero y relleno.
         if (d.sugerirRepetir) {
             BotonPrincipal("Volver a ubicarme", acciones.onVolverAUbicarme)

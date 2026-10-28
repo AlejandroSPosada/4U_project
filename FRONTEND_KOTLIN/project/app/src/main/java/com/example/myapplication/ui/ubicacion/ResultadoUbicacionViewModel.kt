@@ -20,7 +20,11 @@ import com.example.myapplication.logs.AppLog
 import com.example.myapplication.sensors.Declinacion
 import com.example.myapplication.ui.inicio.VoiceController
 import com.example.myapplication.ui.ubicacion.EscaneoConfig.INCLINACION_MAX
+import com.example.myapplication.domain.guia.ComandoGuia
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -45,8 +49,10 @@ private const val TAG = "ResultadoVM"
  * calculan una vez, al abrir (la posición de 6.3 no se mueve); hasta leer la caché del disco no se habla. Una línea
  * `AlertasPublicas` por alerta («Alerta anunciada (resultado): <id> …»).
  *
- * Qué NO hace: no navega (las acciones van a `AppNav`), no escucha comandos de voz (FE-3.5, decisión del usuario del
- * 2026-10-26) y no muestra mapa.
+ * FE-5.3: con ruta por el grafo, ofrece «Guiarme» ([hayRuta]) y, tras decir el resultado, escucha una sola vez por si la
+ * persona dice «guíame» (`ComandoGuia`; [pedirGuia]). Es el único comando de voz de 6.3 (los demás son de FE-3.5).
+ *
+ * Qué NO hace: no navega (las acciones van a `AppNav`) y no muestra mapa.
  */
 class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -61,6 +67,18 @@ class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
     private var rumboVivo: Double? = null     // rumbo verdadero de la brújula (sin corregir), o null sin lectura
     private var ultimaActualizacion = 0L      // para no recalcular los textos a 50 Hz
     private var abierto = false
+    private var token = 0                     // FE-5.3: invalida la escucha de «guíame» al pausar o repetir
+
+    // FE-5.3: con ruta por el grafo, «Guiarme» abre la 6.5 (también por voz: «guíame» tras decir el resultado).
+    private val hayRuta: Boolean = run {
+        val p = ubicacion?.ubicado?.posicion
+        val d = destino
+        p != null && d != null && planificador?.rutaA(d, p.lat, p.lng, null) != null
+    }
+    private val _pedirGuia = Channel<Unit>(Channel.CONFLATED)
+
+    /** FE-5.3: la persona dijo «guíame» (la pantalla navega a la 6.5). */
+    val pedirGuia: Flow<Unit> = _pedirGuia.receiveAsFlow()
 
     // FE-3.6: alertas cercanas a la posición estimada (null = todavía leyendo la caché).
     private var alertas: List<AlertaCercana>? = if (ubicacion?.ubicado == null) emptyList() else null
@@ -137,16 +155,27 @@ class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** `ON_STOP` de la pantalla o antes de navegar: calla la voz (y no habla si la caché llega después). */
+    /** `ON_STOP` de la pantalla o antes de navegar: calla la voz (no habla si la caché llega después y deja de escuchar
+     * «guíame»). */
     fun alPausar() {
         hablarAlCargar = false
+        token++
         voz.stopAll()
     }
 
     private fun hablar() {
         val e = calcular()
         _estado.value = e
-        voz.speak(e.descripcion.hablado)
+        val t = ++token
+        voz.speak(e.descripcion.hablado) { if (t == token && hayRuta) escucharGuia(t) }
+    }
+
+    /** FE-5.3: una sola escucha tras decir el resultado; «guíame» (ComandoGuia) pide la guía. */
+    private fun escucharGuia(t: Int) {
+        voz.listen(
+            onResult = { texto -> if (t == token && ComandoGuia.esGuiar(texto)) _pedirGuia.trySend(Unit) },
+            onFail = {},
+        )
     }
 
     private fun calcular(): ResultadoUiState {
@@ -155,6 +184,7 @@ class ResultadoUbicacionViewModel(app: Application) : AndroidViewModel(app) {
             descripcion = DescribirUbicacion.describir(ubicacion, rumbo, destino, planificador, alertas.orEmpty()),
             hayPosicion = ubicacion?.ubicado != null,
             mapaDisponible = mapaDisponible,
+            hayRuta = hayRuta,
         )
     }
 

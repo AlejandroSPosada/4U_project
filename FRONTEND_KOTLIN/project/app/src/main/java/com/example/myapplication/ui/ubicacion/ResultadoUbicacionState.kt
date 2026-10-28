@@ -15,6 +15,8 @@ data class ResultadoUiState(
     val descripcion: DescripcionUbicacion,
     val hayPosicion: Boolean,
     val mapaDisponible: Boolean = false,
+    // FE-5.3: hay ruta por el grafo hasta el destino: se muestra «Guiarme» (vista 6.5).
+    val hayRuta: Boolean = false,
 )
 
 /**
@@ -28,4 +30,5 @@ data class ResultadoAcciones(
     val onIrALugar: () -> Unit = {},
     val onInicio: () -> Unit = {},
     val onVerMapa: () -> Unit = {},
+    val onGuiarme: () -> Unit = {},
 )

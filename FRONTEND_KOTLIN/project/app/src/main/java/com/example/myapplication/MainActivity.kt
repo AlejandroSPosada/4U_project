@@ -42,6 +42,9 @@ import com.example.myapplication.ui.admin.videos.VideoDetalleScreen
 import com.example.myapplication.ui.admin.videos.VideosScreen
 import com.example.myapplication.map.MapaPublicoScreen
 import com.example.myapplication.map.PruebaMapa
+import com.example.myapplication.domain.guia.PruebaGuia
+import com.example.myapplication.ui.navegacion.LlegadaScreen
+import com.example.myapplication.ui.navegacion.NavegacionScreen
 import com.example.myapplication.ui.admin.recoleccion.UbicacionManualScreen
 import com.example.myapplication.ui.admin.recoleccion.RecoleccionScreen
 import com.example.myapplication.ui.admin.recoleccion.ResumenVideoScreen
@@ -72,6 +75,15 @@ class MainActivity : ComponentActivity() {
                 SesionDeNavegacion.registrar(it, rumboAlTerminar = null)
             }
         }
+        // FE-5.3: con la ruta de prueba `navegacion` (6.5), el mismo destino y posición de prueba y, opcional, el modo de
+        // simulación (`--es simular_pasos 0.7,500`: un paso de 0,7 m cada 500 ms, sin sensores). Solo aquí.
+        if (rutaPrueba == "navegacion") {
+            PruebaGuia.fijar(
+                intent?.getStringExtra(EXTRA_DESTINO_PRUEBA),
+                intent?.getStringExtra(EXTRA_POSICION_PRUEBA),
+                intent?.getStringExtra(EXTRA_SIMULAR_PASOS),
+            )
+        }
         setContent {
             MaterialTheme {
                 AppNav(rutaInicial = rutaPrueba)
@@ -89,7 +101,7 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_RUTA = "ruta"
 
         /** Rutas que se pueden abrir así; cualquier otra se ignora (navegar a una no registrada cierra la app). */
-        val RUTAS_DE_PRUEBA = setOf("mapa", "resultado")
+        val RUTAS_DE_PRUEBA = setOf("mapa", "resultado", "navegacion")
 
         /** FE-5.1: destino de prueba del mapa (el `lugar` de una entrada del grafo; se compara normalizado). */
         const val EXTRA_DESTINO_PRUEBA = "destino_prueba"
@@ -99,6 +111,9 @@ class MainActivity : ComponentActivity() {
 
         /** FE-3.6: ubicación de prueba de «Ubicarme» (rutas `resultado` y `mapa`), `"<lat>,<lng>"` con punto decimal. */
         const val EXTRA_UBICACION_PRUEBA = "ubicacion_prueba"
+
+        /** FE-5.3: modo de simulación de la guía, `"<paso m>,<intervalo ms>"` (o `si` = 0,7 m cada 500 ms). */
+        const val EXTRA_SIMULAR_PASOS = "simular_pasos"
     }
 }
 
@@ -217,6 +232,37 @@ fun AppNav(rutaInicial: String? = null) {
                 // FE-3.6: «Caminar con el mapa» (solo con ubicación vigente): el mapa empieza en esta posición y la 6.3
                 // sale de la pila (Atrás desde el mapa vuelve a Inicio).
                 onVerMapa = { nav.navigate("mapa") { popUpTo("resultado") { inclusive = true } } },
+                // FE-5.3: «Guiarme» (o «guíame») → 6.5, encima de la 6.3 (Terminar vuelve a ella).
+                onGuiarme = { nav.navigate("navegacion") { launchSingleTop = true } },
+            )
+        }
+
+        // 6.5 Navegación guiada (FE-5.3). Pide la cámara (fotos de corrección); sin ella guía solo con los pasos.
+        composable("navegacion") {
+            var permisoPedido by rememberSaveable { mutableStateOf(false) }
+            var camaraOk by rememberSaveable { mutableStateOf(false) }
+            if (!permisoPedido) {
+                PedirPermisos(
+                    permisos = arrayOf(Permisos.CAMARA),
+                    onResultado = { concedido ->
+                        camaraOk = concedido
+                        permisoPedido = true
+                    },
+                )
+            } else {
+                NavegacionScreen(
+                    camaraOk = camaraOk,
+                    onTerminar = { nav.popBackStack() },
+                    onLlegada = { nav.navigate("llegada") { popUpTo("navegacion") { inclusive = true } } },
+                )
+            }
+        }
+
+        // 6.6 Llegada (FE-5.3). El texto lo deja la guía en LlegadaGuia.
+        composable("llegada") {
+            LlegadaScreen(
+                onIrAOtroLugar = { nav.navigate("destino") { popUpTo("llegada") { inclusive = true } } },
+                onInicio = { nav.popBackStack("inicio", inclusive = false) },
             )
         }
 

@@ -58,6 +58,10 @@ data class DescripcionUbicacion(
 object DescribirUbicacion {
 
     const val LLEGARA_NAVEGACION = "La navegación guiada llegará en una próxima versión."
+
+    /** FE-5.3: con ruta por el grafo, la 6.3 ofrece la guía (botón «Guiarme» y comando de voz). */
+    const val GUIA_DISPONIBLE = "Toca «Guiarme» o di «guíame» para que te lleve."
+
     const val SIN_UBICACION = "No tengo una ubicación reciente"
     const val SIN_COINCIDENCIAS = "No reconocí este lugar"
     const val NINGUN_LUGAR_JUNTO = "No estás junto a ningún lugar conocido"
@@ -196,7 +200,7 @@ object DescribirUbicacion {
             if (ruta.destinoLejos) {
                 detalles += "Desde el camino, ${destino.nombre} queda ${metros(ruta.metrosAlDestino)} en línea recta."
             }
-            detalles += LLEGARA_NAVEGACION
+            detalles += GUIA_DISPONIBLE
         } else if (destino != null) {
             val d = CalibracionPaso.distanciaEntre(p.lat, p.lng, destino.lat, destino.lng)
             val donde = rumbo?.let {
