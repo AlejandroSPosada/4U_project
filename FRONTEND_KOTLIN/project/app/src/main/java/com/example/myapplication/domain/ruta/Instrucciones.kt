@@ -8,7 +8,8 @@ import kotlin.math.roundToInt
  * (ARCHITECTURE §5.7, «Grafo y rutas», tabla de parámetros).
  *
  * - [fueraDelCaminoM]: si la persona está a más de esto de la arista más cercana, la primera instrucción la lleva al
- *   camino (tramo propio); si está más cerca, la ruta empieza en el punto proyectado.
+ *   camino (tramo propio); si está más cerca, la ruta empieza en el punto proyectado. Del lado del destino: si el lugar
+ *   queda a más de esto del grafo, la llegada dice cuánto falta en línea recta y hacia dónde.
  * - Ángulo entre un tramo y el siguiente (en valor absoluto): < [rectoMaxGrados] es «casi recto» (se junta con el
  *   anterior); < [leveMaxGrados], giro leve; < [normalMaxGrados], giro normal; < [vueltaMinGrados], giro cerrado; desde
  *   [vueltaMinGrados], «date la vuelta».
@@ -56,6 +57,13 @@ data class Instruccion(
 )
 
 /**
+ * Lo que falta desde el punto de llegada (en el grafo) hasta el destino cuando este queda lejos del grafo: sus
+ * coordenadas y los metros en línea recta. Con ella, la llegada dice «Has llegado al punto del camino más cercano a X.
+ * Está a N metros en línea recta, <dirección>.».
+ */
+data class Llegada(val lat: Double, val lng: Double, val metros: Double)
+
+/**
  * Instrucciones de texto a partir de los ángulos entre tramos (FE-5.1; `InstruccionesTest`). Los tramos casi rectos se
  * juntan («sigue recto 40 metros»); la primera se da respecto al rumbo actual de la persona; la última es «Has llegado a
  * <destino>.».
@@ -91,7 +99,8 @@ object Instrucciones {
     /**
      * [puntos]: la polilínea (sin puntos repetidos); [rumboActual]: hacia dónde mira la persona (norte verdadero) o
      * `null`; [alCamino]: el primer segmento es el de la persona hasta el camino (no se junta con el siguiente);
-     * [destino]: el nombre que se dice al llegar.
+     * [destino]: el nombre que se dice al llegar; [llegada]: si el destino queda lejos del grafo, lo que falta desde el
+     * último punto (la dirección se da respecto al último tramo o, sin tramos, a [rumboActual]).
      */
     fun generar(
         puntos: List<PuntoRuta>,
@@ -99,6 +108,7 @@ object Instrucciones {
         alCamino: Boolean,
         destino: String,
         p: ParametrosRuta = ParametrosRuta(),
+        llegada: Llegada? = null,
     ): List<Instruccion> {
         val fin = puntos.lastOrNull() ?: return emptyList()
         val tramos = mutableListOf<Tramo>()
@@ -148,10 +158,28 @@ object Instrucciones {
             }
             desde += t.metros
         }
-        resultado += Instruccion(
-            TipoInstruccion.LLEGADA, null, Lado.NINGUNO, 0.0, desde, fin.lat, fin.lng, "Has llegado a $destino.",
-        )
+        val textoLlegada = if (llegada == null) {
+            "Has llegado a $destino."
+        } else {
+            val mirando = tramos.lastOrNull()?.rumboFinal ?: rumboActual
+            val donde = mirando?.let {
+                ", " + direccionRelativa(Geo.diferencia(Geo.rumbo(fin.lat, fin.lng, llegada.lat, llegada.lng), it))
+            }.orEmpty()
+            "Has llegado al punto del camino más cercano a $destino. Está a ${metrosTexto(llegada.metros)} en línea recta$donde."
+        }
+        resultado += Instruccion(TipoInstruccion.LLEGADA, null, Lado.NINGUNO, 0.0, desde, fin.lat, fin.lng, textoLlegada)
         return resultado
+    }
+
+    /** Sectores de 90° (como `DescribirUbicacion.direccion`): ±45° al frente, más de 135° detrás (bordes al frente y detrás). */
+    fun direccionRelativa(grados: Double): String {
+        val a = abs(grados)
+        return when {
+            a <= 45.0 -> "al frente"
+            a >= 135.0 -> "detrás de ti"
+            grados > 0 -> "a tu derecha"
+            else -> "a tu izquierda"
+        }
     }
 
     /** Primera instrucción, respecto a hacia dónde mira la persona («Gira a tu derecha y sigue recto»). */

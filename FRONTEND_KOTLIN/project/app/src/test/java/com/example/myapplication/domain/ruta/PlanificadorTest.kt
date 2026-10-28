@@ -8,16 +8,17 @@ import com.example.myapplication.domain.model.PosicionEstimada
 import com.example.myapplication.domain.model.ResultadoUbicacion
 import com.example.myapplication.domain.model.UbicacionEstimada
 import com.example.myapplication.domain.usecase.DescribirUbicacion
+import com.example.myapplication.map.TextosRutaMapa
 import com.google.gson.JsonParser
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertSame
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * FE-5.1, criterio C4 (en la JVM): con el `grafo.json` real, la ruta de la validación en casa (`validate51.py`:
- * destino `bloque35` y posición de prueba 6.201434, −75.578427, sobre la arista n0008–n0014) y lo que dice la vista
- * 6.3 con ruta y sin ella.
+ * FE-5.1, criterio C4 (en la JVM): con el `grafo.json` real (versión 209), la ruta de la validación en casa
+ * (`validate51.py`: destino de prueba `bloque35` y posición 6.201434, −75.578707, sobre la arista a0032 n0002–n0008), la
+ * meta por las coordenadas del destino y lo que dice la vista 6.3 con ruta y sin ella.
  */
 class PlanificadorTest {
 
@@ -25,49 +26,59 @@ class PlanificadorTest {
 
     /** La misma posición que `POSICION_PRUEBA` de `validate51.py`. */
     private val latPrueba = 6.201434
-    private val lngPrueba = -75.578427
+    private val lngPrueba = -75.578707
 
+    /** «Bloque 35» de `GET /v1/places` en `dev` (2026-10-28): ~2 m al sur del nodo n0007. */
     private val bloque35 = LugarDestino("b35", "Bloque 35", CategoriaLugar.BLOQUE, 6.201286, -75.578834)
 
     @Test
     fun rutaDeLaValidacionEnCasa() {
-        val r = planificador.calcular(latPrueba, lngPrueba, listOf("bloque35"), "Bloque 35", null)
+        // Destino de prueba por texto: el `lugar` informativo «bloque 35» del nodo n0007 da sus coordenadas.
+        val r = planificador.calcular(latPrueba, lngPrueba, listOf("bloque35"), "bloque 35", null)
         val ruta = (r as ResultadoRuta.Encontrada).ruta
-        assertEquals("n0007", ruta.entrada.id)
-        assertEquals("a0043", ruta.inicio.arista.id)
-        assertEquals(59.7, ruta.metros, 0.3)
+        assertEquals("a0032", ruta.inicio.arista.id)
         assertTrue(ruta.metrosAlCamino < 1.0)
+        assertTrue(ruta.fin.distanciaM < 0.01)
+        assertFalse(ruta.destinoLejos)
+        assertEquals(28.7, ruta.metros, 0.3)
+        assertEquals(6.2013034, ruta.puntos.last().lat, 1e-6) // n0007
         assertEquals(
-            listOf("Camina 45 metros por el camino.", "Gira a la izquierda y sigue recto 14 metros.", "Has llegado a Bloque 35."),
+            listOf("Camina 14 metros por el camino.", "Gira a la izquierda y sigue recto 14 metros.", "Has llegado a bloque 35."),
             ruta.instrucciones.map { it.texto },
         )
         // Lo que muestra el aviso del mapa y lo que busca validate51.py C4b.
-        assertEquals("Ruta a Bloque 35: 60 m por el camino", com.example.myapplication.map.TextosRutaMapa.titulo("Bloque 35", ruta.metros))
+        assertEquals("Ruta a bloque 35: 29 m por el camino", TextosRutaMapa.titulo("bloque 35", ruta.metros))
+    }
+
+    @Test
+    fun laMetaSaleDeLasCoordenadasDelLugar() {
+        // Bloque 35 del backend se proyecta sobre a0007 (n0007–n0025), ~1,9 m más allá de n0007.
+        val ruta = planificador.rutaA(bloque35, latPrueba, lngPrueba, null)!!
+        assertEquals("a0007", ruta.fin.arista.id)
+        assertEquals(30.7, ruta.metros, 0.3)
+        assertEquals("Gira a la izquierda y sigue recto 16 metros.", ruta.instrucciones[1].texto)
+        assertEquals("Has llegado a Bloque 35.", ruta.instrucciones.last().texto)
     }
 
     @Test
     fun laPrimeraDependeDelRumbo() {
         val norte = planificador.rutaA(bloque35, latPrueba, lngPrueba, 0.0)!!
-        assertEquals("Gira a tu izquierda y sigue recto 45 metros.", norte.primera.texto)
+        assertEquals("Gira a tu izquierda y sigue recto 14 metros.", norte.primera.texto)
         val oeste = planificador.rutaA(bloque35, latPrueba, lngPrueba, 270.0)!!
-        assertEquals("Sigue recto 45 metros.", oeste.primera.texto)
+        assertEquals("Sigue recto 14 metros.", oeste.primera.texto)
     }
 
     @Test
-    fun unLugarConDosEntradasVaALaMasCercana() {
-        val biblio = planificador.calcular(latPrueba, lngPrueba, listOf("Biblioteca"), "Biblioteca", null)
-        val ruta = (biblio as ResultadoRuta.Encontrada).ruta
-        assertEquals("n0010", ruta.entrada.id) // la del norte; la otra (n0030) queda a ~150 m
-        assertEquals(40.0, ruta.metros, 1.5)
-        assertEquals(2, planificador.entradasDe(listOf("BIBLIOTECA")).size)
-    }
-
-    @Test
-    fun casaPorAliasYDestinoFueraDelGrafo() {
-        val conAlias = LugarDestino("c", "Cafetería Central", CategoriaLugar.CAFETERIA, 6.2, -75.57, alias = listOf("cafetería"))
-        assertEquals("n0031", planificador.rutaA(conAlias, latPrueba, lngPrueba, null)!!.entrada.id)
-        val fuera = LugarDestino("x", "Auditorio", CategoriaLugar.AUDITORIO, 6.2, -75.57)
-        assertSame(ResultadoRuta.DestinoFueraDelGrafo, planificador.calcular(latPrueba, lngPrueba, fuera, null))
+    fun cualquierLugarTieneRutaAunqueElGrafoNoLoNombre() {
+        // Un lugar inventado ~40 m al oeste de n0002 (fuera del grafo): llega al punto más cercano y dice cuánto falta.
+        val lejos = LugarDestino("x", "Auditorio", CategoriaLugar.AUDITORIO, 6.2014317, -75.5791977)
+        val ruta = planificador.rutaA(lejos, latPrueba, lngPrueba, null)!!
+        assertTrue(ruta.destinoLejos)
+        assertEquals(40.0, ruta.metrosAlDestino, 2.0)
+        assertTrue(ruta.instrucciones.last().texto, ruta.instrucciones.last().texto.startsWith(
+            "Has llegado al punto del camino más cercano a Auditorio. Está a ",
+        ))
+        assertTrue(ruta.instrucciones.last().texto.endsWith(" en línea recta, al frente."))
     }
 
     @Test
@@ -75,11 +86,11 @@ class PlanificadorTest {
         val ruta = planificador.rutaA(bloque35, latPrueba, lngPrueba, null)!!
         val o = JsonParser.parseString(ruta.json()).asJsonObject
         assertEquals("Bloque 35", o.get("destino").asString)
-        assertEquals(59.7, o.get("metros").asDouble, 0.3)
-        assertEquals("Camina 45 metros por el camino.", o.get("primera").asString)
+        assertEquals(30.7, o.get("metros").asDouble, 0.3)
+        assertEquals("Camina 14 metros por el camino.", o.get("primera").asString)
         val puntos = o.getAsJsonArray("puntos")
         assertEquals(ruta.puntos.size, puntos.size())
-        assertEquals(6.2013034, puntos.last().asJsonArray[0].asDouble, 1e-7) // la entrada n0007
+        assertEquals(ruta.fin.lat, puntos.last().asJsonArray[0].asDouble, 1e-9)
     }
 
     private fun ubicadoEn(lat: Double, lng: Double) = UbicacionEstimada(
@@ -103,22 +114,23 @@ class PlanificadorTest {
         val d = DescribirUbicacion.describir(ubicadoEn(latPrueba, lngPrueba), 10.0, bloque35, planificador)
         assertEquals(
             listOf(
-                "Tu destino, Bloque 35, está a unos 60 metros por el camino.",
-                "Gira a tu izquierda y sigue recto 45 metros.",
+                "Tu destino, Bloque 35, está a unos 31 metros por el camino.",
+                "Gira a tu izquierda y sigue recto 14 metros.",
                 DescribirUbicacion.LLEGARA_NAVEGACION,
             ),
             d.detalles,
         )
-        assertTrue(d.hablado.endsWith("Confianza alta. Tu destino, Bloque 35, está a unos 60 metros por el camino. " +
-            "Gira a tu izquierda y sigue recto 45 metros. ${DescribirUbicacion.LLEGARA_NAVEGACION}"))
+        assertTrue(d.hablado.endsWith("Confianza alta. Tu destino, Bloque 35, está a unos 31 metros por el camino. " +
+            "Gira a tu izquierda y sigue recto 14 metros. ${DescribirUbicacion.LLEGARA_NAVEGACION}"))
     }
 
     @Test
-    fun laVista63SinRutaSigueEnLineaRecta() {
-        val fuera = LugarDestino("x", "Auditorio", CategoriaLugar.AUDITORIO, latPrueba + 0.001, lngPrueba)
-        val conPlan = DescribirUbicacion.describir(ubicadoEn(latPrueba, lngPrueba), 10.0, fuera, planificador)
-        val sinPlan = DescribirUbicacion.describir(ubicadoEn(latPrueba, lngPrueba), 10.0, fuera, null)
-        assertEquals(sinPlan, conPlan)
-        assertEquals("Tu destino, Auditorio, está al frente, a unos 111 metros.", conPlan.detalles.first())
+    fun laVista63SinPlanificadorSigueEnLineaRecta() {
+        val otro = LugarDestino("x", "Auditorio", CategoriaLugar.AUDITORIO, latPrueba + 0.001, lngPrueba)
+        val sinPlan = DescribirUbicacion.describir(ubicadoEn(latPrueba, lngPrueba), 10.0, otro, null)
+        assertEquals("Tu destino, Auditorio, está al frente, a unos 111 metros.", sinPlan.detalles.first())
+        // Con planificador, cualquier lugar con coordenadas tiene ruta (por el camino), también este.
+        val conPlan = DescribirUbicacion.describir(ubicadoEn(latPrueba, lngPrueba), 10.0, otro, planificador)
+        assertTrue(conPlan.detalles.first(), conPlan.detalles.first().endsWith(" por el camino."))
     }
 }

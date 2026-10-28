@@ -1,19 +1,20 @@
 """Validador de FE-5.1 — Grafo y rutas (la «App 1» de la guía en tiempo real).
 
 Documento: FRONTEND_KOTLIN/docs/validation/validation-5-1.md. Entornos: local (C1a, C1b, C2a, C3a y C4a: pruebas de la
-JVM y comprobaciones estáticas de `assets/grafo.json`, sin teléfono ni red) y dev (además C3b: cada `lugar` del grafo
-existe en `GET /v1/places`, ruta pública; y C4b: con el teléfono **en casa**, el mapa público del APK de depuración
-abierto con un destino y una posición de prueba muestra la ruta y su primera instrucción, y un paso guiado —tocar otro
-punto del mapa— la recalcula). No escribe nada en el backend, no usa `embedding` y en el teléfono no borra nada
-(nunca `pm clear`).
+JVM y comprobaciones estáticas de `assets/grafo.json`, sin teléfono ni red) y dev (además C3b: cada lugar de
+`GET /v1/places` —ruta pública— tiene ruta por el grafo, con la meta en el punto del grafo más cercano a sus
+coordenadas, y a qué distancia del grafo queda; y C4b: con el teléfono **en casa**, el mapa público del APK de
+depuración abierto con un destino y una posición de prueba muestra la ruta y su primera instrucción, y un paso guiado
+—tocar otro punto del mapa— la recalcula). No escribe nada en el backend, no usa `embedding` y en el teléfono no borra
+nada (nunca `pm clear`).
 """
 
 from __future__ import annotations
 
 import json
+import math
 import re
 import sys
-import unicodedata
 from dataclasses import dataclass, field
 
 import comun
@@ -41,20 +42,24 @@ MAIN_ACTIVITY = DIR_KOTLIN / "MainActivity.kt"
 FORMATO_GRAFO = 1
 TIPOS_NODO = ("cruce", "entrada")
 
-# Paso en casa (C4b): la misma posición y destino que PlanificadorTest (ruta n0008 → n0002 → n0007, ~59,7 m).
+FUERA_DEL_CAMINO_M = 15.0  # ParametrosRuta.fueraDelCaminoM: más lejos, la llegada dice cuánto falta en línea recta
+RADIO_TIERRA_M = 6_371_000.0  # Geo.RADIO_TIERRA_M
+
+# Paso en casa (C4b): la misma posición y destino que PlanificadorTest con el grafo versión 209 (ruta por a0032 hasta
+# n0002 y a0003 hasta n0007, ~28,7 m). El destino es el `lugar` informativo «bloque 35» del nodo n0007.
 DESTINO_PRUEBA = "bloque35"  # sin espacios: así pasa por `adb shell am start --es` sin comillas
-POSICION_PRUEBA = (6.201434, -75.578427)  # sobre la arista n0008–n0014 del grafo
-TITULO_ESPERADO = "Ruta a Bloque 35: 60 m por el camino"
-PRIMERA_ESPERADA = "Camina 45 metros por el camino."
+POSICION_PRUEBA = (6.201434, -75.578707)  # sobre la arista a0032 (n0002–n0008) del grafo
+TITULO_ESPERADO = "Ruta a bloque 35: 29 m por el camino"
+PRIMERA_ESPERADA = "Camina 14 metros por el camino."
 PREFIJO_AVISO = "Ruta a "
-PREFIJO_DESTINO = "Ruta a Bloque 35: "
+PREFIJO_DESTINO = "Ruta a bloque 35: "
 TEXTOS_SIN_RUTA = ("Destino: ", "No tengo un camino", "No encontré un camino", "Rutas desactivadas")
 LIMITE_RUTA_S = 30  # arranque en frío + Leaflet desde unpkg.com + teselas
 LIMITE_TOQUE_S = 15
 PATRON_METROS = re.compile(r": (\d+) m por el camino$")
 
 INSTRUCCION_C4B = (
-    "En el teléfono se ve el mapa público con la ruta verde hasta Bloque 35 y, arriba, «"
+    "En el teléfono se ve el mapa público con la ruta verde hasta bloque 35 y, arriba, «"
     + TITULO_ESPERADO
     + "». Toca OTRO punto del mapa, a uno o dos dedos del punto azul (no pulses ▶), y espera a que el aviso de "
     "arriba cambie de distancia."
@@ -69,10 +74,13 @@ INSTRUCCION_C4C = (
 # --- piezas puras --------------------------------------------------------------------------------------------------
 
 
-def normalizar(texto: str) -> str:
-    """Como `EmparejarLugares.normalizar` de la app: minúsculas, sin tildes y solo letras y números."""
-    sin_tildes = "".join(c for c in unicodedata.normalize("NFD", texto.lower()) if not unicodedata.combining(c))
-    return re.sub(r"[^a-z0-9]+", "", sin_tildes)
+@dataclass
+class AristaGrafo:
+    id: str
+    a: str
+    b: str
+    metros: float
+    bloqueada: bool
 
 
 @dataclass
@@ -81,9 +89,11 @@ class ResumenGrafo:
     nodos: int
     aristas: int
     entradas: int
-    lugares: list[str]
+    lugares: list[str]  # nombres de `lugar` (informativos), sin repetir
     metros: float
     bloqueadas: int
+    posiciones: dict[str, tuple[float, float]] = field(default_factory=dict)  # id → (lat, lng)
+    lista_aristas: list[AristaGrafo] = field(default_factory=list)
 
 
 def componentes(ids: list[str], aristas: list[tuple[str, str]]) -> list[set[str]]:
@@ -130,6 +140,7 @@ def revisar_grafo(texto: str) -> ResumenGrafo:
     errores: list[str] = []
     ids: list[str] = []
     lugares: list[str] = []
+    posiciones: dict[str, tuple[float, float]] = {}
     entradas = 0
     for i, n in enumerate(nodos):
         if not isinstance(n, dict) or not isinstance(n.get("id"), str) or not isinstance(n.get("tipo"), str):
@@ -140,17 +151,18 @@ def revisar_grafo(texto: str) -> ResumenGrafo:
             errores.append(f"nodo {n['id']} sin lat/lng numéricos")
         elif not (-90 <= lat <= 90 and -180 <= lng <= 180):
             errores.append(f"nodo {n['id']} con coordenadas fuera de rango")
+        else:
+            posiciones[n["id"]] = (float(lat), float(lng))
         ids.append(n["id"])
         if n["tipo"] == "entrada":
             entradas += 1
-            lugar = n.get("lugar")
-            if not isinstance(lugar, str) or not lugar.strip():
-                errores.append(f"entrada {n['id']} sin lugar")
-            elif lugar not in lugares:
-                lugares.append(lugar)
+        lugar = n.get("lugar")  # opcional e informativo (decisión del usuario del 2026-10-28)
+        if isinstance(lugar, str) and lugar.strip() and lugar not in lugares:
+            lugares.append(lugar)
     repetidos = sorted({i for i in ids if ids.count(i) > 1})
     errores += [f"id de nodo repetido: {i}" for i in repetidos]
     pares: list[tuple[str, str]] = []
+    lista: list[AristaGrafo] = []
     ids_aristas: list[str] = []
     metros = 0.0
     bloqueadas = 0
@@ -172,44 +184,97 @@ def revisar_grafo(texto: str) -> ResumenGrafo:
         if a.get("bloqueada") is True:
             bloqueadas += 1
         pares.append((a["a"], a["b"]))
+        lista.append(AristaGrafo(a["id"], a["a"], a["b"], float(m) if isinstance(m, (int, float)) else 0.0,
+                                 a.get("bloqueada") is True))  # fmt: skip
     errores += [f"id de arista repetido: {i}" for i in sorted({i for i in ids_aristas if ids_aristas.count(i) > 1})]
     comps = componentes(list(dict.fromkeys(ids)), pares)
     if len(comps) > 1:
         fuera = sorted(set().union(*comps[1:]))
         errores.append(f"{len(comps)} componentes; fuera del principal: {', '.join(fuera[:10])}")
-    if entradas == 0:
-        errores.append("ninguna entrada")
     if errores:
         raise comun.Falla(f"grafo.json inválido: {'; '.join(errores[:6])}")
-    return ResumenGrafo(version, len(nodos), len(aristas), entradas, lugares, metros, bloqueadas)
+    return ResumenGrafo(version, len(nodos), len(aristas), entradas, lugares, metros, bloqueadas, posiciones, lista)
 
 
 @dataclass
-class Emparejamiento:
-    exactos: list[str] = field(default_factory=list)
-    normalizados: dict[str, str] = field(default_factory=dict)  # lugar del grafo → nombre en el backend
-    faltan: list[str] = field(default_factory=list)
+class Proyeccion:
+    arista: str
+    t: float
+    distancia_m: float
 
 
-def emparejar(lugares_grafo: list[str], lugares_backend: list[dict]) -> Emparejamiento:
-    """Como `EmparejarLugares.emparejar`: por `nombre` exacto o, si no, por `nombre` o un `alias` normalizado."""
-    e = Emparejamiento()
-    nombres = [str(lugar.get("nombre") or "") for lugar in lugares_backend]
-    claves: list[tuple[str, set[str]]] = []
-    for lugar in lugares_backend:
-        alias = lugar.get("alias") if isinstance(lugar.get("alias"), list) else []
-        textos = [str(lugar.get("nombre") or "")] + [str(a) for a in alias]
-        claves.append((str(lugar.get("nombre") or ""), {normalizar(t) for t in textos if normalizar(t)}))
-    for lg in lugares_grafo:
-        if lg in nombres:
-            e.exactos.append(lg)
+def proyectar(resumen: ResumenGrafo, lat: float, lng: float) -> Proyeccion | None:
+    """Como `Proyeccion.masCercana` de la app: la arista usable (no bloqueada) más cercana a (lat, lng), en un plano
+    equirectangular centrado en el punto; `t` recortado a [0, 1]; empate exacto: la primera del archivo."""
+    kx = math.radians(1.0) * RADIO_TIERRA_M * math.cos(math.radians(lat))
+    ky = math.radians(1.0) * RADIO_TIERRA_M
+    mejor: Proyeccion | None = None
+    for ar in resumen.lista_aristas:
+        if ar.bloqueada or ar.a not in resumen.posiciones or ar.b not in resumen.posiciones:
             continue
-        casa = next((nombre for nombre, cs in claves if normalizar(lg) in cs), None)
-        if casa is None:
-            e.faltan.append(lg)
-        else:
-            e.normalizados[lg] = casa
-    return e
+        (la_a, ln_a), (la_b, ln_b) = resumen.posiciones[ar.a], resumen.posiciones[ar.b]
+        ax, ay = (ln_a - lng) * kx, (la_a - lat) * ky
+        bx, by = (ln_b - lng) * kx, (la_b - lat) * ky
+        dx, dy = bx - ax, by - ay
+        largo2 = dx * dx + dy * dy
+        t = 0.0 if largo2 == 0 else min(1.0, max(0.0, (-ax * dx - ay * dy) / largo2))
+        d = math.hypot(ax + t * dx, ay + t * dy)
+        if mejor is None or d < mejor.distancia_m:
+            mejor = Proyeccion(ar.id, t, d)
+    return mejor
+
+
+def principal_usable(resumen: ResumenGrafo) -> set[str]:
+    """Nodos del mayor componente con solo aristas usables: dos puntos proyectados en él siempre tienen ruta."""
+    usables = [(a.a, a.b) for a in resumen.lista_aristas if not a.bloqueada]
+    comps = componentes(list(resumen.posiciones), usables)
+    return comps[0] if comps else set()
+
+
+@dataclass
+class LugarRevisado:
+    nombre: str
+    proyeccion: Proyeccion | None
+    con_ruta: bool
+    motivo: str = ""  # por qué no tiene ruta
+
+    @property
+    def lejos(self) -> bool:
+        return self.proyeccion is not None and self.proyeccion.distancia_m > FUERA_DEL_CAMINO_M
+
+
+def revisar_lugares(resumen: ResumenGrafo, items: list[dict]) -> list[LugarRevisado]:
+    """Cada lugar de `GET /v1/places` con su punto más cercano del grafo (la meta de una ruta hacia él) y si tiene ruta:
+    coordenadas válidas, una arista usable y esa arista en el componente principal de las usables."""
+    principal = principal_usable(resumen)
+    por_id = {a.id: a for a in resumen.lista_aristas}
+    resultado = []
+    for item in items:
+        nombre = str(item.get("nombre") or item.get("id") or "?")
+        lat, lng = item.get("lat"), item.get("lng")
+        if not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in (lat, lng)) or not (
+            -90 <= lat <= 90 and -180 <= lng <= 180
+        ):
+            resultado.append(LugarRevisado(nombre, None, False, "sin coordenadas válidas"))
+            continue
+        pr = proyectar(resumen, float(lat), float(lng))
+        if pr is None:
+            resultado.append(LugarRevisado(nombre, None, False, "el grafo no tiene aristas usables"))
+            continue
+        arista = por_id[pr.arista]
+        if arista.a not in principal:
+            resultado.append(
+                LugarRevisado(nombre, pr, False, f"la arista {pr.arista} no se alcanza (aristas bloqueadas)")
+            )
+            continue
+        resultado.append(LugarRevisado(nombre, pr, True))
+    return resultado
+
+
+def describir_lugar(lugar: LugarRevisado) -> str:
+    if lugar.proyeccion is None:
+        return f"{lugar.nombre} ({lugar.motivo})"
+    return f"{lugar.nombre} a {lugar.proyeccion.distancia_m:.0f} m del grafo ({lugar.proyeccion.arista})"
 
 
 def aviso_en_pantalla(nodos: list[comun.Nodo]) -> tuple[str, str | None] | None:
@@ -361,7 +426,8 @@ def main(argv: list[str] | None = None) -> int:
         ctx.pasaron.add("C1b")
         return (
             f"assets/grafo.json v{r.version}: {r.nodos} nodos, {r.aristas} aristas ({r.bloqueadas} bloqueadas), "
-            f"{r.entradas} entradas con lugar ({len(r.lugares)} lugares), {r.metros:.0f} m, un solo componente"
+            f"{r.entradas} entradas, {len(r.lugares)} nombres de lugar (informativos), {r.metros:.0f} m, "
+            "un solo componente"
         )
 
     def c2a() -> str:
@@ -397,17 +463,29 @@ def main(argv: list[str] | None = None) -> int:
         if r.estado != 200 or not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("items"), list):
             raise comun.Falla(f"GET /v1/places respondió {r.estado} {comun.codigo_error(r) or ''}".rstrip())
         items = [i for i in cuerpo["items"] if isinstance(i, dict)]
-        e = emparejar(ctx.resumen.lugares, items)
-        partes = [f"exactos: {', '.join(e.exactos) or 'ninguno'}"]
-        if e.normalizados:
-            partes.append("normalizados: " + ", ".join(f"{k} → {v}" for k, v in e.normalizados.items()))
-        resumen = f"GET /v1/places -> {len(items)} lugares; {'; '.join(partes)}"
-        if e.faltan:
-            raise comun.Falla(
-                f"{len(e.faltan)} de {len(ctx.resumen.lugares)} lugares del grafo no existen en GET /v1/places: "
-                f"{', '.join(e.faltan)} ({resumen})"
+        revisados = revisar_lugares(ctx.resumen, items)
+        sin_ruta = [lugar for lugar in revisados if not lugar.con_ruta]
+        lejos = [lugar for lugar in revisados if lugar.con_ruta and lugar.lejos]
+        cerca = [lugar for lugar in revisados if lugar.con_ruta and not lugar.lejos]
+        partes = [f"GET /v1/places -> {len(items)} lugares"]
+        if cerca:
+            partes.append(f"a ≤ {FUERA_DEL_CAMINO_M:.0f} m del grafo: " + ", ".join(describir_lugar(x) for x in cerca))
+        if lejos:
+            aviso = (
+                f"aviso: {len(lejos)} a más de {FUERA_DEL_CAMINO_M:.0f} m del grafo (la ruta llega al punto más "
+                "cercano y dice cuánto falta en línea recta): " + ", ".join(describir_lugar(x) for x in lejos)
             )
-        return f"los {len(ctx.resumen.lugares)} lugares del grafo existen en el backend ({resumen})"
+            comun.avisar(aviso)
+            partes.append(aviso)
+        if sin_ruta:
+            raise comun.Falla(
+                f"{len(sin_ruta)} de {len(items)} lugares sin ruta: "
+                + ", ".join(describir_lugar(x) for x in sin_ruta)
+                + f" ({'; '.join(partes)})"
+            )
+        if not items:
+            return "GET /v1/places -> 0 lugares: nada que comprobar"
+        return f"los {len(items)} lugares tienen ruta ({'; '.join(partes)})"
 
     def preparar_telefono() -> None:
         if ctx.telefono_listo:

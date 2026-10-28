@@ -14,8 +14,9 @@ object TiposNodo {
 }
 
 /**
- * Un nodo: un cruce o la entrada a un lugar. [lugar] es el **nombre** del lugar del backend (`GET /v1/places`) al que
- * lleva la entrada; un lugar puede tener varias entradas (la biblioteca tiene dos).
+ * Un nodo: un cruce o la entrada a un lugar. [lugar] es un nombre **opcional e informativo** (decisión del usuario del
+ * 2026-10-28): la meta de una ruta sale de las coordenadas del destino, no de este campo. Solo lo usan los destinos de
+ * prueba por nombre del mapa (`Planificador.nodoConLugar`).
  */
 data class Nodo(
     val id: String,
@@ -62,7 +63,7 @@ class Grafo(
 ) {
     val porId: Map<String, Nodo> = nodos.associateBy { it.id }
 
-    /** Nodos de tipo `entrada` (con su `lugar`). */
+    /** Nodos de tipo `entrada` (informativo). */
     val entradas: List<Nodo> = nodos.filter { it.esEntrada }
 
     /** Aristas que se pueden recorrer (no `bloqueada`). */
@@ -76,8 +77,8 @@ class Grafo(
         }
     }
 
-    /** Los nombres de lugar de las entradas, sin repetir, en el orden del archivo. */
-    val lugares: List<String> = entradas.mapNotNull { it.lugar }.distinct()
+    /** Los nombres de `lugar` (informativos) de los nodos, sin repetir, en el orden del archivo. */
+    val lugares: List<String> = nodos.mapNotNull { it.lugar }.distinct()
 
     /** Suma de [Arista.metros] de todas las aristas. */
     val metrosTotales: Double get() = aristas.sumOf { it.metros }

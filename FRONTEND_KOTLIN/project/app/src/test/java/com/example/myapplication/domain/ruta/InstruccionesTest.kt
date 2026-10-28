@@ -6,6 +6,7 @@ import com.example.myapplication.domain.ruta.GrafosDePrueba.lat
 import com.example.myapplication.domain.ruta.GrafosDePrueba.lng
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -108,6 +109,66 @@ class InstruccionesTest {
         assertEquals(TipoInstruccion.LLEGADA, llegada.tipo)
         assertEquals(r.metros, llegada.desdeM, 0.01)
         assertEquals(r.metros, r.instrucciones.sumOf { it.metros }, 0.01)
+    }
+
+    private fun rutaACoordenadas(x: Double, y: Double, dx: Double, dy: Double, rumbo: Double?): Ruta {
+        val r = Planificador(cuadrado()).calcular(lat(y), lng(x), lat(dy), lng(dx), "Meta", rumbo)
+        return (r as ResultadoRuta.Encontrada).ruta
+    }
+
+    @Test
+    fun destinoLejosDelGrafoDiceCuantoFaltaYHaciaDonde() {
+        // Destino (140, 100): a 40 m al este de C, el punto del grafo más cercano. Se llega a C mirando al norte.
+        val r = rutaACoordenadas(10.0, -5.0, 140.0, 100.0, rumbo = 90.0)
+        assertTrue(r.destinoLejos)
+        assertEquals(40.0, r.metrosAlDestino, 0.1)
+        assertEquals(190.0, r.metros, 0.5) // por el camino: no cuenta los 40 m en línea recta
+        assertEquals(
+            listOf(
+                "Sigue recto 90 metros.",
+                "Gira a la izquierda y sigue recto 100 metros.",
+                "Has llegado al punto del camino más cercano a Meta. Está a 40 metros en línea recta, a tu derecha.",
+            ),
+            textos(r),
+        )
+        // A menos de 15 m del grafo, la llegada de siempre.
+        val cerca = rutaACoordenadas(10.0, -5.0, 110.0, 100.0, rumbo = 90.0)
+        assertFalse(cerca.destinoLejos)
+        assertEquals("Has llegado a Meta.", cerca.instrucciones.last().texto)
+    }
+
+    @Test
+    fun destinoLejosSinTramosUsaElRumbo() {
+        // La persona ya está en el punto más cercano (C) mirando al sur; el destino, 40 m al norte: detrás.
+        val r = rutaACoordenadas(100.0, 100.0, 100.0, 140.0, rumbo = 180.0)
+        assertEquals(
+            listOf("Has llegado al punto del camino más cercano a Meta. Está a 40 metros en línea recta, detrás de ti."),
+            textos(r),
+        )
+        val sinRumbo = rutaACoordenadas(100.0, 100.0, 100.0, 140.0, rumbo = null)
+        assertEquals(
+            "Has llegado al punto del camino más cercano a Meta. Está a 40 metros en línea recta.",
+            sinRumbo.primera.texto,
+        )
+    }
+
+    @Test
+    fun enLaMismaAristaVaDirectoYSinCruces() {
+        assertEquals(
+            listOf("Sigue recto 50 metros.", "Has llegado a Meta."),
+            textos(rutaACoordenadas(10.0, -5.0, 60.0, 3.0, rumbo = 90.0)),
+        )
+        assertEquals(
+            "Date la vuelta y sigue recto 50 metros.",
+            rutaACoordenadas(60.0, -5.0, 10.0, 3.0, rumbo = 90.0).primera.texto,
+        )
+    }
+
+    @Test
+    fun destinoSinCoordenadasValidasNoTieneRuta() {
+        val p = Planificador(cuadrado())
+        assertSame(ResultadoRuta.DestinoFueraDelGrafo, p.calcular(lat(0.0), lng(0.0), Double.NaN, lng(0.0), "X", null))
+        assertSame(ResultadoRuta.DestinoFueraDelGrafo, p.calcular(lat(0.0), lng(0.0), listOf("no existe"), "X", null))
     }
 
     @Test

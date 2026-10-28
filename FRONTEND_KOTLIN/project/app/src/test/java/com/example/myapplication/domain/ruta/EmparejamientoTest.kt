@@ -2,16 +2,23 @@ package com.example.myapplication.domain.ruta
 
 import com.example.myapplication.domain.model.CategoriaLugar
 import com.example.myapplication.domain.model.LugarDestino
+import com.example.myapplication.domain.ruta.GrafosDePrueba.cuadrado
+import com.example.myapplication.domain.ruta.GrafosDePrueba.lat
+import com.example.myapplication.domain.ruta.GrafosDePrueba.lng
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** FE-5.1, criterio C3 (en la JVM): las entradas del grafo casan con los lugares del backend por nombre normalizado. */
+/**
+ * FE-5.1, criterio C3 (en la JVM): los lugares del backend se emparejan con el grafo **por coordenadas** (el punto más
+ * cercano del grafo es la meta); los nombres de `lugar` del grafo son informativos.
+ */
 class EmparejamientoTest {
 
-    private fun lugar(id: String, nombre: String, alias: List<String> = emptyList()) =
-        LugarDestino(id, nombre, CategoriaLugar.BLOQUE, 6.2, -75.57, alias)
+    private fun lugar(id: String, nombre: String, lat: Double, lng: Double) =
+        LugarDestino(id, nombre, CategoriaLugar.BLOQUE, lat, lng)
 
     @Test
     fun normalizaSinTildesNiSignos() {
@@ -22,31 +29,32 @@ class EmparejamientoTest {
     }
 
     @Test
-    fun casaPorNombreOAliasYDistingueLosExactos() {
+    fun cadaLugarConSuPuntoMasCercanoYSiQuedaLejos() {
         val lugares = listOf(
-            lugar("1", "Bloque 35"),
-            lugar("2", "Bloque 33"),
-            lugar("3", "Biblioteca Central", alias = listOf("biblioteca")),
-            lugar("4", "Auditorio"),
+            lugar("cerca", "Cerca", lat(-5.0), lng(10.0)), // a 5 m de A–B
+            lugar("lejos", "Lejos", lat(100.0), lng(140.0)), // a 40 m de C
+            lugar("roto", "Sin coordenadas", Double.NaN, lng(0.0)),
         )
-        val e = EmparejarLugares.emparejar(listOf("Bloque 35", "bloque 33", "biblioteca", "cocnverso", "biblioteca"), lugares)
-        assertEquals(setOf("Bloque 35", "bloque 33", "biblioteca"), e.coinciden.keys)
-        assertEquals("3", e.coinciden.getValue("biblioteca").id)
-        assertEquals(setOf("Bloque 35"), e.exactos)
-        assertEquals(listOf("cocnverso"), e.sinLugarEnBackend)
-        assertEquals(listOf("4"), e.sinEntrada.map { it.id })
-        assertTrue(EmparejarLugares.coincide("bloque35", lugares[0]))
-        assertFalse(EmparejarLugares.coincide("bloque 3", lugares[0]))
+        val e = EmparejarLugares.emparejar(cuadrado(), lugares)
+        assertEquals(listOf("cerca", "lejos", "roto"), e.map { it.lugar.id })
+        assertEquals("ab", e[0].punto!!.arista.id)
+        assertEquals(5.0, e[0].punto!!.distanciaM, 0.05)
+        assertFalse(e[0].lejos)
+        assertEquals(40.0, e[1].punto!!.distanciaM, 0.1)
+        assertTrue(e[1].lejos)
+        assertNull(e[2].punto)
+        assertFalse(e[2].lejos)
+        // Con otro umbral, «Lejos» deja de estarlo.
+        assertFalse(EmparejarLugares.emparejar(cuadrado(), lugares, ParametrosRuta(fueraDelCaminoM = 50.0))[1].lejos)
     }
 
     @Test
-    fun conLosLugaresDeDevHoySoloCasaBloque35() {
-        // GET /v1/places en dev el 2026-10-28: un solo lugar, «Bloque 35» (backend §5.3).
-        val e = EmparejarLugares.emparejar(GrafosDePrueba.real().lugares, listOf(lugar("b35", "Bloque 35")))
-        assertEquals(setOf("Bloque 35"), e.exactos)
-        assertEquals(
-            listOf("bloque 33", "biblioteca", "bloque 38", "cocnverso", "bloque 34", "cafeteria"),
-            e.sinLugarEnBackend,
-        )
+    fun elBloque35DeDevQuedaJuntoAlGrafo() {
+        // GET /v1/places en dev el 2026-10-28: «Bloque 35» en (6.201286, −75.578834), a ~2 m al sur del nodo n0007.
+        val e = EmparejarLugares.emparejar(GrafosDePrueba.real(), listOf(lugar("b35", "Bloque 35", 6.201286, -75.578834)))
+        val p = e.single().punto!!
+        assertEquals("a0007", p.arista.id)
+        assertTrue(p.distanciaM < 1.0)
+        assertFalse(e.single().lejos)
     }
 }

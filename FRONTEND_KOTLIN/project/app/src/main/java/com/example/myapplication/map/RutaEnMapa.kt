@@ -6,8 +6,9 @@ import kotlin.math.roundToInt
 
 /**
  * Datos de prueba del mapa público (FE-5.1, ADR-FE-38). **Solo** los escribe `MainActivity` en el APK de depuración, en
- * un arranque nuevo y con la ruta de prueba `mapa` (`--es ruta mapa`): [destino] (`--es destino_prueba <nombre>`, el
- * `lugar` de una entrada del grafo; se compara normalizado, así `bloque35` vale por «Bloque 35») y [posicion]
+ * un arranque nuevo y con la ruta de prueba `mapa` (`--es ruta mapa`): [destino] (`--es destino_prueba <texto>`:
+ * `"<lat>,<lng>"` o el `lugar` informativo de un nodo del grafo, comparado normalizado, así `bloque35` vale por «Bloque
+ * 35»; `Planificador.calcular(…, nombres, …)`) y [posicion]
  * (`--es posicion_prueba <lat>,<lng>`). El mapa usa [posicion] una vez como punto de partida (como un toque) y
  * [destino] en lugar del de `SesionDeNavegacion`; al salir del mapa se borran. El flujo real nunca los escribe.
  */
@@ -69,7 +70,14 @@ object TextosRutaMapa {
         }
     }
 
-    /** Nombre que se muestra para un destino de prueba: el `lugar` de su primera entrada en el grafo, o el texto tal cual. */
-    fun nombrePrueba(planificador: Planificador?, destino: String): String =
-        planificador?.entradasDe(listOf(destino))?.firstOrNull()?.lugar ?: destino
+    /**
+     * Nombre que se muestra para un destino de prueba: el `lugar` del primer nodo del grafo que casa, [DESTINO_DE_PRUEBA] si son
+     * coordenadas, o el texto tal cual.
+     */
+    fun nombrePrueba(planificador: Planificador?, destino: String): String {
+        planificador?.nodoConLugar(destino)?.lugar?.let { return it }
+        return if (PruebaMapa.leerPosicion(destino) != null) DESTINO_DE_PRUEBA else destino
+    }
+
+    const val DESTINO_DE_PRUEBA = "Destino de prueba"
 }

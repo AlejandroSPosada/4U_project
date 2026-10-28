@@ -19,17 +19,10 @@ CASOS = {
     "PlanificadorTest": 7,
     "RutaEnMapaTest": 3,
 }
-LUGARES_DEV_COMPLETOS = [
-    {"id": "1", "nombre": "Bloque 33"},
-    {"id": "2", "nombre": "Bloque 35"},
-    {"id": "3", "nombre": "Biblioteca Central", "alias": ["biblioteca"]},
-    {"id": "4", "nombre": "Bloque 38"},
-    {"id": "5", "nombre": "Café Con.verso", "alias": ["cocnverso"]},
-    {"id": "6", "nombre": "Bloque 34"},
-    {"id": "7", "nombre": "Cafetería", "alias": []},
-    {"id": "8", "nombre": "Auditorio"},
-]
-TRAS_TOQUE = ("Ruta a Bloque 35: 83 m por el camino", "Gira a tu izquierda y sigue recto 30 metros.")
+# GET /v1/places en dev el 2026-10-28 (un solo lugar) y uno inventado lejos del grafo (~40 m al oeste de n0002).
+BLOQUE_35 = {"id": "b35", "nombre": "Bloque 35", "categoria": "bloque", "lat": 6.201286, "lng": -75.578834}
+LEJANO = {"id": "x", "nombre": "Auditorio", "categoria": "auditorio", "lat": 6.2014317, "lng": -75.5791977}
+TRAS_TOQUE = ("Ruta a bloque 35: 47 m por el camino", "Gira a tu izquierda y sigue recto 30 metros.")
 
 
 def _nodo(texto="", desc="", clase="android.widget.TextView", limites=(0, 0, 10, 10), paquete=comun.PAQUETE):
@@ -64,7 +57,7 @@ class _Simulado:
         self.tmp = tmp_path
         self.casos = casos or dict(CASOS)
         self.fallos = fallos or {}
-        self.lugares = LUGARES_DEV_COMPLETOS if lugares is None else lugares
+        self.lugares = [BLOQUE_35] if lugares is None else lugares
         self.aviso = aviso
         self.tras_toque = tras_toque
         self.be31_hecho = be31_hecho
@@ -179,17 +172,12 @@ def _detalle(datos, id_):
 # --- piezas puras --------------------------------------------------------------------------------------------------
 
 
-def test_normalizar_como_la_app():
-    assert validate51.normalizar("Café Con.verso") == "cafeconverso"
-    assert validate51.normalizar(" Bloque  35 ") == "bloque35"
-    assert validate51.normalizar("CAFETERÍA") == "cafeteria"
-
-
 def test_revisar_el_grafo_real_de_assets():
     r = validate51.revisar_grafo(validate51.GRAFO.read_text(encoding="utf-8"))
-    assert (r.version, r.nodos, r.aristas, r.entradas, r.bloqueadas) == (180, 26, 31, 8, 0)
-    assert r.lugares == ["bloque 33", "Bloque 35", "biblioteca", "bloque 38", "cocnverso", "bloque 34", "cafeteria"]
-    assert 640 < r.metros < 660
+    assert (r.version, r.nodos, r.aristas, r.entradas, r.bloqueadas) == (209, 28, 33, 8, 0)
+    assert r.lugares == ["bloque 33", "bloque 35", "biblioteca", "bloque 38", "cocnverso", "bloque 34", "cafeteria"]
+    assert round(r.metros, 1) == 647.2
+    assert len(r.posiciones) == 28 and len(r.lista_aristas) == 33
 
 
 def _grafo(nodos, aristas, formato=1):
@@ -208,10 +196,8 @@ A1 = {"id": "a1", "a": "n1", "b": "n2", "metros": 11.1}
         (_grafo([N1, N2], [A1], formato=2), "formato 2"),
         (_grafo([N1, N2, N1], [A1]), "id de nodo repetido: n1"),
         (_grafo([N1, N2], [A1, {"id": "a2", "a": "n1", "b": "n9", "metros": 3}]), "nodo inexistente n9"),
-        (_grafo([N1, {**N2, "lugar": " "}], [A1]), "entrada n2 sin lugar"),
         (_grafo([N1, N2, {**N1, "id": "n3"}], [A1]), "2 componentes; fuera del principal: n3"),
         (_grafo([N1, N2], [{**A1, "metros": 0}]), "sin metros > 0"),
-        (_grafo([N1, {**N2, "tipo": "cruce"}], [A1]), "ninguna entrada"),
     ],
 )
 def test_revisar_grafo_invalido(texto, mensaje):
@@ -219,25 +205,72 @@ def test_revisar_grafo_invalido(texto, mensaje):
         validate51.revisar_grafo(texto)
 
 
-def test_emparejar_exactos_normalizados_y_faltan():
-    e = validate51.emparejar(
-        ["Bloque 35", "bloque 33", "cocnverso", "biblioteca"],
-        [{"nombre": "Bloque 35"}, {"nombre": "Bloque 33"}, {"nombre": "Biblioteca Central", "alias": ["biblioteca"]}],
+def test_lugar_opcional_e_informativo():
+    sin_lugar = validate51.revisar_grafo(_grafo([N1, {**N2, "lugar": " "}], [A1]))
+    assert sin_lugar.lugares == [] and sin_lugar.entradas == 1
+    sin_entradas = validate51.revisar_grafo(_grafo([N1, {**N2, "tipo": "cruce"}], [A1]))
+    assert sin_entradas.entradas == 0 and sin_entradas.lugares == ["Bloque 35"]
+
+
+def _real():
+    return validate51.revisar_grafo(validate51.GRAFO.read_text(encoding="utf-8"))
+
+
+def test_proyectar_como_la_app():
+    r = _real()
+    # La posición de prueba de C4b cae sobre a0032 (n0002–n0008), casi en la mitad.
+    pr = validate51.proyectar(r, *validate51.POSICION_PRUEBA)
+    assert pr is not None and pr.arista == "a0032" and abs(pr.t - 0.5) < 0.01 and pr.distancia_m < 1
+    # Bloque 35 del backend: sobre a0007, a menos de 1 m (EmparejamientoTest dice lo mismo).
+    b35 = validate51.proyectar(r, BLOQUE_35["lat"], BLOQUE_35["lng"])
+    assert b35 is not None and b35.arista == "a0007" and b35.distancia_m < 1
+    lejano = validate51.proyectar(r, LEJANO["lat"], LEJANO["lng"])
+    assert lejano is not None and 38 < lejano.distancia_m < 42
+
+
+def test_revisar_lugares():
+    r = _real()
+    revisados = validate51.revisar_lugares(
+        r, [BLOQUE_35, LEJANO, {"id": "s", "nombre": "Sin coordenadas", "lat": None, "lng": -75.5}]
     )
-    assert e.exactos == ["Bloque 35"]
-    assert e.normalizados == {"bloque 33": "Bloque 33", "biblioteca": "Biblioteca Central"}
-    assert e.faltan == ["cocnverso"]
+    assert [(x.nombre, x.con_ruta, x.lejos) for x in revisados] == [
+        ("Bloque 35", True, False),
+        ("Auditorio", True, True),
+        ("Sin coordenadas", False, False),
+    ]
+    assert validate51.describir_lugar(revisados[0]) == "Bloque 35 a 0 m del grafo (a0007)"
+    assert validate51.describir_lugar(revisados[2]) == "Sin coordenadas (sin coordenadas válidas)"
+
+
+def test_revisar_lugares_con_arista_que_no_se_alcanza():
+    # Dos piezas unidas solo por una arista bloqueada: un lugar junto a la pieza pequeña no tiene ruta.
+    n3 = {"id": "n3", "lat": 6.2010, "lng": -75.5, "tipo": "cruce"}
+    n4 = {"id": "n4", "lat": 6.2011, "lng": -75.5, "tipo": "cruce"}
+    n5 = {"id": "n5", "lat": 6.2012, "lng": -75.5, "tipo": "cruce"}
+    aristas = [
+        {"id": "a1", "a": "n1", "b": "n2", "metros": 11.1},
+        {"id": "a2", "a": "n2", "b": "n3", "metros": 11.1},
+        {"id": "a3", "a": "n3", "b": "n4", "metros": 11.1, "bloqueada": True},
+        {"id": "a4", "a": "n4", "b": "n5", "metros": 11.1},
+    ]
+    nodos = [{**N1, "lat": 6.2008}, {**N2, "lat": 6.2009}, n3, n4, n5]
+    r = validate51.revisar_grafo(_grafo(nodos, aristas))
+    cerca, lejos = validate51.revisar_lugares(
+        r, [{"nombre": "A", "lat": 6.2008, "lng": -75.5}, {"nombre": "B", "lat": 6.2012, "lng": -75.5}]
+    )
+    assert cerca.con_ruta and not lejos.con_ruta
+    assert "no se alcanza" in lejos.motivo
 
 
 def test_aviso_en_pantalla_y_metros():
-    nodos = _nodos("Ruta a Bloque 35: 60 m por el camino", "Camina 45 metros por el camino.", "otro")
+    nodos = _nodos("Ruta a bloque 35: 29 m por el camino", "Camina 14 metros por el camino.", "otro")
     assert validate51.aviso_en_pantalla(nodos) == (
-        "Ruta a Bloque 35: 60 m por el camino",
-        "Camina 45 metros por el camino.",
+        "Ruta a bloque 35: 29 m por el camino",
+        "Camina 14 metros por el camino.",
     )
     assert validate51.aviso_en_pantalla(_nodos("Destino: X. Toca el mapa…")) == ("Destino: X. Toca el mapa…", None)
     assert validate51.aviso_en_pantalla(_nodos("Bienvenido")) is None
-    assert validate51.metros_del_aviso("Ruta a Bloque 35: 60 m por el camino") == 60
+    assert validate51.metros_del_aviso("Ruta a bloque 35: 29 m por el camino") == 29
     assert validate51.metros_del_aviso("Destino: X") is None
 
 
@@ -273,7 +306,9 @@ def test_local_pasa_sin_telefono_ni_red(tmp_path, monkeypatch):
     e = _estados(datos)
     assert e == {"P1": "pasa", "C1a": "pasa", "C1b": "pasa", "C2a": "pasa", "C3a": "pasa", "C4a": "pasa",
                  "C3b": "omitida", "C4b": "omitida"}  # fmt: skip
-    assert "26 nodos, 31 aristas (0 bloqueadas), 8 entradas con lugar (7 lugares)" in _detalle(datos, "C1b")
+    assert "v209: 28 nodos, 33 aristas (0 bloqueadas), 8 entradas, 7 nombres de lugar (informativos), 647 m" in (
+        _detalle(datos, "C1b")
+    )
     assert [m["id"] for m in datos["manuales"]] == ["C4c"]
     assert len([g for g in s.gradle_llamadas if "testDebugUnitTest" in g]) == 1
     assert s.adb_llamadas == [] and s.http_llamadas == []
@@ -285,38 +320,57 @@ def test_dev_feliz(tmp_path, monkeypatch):
     codigo, datos = _correr(tmp_path, "dev")
     assert codigo == 0, datos
     assert all(estado == "pasa" for estado in _estados(datos).values())
-    assert "exactos: Bloque 35" in _detalle(datos, "C3b")
-    assert "cocnverso → Café Con.verso" in _detalle(datos, "C3b")
+    assert _detalle(datos, "C3b").startswith("los 1 lugares tienen ruta (GET /v1/places -> 1 lugares; a ≤ 15 m del")
+    assert "Bloque 35 a 0 m del grafo (a0007)" in _detalle(datos, "C3b")
     c4b = _detalle(datos, "C4b")
     assert validate51.TITULO_ESPERADO in c4b and TRAS_TOQUE[0] in c4b
     inicio = next(a for a in s.adb_llamadas if a[:3] == ("shell", "am", "start"))
-    assert inicio[-6:] == ("--es", "destino_prueba", "bloque35", "--es", "posicion_prueba", "6.201434,-75.578427")
+    assert inicio[-6:] == ("--es", "destino_prueba", "bloque35", "--es", "posicion_prueba", "6.201434,-75.578707")
     assert len(s.pasos_guiados) == 1
     assert ("shell", "am", "force-stop", comun.PAQUETE) == s.adb_llamadas[-1]  # limpieza
     assert not any("pm" in a and "clear" in a for a in s.adb_llamadas)
 
 
-def test_dev_hoy_solo_existe_bloque_35(tmp_path, monkeypatch):
-    s = _Simulado(tmp_path, lugares=[{"id": "b", "nombre": "Bloque 35", "categoria": "bloque"}])
+def test_dev_lugar_lejos_avisa_sin_fallar(tmp_path, monkeypatch, capsys):
+    s = _Simulado(tmp_path, lugares=[BLOQUE_35, LEJANO])
     s.instalar_en(monkeypatch)
-    codigo, datos = _correr(tmp_path, "dev")
+    codigo, datos = _correr(tmp_path, "dev", ["--solo", "C3b"])
+    assert codigo == 0
+    detalle = _detalle(datos, "C3b")
+    assert detalle.startswith("los 2 lugares tienen ruta")
+    assert "aviso: 1 a más de 15 m del grafo" in detalle and "Auditorio a 40 m del grafo" in detalle
+    assert "aviso: 1 a más de 15 m del grafo" in capsys.readouterr().err
+    assert _estados(datos)["P2"] == "no evaluada"
+    assert s.adb_llamadas == []
+
+
+def test_dev_lugar_sin_coordenadas_falla(tmp_path, monkeypatch):
+    s = _Simulado(tmp_path, lugares=[BLOQUE_35, {"id": "s", "nombre": "Sin coordenadas", "lng": -75.5}])
+    s.instalar_en(monkeypatch)
+    codigo, datos = _correr(tmp_path, "dev", ["--solo", "C3b"])
     assert codigo == 1
-    assert _estados(datos)["C3b"] == "falla"
-    assert "6 de 7 lugares del grafo no existen en GET /v1/places: bloque 33, biblioteca" in _detalle(datos, "C3b")
-    assert _estados(datos)["C4b"] == "pasa"
+    assert _detalle(datos, "C3b").startswith("1 de 2 lugares sin ruta: Sin coordenadas (sin coordenadas válidas)")
+
+
+def test_dev_sin_lugares_no_hay_nada_que_comprobar(tmp_path, monkeypatch):
+    s = _Simulado(tmp_path, lugares=[])
+    s.instalar_en(monkeypatch)
+    codigo, datos = _correr(tmp_path, "dev", ["--solo", "C3b"])
+    assert codigo == 0
+    assert _detalle(datos, "C3b") == "GET /v1/places -> 0 lugares: nada que comprobar"
 
 
 def test_dev_aviso_distinto(tmp_path, monkeypatch):
-    s = _Simulado(tmp_path, aviso=("Ruta a Bloque 35: 61 m por el camino", "Camina 46 metros por el camino."))
+    s = _Simulado(tmp_path, aviso=("Ruta a bloque 35: 30 m por el camino", "Camina 15 metros por el camino."))
     s.instalar_en(monkeypatch)
     codigo, datos = _correr(tmp_path, "dev", ["--solo", "C4b"])
     assert codigo == 1
-    assert "se esperaba «Ruta a Bloque 35: 60 m por el camino»" in _detalle(datos, "C4b")
+    assert "se esperaba «Ruta a bloque 35: 29 m por el camino»" in _detalle(datos, "C4b")
     assert s.pasos_guiados == []
 
 
 def test_dev_sin_ruta_en_el_mapa(tmp_path, monkeypatch):
-    s = _Simulado(tmp_path, aviso=("Destino: Bloque 35. Toca el mapa para fijar tu posición y ver la ruta.", None))
+    s = _Simulado(tmp_path, aviso=("Destino: bloque 35. Toca el mapa para fijar tu posición y ver la ruta.", None))
     s.instalar_en(monkeypatch)
     codigo, datos = _correr(tmp_path, "dev", ["--solo", "C4b"])
     assert codigo == 1

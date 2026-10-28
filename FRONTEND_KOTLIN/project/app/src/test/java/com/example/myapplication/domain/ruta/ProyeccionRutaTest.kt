@@ -9,11 +9,15 @@ import org.junit.Test
 
 /**
  * FE-5.1, criterio C2: la posición se proyecta sobre la **arista** más cercana (no el nodo más cercano) y la ruta más
- * corta sale de ese nodo virtual, sin aristas bloqueadas, a la entrada más cercana del lugar.
+ * corta va de ese nodo virtual de partida al nodo virtual de llegada (la proyección de las coordenadas del destino), sin
+ * aristas bloqueadas.
  */
 class ProyeccionRutaTest {
 
     private fun proyectar(g: Grafo, x: Double, y: Double) = Proyeccion.masCercana(g, lat(y), lng(x))!!
+
+    private fun camino(g: Grafo, desde: Pair<Double, Double>, hasta: Pair<Double, Double>) =
+        CalculoRuta.masCorta(g, proyectar(g, desde.first, desde.second), proyectar(g, hasta.first, hasta.second))
 
     @Test
     fun proyectaSobreElSegmentoConFraccionYDistancia() {
@@ -53,45 +57,52 @@ class ProyeccionRutaTest {
     @Test
     fun laRutaSaleDelPuntoProyectadoNoDelNodoMasCercano() {
         // A 45 m de A y 55 m de B: el nodo más cercano es A, pero la ruta a C va hacia B (55 + 100), no hacia atrás.
-        val g = cuadrado()
-        val inicio = proyectar(g, 45.0, -3.0)
-        val camino = CalculoRuta.masCorta(g, inicio, setOf("C"))!!
-        assertEquals(listOf("B", "C"), camino.nodos.map { it.id })
-        assertEquals(155.0, camino.metros, 0.5)
-        assertEquals("C", camino.entrada.id)
+        val c = camino(cuadrado(), 45.0 to -3.0, 100.0 to 100.0)!!
+        assertEquals("B", c.nodos.first().id) // [B] o [B, C]: la meta está sobre C (empate exacto entre los dos)
+        assertEquals(155.0, c.metros, 0.5)
+    }
+
+    @Test
+    fun laMetaEsLaProyeccionDelDestinoEnMitadDeUnaArista() {
+        // Destino (104, 60): se proyecta a 60 m de B sobre B–C; desde (45, −3): 55 + 60.
+        val c = camino(cuadrado(), 45.0 to -3.0, 104.0 to 60.0)!!
+        assertEquals("bc", c.fin.arista.id)
+        assertEquals(0.6, c.fin.t, 0.002)
+        assertEquals(4.0, c.fin.distanciaM, 0.05)
+        assertEquals(listOf("B"), c.nodos.map { it.id })
+        assertEquals(115.0, c.metros, 0.5)
+    }
+
+    @Test
+    fun enLaMismaAristaVaDirecto() {
+        val c = camino(cuadrado(), 10.0 to -5.0, 60.0 to 3.0)!!
+        assertEquals(emptyList<String>(), c.nodos.map { it.id })
+        assertEquals(50.0, c.metros, 0.3)
+        // Hacia atrás en la misma arista, también directo.
+        assertEquals(50.0, camino(cuadrado(), 60.0 to -5.0, 10.0 to 3.0)!!.metros, 0.3)
     }
 
     @Test
     fun evitaLasAristasBloqueadas() {
-        val g = cuadrado(bloquearBC = true)
-        val camino = CalculoRuta.masCorta(g, proyectar(g, 45.0, -3.0), setOf("C"))!!
-        assertEquals(listOf("A", "D", "C"), camino.nodos.map { it.id })
-        assertEquals(245.0, camino.metros, 0.5)
+        val c = camino(cuadrado(bloquearBC = true), 45.0 to -3.0, 100.0 to 100.0)!!
+        assertEquals(listOf("A", "D"), c.nodos.map { it.id }.take(2))
+        assertEquals(245.0, c.metros, 0.5)
     }
 
     @Test
-    fun conVariasEntradasGanaLaMasCercanaPorElCamino() {
-        val g = cuadrado(entradaE = true)
-        val camino = CalculoRuta.masCorta(g, proyectar(g, 90.0, -2.0), setOf("C", "E"))!!
-        assertEquals("E", camino.entrada.id)
-        assertEquals(60.0, camino.metros, 0.5)
+    fun sinCaminoDaNull() {
+        // Con B–C y D–A bloqueadas, A–B y C–D quedan sueltas: de A–B no se llega a una meta sobre C–D.
+        val base = cuadrado()
+        val g = Grafo(
+            1, 1, null, base.nodos,
+            base.aristas.map { if (it.id == "bc" || it.id == "da") it.copy(bloqueada = true) else it },
+        )
+        assertNull(camino(g, 45.0 to -3.0, 50.0 to 103.0))
     }
 
     @Test
-    fun sinCaminoODestinosVaciosDaNull() {
-        // C solo se alcanza por B–C (bloqueada) y C–D; si C–D también se bloquea, C queda inalcanzable.
-        val base = cuadrado(bloquearBC = true)
-        val g = Grafo(1, 1, null, base.nodos, base.aristas.map { if (it.id == "cd") it.copy(bloqueada = true) else it })
-        val inicio = proyectar(g, 45.0, -3.0)
-        assertNull(CalculoRuta.masCorta(g, inicio, setOf("C")))
-        assertNull(CalculoRuta.masCorta(g, inicio, emptySet()))
-    }
-
-    @Test
-    fun enUnNodoDestinoLaRutaMideCero() {
-        val g = cuadrado()
-        val camino = CalculoRuta.masCorta(g, proyectar(g, 100.0, 100.0), setOf("C"))!!
-        assertEquals(listOf("C"), camino.nodos.map { it.id })
-        assertEquals(0.0, camino.metros, 0.01)
+    fun enElDestinoLaRutaMideCero() {
+        val c = camino(cuadrado(), 100.0 to 100.0, 100.0 to 100.0)!!
+        assertEquals(0.0, c.metros, 0.01)
     }
 }

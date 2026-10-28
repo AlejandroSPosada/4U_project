@@ -7,16 +7,19 @@ import com.example.myapplication.domain.ruta.EmparejarLugares
 import com.example.myapplication.domain.ruta.LectorGrafo
 import com.example.myapplication.domain.ruta.Planificador
 import com.example.myapplication.logs.AppLog
+import kotlin.math.roundToInt
 
 /**
  * El grafo de caminos de la app (FE-5.1; ARCHITECTURE §5.6 y §5.7, «Grafo y rutas»): `assets/grafo.json`, de solo
  * lectura, leído **una vez por proceso** con [LectorGrafo]. Si el archivo falta o es inválido, la app no se cae: las
  * rutas quedan desactivadas ([planificador] da `null`) y se registra una línea `Grafo` con los errores.
  *
- * Líneas `Grafo` (`AppLog`, sin la posición de la persona): `Grafo v180 cargado: 26 nodos, 31 aristas, 8 entradas`
+ * Líneas `Grafo` (`AppLog`, sin la posición de la persona): `Grafo v209 cargado: 28 nodos, 33 aristas, 8 entradas`
  * (`AppLog.i`), `Grafo: aviso: …` (`AppLog.w`, una por aviso), `grafo.json inválido (N errores): …; rutas
- * desactivadas` o `grafo.json no se pudo leer (…); rutas desactivadas` (`AppLog.w`) y, desde 6.4,
- * `Grafo: N de M lugares del grafo sin lugar en el backend: …` (`AppLog.w`, una vez por proceso).
+ * desactivadas` o `grafo.json no se pudo leer (…); rutas desactivadas` (`AppLog.w`) y, desde 6.4 (una vez por
+ * proceso), `Grafo: los M lugares del backend quedan a ≤ 15 m del grafo` (`AppLog.i`) o `Grafo: N de M lugares del
+ * backend quedan a más de 15 m del grafo: X (40 m), …` (`AppLog.w`; nombres y distancias de lugares, no la posición
+ * de nadie).
  */
 object GrafoDeLaApp {
 
@@ -62,19 +65,25 @@ object GrafoDeLaApp {
         (cargar(context) as? CargaGrafo.Valido)?.let { Planificador(it.grafo) }
 
     /**
-     * Avisa (una vez por proceso, línea `Grafo`) de los lugares del grafo que no casan con ningún lugar del backend.
-     * La llama Selección de destino (6.4) al cargar `GET /v1/places`.
+     * Avisa (una vez por proceso, línea `Grafo`) de cómo quedan los lugares del backend respecto al grafo (por
+     * coordenadas: la meta de una ruta es el punto del grafo más cercano al lugar). La llama Selección de destino (6.4)
+     * al cargar `GET /v1/places`.
      */
     fun avisarEmparejamiento(context: Context, lugares: List<LugarDestino>) {
         if (emparejamientoAvisado) return
-        val grafo = (cargar(context) as? CargaGrafo.Valido)?.grafo ?: return
+        val planificador = planificador(context) ?: return
         emparejamientoAvisado = true
-        val e = EmparejarLugares.emparejar(grafo.lugares, lugares)
-        if (e.sinLugarEnBackend.isNotEmpty()) {
+        val p = planificador.parametros
+        val emparejados = EmparejarLugares.emparejar(planificador.grafo, lugares, p)
+        val lejos = emparejados.filter { it.lejos || it.punto == null }
+        if (lejos.isEmpty()) {
+            AppLog.i(TAG, "Grafo: los ${lugares.size} lugares del backend quedan a ≤ ${p.fueraDelCaminoM.roundToInt()} m del grafo")
+        } else {
             AppLog.w(
                 TAG,
-                "Grafo: ${e.sinLugarEnBackend.size} de ${grafo.lugares.size} lugares del grafo sin lugar en el backend: " +
-                    e.sinLugarEnBackend.joinToString(),
+                "Grafo: ${lejos.size} de ${lugares.size} lugares del backend quedan a más de " +
+                    "${p.fueraDelCaminoM.roundToInt()} m del grafo: " +
+                    lejos.joinToString { l -> "${l.lugar.nombre} (${l.punto?.let { "${it.distanciaM.roundToInt()} m" } ?: "sin coordenadas"})" },
             )
         }
     }

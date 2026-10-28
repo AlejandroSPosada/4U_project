@@ -17,13 +17,13 @@ sealed interface CargaGrafo {
  *
  * **Invalida el grafo:** JSON roto o que no es un objeto; `formato` distinto de [FORMATO]; sin `version` entera; sin
  * listas `nodos` o `aristas`; un nodo sin `id`, `lat`/`lng` numéricos (y en rango) o `tipo`; una arista sin `id`, `a` o
- * `b`; ids de nodo o de arista repetidos; una arista a un nodo inexistente o de un nodo a sí mismo; una `entrada` sin
- * `lugar`; más de un componente conexo (contando todas las aristas, también las bloqueadas: un nodo aislado es un
- * componente).
+ * `b`; ids de nodo o de arista repetidos; una arista a un nodo inexistente o de un nodo a sí mismo; más de un
+ * componente conexo (contando todas las aristas, también las bloqueadas: un nodo aislado es un componente).
  *
  * **Solo avisa:** un `tipo` de nodo que no es `cruce` ni `entrada`; `metros` ausente o ≤ 0 (se usa la distancia entre
- * los nodos); `lugar` en un nodo que no es `entrada` (se ignora). `contadores` (del editor que generó el archivo) se
- * ignora.
+ * los nodos). `lugar` es **opcional e informativo** en cualquier nodo (decisión del usuario del 2026-10-28: la meta de
+ * una ruta sale de las coordenadas del destino, no del nombre): no se exige ni se comprueba. `contadores` (los
+ * siguientes ids libres del editor que generó el archivo, no totales) se ignora.
  */
 object LectorGrafo {
 
@@ -65,8 +65,7 @@ object LectorGrafo {
             if (lat !in -90.0..90.0 || lng !in -180.0..180.0) errores += "nodo $id con coordenadas fuera de rango"
             if (tipo != TiposNodo.CRUCE && tipo != TiposNodo.ENTRADA) avisos += "nodo $id de tipo desconocido «$tipo»"
             val lugar = texto(n, "lugar")?.trim()?.takeIf { it.isNotEmpty() }
-            if (lugar != null && tipo != TiposNodo.ENTRADA) avisos += "nodo $id tiene lugar pero no es entrada (se ignora)"
-            nodos += Nodo(id, lat, lng, tipo, if (tipo == TiposNodo.ENTRADA) lugar else null)
+            nodos += Nodo(id, lat, lng, tipo, lugar)
         }
 
         val porId = nodos.associateBy { it.id }
@@ -108,8 +107,8 @@ object LectorGrafo {
     }
 
     /**
-     * Las reglas de estructura (ids repetidos, aristas a nodos inexistentes o a sí mismas, entradas sin lugar, más de
-     * un componente). Lista vacía = válido.
+     * Las reglas de estructura (ids repetidos, aristas a nodos inexistentes o a sí mismas, más de un componente).
+     * Lista vacía = válido.
      */
     fun validar(nodos: List<Nodo>, aristas: List<Arista>): List<String> {
         val errores = mutableListOf<String>()
@@ -121,7 +120,6 @@ object LectorGrafo {
             if (ar.b !in ids) errores += "arista ${ar.id}: nodo inexistente ${ar.b}"
             if (ar.a == ar.b) errores += "arista ${ar.id} une un nodo consigo mismo"
         }
-        nodos.filter { it.esEntrada && it.lugar.isNullOrBlank() }.forEach { errores += "entrada ${it.id} sin lugar" }
         if (nodos.isEmpty()) errores += "sin nodos"
         val comps = componentes(nodos, aristas)
         if (comps.size > 1) {

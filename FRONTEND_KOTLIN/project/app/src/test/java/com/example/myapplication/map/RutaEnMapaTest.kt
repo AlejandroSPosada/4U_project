@@ -29,16 +29,21 @@ class RutaEnMapaTest {
             TextosRutaMapa.aviso("Auditorio", true, true, ResultadoRuta.DestinoFueraDelGrafo)!!.titulo,
         )
         assertEquals("No encontré un camino hasta X.", TextosRutaMapa.aviso("X", true, true, ResultadoRuta.SinCamino)!!.titulo)
-        val r = planificador.calcular(6.201434, -75.578427, listOf("bloque35"), "Bloque 35", null)
+        // La ruta de validate51.py C4b (grafo versión 209).
+        val r = planificador.calcular(6.201434, -75.578707, listOf("bloque35"), "bloque 35", null)
         assertEquals(
-            AvisoRuta("Ruta a Bloque 35: 60 m por el camino", "Camina 45 metros por el camino."),
-            TextosRutaMapa.aviso("Bloque 35", true, true, r),
+            AvisoRuta("Ruta a bloque 35: 29 m por el camino", "Camina 14 metros por el camino."),
+            TextosRutaMapa.aviso("bloque 35", true, true, r),
         )
+        // Un destino de prueba por coordenadas (Bloque 35 del backend) también tiene ruta.
+        val c = planificador.calcular(6.201434, -75.578707, listOf("6.201286,-75.578834"), TextosRutaMapa.DESTINO_DE_PRUEBA, null)
+        assertEquals("Ruta a Destino de prueba: 31 m por el camino", TextosRutaMapa.aviso("Destino de prueba", true, true, c)!!.titulo)
     }
 
     @Test
     fun nombreDeUnDestinoDePrueba() {
-        assertEquals("Bloque 35", TextosRutaMapa.nombrePrueba(planificador, "bloque35"))
+        assertEquals("bloque 35", TextosRutaMapa.nombrePrueba(planificador, "bloque35"))
+        assertEquals(TextosRutaMapa.DESTINO_DE_PRUEBA, TextosRutaMapa.nombrePrueba(planificador, "6.201286,-75.578834"))
         assertEquals("cafeteria", TextosRutaMapa.nombrePrueba(planificador, "Cafetería"))
         assertEquals("Auditorio", TextosRutaMapa.nombrePrueba(planificador, "Auditorio"))
         assertEquals("bloque35", TextosRutaMapa.nombrePrueba(null, "bloque35"))

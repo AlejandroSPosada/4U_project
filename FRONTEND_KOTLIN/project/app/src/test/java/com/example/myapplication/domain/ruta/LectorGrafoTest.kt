@@ -4,7 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** FE-5.1, criterio C1: `grafo.json` se lee tal cual y se valida; uno inválido no lanza (ARCHITECTURE §5.7). */
+/**
+ * FE-5.1, criterio C1: `grafo.json` se lee tal cual y se valida; uno inválido no lanza (ARCHITECTURE §5.7). `lugar` es
+ * opcional e informativo (decisión del usuario del 2026-10-28).
+ */
 class LectorGrafoTest {
 
     private fun json(nodos: String, aristas: String, formato: Int = 1, version: String = "7") =
@@ -25,20 +28,20 @@ class LectorGrafoTest {
         assertTrue("$carga", carga is CargaGrafo.Valido)
         val g = (carga as CargaGrafo.Valido).grafo
         assertEquals(1, g.formato)
-        assertEquals(180, g.version)
-        assertEquals(26, g.nodos.size)
-        assertEquals(31, g.aristas.size)
+        assertEquals(209, g.version)
+        assertEquals("2026-10-28T10:18:28-05:00", g.actualizado)
+        assertEquals(28, g.nodos.size)
+        assertEquals(33, g.aristas.size)
         assertEquals(8, g.entradas.size)
-        assertEquals(18, g.nodos.count { it.tipo == TiposNodo.CRUCE })
+        assertEquals(20, g.nodos.count { it.tipo == TiposNodo.CRUCE })
         assertEquals(1, LectorGrafo.componentes(g.nodos, g.aristas).size)
         assertTrue(carga.avisos.isEmpty())
         assertEquals(
-            listOf("bloque 33", "Bloque 35", "biblioteca", "bloque 38", "cocnverso", "bloque 34", "cafeteria"),
+            listOf("bloque 33", "bloque 35", "biblioteca", "bloque 38", "cocnverso", "bloque 34", "cafeteria"),
             g.lugares,
         )
-        assertEquals(2, g.entradas.count { it.lugar == "biblioteca" })
         assertTrue(g.aristas.none { it.bloqueada })
-        assertEquals(650.0, g.metrosTotales, 10.0)
+        assertEquals(647.2, g.metrosTotales, 0.05)
     }
 
     @Test
@@ -53,8 +56,8 @@ class LectorGrafoTest {
         assertEquals("camino", g.aristas[1].tipo)
         assertTrue(g.aristas[1].accesible)
         assertEquals(11.1, g.aristas[1].metros, 0.2) // sin metros: la distancia entre n2 y n3
-        assertEquals(null, g.porId.getValue("n3").lugar) // lugar en un nodo que no es entrada: se ignora
-        assertEquals(3, carga.avisos.size) // tipo desconocido, lugar ignorado, metros calculados
+        assertEquals("x", g.porId.getValue("n3").lugar) // lugar en cualquier nodo: informativo, se conserva
+        assertEquals(2, carga.avisos.size) // tipo desconocido y metros calculados
     }
 
     @Test
@@ -81,7 +84,7 @@ class LectorGrafoTest {
     }
 
     @Test
-    fun componenteAisladoYEntradaSinLugar() {
+    fun componenteAisladoInvalidaYEntradaSinLugarNo() {
         val e = errores(
             json(
                 dosNodos + """, {"id": "n3", "lat": 6.2012, "lng": -75.5785, "tipo": "entrada"},
@@ -89,8 +92,11 @@ class LectorGrafoTest {
                 unaArista + """, {"id": "a2", "a": "n3", "b": "n4", "metros": 11}""",
             ),
         )
-        assertTrue(e.toString(), e.contains("entrada n3 sin lugar"))
+        assertTrue(e.toString(), e.none { it.contains("sin lugar") })
         assertTrue(e.toString(), e.any { it.startsWith("el grafo tiene 2 componentes; fuera del principal: n3, n4") })
+        // Una entrada sin lugar, sola, no invalida el grafo (el lugar es informativo).
+        val sinLugar = LectorGrafo.leer(json(dosNodos.replace(", \"lugar\": \"Bloque 35\"", ""), unaArista))
+        assertTrue("$sinLugar", sinLugar is CargaGrafo.Valido && (sinLugar as CargaGrafo.Valido).avisos.isEmpty())
     }
 
     @Test

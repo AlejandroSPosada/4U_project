@@ -226,7 +226,8 @@ fun MapaPublicoScreen(modifier: Modifier = Modifier) {
             mostrar = TextosRutaMapa.nombrePrueba(planificador, destinoPrueba)
         } else {
             val d = destinoSesion
-            nombres = d?.let { listOf(it.nombre) + it.alias }
+            // FE-5.1 (decisión del usuario del 2026-10-28): la meta sale de las coordenadas del lugar, no de su nombre.
+            nombres = d?.let { listOf("${it.lat},${it.lng}") }
             mostrar = d?.nombre
         }
         val pos = posicionActual
