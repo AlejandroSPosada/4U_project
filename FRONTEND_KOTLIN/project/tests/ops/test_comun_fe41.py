@@ -1,4 +1,6 @@
-"""Pruebas de las ayudas de `comun.py` que añadió FE-4.1: `jpeg_sintetico` y `http_put_bytes`."""
+"""Pruebas de las ayudas de `comun.py` que añadió FE-4.1: `jpeg_sintetico`, `http_put_bytes` y, para la interfaz del
+teléfono, el `package` y el `focused` de los nodos, `app_en_primer_plano`, `de_la_app`, `desplazar_hacia_arriba` y
+`textos_visibles` sin los textos de otras apps."""
 
 from __future__ import annotations
 
@@ -72,3 +74,62 @@ def test_http_put_bytes_sin_respuesta_no_dice_la_url():
         comun.http_put_bytes("http://127.0.0.1:9/x.jpg?X-Amz-Signature=FIRMA-SECRETA", b"x", {}, timeout=2)
     assert "FIRMA-SECRETA" not in str(e.value)
     assert "127.0.0.1" not in str(e.value)
+
+
+def _ui(*nodos: tuple[str, str, str]) -> list[comun.Nodo]:
+    """(texto, package, extra) → nodos de un volcado de uiautomator."""
+    partes = "".join(
+        f'<node text="{t}" content-desc="" class="android.widget.TextView" package="{p}" {extra} '
+        'bounds="[0,0][10,10]" enabled="true" password="false"/>'
+        for t, p, extra in nodos
+    )
+    return comun.parsear_ui(f"<hierarchy>{partes}</hierarchy>")
+
+
+def test_los_nodos_traen_su_paquete_y_el_foco():
+    a, b = _ui(("Hola", comun.PAQUETE, 'focused="true"'), ("DaviPlata", "com.miui.home", ""))
+    assert (a.paquete, a.enfocado, a.de_la_app) == (comun.PAQUETE, True, True)
+    assert (b.paquete, b.enfocado, b.de_la_app) == ("com.miui.home", False, False)
+    # Un nodo sin `package` (hecho a mano, como en las pruebas de los otros validadores) cuenta como de la app.
+    sin = comun.Nodo("x", "", "android.widget.TextView", (0, 0, 1, 1), True, False)
+    assert sin.de_la_app and not sin.enfocado
+    assert comun.de_la_app([a, b, sin]) == [a, sin]
+
+
+def test_app_en_primer_plano():
+    assert comun.app_en_primer_plano(_ui(("Videos de recolección", comun.PAQUETE, "")))
+    assert not comun.app_en_primer_plano(_ui(("DaviPlata", "com.miui.home", ""), ("Instagram", "com.miui.home", "")))
+    assert not comun.app_en_primer_plano([])
+
+
+def test_textos_visibles_no_lista_otras_apps():
+    inicio = _ui(
+        ("DaviPlata", "com.miui.home", ""), ("Instagram", "com.miui.home", ""), ("My Application", "com.miui.home", "")
+    )
+    texto = comun.textos_visibles(inicio)
+    assert "la app no está en primer plano" in texto
+    for nombre in ("DaviPlata", "Instagram", "My Application", "com.miui.home"):
+        assert nombre not in texto
+    mezcla = _ui(("Videos de recolección", comun.PAQUETE, ""), ("DaviPlata", "com.miui.home", ""))
+    assert comun.textos_visibles(mezcla) == "«Videos de recolección» (y 1 textos de otra app, omitidos)"
+    # Un diálogo del sistema sí se lee (sirve para el diagnóstico).
+    dialogo = _ui(("¿Permitir que My Application tome fotos?", "com.android.permissioncontroller", ""))
+    assert "Permitir" in comun.textos_visibles(dialogo)
+    assert comun.textos_visibles([]) == "(nada legible)"
+
+
+def test_desplazar_hacia_arriba_desliza_de_arriba_abajo(monkeypatch):
+    ordenes: list[tuple[str, ...]] = []
+
+    def adb(*args, timeout=0):
+        ordenes.append(args)
+        if args[:3] == ("shell", "wm", "size"):
+            return comun.Resultado(0, "Physical size: 1080x2400\n", "")
+        return comun.Resultado(0, "", "")
+
+    monkeypatch.setattr(comun, "adb", adb)
+    comun.desplazar_hacia_arriba()
+    comun.desplazar_hacia_abajo()
+    arriba, abajo = (o for o in ordenes if o[:3] == ("shell", "input", "swipe"))
+    assert arriba[3:7] == ("540", "720", "540", "1680")  # del 30 % al 70 %: la página sube
+    assert abajo[3:7] == ("540", "1680", "540", "720")

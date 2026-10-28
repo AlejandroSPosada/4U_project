@@ -131,7 +131,7 @@ en `project/.validacion/FE-4.1-<AAAAMMDD-HHMMSS>.json` (hora UTC) o en `--inform
    ```bash
    uv run --frozen ruff check . && uv run --frozen ruff format --check . && uv run --frozen pytest -q
    ```
-   Esperado: `All checks passed!`, `25 files already formatted` y `277 passed, 1 skipped` (la omitida es la
+   Esperado: `All checks passed!`, `25 files already formatted` y `289 passed, 1 skipped` (la omitida es la
    decodificación con Pillow de `jpeg_sintetico`, que no está en el grupo `ops`).
 3. Compilación y pruebas unitarias de la app:
    ```bash
@@ -210,7 +210,19 @@ Resultado: pasa (código 0)
 hay, los números son mayores y el script los compara igual con la API.) Al terminar, en stderr: `· limpieza: cerrar la
 app (am force-stop)` y `· limpieza: borrar los videos de prueba (validacion-4-1-*)` (orden inverso al de registro).
 
+El validador nunca pulsa Atrás en el Panel (es la raíz: cerraría la app) ni con otra app en primer plano: reconoce el
+Panel por el saludo o, si está desplazado, por los textos de sus tarjetas, y antes de cada Atrás, toque o texto mira el
+`package` del volcado. Los mensajes nunca listan textos de otras apps (p. ej. la pantalla de inicio): dicen «(la app no
+está en primer plano: …; sus textos no se muestran)».
+
 Casos previstos:
+- `[FALLA] C1b|C3b|C2b la app salió del primer plano (se ve otra app o la pantalla de inicio): no se pulsa nada fuera de
+  ella` (o `… mientras se esperaba <qué>`) → la app se cerró o alguien la dejó (Inicio, una notificación). Si fue al
+  eliminar en C2b, es una falla de la app (C2: «sin cerrar la app»); si no, repetir con el teléfono quieto. La siguiente
+  comprobación vuelve a abrirla e iniciar sesión sola. (En la primera ejecución en `dev`, sobre `01adb2e`, C3b y C2b
+  fallaron con «no se volvió al Panel con Atrás» por el validador: ARCHITECTURE §5.11, trampas de FE-4.1.)
+- `[FALLA] … se ve el Panel pero no «Hola, <nombre>» tras subir 5 veces` → el saludo cambió (o el nombre del admin):
+  revisar `saludo_esperado`.
 - `[FALLA] P6 BE-4.1 no está «Hecho» …` (código 2) → BE-4.1 no está cerrado: esperar.
 - `[FALLA] C1b 7.13 dice «X videos», pero GET /v1/admin/videos da total Y` → la Lista no muestra el `total` del servidor
   (o cambió mientras se leía: repetir sin subidas en marcha).

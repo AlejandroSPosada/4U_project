@@ -63,6 +63,23 @@ LIMITE_FILTRO_S = 15  # tras escribir en un buscador (espera de 400 ms + la peti
 LIMITE_RENOMBRAR_S = 20
 LIMITE_VUELTA_S = 30  # tras el Enter de C2b, hasta ver 7.13
 MAX_DESPLAZAMIENTOS = 4
+MAX_ATRAS = 4  # 7.14 → 7.13 → Panel, más cerrar el teclado y un diálogo
+LIMITE_ATRAS_S = 5  # tras un Atrás, hasta que cambie la pantalla o se vea el Panel (al volver, el Panel recarga)
+LIMITE_FUERA_S = 3  # fuera de la app más tiempo que esto → «la app salió del primer plano»
+SALIO_DE_LA_APP = "la app salió del primer plano (se ve otra app o la pantalla de inicio)"
+# Textos que solo tiene el Panel (PanelAdminScreen; ARCHITECTURE §5.5): lo reconocen aunque esté desplazado y el saludo
+# haya quedado arriba, fuera de la pantalla (Compose conserva el desplazamiento al volver: rememberScrollState).
+MARCAS_PANEL = (
+    "Panel de administración · Campus Navi",
+    "Captura y gestiona las imágenes del entorno.",
+    "Administra los lugares del campus.",
+    "Gestiona el mapa, rutas y alertas de seguridad.",
+    "Revisa y administra el dataset de imágenes.",
+    "Gestiona los videos del sistema.",
+    "Consulta métricas y rendimiento del sistema.",
+    "Resumen rápido",
+    "Cerrar sesión",
+)
 TECLA_FIN = "123"  # KEYCODE_MOVE_END
 TECLA_BORRAR = "67"  # KEYCODE_DEL
 # Textos de la app (ARCHITECTURE §5.5 y TextosVideos): cambiarlos exige cambiarlos aquí.
@@ -244,6 +261,21 @@ def sin_subir_en_manifests(manifests: list[str]) -> int:
 def saludo_esperado(nombre: str) -> str:
     primero = nombre.strip().split(" ")[0]
     return f"Hola, {primero}" if primero else "Hola"
+
+
+def es_panel(nodos: list[comun.Nodo], saludo: str) -> bool:
+    """¿Se ve el Panel? Por el saludo o, si está desplazado o recargando su resumen, por un texto que solo tiene él
+    (`MARCAS_PANEL`). Solo cuentan los nodos de la app. En el Panel nunca se pulsa Atrás: es la raíz y cerraría la
+    app."""
+    propios = comun.de_la_app(nodos)
+    if comun.primero(propios, dice=saludo) is not None:
+        return True
+    return any(comun.primero(propios, contiene=marca) is not None for marca in MARCAS_PANEL)
+
+
+def firma_pantalla(nodos: list[comun.Nodo]) -> tuple[tuple[str, str, str], ...]:
+    """Lo que se ve (textos y clases de la app), para saber si un Atrás ya cambió la pantalla."""
+    return tuple((n.texto, n.descripcion, n.clase) for n in comun.de_la_app(nodos))
 
 
 # --- validador ---------------------------------------------------------------------------------------------------
@@ -517,16 +549,36 @@ def main(argv: list[str] | None = None) -> int:
         comun.esperar_nodo(panel, LIMITE_LOGIN_S, f"«{saludo}» (Panel)")
         ctx.panel_abierto = True
 
+    def pantalla_de_la_app() -> list[comun.Nodo]:
+        """Volcado de la pantalla, exigiendo que sea de la app (hasta `LIMITE_FUERA_S` de margen). Fuera de ella no se
+        toca, no se escribe y no se pulsa Atrás: Falla, y la siguiente comprobación vuelve a abrirla e iniciar
+        sesión."""
+        fin = comun.reloj() + LIMITE_FUERA_S
+        while True:
+            nodos = comun.volcar_pantalla()
+            if comun.app_en_primer_plano(nodos):
+                return nodos
+            if comun.reloj() >= fin:
+                ctx.panel_abierto = False
+                raise comun.Falla(f"{SALIO_DE_LA_APP}: no se pulsa nada fuera de ella")
+            comun.dormir(1)
+
     def cerrar_teclado() -> None:
-        if comun.teclado_visible():
+        """Atrás para cerrar el teclado, solo si hay un campo de la app con el foco **y** `dumpsys input_method` dice
+        que está abierto (puede seguir diciéndolo después de cerrarlo, y entonces Atrás sale de la pantalla), y nunca en
+        el Panel (no tiene campos; Atrás cerraría la app)."""
+        nodos = pantalla_de_la_app()
+        if es_panel(nodos, saludo_esperado(ctx.nombre_admin)):
+            return
+        if any(n.es_campo and n.enfocado for n in comun.de_la_app(nodos)) and comun.teclado_visible():
             comun.tecla(comun.TECLA_ATRAS)
             comun.dormir(1)
 
     def tocar_en_panel(texto: str) -> None:
         """Toca la tarjeta del Panel que dice `texto` (bajando hasta `MAX_DESPLAZAMIENTOS` veces)."""
         for intento in range(MAX_DESPLAZAMIENTOS + 1):
-            nodos = comun.volcar_pantalla()
-            nodo = comun.primero(nodos, dice=texto)
+            nodos = pantalla_de_la_app()
+            nodo = comun.primero(comun.de_la_app(nodos), dice=texto)
             if nodo is not None:
                 comun.tocar(nodo)
                 return
@@ -535,23 +587,53 @@ def main(argv: list[str] | None = None) -> int:
                 comun.dormir(0.5)
         raise comun.Falla(f"no se ve «{texto}» en el Panel; en pantalla: {comun.textos_visibles(nodos)}")
 
-    def volver_al_panel() -> None:
-        """Atrás (cerrando antes el teclado) hasta ver el saludo del Panel; como mucho 4 veces."""
-        saludo = saludo_esperado(ctx.nombre_admin)
-        cerrar_teclado()
-        for _ in range(4):
-            nodos = comun.volcar_pantalla()
-            if comun.primero(nodos, dice=saludo) is not None:
+    def subir_al_saludo(nodos: list[comun.Nodo], saludo: str) -> None:
+        """Deja el Panel arriba del todo, con el saludo a la vista (`tocar_en_panel` busca bajando): desliza hacia
+        arriba hasta `MAX_DESPLAZAMIENTOS + 1` veces."""
+        for _ in range(MAX_DESPLAZAMIENTOS + 1):
+            if comun.primero(comun.de_la_app(nodos), dice=saludo) is not None:
                 return
+            comun.desplazar_hacia_arriba()
+            comun.dormir(0.5)
+            nodos = pantalla_de_la_app()
+        if comun.primero(comun.de_la_app(nodos), dice=saludo) is None:
+            raise comun.Falla(
+                f"se ve el Panel pero no «{saludo}» tras subir {MAX_DESPLAZAMIENTOS + 1} veces; en pantalla: "
+                f"{comun.textos_visibles(nodos)}"
+            )
+
+    def volver_al_panel() -> None:
+        """Atrás hasta el Panel, sin salir nunca de la app (FE-4.1): antes de cada Atrás mira que la pantalla sea de la
+        app (si no, Falla «la app salió del primer plano») y que no sea ya el Panel (por el saludo o por `MARCAS_PANEL`,
+        aunque esté desplazado o recargando); tras cada Atrás espera hasta `LIMITE_ATRAS_S` a que la pantalla cambie.
+        El Atrás también cierra el teclado o un diálogo. Como mucho `MAX_ATRAS` veces; al llegar, sube al saludo."""
+        saludo = saludo_esperado(ctx.nombre_admin)
+        nodos: list[comun.Nodo] = []
+        for atras in range(MAX_ATRAS + 1):
+            nodos = pantalla_de_la_app()
+            if es_panel(nodos, saludo):
+                subir_al_saludo(nodos, saludo)
+                return
+            if atras == MAX_ATRAS:
+                break
+            antes = firma_pantalla(nodos)
             comun.tecla(comun.TECLA_ATRAS)
-            comun.dormir(1)
-        nodos = comun.volcar_pantalla()
-        if comun.primero(nodos, dice=saludo) is None:
-            raise comun.Falla(f"no se volvió al Panel con Atrás; en pantalla: {comun.textos_visibles(nodos)}")
+            fin = comun.reloj() + LIMITE_ATRAS_S
+            while True:
+                comun.dormir(1)
+                ahora = comun.volcar_pantalla()
+                cambio = firma_pantalla(ahora) != antes
+                if not comun.app_en_primer_plano(ahora) or es_panel(ahora, saludo) or cambio:
+                    break
+                if comun.reloj() >= fin:
+                    break
+        raise comun.Falla(
+            f"no se volvió al Panel con {MAX_ATRAS} veces Atrás; en pantalla: {comun.textos_visibles(nodos)}"
+        )
 
     def asegurar_busqueda(texto: str) -> None:
         """El primer campo de la pantalla queda con `texto` (si tenía otra cosa, se borra) y el teclado cerrado."""
-        campos = comun.campos_texto(comun.volcar_pantalla())
+        campos = comun.campos_texto(comun.de_la_app(pantalla_de_la_app()))
         if not campos:
             raise comun.Falla("no se ve el buscador de la pantalla")
         if campos[0].texto == texto:
@@ -567,11 +649,22 @@ def main(argv: list[str] | None = None) -> int:
         cerrar_teclado()
 
     def esperar(que: str, limite_s: float, listo: Callable[[list[comun.Nodo]], bool]) -> list[comun.Nodo]:
+        """Vuelca cada ~1 s hasta que `listo(nodos)`; si la app sale del primer plano más de `LIMITE_FUERA_S`, Falla
+        «la app salió del primer plano» (p. ej. se cerró al borrar: C2); si no llega en `limite_s`, Falla con lo que se
+        veía (solo textos de la app, `comun.textos_visibles`)."""
         fin = comun.reloj() + limite_s
+        fuera_desde: float | None = None
         while True:
             nodos = comun.volcar_pantalla()
-            if listo(nodos):
-                return nodos
+            if comun.app_en_primer_plano(nodos):
+                fuera_desde = None
+                if listo(nodos):
+                    return nodos
+            else:
+                fuera_desde = comun.reloj() if fuera_desde is None else fuera_desde
+                if comun.reloj() - fuera_desde >= LIMITE_FUERA_S:
+                    ctx.panel_abierto = False
+                    raise comun.Falla(f"{SALIO_DE_LA_APP} mientras se esperaba {que}")
             if comun.reloj() >= fin:
                 raise comun.Falla(f"en {limite_s:.0f} s no se vio {que}; en pantalla: {comun.textos_visibles(nodos)}")
             comun.dormir(1)
@@ -724,7 +817,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def abrir_lista_filtrada() -> None:
         """Deja 7.13 abierta y con `PREFIJO` en el buscador (para los pasos guiados)."""
-        if not en_lista(comun.volcar_pantalla()):
+        if not en_lista(pantalla_de_la_app()):
             volver_al_panel()
             tocar_en_panel(ACCESO_VIDEOS)
             esperar("la lista de videos (7.13)", LIMITE_LISTA_S, en_lista)
@@ -743,7 +836,7 @@ def main(argv: list[str] | None = None) -> int:
             nombre = str((d or {}).get("nombre") or "")
             if nombre == RENOMBRADO:
                 break
-            nodos = comun.volcar_pantalla()
+            nodos = comun.de_la_app(comun.volcar_pantalla())
             error = comun.primero(nodos, contiene=ERROR_RENOMBRAR)
             if error is not None:
                 raise comun.Falla(f"la app mostró «{error.texto or error.descripcion}» al renombrar")
@@ -765,6 +858,7 @@ def main(argv: list[str] | None = None) -> int:
         comun.esperar_enter(INSTRUCCION_C2B)
 
         def vuelta(ns: list[comun.Nodo]) -> bool:
+            ns = comun.de_la_app(ns)
             error = comun.primero(ns, dice=ERROR_ELIMINAR)
             if error is not None:
                 mensaje = next((n.texto for n in ns if "se pudo eliminar el video" in n.texto and n != error), "")

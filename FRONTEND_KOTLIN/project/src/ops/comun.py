@@ -873,6 +873,20 @@ _PATRON_TECLADO = re.compile(r"\b(mInputShown|mIsInputViewShown|isInputViewShown
 # Lo que `adb shell input text` puede recibir sin escapar en el sh del teléfono.
 _SEGUROS_INPUT = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@._-+,:=/")
 TECLA_ATRAS = "4"
+# Ventanas del sistema cuyos textos sí sirven en un diagnóstico (diálogos de permisos, del instalador, de «no responde»
+# y de seguridad de MIUI). Los de cualquier otra app —p. ej. la pantalla de inicio, con las apps del usuario— nunca se
+# imprimen (FE-4.1).
+PAQUETES_SISTEMA = frozenset(
+    {
+        "android",
+        "com.android.permissioncontroller",
+        "com.google.android.permissioncontroller",
+        "com.android.packageinstaller",
+        "com.google.android.packageinstaller",
+        "com.lbe.security.miui",
+        "com.miui.securitycenter",
+    }
+)
 
 
 def exigir_adb_permitido(r: Resultado, que: str) -> None:
@@ -892,6 +906,12 @@ class Nodo:
     limites: tuple[int, int, int, int]  # x1, y1, x2, y2 en píxeles de la pantalla
     habilitado: bool
     contrasena: bool
+    paquete: str = ""  # `package` (FE-4.1); "" = desconocido (nodos hechos a mano): cuenta como de la app
+    enfocado: bool = False  # `focused` (FE-4.1)
+
+    @property
+    def de_la_app(self) -> bool:
+        return self.paquete in ("", PAQUETE)
 
     @property
     def centro(self) -> tuple[int, int]:
@@ -929,9 +949,22 @@ def parsear_ui(xml: str) -> list[Nodo]:
                 limites=(x1, y1, x2, y2),
                 habilitado=e.get("enabled", "true") == "true",
                 contrasena=e.get("password", "false") == "true",
+                paquete=e.get("package", ""),
+                enfocado=e.get("focused", "false") == "true",
             )
         )
     return nodos
+
+
+def de_la_app(nodos: list[Nodo]) -> list[Nodo]:
+    """Solo los nodos de la app (`package` = `PAQUETE`, o desconocido)."""
+    return [n for n in nodos if n.de_la_app]
+
+
+def app_en_primer_plano(nodos: list[Nodo]) -> bool:
+    """¿El volcado es de la app? (algún nodo suyo; un volcado vacío o de otra app —la pantalla de inicio, un diálogo del
+    sistema— no). Antes de pulsar Atrás hay que mirarlo: fuera de la app, Atrás actúa sobre otra cosa (FE-4.1)."""
+    return any(n.de_la_app for n in nodos)
 
 
 def volcar_pantalla(intentos: int = 3) -> list[Nodo]:
@@ -959,15 +992,25 @@ def volcar_pantalla(intentos: int = 3) -> list[Nodo]:
 
 
 def textos_visibles(nodos: list[Nodo], limite: int = 12) -> str:
-    """Textos de la pantalla para un diagnóstico, sin campos de texto (pueden llevar el correo o la contraseña)."""
+    """Textos de la pantalla para un diagnóstico, sin campos de texto (pueden llevar el correo o la contraseña) y solo
+    de la app o de un diálogo del sistema (`PAQUETES_SISTEMA`): los de otras apps (la pantalla de inicio lista las apps
+    instaladas del usuario) no se imprimen; solo se dice que se omitieron (FE-4.1)."""
     vistos: list[str] = []
+    ajenos = 0
     for n in nodos:
         if n.es_campo or n.contrasena:
             continue
         t = (n.texto or n.descripcion).strip()
-        if t and t not in vistos:
+        if not t:
+            continue
+        if not n.de_la_app and n.paquete not in PAQUETES_SISTEMA:
+            ajenos += 1
+        elif t not in vistos:
             vistos.append(t)
-    return ", ".join(f"«{resumir(t, 40)}»" for t in vistos[:limite]) or "(nada legible)"
+    if not vistos and ajenos:
+        return "(la app no está en primer plano: se ve otra app o la pantalla de inicio; sus textos no se muestran)"
+    texto = ", ".join(f"«{resumir(t, 40)}»" for t in vistos[:limite]) or "(nada legible)"
+    return f"{texto} (y {ajenos} textos de otra app, omitidos)" if ajenos else texto
 
 
 def tocar(nodo: Nodo) -> None:
@@ -1034,6 +1077,15 @@ def desplazar_hacia_abajo() -> None:
     ancho, alto = tamano_pantalla()
     x = ancho // 2
     r = adb("shell", "input", "swipe", str(x), str(alto * 7 // 10), str(x), str(alto * 3 // 10), "300", timeout=30)
+    exigir_adb_permitido(r, "deslizar (input swipe)")
+
+
+def desplazar_hacia_arriba() -> None:
+    """Desliza el dedo de arriba abajo por el centro (del 30 % al 70 % del alto): la página sube (se ve lo de arriba).
+    Empieza lejos del borde superior para no abrir la cortina de notificaciones (FE-4.1)."""
+    ancho, alto = tamano_pantalla()
+    x = ancho // 2
+    r = adb("shell", "input", "swipe", str(x), str(alto * 3 // 10), str(x), str(alto * 7 // 10), "300", timeout=30)
     exigir_adb_permitido(r, "deslizar (input swipe)")
 
 

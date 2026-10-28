@@ -83,6 +83,32 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
     entregables, «Hecho en el código» y por qué C1–C3 no cambian; C1 aclara que los recorridos sin subir cuentan como
     datos reales); §2.2 FE-4.4 nuevo; FE-4.3 (quitar `ManifestRecorrido.video(…)` de assets); §3 FE-4.1 «En curso»
     (falta `dev`); §4: HU-17 y HU-18 también en FE-4.4.
+  - **Arreglo tras la primera ejecución en `dev`** (2026-10-27, el maestro, sobre `01adb2e`, ya en `main`): código 1 por
+    el validador, no por la app. P1–P6, C1a–C3a y C1b pasaron; C3b y C2b fallaron antes del paso guiado con «no se volvió
+    al Panel con Atrás», con la pantalla de inicio del teléfono, cuyos nombres de apps acabaron en el log y en el
+    informe. Causa más probable (sin comprobar en el teléfono; con un teléfono simulado así, el código anterior da
+    exactamente esa salida): `dumpsys input_method` sigue diciendo que el teclado está abierto después de cerrarlo, y
+    el Atrás «para cerrar el teclado» de `volver_al_panel` cerró la app en el Panel, que es la raíz. También quedan
+    cubiertas las otras dos hipótesis del maestro: el Panel desplazado con el saludo fuera de la pantalla, y el Panel
+    recargando. Cambios, solo en los validadores:
+    - `comun.py`: `Nodo` gana `paquete` y `enfocado` (con valor por defecto); nuevas `de_la_app`, `app_en_primer_plano`
+      y `desplazar_hacia_arriba`; `textos_visibles` ya no imprime textos de otras apps (sí los de los diálogos del
+      sistema de `PAQUETES_SISTEMA`), lo que vale para todos los validadores.
+    - `validate41.py`:
+      - `es_panel` reconoce el Panel por el saludo o por `MARCAS_PANEL`.
+      - `pantalla_de_la_app` falla con «la app salió del primer plano» y no toca nada fuera de la app; la siguiente
+        comprobación vuelve a abrirla.
+      - `cerrar_teclado` solo actúa con un campo enfocado y nunca en el Panel.
+      - `volver_al_panel` nunca pulsa Atrás en el Panel ni fuera de la app, espera a que la pantalla cambie entre un Atrás
+        y otro, y sube al saludo.
+      - `esperar` falla si la app pasa más de 3 s fuera.
+    - Pruebas: `test_validate41.py` pasa a 28 casos; el teléfono simulado tiene ahora `package`, la pantalla de inicio, un
+      Panel que se desplaza y un teclado «que no se suelta». `test_comun_fe41.py` pasa a 9. Total 289 + 1 omitida.
+    - Docs: §4.10 (resultado del intento), §5.11 (ayudas, `validate41.py` y la trampa nueva) y `validation-4-1` §5 (289
+      casos y casos previstos nuevos).
+    - Versión: se queda en **0.14.0**. Un parche, según las reglas, no puede cambiar un contrato, y esto añade piezas a
+      §5.11. FE-4.1 sigue «En curso» y la 0.14.0 es la entrada que describe sus entregables, incluido `validate41.py`. La
+      app no cambia.
 - **Contradicciones corregidas:**
   - La `validation-4-1` anterior creaba las fotos de prueba con Pillow (no está en el grupo `ops`), usaba `ref_cliente =
     nombre` (un segundo intento da `409 VIDEO_ELIMINADO`) y limpiaba por `q` sin mirar `ref_cliente` (podía borrar un video
@@ -110,8 +136,14 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
   decodificado con Pillow del entorno del backend (`JPEG (640, 480) L`). En `dev`, solo lecturas `GET` con el admin
   (formas de `/v1/admin/videos`, `/v1/admin/videos/{id}` y `/v1/admin/images`, que coinciden con los DTOs; sin restos
   `validacion-4-1`). `git diff --stat` igual a `--stat --ignore-cr-at-eol`.
+  - **Tras el arreglo** (worktree sobre `01adb2e`, sin commit):
+    - `ruff check` limpio, `ruff format --check` («25 files already formatted»), `pytest` (289 passed, 1 skipped) y
+      `validate41.py --entorno local` con código 0.
+    - El caso nuevo «`dumpsys` no suelta el teclado», corrido contra el `validate41.py` de `01adb2e`, da lo mismo que
+      `dev`: C1b pasa y C3b y C2b fallan con «no se volvió al Panel con Atrás».
 - **Pendiente:** `validate41.py --entorno dev` con el teléfono (C1b, C3b, C2b; dos pasos guiados; lo coordina el
-  maestro) y la evidencia de C2c; sin probar en el teléfono todo lo de §4.10 («Sin probar en el teléfono»); FE-4.4
+  maestro; repetir tras el arreglo del validador) y la evidencia de C2c; sin probar en el teléfono todo lo de §4.10
+  («Sin probar en el teléfono») y, del arreglo, que `uiautomator` marque `focused` en el buscador de Compose; FE-4.4
   (planificar); de FE-4.3, quitar `ManifestRecorrido.video(…)` de assets y mover `GaleriaColores` y los campos de la
   Galería a `ui/components/`.
 

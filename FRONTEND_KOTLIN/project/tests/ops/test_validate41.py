@@ -32,10 +32,17 @@ PLAN_BACKEND = (
 )
 
 
-def _nodo(texto="", desc="", clase="android.widget.TextView", limites=(0, 0, 10, 10)):
+LANZADOR = "com.miui.home"
+APPS_DEL_USUARIO = ("DaviPlata", "SoundWireFree", "Instagram", "My Application")  # nunca deben salir en el informe
+
+
+def _nodo(
+    texto="", desc="", clase="android.widget.TextView", limites=(0, 0, 10, 10), paquete=comun.PAQUETE, foco=False
+):
     x1, y1, x2, y2 = limites
     return (
         f"<node text={quoteattr(texto)} content-desc={quoteattr(desc)} class={quoteattr(clase)} "
+        f'package={quoteattr(paquete)} focused="{str(foco).lower()}" '
         f'bounds="[{x1},{y1}][{x2},{y2}]" enabled="true" password="false"/>'
     )
 
@@ -214,6 +221,14 @@ class Telefono:
         self.total_lista_de_mas = 0
         self.locales_de_menos = 0
         self.galeria_de_mas = 0
+        # El Panel y el teclado como en el Xiaomi (FE-4.1, primera ejecución en dev)
+        self.panel_alto = False  # «Videos» e «Imágenes» solo se ven tras bajar una vez (el saludo queda fuera)
+        self.desplazado = 0  # cuánto bajó el Panel; se conserva al volver a él (rememberScrollState)
+        self.teclado = False  # teclado abierto de verdad
+        self.teclado_fantasma = False  # dumpsys input_method sigue diciendo que está abierto
+        self.cierra_al_volver = False  # Atrás desde 7.13 cierra la app (una vez)
+        self.atras_en_panel = 0  # Atrás pulsados con el Panel en pantalla (lo cierra: es la raíz)
+        self.atras_fuera = 0  # Atrás pulsados con otra app en primer plano
 
     def _locales(self, q: str = "") -> list[str]:
         nombres = []
@@ -234,11 +249,21 @@ class Telefono:
                 _nodo(texto="Iniciar sesión", limites=(300, 1380, 800, 1450)),
             ]
         if p == "panel":
-            return [
-                _nodo(texto=validate41.saludo_esperado(NOMBRE_ADMIN), limites=(100, 200, 900, 280)),
-                _nodo(texto="Videos", limites=(100, 1500, 500, 1560)),
-                _nodo(texto="Imágenes", limites=(600, 1500, 1000, 1560)),
-            ]
+            nodos = []
+            if self.desplazado == 0:
+                nodos += [
+                    _nodo(texto=validate41.saludo_esperado(NOMBRE_ADMIN), limites=(100, 200, 900, 280)),
+                    _nodo(texto="Panel de administración · Campus Navi", limites=(100, 290, 900, 330)),
+                ]
+            if self.desplazado >= 1 or not self.panel_alto:
+                nodos += [
+                    _nodo(texto="Videos", limites=(100, 1500, 500, 1560)),
+                    _nodo(texto="Imágenes", limites=(600, 1500, 1000, 1560)),
+                    _nodo(texto="Gestiona los videos del sistema.", limites=(100, 1570, 500, 1640)),
+                ]
+            if self.desplazado >= 1:
+                nodos.append(_nodo(texto="Resumen rápido", limites=(100, 1800, 600, 1850)))
+            return nodos
         if p == "lista":
             q = self.busqueda_lista
             servidor = self.api.visibles(q or None)
@@ -246,7 +271,7 @@ class Telefono:
             nodos = [
                 _nodo(texto=validate41.TITULO_LISTA, limites=(100, 100, 600, 160)),
                 _nodo(texto=f"{len(servidor) + self.total_lista_de_mas} videos", limites=(100, 170, 400, 210)),
-                _nodo(texto=q, clase="android.widget.EditText", limites=(40, 300, 1040, 400)),
+                _nodo(texto=q, clase="android.widget.EditText", limites=(40, 300, 1040, 400), foco=self.foco == p),
             ]
             if len(locales) - self.locales_de_menos > 0:
                 nodos.append(
@@ -284,7 +309,7 @@ class Telefono:
                     texto="1 imagen" if total == 1 else f"{total:,} imágenes".replace(",", "."),
                     limites=(40, 170, 400, 210),
                 ),
-                _nodo(texto=q, clase="android.widget.EditText", limites=(40, 300, 1040, 400)),
+                _nodo(texto=q, clase="android.widget.EditText", limites=(40, 300, 1040, 400), foco=self.foco == p),
             ]
             for i, f in enumerate(fotos[:6]):
                 nodos.append(
@@ -294,7 +319,11 @@ class Telefono:
                     )
                 )
             return nodos
-        return [_nodo(texto="Escritorio", limites=(0, 0, 1080, 2400))]
+        # La pantalla de inicio del teléfono (app cerrada o en segundo plano): las apps del usuario.
+        return [
+            _nodo(desc=nombre, limites=(40 + 260 * i, 600, 260 + 260 * i, 860), paquete=LANZADOR)
+            for i, nombre in enumerate(APPS_DEL_USUARIO)
+        ]
 
     def _xml(self) -> str:
         return f"<?xml version='1.0' encoding='UTF-8'?><hierarchy rotation=\"0\">{''.join(self._nodos())}</hierarchy>"
@@ -305,24 +334,37 @@ class Telefono:
             self.pantalla, self.campos = "login", ["", ""]
         elif p == "login":
             if 900 <= y <= 1060:
-                self.foco = 0
+                self.foco, self.teclado = 0, True
             elif 1100 <= y <= 1260:
-                self.foco = 1
+                self.foco, self.teclado = 1, True
             elif 1380 <= y <= 1450 and tuple(self.campos) == ADMIN:
-                self.pantalla = "panel"
+                self.pantalla, self.foco, self.teclado = "panel", None, False
         elif p == "panel" and 1500 <= y <= 1560:
             if x < 550:
                 self.pantalla, self.busqueda_lista = "lista", ""
             else:
                 self.pantalla, self.busqueda_galeria = "galeria", ""
         elif p in ("lista", "galeria") and 300 <= y <= 400:
-            self.foco = p
+            self.foco, self.teclado = p, True
 
     def _atras(self) -> None:
+        p = self.pantalla
+        if p not in ("inicio", "login", "panel", "lista", "detalle", "galeria"):
+            self.atras_fuera += 1
+            return
+        if self.teclado:
+            self.teclado = False  # con el teclado abierto, Atrás solo lo cierra (el campo sigue con el foco)
+            return
+        if p == "panel":
+            self.atras_en_panel += 1
         self.dialogo = None
-        self.pantalla = {"detalle": "lista", "lista": "panel", "galeria": "panel", "panel": "inicio"}.get(
-            self.pantalla, self.pantalla
-        )
+        if p == "lista" and self.cierra_al_volver:
+            self.cierra_al_volver = False
+            nueva = "escritorio"
+        else:
+            nueva = {"detalle": "lista", "lista": "panel", "galeria": "panel", "panel": "escritorio"}.get(p, p)
+        if nueva != p:
+            self.pantalla, self.foco = nueva, None
 
     def _escribir(self, texto: str) -> None:
         if self.foco == "lista":
@@ -362,7 +404,7 @@ class Telefono:
         if orden[:2] == ("getprop", "ro.build.version.sdk"):
             return comun.Resultado(0, "34\n", "")
         if orden[:2] == ("am", "force-stop"):
-            self.pantalla = None
+            self.pantalla, self.foco, self.teclado, self.desplazado = None, None, False, 0
             return ok
         if orden[:2] == ("am", "start"):
             self.pantalla = "inicio"
@@ -380,7 +422,13 @@ class Telefono:
                 self._borrar()
             return ok
         if orden[:2] == ("dumpsys", "input_method"):
-            return comun.Resultado(0, "  mInputShown=false\n", "")
+            abierto = "true" if self.teclado or self.teclado_fantasma else "false"
+            return comun.Resultado(0, f"  mInputShown={abierto}\n", "")
+        if orden[:2] == ("input", "swipe"):
+            if self.pantalla == "panel":  # de abajo arriba baja la página; de arriba abajo la sube
+                bajar = int(orden[3]) > int(orden[5])
+                self.desplazado = min(self.desplazado + 1, 2) if bajar else max(self.desplazado - 1, 0)
+            return ok
         if orden[:2] == ("wm", "size"):
             return comun.Resultado(0, "Physical size: 1080x2400\n", "")
         if orden[:2] == ("pm", "grant"):
@@ -403,6 +451,7 @@ class Mundo:
         self.renombra = True
         self.elimina = True
         self.error_al_borrar = False
+        self.se_cierra_al_borrar = False
 
     def instalar(self, monkeypatch) -> None:
         plan = self.tmp / "PLAN.md"
@@ -441,6 +490,7 @@ class Mundo:
                 "el paso guiado necesita una terminal: la entrada estándar está cerrada (EOF)"
             )
         t = self.telefono
+        t.foco, t.teclado = None, False  # la persona toca una fila: el buscador pierde el foco
         if validate41.RENOMBRADO in instruccion and "Renombrar" in instruccion:
             assert t.pantalla == "lista" and t.busqueda_lista == validate41.PREFIJO
             t.pantalla = "detalle"
@@ -456,7 +506,8 @@ class Mundo:
                 )
             elif self.elimina:
                 self.api.eliminar(self.api.por_nombre(validate41.VIDEO_B)["id"])
-                t.pantalla = "lista"  # la app vuelve sola a 7.13 (la misma entrada: conserva la búsqueda)
+                # la app vuelve sola a 7.13 (la misma entrada: conserva la búsqueda), salvo que se cierre al borrar
+                t.pantalla = "escritorio" if self.se_cierra_al_borrar else "lista"
         else:
             raise AssertionError(instruccion)
 
@@ -708,6 +759,103 @@ def test_eof_en_el_paso_guiado_da_3_y_limpia(tmp_path, monkeypatch):
     assert codigo == 3, datos
     assert _estados(datos)["C3b"] == "error"
     assert all(not validate41.es_de_prueba(v) for v in m.api.visibles()) and m.telefono.pantalla is None
+
+
+def _sin_apps_del_usuario(capsys, datos) -> None:
+    salida = capsys.readouterr()
+    informe = json.dumps(datos, ensure_ascii=False)
+    for nombre in APPS_DEL_USUARIO:
+        assert nombre not in salida.out and nombre not in salida.err and nombre not in informe, nombre
+
+
+def test_es_panel_por_el_saludo_o_por_sus_marcas():
+    saludo = validate41.saludo_esperado(NOMBRE_ADMIN)
+
+    def ui(*nodos):
+        return comun.parsear_ui("<hierarchy>" + "".join(nodos) + "</hierarchy>")
+
+    assert validate41.es_panel(ui(_nodo(texto=saludo)), saludo)
+    # Desplazado: el saludo quedó arriba, fuera de la pantalla; lo reconoce una tarjeta (o «Resumen rápido»).
+    assert validate41.es_panel(ui(_nodo(texto="Videos"), _nodo(texto="Gestiona los videos del sistema.")), saludo)
+    assert validate41.es_panel(ui(_nodo(texto="Resumen rápido")), saludo)
+    assert not validate41.es_panel(ui(_nodo(texto=validate41.TITULO_LISTA), _nodo(texto="Videos")), saludo)
+    # Un texto igual en otra app no cuenta.
+    assert not validate41.es_panel(ui(_nodo(texto=saludo, paquete=LANZADOR)), saludo)
+
+
+def test_las_marcas_del_panel_estan_en_su_pantalla():
+    """Si cambian los textos del Panel, hay que cambiar MARCAS_PANEL (si no, volver_al_panel no lo reconoce)."""
+    panel = validate41.DIR_KOTLIN / "ui" / "admin" / "panel" / "PanelAdminScreen.kt"
+    codigo = panel.read_text(encoding="utf-8")
+    for marca in validate41.MARCAS_PANEL:
+        assert f'"{marca}"' in codigo, marca
+
+
+@pytest.mark.parametrize(
+    ("panel_alto", "fantasma"),
+    [(False, True), (True, False), (True, True)],
+    ids=["dumpsys-no-suelta-el-teclado", "panel-desplazado", "las-dos"],
+)
+def test_nunca_pulsa_atras_en_el_panel(tmp_path, monkeypatch, panel_alto, fantasma):
+    """La primera ejecución en dev (2026-10-27, sobre 01adb2e): C1b pasó y C3b y C2b fallaron con «no se volvió al
+    Panel con Atrás», con la pantalla de inicio del teléfono. Con un Panel que se queda desplazado al volver y un
+    `dumpsys input_method` que sigue diciendo que el teclado está abierto, el validador no pulsa Atrás en el Panel."""
+    m = Mundo(tmp_path)
+    m.telefono.panel_alto = panel_alto
+    m.telefono.teclado_fantasma = fantasma
+    m.instalar(monkeypatch)
+    codigo, datos = _correr(tmp_path, "dev")
+    assert codigo == 0, datos
+    assert set(_estados(datos).values()) == {"pasa"}
+    assert m.telefono.atras_en_panel == 0 and m.telefono.atras_fuera == 0
+    if panel_alto:  # bajó para tocar «Videos» o «Imágenes» y volvió a subir al saludo
+        swipes = [o for o in m.telefono.ordenes if o[:3] == ("shell", "input", "swipe")]
+        assert any(int(o[4]) > int(o[6]) for o in swipes) and any(int(o[4]) < int(o[6]) for o in swipes)
+
+
+def test_si_la_app_se_cierra_no_pulsa_atras_fuera_ni_imprime_otras_apps(tmp_path, monkeypatch, capsys):
+    m = Mundo(tmp_path)
+    m.telefono.cierra_al_volver = True  # Atrás desde 7.13 cierra la app (una vez), en C1b
+    m.instalar(monkeypatch)
+    codigo, datos = _correr(tmp_path, "dev")
+    assert codigo == 1, datos
+    assert _estados(datos)["C1b"] == "falla"
+    assert validate41.SALIO_DE_LA_APP in _detalle(datos, "C1b")
+    assert m.telefono.atras_fuera == 0  # no pulsó nada en la pantalla de inicio
+    # La siguiente comprobación vuelve a abrir la app e iniciar sesión, y sigue.
+    assert _estados(datos)["C3b"] == "pasa" and _estados(datos)["C2b"] == "pasa"
+    assert sum(1 for o in m.telefono.ordenes if o[:3] == ("shell", "am", "start")) == 2
+    _sin_apps_del_usuario(capsys, datos)
+
+
+def test_la_app_se_cierra_al_borrar_c2b_falla_sin_textos_de_otras_apps(tmp_path, monkeypatch, capsys):
+    m = Mundo(tmp_path)
+    m.se_cierra_al_borrar = True
+    m.instalar(monkeypatch)
+    codigo, datos = _correr(tmp_path, "dev", ["--solo", "C2b"])
+    assert codigo == 1, datos
+    detalle = _detalle(datos, "C2b")
+    assert f"{validate41.SALIO_DE_LA_APP} mientras se esperaba la lista de videos (7.13) tras eliminar" in detalle
+    assert m.telefono.atras_fuera == 0
+    _sin_apps_del_usuario(capsys, datos)
+
+
+def test_sin_ver_la_galeria_el_mensaje_no_lista_otras_apps(tmp_path, monkeypatch, capsys):
+    """Una espera que vence fuera de la app (p. ej. «Imágenes» abre otra cosa) no imprime los textos de esa otra app."""
+    m = Mundo(tmp_path)
+    m.instalar(monkeypatch)
+    original = m.telefono._tocar
+
+    def tocar(x, y):
+        original(x, y)
+        if m.telefono.pantalla == "galeria":
+            m.telefono.pantalla = "escritorio"
+
+    monkeypatch.setattr(m.telefono, "_tocar", tocar)
+    codigo, datos = _correr(tmp_path, "dev", ["--solo", "C1b"])
+    assert codigo == 1, datos
+    assert validate41.SALIO_DE_LA_APP in _detalle(datos, "C1b")
+    _sin_apps_del_usuario(capsys, datos)
 
 
 @pytest.mark.parametrize("instruccion", [validate41.INSTRUCCION_C3B, validate41.INSTRUCCION_C2B])

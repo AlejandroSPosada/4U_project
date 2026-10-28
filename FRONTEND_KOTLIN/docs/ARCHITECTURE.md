@@ -1234,6 +1234,12 @@ aparte con el Pillow 12.3.0 del entorno del backend: `JPEG (640, 480) L`) y `val
 `RemoteVideoRepositoryTest` 15/15; C1b, C3b y C2b omitidas; manual C2c). **Sin probar en el teléfono ni en `dev`** (lo
 coordina el maestro).
 
+Primera ejecución en `dev` (2026-10-27, el maestro, sobre `01adb2e`): código 1 **por el validador**, no por la app. P1–P6,
+C1a, C2a, C3a y C1b pasaron (7.13 «4 videos» = API; «12 sin subir en este teléfono» = manifests; la búsqueda mostró los
+dos videos de prueba; 7.11 «24 imágenes» = API); C3b y C2b fallaron antes del paso guiado: `volver_al_panel` pulsó Atrás
+en el Panel y cerró la app (§5.11, trampas de FE-4.1). Arreglado en el validador (sin cambios en la app): ruff limpio,
+`pytest` **289 passed, 1 skipped** y `validate41.py --entorno local` → código 0. Falta repetir en `dev`.
+
 ---
 
 ## 5. Interfaces (contratos): catálogo de piezas reutilizables y contratos entre vistas
@@ -3642,9 +3648,9 @@ llaman a AWS; FE-2.1, FE-2.2, FE-3.3, FE-3.4 y FE-4.1 las reutilizan):
 | `motivo_tarea(t)` | Texto para un detalle: código, eventos de fallo (`usuario_rechazado`, `usuario_no_encontrado`, `comando_fallido`, `configuracion_incompleta`, `base_no_disponible`) y `stoppedReason` |
 | `crear_usuario_validacion(outputs)` → contraseña; `desactivar_usuario_validacion(outputs, tolerar_inexistente=True)` → detalle; `USUARIO_VALIDACION`, `NOMBRE_USUARIO_VALIDACION` | `crear-usuario --correo validacion+user@campus.edu.co --nombre validacion-user --rol user` con `CREAR_USUARIO_PASSWORD = validacion-pw-<uuid4>` (crea o reactiva; la contraseña se devuelve y nunca se imprime) y `desactivar-usuario --correo …`; `Falla` con `motivo_tarea` si no dan 0 (con `tolerar_inexistente`, «no existe» —1 con `usuario_no_encontrado`— no es fallo). Tardan ~1–2 min cada una |
 | `exigir_adb_permitido(r, que)`; `MENSAJE_SEGURIDAD_MIUI` | Si la salida de adb trae `SecurityException`, `INJECT_EVENTS`, `GRANT_RUNTIME_PERMISSIONS` o `Permission Denial` → `ErrorConfiguracion` «el teléfono no deja a adb `<que>`… en MIUI/HyperOS activa «Depuración USB (Configuración de seguridad)»…». La usan `tocar`, `escribir_texto`, `tecla`, `desplazar_hacia_abajo` y el `pm grant` de `validate12` |
-| `Nodo(texto, descripcion, clase, limites, habilitado, contrasena)` (`.centro`, `.es_campo`, `.dice(v)`, `.contiene(f)`); `parsear_ui(xml)` → `list[Nodo]` | Un nodo de `uiautomator dump`: `text`, `content-desc`, `class`, `bounds` (`(x1, y1, x2, y2)`), `enabled`, `password`. `dice` = texto o descripción igual; `es_campo` = clase `…EditText`. XML roto → `Falla` |
+| `Nodo(texto, descripcion, clase, limites, habilitado, contrasena)` (`.centro`, `.es_campo`, `.dice(v)`, `.contiene(f)`); `parsear_ui(xml)` → `list[Nodo]` | Un nodo de `uiautomator dump`: `text`, `content-desc`, `class`, `bounds` (`(x1, y1, x2, y2)`), `enabled`, `password` (y desde FE-4.1 `package` y `focused`, abajo). `dice` = texto o descripción igual; `es_campo` = clase `…EditText`. XML roto → `Falla` |
 | `volcar_pantalla(intentos=3)` → `list[Nodo]`; `RUTA_UI` | `adb exec-out "uiautomator dump /data/local/tmp/validacion-ui.xml 2>&1; cat …; rm -f …"` (una sola orden: el volcado puede llevar lo escrito en un campo y no queda en el teléfono). Toma el XML desde `<hierarchy` (antes llega «UI hierchary dumped to: …»). Reintenta con 1 s si no sale; si no → `Falla`, con «could not get idle state» en el mensaje si uiautomator lo dijo |
-| `textos_visibles(nodos, limite=12)` | Textos de la pantalla para un diagnóstico, **sin** campos de texto ni contraseñas |
+| `textos_visibles(nodos, limite=12)` | Textos de la pantalla para un diagnóstico, **sin** campos de texto ni contraseñas, y desde FE-4.1 sin los textos de otras apps (abajo) |
 | `tocar(nodo)`, `tecla(codigo)` (`TECLA_ATRAS = "4"`), `teclado_visible()`, `tamano_pantalla()`, `desplazar_hacia_abajo()` | `input tap` en el centro; `input keyevent`; `dumpsys input_method` contiene `mInputShown=true` (o `mIsInputViewShown`/`isInputViewShown`); `wm size` (el `Override size` si existe); `input swipe` del 70 % al 30 % del alto por el centro (300 ms) |
 | `escapar_input_text(texto)`; `escribir_texto(texto)` | Escape para `adb shell input text`: espacio → `%s`; lo que no sea `[A-Za-z0-9@._-+,:=/]`, con `\` delante (el `sh` del teléfono lo deja literal). Un texto con `%s` no se puede escribir (`input` lo vuelve espacio) y uno con caracteres no ASCII imprimibles tampoco → `ErrorConfiguracion` (sin el texto en el mensaje). `escribir_texto` nunca imprime el texto ni la salida de adb |
 | `abrir_app()` | `am force-stop` + `am start -W -n ACTIVIDAD` (arranque en frío: `MyApp` borra la sesión) |
@@ -3700,6 +3706,10 @@ Ayudas que añadió FE-4.1 (para validadores que suben fotos de prueba por la AP
 |---|---|
 | `http_put_bytes(url, datos, encabezados, *, timeout=60)` → `RespuestaHttp` | `PUT` de `datos` a una URL prefirmada de S3 con **exactamente** los `encabezados` que dio el backend (`{"Content-Type": "image/jpeg"}`: va en la firma). Sin `X-Request-Id` ni `Authorization` (como `SubidorS3` de la app; `urllib` añade `Host`, `Content-Length`, `User-Agent` y `Connection`, que no van firmados). 4xx/5xx se devuelven; sin respuesta → `ErrorRed` «PUT a S3 sin respuesta (<tipo>)»: **la URL (lleva la firma) nunca se imprime ni va a un mensaje** |
 | `jpeg_sintetico(ancho=640, alto=480, semilla=0)` → `bytes` | JPEG *baseline* en escala de grises hecho a mano, sin Pillow: bloques de 8×8 de un solo tono (solo el coeficiente DC; tabla DC de luminancia del anexo K.3 y una tabla AC con un único símbolo, EOB, de un bit; cuantización 8) que dibujan franjas diagonales: nivel del bloque `(bx, by)` = 28 + (3·bx + 5·by + 37·semilla) mod 200. La misma semilla da los mismos bytes; otra, otros (ETag distintos). `ancho` y `alto` múltiplos de 8 (si no, `ValueError`). 640×480 ≈ 4 KB; su lado menor (480) cumple `REC_LADO_MIN_PX` (320, backend §5.10). `dimensiones_jpeg` lo lee; con Pillow 12.3.0 (el del entorno del backend, 2026-10-27) se decodificó como `JPEG (640, 480) L` con los niveles esperados (`test_comun_fe41.py` lo prueba solo si hay Pillow, que no está en el grupo `ops`) |
+| `Nodo.paquete`, `Nodo.enfocado`, `Nodo.de_la_app` | Dos campos nuevos al final de `Nodo` (con valor por defecto: los nodos hechos a mano de los otros validadores siguen igual): `package` y `focused` del volcado. `de_la_app` = `paquete` es `PAQUETE` o `""` (desconocido) |
+| `de_la_app(nodos)`; `app_en_primer_plano(nodos)` | Los nodos de la app; ¿hay alguno? (un volcado vacío o solo de otra app —la pantalla de inicio, un diálogo del sistema— no). Antes de pulsar Atrás, tocar o escribir hay que mirarlo: fuera de la app, Atrás actúa sobre otra cosa |
+| `PAQUETES_SISTEMA`; `textos_visibles` (cambio) | `textos_visibles` ya no lista los textos de otras apps (la pantalla de inicio lista las apps instaladas del usuario y acababa en el log y en el informe): solo los de la app y los de las ventanas de `PAQUETES_SISTEMA` (permisos, instalador, `android`, seguridad de MIUI). Si solo hay de otra app: «(la app no está en primer plano: se ve otra app o la pantalla de inicio; sus textos no se muestran)»; si hay de las dos: los de la app y «(y N textos de otra app, omitidos)». Vale para todos los validadores |
+| `desplazar_hacia_arriba()` | `input swipe` del 30 % al 70 % del alto por el centro (300 ms): la página sube. Empieza lejos del borde para no abrir la cortina de notificaciones |
 
 
 Forma de un validador (`validate11.py` es el ejemplo): `import comun`, `main(argv=None)` crea el `Validador` y devuelve
@@ -3711,8 +3721,8 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 `test_validate31.py`, 30, que incluye las pruebas de `http_delete` y `esperar_enter`; 190 con FE-3.2:
 `test_validate32.py`, 31, que incluye las de `cuerpo_multipart` y `http_post_multipart`; 222 con FE-2.2:
 `test_validate22.py`, 32; 241 con FE-3.4: `test_validate34.py`, 19; 253 con FE-3.3: `test_validate33.py`, 12; 278 con
-FE-4.1: `test_validate41.py`, 20, y `test_comun_fe41.py`, 5, de los que uno se omite sin Pillow: «277 passed, 1
-skipped»).
+FE-4.1: `test_validate41.py`, 20, y `test_comun_fe41.py`, 5, de los que uno se omite sin Pillow; 290 con el arreglo de
+la navegación de FE-4.1: `test_validate41.py`, 28, y `test_comun_fe41.py`, 9: «289 passed, 1 skipped»).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -4044,7 +4054,9 @@ skipped»).
   compara **contadores de la interfaz** con la API y con los manifests del teléfono, y comprueba una **navegación que hace
   la app sola** tras un paso guiado): IDs `C1a, C1b, C2a, C2b, C3a, C3b` con grupos `C1 → [C1a, C1b]`, `C2 → [C2a, C2b]` y
   `C3 → [C3a, C3b]`; manual `C2c` (capturas para el PR, se imprime también en `local`); entornos `local` y `dev`; ayudas
-  nuevas en `comun.py`: `http_put_bytes` y `jpeg_sintetico` (arriba). Constantes: `CLASES_C1A`
+  nuevas en `comun.py`: `http_put_bytes`, `jpeg_sintetico` y, tras la primera ejecución en `dev`, `Nodo.paquete`/
+  `enfocado`, `de_la_app`, `app_en_primer_plano`, `desplazar_hacia_arriba` y `textos_visibles` sin otras apps (arriba).
+  Constantes: `CLASES_C1A`
   (`VideoRepositoryCompuestoTest`), `CLASES_C2A` (`TextosVideosTest`), `CLASES_C3A` (`RemoteVideoRepositoryTest`),
   `MINIMO_CASOS` (8, 4 y 10; hoy 11, 5 y 15), `DIR_KOTLIN`, `DIR_ASSETS`, `JS_DETALLE` (`assets/video_detalle.js`),
   `PROHIBIDOS` (`EdicionesLocales`, `AssetsVideoRepository`, `FuenteRecorridos`), `FACTORIES` (lo que deben crear las
@@ -4054,9 +4066,11 @@ skipped»).
   `LADO_FOTOS` (640×480), `POSICION_PRUEBA` (1,0, −100,0: fuera del campus, como los validadores del backend),
   `INICIADO_EN`/`FINALIZADO_EN` (2026-01-01: así 7.3 nunca toma un video de prueba como «el último»), `PERMISOS_INICIO` +
   `PERMISO_ACTIVIDAD`, `DIR_RECOLECCION`, `LIMITE_LOGIN_S` (15), `LIMITE_LISTA_S` (30), `LIMITE_FILTRO_S` (15),
-  `LIMITE_RENOMBRAR_S` (20), `LIMITE_VUELTA_S` (30), `MAX_DESPLAZAMIENTOS` (4), `TECLA_FIN` (123) y `TECLA_BORRAR` (67), y
-  los textos de la app (5.5, `TextosVideos` y la Galería): `ACCESO_VIDEOS` («Videos») y `ACCESO_IMAGENES` («Imágenes»)
-  del Panel, `TITULO_LISTA`, `TITULO_GALERIA` («Imágenes del dataset»), `PATRON_TOTAL_VIDEOS` (`^(\d+) videos?$`),
+  `LIMITE_RENOMBRAR_S` (20), `LIMITE_VUELTA_S` (30), `MAX_DESPLAZAMIENTOS` (4), `MAX_ATRAS` (4), `LIMITE_ATRAS_S` (5),
+  `LIMITE_FUERA_S` (3), `SALIO_DE_LA_APP`, `TECLA_FIN` (123) y `TECLA_BORRAR` (67), y los textos de la app (5.5,
+  `TextosVideos` y la Galería): `ACCESO_VIDEOS` («Videos») y `ACCESO_IMAGENES` («Imágenes») del Panel, `MARCAS_PANEL`
+  (textos que solo tiene el Panel: su subtítulo, las descripciones de sus tarjetas, «Resumen rápido» y «Cerrar sesión»;
+  una prueba mira que sigan en `PanelAdminScreen.kt`), `TITULO_LISTA`, `TITULO_GALERIA` («Imágenes del dataset»), `PATRON_TOTAL_VIDEOS` (`^(\d+) videos?$`),
   `PATRON_SIN_SUBIR`, `PATRON_TOTAL_IMAGENES` («N imágenes» con separadores o «1 imagen»), `PREFIJO_FILA` («Video »),
   `ERROR_ELIMINAR` («No se pudo eliminar el video»), `ERROR_RENOMBRAR` y `ERRORES_LOGIN`; instrucciones
   `INSTRUCCION_C3B`, `INSTRUCCION_C2B` y `INSTRUCCION_C2C`. Piezas puras: `quitar_comentarios_kotlin(texto, cadenas=True)`
@@ -4065,8 +4079,18 @@ skipped»).
   `function eliminarVideo()` llama a `call('eliminarVideo')` y no tiene `setTimeout` ni `salir`), `es_de_prueba(item)`
   (`nombre` **y** `ref_cliente` empiezan por `PREFIJO`), `valor_entero`, `total_en_pantalla(nodos, patron)`,
   `filas_videos(nodos)`, `hay_fila(filas, nombre)` (una `content-desc` que empieza por «Video <nombre>,»),
-  `sin_subir_en_manifests(manifests)` (`finalizado` sin `remote_video_id`, con fotos válidas, como `AlmacenRecorridos`) y
-  `saludo_esperado`. Precondiciones, en orden y sin seguir si una falla: P1 Gradle (3); en `dev` y solo si alguna de C1b,
+  `sin_subir_en_manifests(manifests)` (`finalizado` sin `remote_video_id`, con fotos válidas, como `AlmacenRecorridos`),
+  `saludo_esperado`, `es_panel(nodos, saludo)` (el saludo **o** una de `MARCAS_PANEL`, solo en nodos de la app: lo
+  reconoce aunque esté desplazado o recargando) y `firma_pantalla(nodos)`. **Navegación** (desde la primera ejecución en
+  `dev`): `pantalla_de_la_app()` vuelca y, si en `LIMITE_FUERA_S` no hay nodos de la app, falla con `SALIO_DE_LA_APP`
+  («la app salió del primer plano…») sin tocar nada y deja `panel_abierto = False` (la siguiente comprobación vuelve a
+  abrirla e iniciar sesión); la usan `tocar_en_panel`, `asegurar_busqueda`, `cerrar_teclado` y `abrir_lista_filtrada`.
+  `cerrar_teclado()` pulsa Atrás solo si no es el Panel, hay un campo de la app enfocado **y** `teclado_visible()`.
+  `volver_al_panel()`: hasta `MAX_ATRAS` veces, si es el Panel sube al saludo (`subir_al_saludo`: `desplazar_hacia_arriba`
+  hasta 5 veces) y termina; si no, Atrás y espera hasta `LIMITE_ATRAS_S` a que cambie la pantalla (o salga de la app, o
+  se vea el Panel); **nunca** pulsa Atrás en el Panel ni fuera de la app. `esperar(que, limite, listo)` falla con
+  `SALIO_DE_LA_APP … mientras se esperaba <que>` si la app pasa más de `LIMITE_FUERA_S` fuera (p. ej. se cerró al borrar:
+  C2). Precondiciones, en orden y sin seguir si una falla: P1 Gradle (3); en `dev` y solo si alguna de C1b,
   C3b o C2b está incluida (si no, P2–P6 «no evaluada»): P2 dispositivo físico (3), P3 URL vigente + `ApiConfig.BASE_URL`
   igual + `GET /health` (2, o 3 sin URL), P4 login del admin por la API (401 o rol → 3; otro → 2; guarda token y nombre),
   P5 FE-2.1 «Hecho» (2) y P6 BE-2.1 y BE-4.1 «Hecho» en `PLAN_BACKEND` + `GET /admin/videos?por_pagina=1` y `GET
@@ -4083,7 +4107,7 @@ skipped»).
   espera 7.13 con «N videos» y lo compara con el `total` de `GET /admin/videos` de antes **o** de después; compara «M sin
   subir en este teléfono» (0 si no está) con los manifests; escribe `PREFIJO` en el buscador (`asegurar_busqueda`: si el
   campo tiene otra cosa la borra con `TECLA_FIN` y `TECLA_BORRAR`) y espera las filas de A y B y «N videos» = `total` con
-  `q`; vuelve al Panel (Atrás hasta el saludo), toca «Imágenes» y compara «N imágenes» con `GET /admin/images` (antes o
+  `q`; vuelve al Panel (`volver_al_panel`), toca «Imágenes» y compara «N imágenes» con `GET /admin/images` (antes o
   después). **C3b**: deja 7.13 con la búsqueda (`abrir_lista_filtrada`), paso guiado (`INSTRUCCION_C3B`: abrir A,
   «Renombrar», `RENOMBRADO`, «Guardar»), y consulta `GET /admin/videos/{A}` cada ~1 s hasta 20 s: pasa con el nombre
   nuevo; si la app muestra «No se pudo renombrar…», falla con ese texto. **C2b**: deja 7.13 con la búsqueda, paso guiado
@@ -4096,15 +4120,21 @@ skipped»).
   /admin/videos?q=validacion-4-1` (hasta 20 páginas de 100) que cumplen `es_de_prueba`, y de los que creó esta ejecución
   si su `ref_cliente` es del prefijo (por si la persona los renombró a otra cosa); **nunca** otros videos (uno que solo se
   *llama* `validacion-4-1…` pero cuyo `ref_cliente` no lo es se queda) ni imágenes sueltas; nunca `pm clear`. Las pruebas
-  (`tests/ops/test_validate41.py`, 20) simulan el backend de videos e imágenes (recolección con URLs `PUT` firmadas, `q`,
-  páginas, `DELETE` `202`), el teléfono (Inicio, Login, Panel con «Videos» e «Imágenes», 7.13 con buscador, «N videos», «M
-  sin subir…» y filas, 7.14, la Galería con buscador, «N imágenes» y tarjetas, `files/recoleccion` por `run-as`, Atrás,
-  `input text` y `KEYCODE_DEL`) y Gradle, y lo que hace la persona en cada paso guiado; recorren `main()` en `local` y
-  `dev` (feliz con un resto de una ejecución anterior, un video real y uno que solo se llama como los de prueba —los dos se
-  quedan—; contador de 7.13, «M sin subir» o contador de la Galería distintos; sin renombrar; error al borrar; la app que
-  no vuelve a 7.13; BE-4.1 sin «Hecho»; credenciales malas; `--solo C1a,C2a,C3a`; JVM que falla; EOF) y las piezas puras
-  (comentarios y cadenas, el JS viejo con el `setTimeout` y el de la app), y comprueban que ni la contraseña, ni el token,
-  ni la firma de las URLs `PUT` salen por stdout, stderr o el informe y que nunca se llama a `pm clear`.
+  (`tests/ops/test_validate41.py`, 28) simulan el backend de videos e imágenes (recolección con URLs `PUT` firmadas, `q`,
+  páginas, `DELETE` `202`), el teléfono (Inicio, Login, Panel con «Videos» e «Imágenes» —que puede ser más alto que la
+  pantalla y conserva el desplazamiento al volver—, 7.13 con buscador, «N videos», «M sin subir…» y filas, 7.14, la
+  Galería con buscador, «N imágenes» y tarjetas, la pantalla de inicio con apps de otro `package`, `files/recoleccion`
+  por `run-as`, Atrás —que con el teclado abierto solo lo cierra y en el Panel cierra la app—, `input swipe`, un `dumpsys
+  input_method` que puede seguir diciendo que el teclado está abierto, `input text` y `KEYCODE_DEL`) y Gradle, y lo que
+  hace la persona en cada paso guiado; recorren `main()` en `local` y `dev` (feliz con un resto de una ejecución
+  anterior, un video real y uno que solo se llama como los de prueba —los dos se quedan—; contador de 7.13, «M sin
+  subir» o contador de la Galería distintos; sin renombrar; error al borrar; la app que no vuelve a 7.13; BE-4.1 sin
+  «Hecho»; credenciales malas; `--solo C1a,C2a,C3a`; JVM que falla; EOF; el Panel desplazado y el teclado «que no se
+  suelta» —con el código anterior, este último daba lo mismo que la primera ejecución en `dev`—; la app que se cierra al
+  volver de 7.13, al borrar o al abrir la Galería) y las piezas puras (comentarios y cadenas, el JS viejo con el
+  `setTimeout` y el de la app, `es_panel`, `MARCAS_PANEL` en `PanelAdminScreen.kt`), y comprueban que ni la contraseña,
+  ni el token, ni la firma de las URLs `PUT`, ni los nombres de las apps de la pantalla de inicio salen por stdout, stderr
+  o el informe, que nunca se pulsa Atrás en el Panel ni fuera de la app y que nunca se llama a `pm clear`.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -4264,6 +4294,20 @@ skipped»).
   teléfono:** que `uiautomator` vuelque el encabezado de 7.13 y las `content-desc` de sus filas y de las tarjetas de la
   Galería (Compose las fusiona con `mergeDescendants`, como `TileDato` y `FilaLugar`), que `KEYCODE_DEL` borre el buscador
   y que el diálogo de error se vea sobre el `WebView` de 7.14.
+- **FE-4.1, primera ejecución en `dev` (2026-10-27, sobre `01adb2e`, código 1, por el validador):** C1b pasó y C3b y C2b
+  fallaron con «no se volvió al Panel con Atrás», con la pantalla de inicio del teléfono (y su lista de apps en el log y
+  el informe). El `volver_al_panel` de entonces pulsaba primero Atrás «para cerrar el teclado» si `teclado_visible()`, y
+  luego Atrás hasta ver el saludo. La explicación que encaja con todo (**sin comprobar en el teléfono**): `dumpsys
+  input_method` sigue diciendo que el teclado está abierto después de cerrarlo (`mIsInputViewShown` no vuelve a `false`
+  al ocultarse); desde 7.13 y la Galería ese Atrás de más volvía al Panel (C1b pasa), pero en C3b `volver_al_panel` se
+  llama ya en el Panel, que es la raíz: Atrás cierra la app. Con un teléfono simulado así, el código anterior da
+  exactamente esa salida. Otras dos causas posibles, también cubiertas: el Panel conserva el desplazamiento al volver
+  (`rememberScrollState`) y el saludo queda fuera de la pantalla; y la recarga del Panel al volver (`ON_RESUME`). Desde
+  el arreglo: Atrás para el teclado solo con un campo de la app enfocado, nunca en el Panel (reconocido también por
+  `MARCAS_PANEL`) ni fuera de la app (`package` del volcado), espera a que la pantalla cambie entre un Atrás y otro y
+  sube al saludo; `textos_visibles` ya no imprime textos de otras apps. **Sin comprobar en el teléfono:** que
+  `uiautomator` marque `focused="true"` en el buscador de Compose (si no, el teclado se cierra con el Atrás de
+  `volver_al_panel`: también funciona) y que el Panel se reconozca por `MARCAS_PANEL` cuando está desplazado.
 
 ---
 
