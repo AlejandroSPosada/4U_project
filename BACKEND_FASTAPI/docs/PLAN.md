@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.15.1**.
+Alineado con `ARCHITECTURE.md` **v0.16.0**.
 
 ---
 
@@ -48,9 +48,9 @@ Fases comunes a las cuatro carpetas: `INFRASTRUCTURA_TERRAFORM/docs/PLAN.md` §2
 | BE-3.2 | Localización | BE-2.4, BE-3.1 | BE-2.2, BE-2.4, BE-3.1, EMB-3.1, EMB-3.2 y un dataset real del campus (FE-2.1) | [`validation-3-2`](./validation/validation-3-2.md) |
 | BE-3.3 | Alertas (fuera del núcleo) | BE-1.3 | BE-1.3, BE-2.3 (para C5) | [`validation-3-3`](./validation/validation-3-3.md) |
 | BE-4.1 | Administración de videos e imágenes, y purga | BE-2.2 | BE-2.2, BE-2.4 | [`validation-4-1`](./validation/validation-4-1.md) |
-| BE-5.1 | Corrección visual (`/v1/localize/frame`) — diferido | BE-3.2 | — | — |
+| BE-5.1 | Corrección visual (`/v1/localize/frame`) | BE-3.2 | BE-2.2, BE-4.1 (no el dataset real ni la calibración de BE-3.2: crea sus fotos) | [`validation-5-1`](./validation/validation-5-1.md) |
 | BE-5.2 | Eventos de uso y estadísticas — diferido | BE-3.2 | — | — |
-| BE-5.3 | Rutas (`/v1/route`) — diferido | BE-3.1 y la decisión abierta 2 del frontend | — | — |
+| BE-5.3 | Rutas (`/v1/route`) — diferido, no hace falta por ahora (la ruta se calcula en el teléfono) | BE-3.1 | — | — |
 | BE-6.1 | Endurecimiento — diferido | Fases 1–4 cerradas | — | — |
 
 ### 2.2 Detalle de cada lote
@@ -202,9 +202,29 @@ espera la app, y lo que la app debe hacer está en ARCHITECTURE §4.11, «Para l
   - C5. Los endpoints de §5.5 pasan las pruebas de contrato.
 - **Historias:** HU-17, HU-18.
 
-#### BE-5.1 — Corrección visual (diferido)
-- **Alcance:** definir en §5.3 el contrato de `POST /v1/localize/frame` (una foto + posición previa), búsqueda
-  restringida a un radio. Se desarrolla en paralelo con la fusión PDR + visual de la app (FE-5.1), que lo consume.
+#### BE-5.1 — Corrección visual
+Planificado el 2026-10-28 para la meta «Guía en tiempo real (fotos + pasos)» (`PRIORITY-2.md`, fuera del repositorio);
+construido en ARCHITECTURE 0.16.0 (§4.14, ADR-BE-21; contrato en §5.3). Lo consume la guía por voz de la app
+(**FE-5.3**, vistas 6.5–6.6: cada ~10 m una foto que, si es confiable y coherente con los pasos, reemplaza la posición
+del PDR); FE-5.1 (grafo y rutas en el teléfono) no lo necesita.
+- **Entregables:** `POST /v1/localize/frame` (§5.3): una foto, su rumbo y la posición previa con un radio (por defecto
+  40 m, de 10 a 100; `LOC_FRAME_RADIO_*`, §5.10); búsqueda exacta solo entre las imágenes del radio
+  (`buscar_vecinos_en_radio`) y el algoritmo de BE-3.2 sin cambios; respuesta con posición, confianza, nivel, lugar
+  cercano, `distancia_previa_m`, `radio_busqueda_m` e `imagenes_en_radio`; `sin_coincidencias` como `200`; fila en
+  `eventos_localizacion` con `origen = frame`; `validate51.py`.
+- **Criterios de cierre:**
+  - C1. Una foto igual a una del dataset, con la posición previa a 15 m de ella, da `resultado = ok` a ≤ 10 m de esa
+    foto, nivel `alta` y `distancia_previa_m` coherente (±1 m).
+  - C2. La misma foto con la posición previa lejos (a 300 m, fuera del radio máximo) nunca devuelve su ubicación,
+    aunque haya otras fotos del dataset dentro del radio.
+  - C3. `radio_m` limita la búsqueda: con la previa a 60 m, `radio_m = 30` no la encuentra y `radio_m = 100` sí.
+  - C4. Las peticiones mal formadas dan los errores de §5.3 (`422 VALIDACION` con su campo, `400 FOTOS_INVALIDAS` con
+    su índice).
+  - C5. Cada `200` deja una fila en `eventos_localizacion` con `origen = frame` y `fotos_usadas = 1`; los errores,
+    ninguna.
+  - C6. `latencia_ms` (servidor) ≤ 1 s en cada respuesta, con `embedding` encendido en `dev`.
+- **Umbrales:** usa los `LOC_*` de BE-3.2 (aún iniciales); al calibrarlos cambian aquí sin tocar código (ARCHITECTURE
+  §4.14, «Calibración»). El radio y, si hiciera falta, cortes de nivel propios se ajustan con el día de campo de FE-5.3.
 - **Historias:** HU-06.
 
 #### BE-5.2 — Eventos de uso y estadísticas (diferido)
@@ -214,7 +234,11 @@ espera la app, y lo que la app debe hacer está en ARCHITECTURE §4.11, «Para l
 
 #### BE-5.3 — Rutas (diferido)
 - **Alcance:** modelo del grafo de caminos, cómo se construye (decisión abierta 2 del frontend) y `GET /v1/route`.
-- **Historias:** HU-04.
+- **No hace falta por ahora** (decisión del usuario del 2026-10-27, confirmada el 2026-10-28; `PRIORITY-2.md` §6 decisión 3): el grafo lo entrega
+  el equipo (`grafo.json` en los `assets/` de la app) y la ruta más corta se calcula en el teléfono, sin red (FE-5.1).
+  Se retoma solo si un día el grafo se sirve desde el backend (el formato no cambiaría). `GET /v1/route` sigue
+  respondiendo `501`.
+- **Historias:** HU-04 (hoy la entrega FE-5.1).
 
 #### BE-6.1 — Endurecimiento (diferido)
 - **Alcance:** pruebas de carga de `/v1/localize`, revisión de seguridad (OWASP API Top 10), límites por cliente si el
@@ -241,9 +265,9 @@ espera la app, y lo que la app debe hacer está en ARCHITECTURE §4.11, «Para l
 | BE-3.2 | 3 | En curso | [3-2](./validation/validation-3-2.md) | — | — | Construido en 0.12.0 (`POST /v1/localize`, ARCHITECTURE §4.10 y ADR-BE-18; `validate32.py`), probado en local (834 pruebas con la base del compose), sin ejecutar nada en `dev`. Centroide sin ponderar y margen `(p₁ − p₂) / p₁` (ADR-BE-18): confirmados por el usuario el 2026-10-26 (0.12.1). Falta: el dataset real (FE-2.1), el conjunto y el informe de EMB-3.2, la calibración de `LOC_SIM_MIN`, `LOC_SIM_ALTA` y los cortes de nivel (§5.10 dice «Iniciales»: C6 falla hasta entonces) y `validate32.py --entorno dev` con código 0 |
 | BE-3.3 | 3 | Hecho | [3-3](./validation/validation-3-3.md) | `4885ad6` 2026-10-26 | 0.14.1 | Fuera del núcleo (decisión del usuario, 2026-10-25). `GET /v1/alerts` con foto completa y diferencias con un margen de 60 s, `/v1/admin/alerts` con `PUT` + `If-Match`, `DELETE` con *tombstone* y `sincronizar` cambio por cambio, auditoría y purga diaria en `api` (ARCHITECTURE §4.11 y ADR-BE-19; construido en 0.14.0, sin migración). Pruebas con base en el CI de `backend.yml` del PR 10 (run 40383029250 sobre `89f6a52`: 1003, ninguna omitida; en la máquina no arrancó Docker Desktop); desplegado por el run 40383733721. `validate33.py --entorno dev` con código 0 (informe `.validacion/BE-3.3-20261026-191602.json`): P1–P4, C1a–C1d (caché por diferencias = foto completa; C1b comprobó que `If-Match` pasa por API Gateway: `409 CONFLICTO_VERSION`), C2, C3, C4 y C5 (`alertas_activas` 2 → 3: s0 incluye F de C3 y A2 de C4); limpieza: 4 alertas borradas (6 *tombstones* hasta el 2027-01-24). En el log de `api`, la primera purga diaria (`alertas_purgadas`, 0 borradas) 60 s después de arrancar. Lo consumirán FE-3.3 y FE-3.6 (ARCHITECTURE §4.11, «Para la app») |
 | BE-4.1 | 4 | Hecho | [4-1](./validation/validation-4-1.md) | `c5f6517` 2026-10-27 | 0.15.1 | `PATCH`/`DELETE` de videos, `/v1/admin/images`, URLs GET, purga en el `worker` (en serie con la ingesta) y reconciliador en `api`; sin migración ni cambios de infra (ARCHITECTURE §4.12 y ADR-BE-20). Pruebas con base en el CI del PR 11 y de `main`; `validate41.py --entorno dev` con código 0 (P1–P5, C5b, C4a, C1a, C1b, C4b, C5a, C2, C3). Integrado durante el día de campo por decisión del usuario. Lo consume FE-4.1 |
-| BE-5.1 | 5 | Diferido | — | — | — | |
+| BE-5.1 | 5 | En curso | [5-1](./validation/validation-5-1.md) | — | — | Construido en 0.16.0 (`POST /v1/localize/frame`, ARCHITECTURE §4.14 y ADR-BE-21; contrato en §5.3; sin migración ni cambios de infra). Pruebas sin base en verde en local; las de `tests/base/test_frame_base.py`, sin ejecutar (sin Docker en la máquina: van en el CI de un PR). Falta: desplegar y `validate51.py --entorno dev` con código 0. Lo consume FE-5.3 |
 | BE-5.2 | 5 | Diferido | — | — | — | |
-| BE-5.3 | 5 | Diferido | — | — | — | Depende de la decisión abierta 2 |
+| BE-5.3 | 5 | Diferido | — | — | — | No hace falta por ahora: el grafo lo entrega el equipo y la ruta se calcula en el teléfono (decisión del usuario del 2026-10-27, confirmada el 2026-10-28; FE-5.1) |
 | BE-6.1 | 6 | Diferido | — | — | — | |
 
 ---

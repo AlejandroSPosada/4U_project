@@ -20,6 +20,55 @@ Una entrada por versión de [`ARCHITECTURE.md`](./ARCHITECTURE.md), la más reci
 
 ---
 
+## [0.16.0] — 2026-10-28
+
+- **Lote que la motivó:** BE-5.1 (Corrección visual, `POST /v1/localize/frame`), construcción; es el lote del backend
+  de la meta «Guía en tiempo real (fotos + pasos)» (`PRIORITY-2.md`). Lo consumirá FE-5.3 (guía por voz, vistas
+  6.5–6.6). La ejecución en `dev` la coordina el maestro.
+- **Qué cambió:**
+  - **Contrato primero** (§5.3): `POST /v1/localize/frame` deja de ser reservado. Petición `multipart/form-data` con
+    **una** parte `foto` y `metadatos` = `{"rumbo", "posicion_previa": {"lat", "lng"}, "radio_m" (opcional),
+    "app_version"}`; respuesta `FrameRespuesta` (lo de `/v1/localize` que aplica con una foto más
+    `distancia_previa_m`, `radio_busqueda_m` e `imagenes_en_radio`); `sin_coincidencias` es un `200`; errores `400
+    FOTOS_INVALIDAS`/`SOLICITUD_INVALIDA`, `422 VALIDACION`, `503 EMBEDDING_NO_DISPONIBLE`/`BASE_NO_DISPONIBLE`, en el
+    orden de `/v1/localize`. «Endpoints reservados» ya no lo lista.
+  - **Construido** (§4.14 nueva): búsqueda **exacta** solo entre las imágenes a ≤ `radio_m` (haversine) de la posición
+    previa (`db.consultas.buscar_vecinos_en_radio`, CTE materializada sin HNSW, `count(*) OVER ()` para
+    `imagenes_en_radio`), el algoritmo de BE-3.2 sin cambios, contexto y fila de `eventos_localizacion` con `origen =
+    frame` en una transacción. Código: `esquemas/localizacion.py` (`PARTE_FOTO`, `PosicionPrevia`, `MetadatosFrame`,
+    `FrameRespuesta`, `app_version_admitida`), `db/consultas.py`, `servicios/localizar.py` (`localizar_frame` y las
+    piezas `_vectorizar`, `_contexto`, `_guardar_evento` que comparte con `localizar`), `api/v1/localizar.py` (la ruta
+    y las piezas `_partes`, `_metadatos_validados`, `_errores_del_servicio` y los helpers de salida, compartidos con
+    `/v1/localize`), `config.py` (`loc_frame_radio_*`) y `api/v1/reservados.py` (sin la ruta). `/v1/localize` no cambia
+    de comportamiento (mismo orden de errores, mismos textos; sus pruebas siguen en verde). Sin migración ni cambios de
+    infraestructura.
+  - **ADR-BE-21** (filtrar por distancia en la consulta y no sobre los `LOC_TOP_K` globales; búsqueda exacta; radio 40
+    m entre 10 y 100; algoritmo y `LOC_*` de BE-3.2 sin cambios; respuesta propia; evento con `origen = frame`) y riesgo
+    **R19** (sin índice geográfico). La guía de §4.10 («filtrar los vecinos antes de `localizar`») queda precisada.
+  - §4.1, §4.13 (BE-5.1 construido; BE-5.3 no hace falta por ahora: la ruta se calcula en el teléfono, decisión del
+    usuario del 2026-10-27 confirmada el 2026-10-28) y encabezado al día.
+  - `validate51.py` nuevo (P1–P5; C4, C1, C2, C3, C6, C5) con sus propios datos (`validacion-51-…`, 4 fotos fuera del
+    campus en dos puntos a 300 m) y su prueba con un mundo falso; §5.11 con su descripción. `validation-5-1.md` nuevo.
+    PLAN: BE-5.1 con entregables y criterios C1–C6, «Para validar» BE-2.2 y BE-4.1 (no la calibración de BE-3.2), fila
+    de §3 «En curso»; BE-5.3 anotado como «no hace falta por ahora».
+- **Contratos tocados (§5):**
+  - §5.3: subsección nueva `POST /v1/localize/frame`; fila de la tabla y «Endpoints reservados».
+  - §5.6: `FOTOS_INVALIDAS` y `VALIDACION` (`metadatos.<campo>`) también en `/v1/localize/frame`.
+  - §5.7: «`eventos_localizacion`: filas de BE-5.1» (sin cambio de esquema: `origen = frame` ya estaba en el `CHECK`).
+  - §5.10: parámetros nuevos `LOC_FRAME_RADIO_M` / `LOC_FRAME_RADIO_MIN_M` / `LOC_FRAME_RADIO_MAX_M` (40 / 10 / 100) y
+    evento de log nuevo `frame_calculado`.
+- **Cómo se verificó:** en local (WSL), `ruff check` y `ruff format --check` en verde; `pytest` **sin**
+  `PRUEBAS_DB_URL`: 833 pasan y 282 se omiten (las `base`); todas las existentes siguen pasando y las nuevas también
+  (`tests/api/test_localizar_frame.py`,
+  `tests/contrato/test_contrato_localizacion.py` ampliada, `tests/ops/test_validate51.py` con 7 backends defectuosos;
+  `tests/api/test_auth.py`: `/v1/localize/frame` ya no da `501`). Las 8 de `tests/base/test_frame_base.py` **sin
+  ejecutar**: no hay Docker ni PostgreSQL en la máquina; corren en el CI de `backend.yml` de un PR. La sentencia de la
+  búsqueda es la que compila SQLAlchemy con el dialecto asyncpg (impresa). Nada ejecutado en `dev`.
+- **Pendiente:** las pruebas con base en el CI; desplegar (push a `main`) y `validate51.py --entorno dev` con código 0
+  para cerrar BE-5.1 en PLAN §3. Medir en `dev` la latencia real de un frame (C6 la exige ≤ 1 s) y, con el día de
+  campo de FE-5.3, el radio y si el nivel de un frame (más alto que el de un escaneo, ADR-BE-21) necesita cortes
+  propios. Frontend: FE-5.3 consume el contrato de §5.3 (parte `foto`, no `fotos`).
+
 ## [0.15.1] — 2026-10-27
 
 - **Lote que la motivó:** BE-4.1 (cierre: `validate41.py --entorno dev` con código 0 sobre `c5f6517`, PLAN §3).
