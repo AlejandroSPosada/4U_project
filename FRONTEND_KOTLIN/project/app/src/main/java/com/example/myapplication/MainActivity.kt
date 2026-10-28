@@ -40,6 +40,7 @@ import com.example.myapplication.ui.admin.imagenes.GaleriaScreen
 import com.example.myapplication.ui.admin.videos.VideoDetalleScreen
 import com.example.myapplication.ui.admin.videos.VideosScreen
 import com.example.myapplication.map.MapaPublicoScreen
+import com.example.myapplication.map.PruebaMapa
 import com.example.myapplication.ui.admin.recoleccion.UbicacionManualScreen
 import com.example.myapplication.ui.admin.recoleccion.RecoleccionScreen
 import com.example.myapplication.ui.admin.recoleccion.ResumenVideoScreen
@@ -58,6 +59,11 @@ class MainActivity : ComponentActivity() {
         // FE-2.3: solo en el APK de depuración y en un arranque nuevo (no al restaurar ni al rotar),
         // `am start -n com.example.myapplication/.MainActivity --es ruta mapa` abre una ruta de prueba.
         val rutaPrueba = if (savedInstanceState == null) rutaDePrueba(intent) else null
+        // FE-5.1 (ADR-FE-38): con la ruta de prueba `mapa`, un destino y una posición de prueba para la ruta por el grafo
+        // (`--es destino_prueba bloque35 --es posicion_prueba 6.201434,-75.578427`). Solo aquí: el flujo real no los usa.
+        if (rutaPrueba == "mapa") {
+            PruebaMapa.fijar(intent?.getStringExtra(EXTRA_DESTINO_PRUEBA), intent?.getStringExtra(EXTRA_POSICION_PRUEBA))
+        }
         setContent {
             MaterialTheme {
                 AppNav(rutaInicial = rutaPrueba)
@@ -76,6 +82,12 @@ class MainActivity : ComponentActivity() {
 
         /** Rutas que se pueden abrir así; cualquier otra se ignora (navegar a una no registrada cierra la app). */
         val RUTAS_DE_PRUEBA = setOf("mapa")
+
+        /** FE-5.1: destino de prueba del mapa (el `lugar` de una entrada del grafo; se compara normalizado). */
+        const val EXTRA_DESTINO_PRUEBA = "destino_prueba"
+
+        /** FE-5.1: posición de prueba del mapa, `"<lat>,<lng>"` con punto decimal. */
+        const val EXTRA_POSICION_PRUEBA = "posicion_prueba"
     }
 }
 

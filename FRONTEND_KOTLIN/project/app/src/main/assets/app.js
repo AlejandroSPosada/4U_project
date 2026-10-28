@@ -16,6 +16,9 @@
         startMarker: null,
         trailLine: null,
         trailCoords: [],
+        // FE-5.1: ruta por el grafo (la calcula Kotlin, domain/ruta; llega por onNativeRuta)
+        routeLine: null,
+        routeEnd: null,
 
         // Position
         startLat: null,
@@ -285,6 +288,31 @@
             if (state.trailLine) state.trailLine.setLatLngs(state.trailCoords);
         }
         updateAllStats();
+    };
+
+    /**
+     * FE-5.1: ruta calculada por Kotlin ({destino, metros, primera, puntos: [[lat, lng], …]}) o null para quitarla.
+     * Solo dibuja: la distancia y la primera instrucción las muestra Kotlin encima del mapa.
+     */
+    window.onNativeRuta = function (ruta) {
+        if (!state.map) return;
+        if (state.routeLine) { state.map.removeLayer(state.routeLine); state.routeLine = null; }
+        if (state.routeEnd) { state.map.removeLayer(state.routeEnd); state.routeEnd = null; }
+        if (!ruta || !Array.isArray(ruta.puntos) || ruta.puntos.length < 2) return;
+        state.routeLine = L.polyline(ruta.puntos, { color: '#22c55e', weight: 6, opacity: 0.85 }).addTo(state.map);
+        const fin = ruta.puntos[ruta.puntos.length - 1];
+        state.routeEnd = L.circleMarker(fin, {
+            radius: 8, color: '#14532d', weight: 2, fillColor: '#22c55e', fillOpacity: 1,
+        }).addTo(state.map);
+    };
+
+    /** FE-5.1 (solo APK de depuración): punto de partida de prueba, como un toque en el mapa; quita la portada. */
+    window.onNativeInicio = function (lat, lng) {
+        if (!state.map) return;
+        const splash = $('splash-screen');
+        if (splash) { splash.classList.add('dismissed'); splash.style.display = 'none'; }
+        $('top-bar').classList.remove('hidden');
+        setUserPosition(lat, lng);
     };
 
     /** Desviación de la aceleración respecto a la gravedad (m/s²), solo para la gráfica. */
@@ -715,6 +743,8 @@
         }
         window.addEventListener('resize', resizeCanvas);
         setTimeout(resizeCanvas, 500);
+        // FE-5.1: avisa a Kotlin que ya acepta window.onNative* (posición de prueba y ruta).
+        bridgeCall('listo');
     }
 
     if (document.readyState === 'loading') {

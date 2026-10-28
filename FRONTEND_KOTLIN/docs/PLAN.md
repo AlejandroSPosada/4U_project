@@ -4,7 +4,7 @@ Qué se construye y en qué orden. **Cómo** funciona cada pieza está en [`ARCH
 **por qué y cuándo** cambió algo, en [`CHANGELOG.md`](./CHANGELOG.md); **cómo se comprueba** cada lote, en
 [`validation/`](./validation/).
 
-Alineado con `ARCHITECTURE.md` **v0.14.1**. Este archivo contiene además el **catálogo único de historias de usuario**
+Alineado con `ARCHITECTURE.md` **v0.15.0**. Este archivo contiene además el **catálogo único de historias de usuario**
 del proyecto (§5), que los planes de las otras carpetas referencian.
 
 ---
@@ -71,7 +71,8 @@ prototipo ya construido sobre datos locales y *stubs*.
 | FE-4.2 | Ajustes (6.7) | — | — | [`validation-4-2`](./validation/validation-4-2.md) |
 | FE-4.3 | Limpieza y deuda técnica | — | — | [`validation-4-3`](./validation/validation-4-3.md) |
 | FE-4.4 | Galería y videos: lo que quedó de FE-4.1 (7.8, 7.11–7.14) | FE-4.1 | FE-4.1, BE-4.1 | — (se escribe al planificarlo) |
-| FE-5.1 | Navegación guiada, llegada y fusión (6.5, 6.6) — diferido | FE-3.2, BE-5.1, BE-5.3 | — | — |
+| FE-5.1 | Grafo y rutas (la «App 1» de la guía en tiempo real) | FE-3.2 | FE-3.1, BE-3.1 | [`validation-5-1`](./validation/validation-5-1.md) |
+| FE-5.3 | Guía por voz con pasos y fotos (6.5, 6.6) | FE-5.1, BE-5.1 | FE-5.1, BE-5.1 | — (se escribe al planificarlo) |
 | FE-5.2 | Estadísticas (7.15) — diferido | BE-5.2 | — | — |
 | FE-6.1 | Preparación para publicar — diferido | Fases 1–4 cerradas | — | — |
 
@@ -433,10 +434,68 @@ fuera; guía para construirlo en ARCHITECTURE §4.10, «Para los lotes siguiente
 - **Criterios de cierre:** por definir al planificarlo (a decidir con el usuario).
 - **Historias:** HU-17, HU-18.
 
-#### FE-5.1 — Navegación guiada, llegada y fusión (diferido)
-- **Alcance:** vistas 6.5 y 6.6 sobre `PdrTracker`; fusión PDR + visual en `domain/fusion/` (decisiones abiertas 4 y 5);
-  corrección visual con BE-5.1; rutas con BE-5.3; funcionamiento sin conexión (decisión abierta 6); deriva de la brújula
-  (decisión abierta 16).
+#### FE-5.1 — Grafo y rutas
+Nace el 2026-10-28 de partir el FE-5.1 «diferido» (navegación guiada, llegada y fusión) en dos: **FE-5.1** (este, la «App
+1» de la meta «Guía en tiempo real (fotos + pasos)») y **FE-5.3** (la guía por voz). Decisiones del usuario: el grafo lo
+entrega el equipo y la app lo lee tal cual, sin funciones para cambiarlo (2026-10-27; resuelve la decisión abierta 2), y
+la ruta se calcula en el teléfono, así que **la app ya no depende de BE-5.3** (`GET /v1/route`); al copiar el grafo, los
+nombres de `lugar` se corrigen para que coincidan exactamente con los del backend, y uno que no exista se deja y se
+reporta (2026-10-28).
+- **Alcance:**
+  - `grafo.json` del equipo en `assets/`, de solo lectura, con modelos `Nodo`, `Arista`, `Grafo` (lógica pura) y un
+    cargador que lo valida (ids repetidos, aristas a nodos inexistentes, componentes aislados, entradas sin lugar): con
+    un grafo inválido la app no se cae, desactiva las rutas y lo registra.
+  - Proyectar la posición sobre la **arista** más cercana (punto del segmento, no el nodo más cercano) con un nodo
+    virtual de partida; a más de ~15 m de cualquier arista, la primera instrucción lleva al camino.
+  - Ruta más corta en el teléfono, sin red (Dijkstra), a la entrada más cercana del destino (un lugar puede tener
+    varias); sin aristas `bloqueada`.
+  - Instrucciones de texto por los ángulos entre tramos (casi recto se junta; giros leves, normales y cerrados; la
+    primera respecto al rumbo de la persona; «has llegado»), con parámetros con nombre y valores de partida documentados.
+  - Emparejar las entradas del grafo con los lugares del backend por nombre normalizado y avisar de las que no coincidan;
+    destino fuera del grafo → sin ruta (la 6.3 sigue con la línea recta de FE-3.2).
+  - Mapa público: dibujar la ruta desde la posición actual hasta el destino elegido en 6.4. Vista 6.3: con ruta, la
+    primera instrucción y la distancia por el camino. **Sin** guía por voz en movimiento ni fotos (FE-5.3).
+- **Hecho en el código** (ARCHITECTURE 0.15.0, §4.11; ADR-FE-38 y ADR-FE-39): todo lo anterior. `assets/grafo.json`
+  versión 180 (la 179 del equipo con `bloque 35` → `Bloque 35`, el único lugar del grafo que existe en `dev` el
+  2026-10-28). Ruta de prueba del mapa con destino y posición por extras del `Intent`, solo en el APK de depuración.
+- **Criterios de cierre** (propuestos por el esclavo el 2026-10-28, comprobables en casa; a confirmar por el usuario):
+  - C1. La app lee `assets/grafo.json` tal cual y lo valida: el grafo del equipo es válido (formato 1, un solo
+    componente, toda entrada con lugar) y uno inválido (JSON roto, ids repetidos, aristas a nodos inexistentes,
+    componentes aislados, entradas sin lugar) desactiva las rutas sin cerrar la app (`LectorGrafoTest`; C1b estática).
+  - C2. La ruta sale del punto proyectado sobre la arista más cercana (no del nodo más cercano), es la más corta hasta la
+    entrada más cercana del lugar, no usa aristas bloqueadas y sus instrucciones siguen los umbrales documentados
+    (`ProyeccionRutaTest`, `InstruccionesTest`).
+  - C3. Cada `lugar` del grafo existe como lugar en `GET /v1/places` de `dev` (por nombre o alias, normalizado como en
+    la app) y la app avisa de los que no (`EmparejamientoTest`; C3b en `dev`). **Hoy falla:** `dev` solo tiene «Bloque
+    35»; faltan seis lugares (decisión del usuario: crearlos en 7.7 y con qué nombres).
+  - C4. En el teléfono, en casa: el mapa público con un destino del grafo y una posición dentro del grafo muestra la ruta,
+    la distancia por el camino y la primera instrucción esperadas, y tocar otro punto la recalcula; la 6.3 dice la
+    distancia por el camino y la primera instrucción (`PlanificadorTest`, `RutaEnMapaTest`; C4b en `dev` con un paso
+    guiado; captura C4c).
+- **Historias:** HU-04 (en parte: la ruta; la guía hablada es de FE-5.3).
+
+#### FE-5.3 — Guía por voz con pasos y fotos (6.5, 6.6)
+Nace el 2026-10-28 del FE-5.1 «diferido» (arriba). Es la «App 2» de la meta «Guía en tiempo real (fotos + pasos)».
+Decisiones del usuario del 2026-10-27: fotos + pasos («La verdad sí me gustaría que fuera con fotos + pasos»); regla
+simple de mezcla (los pasos mueven la posición entre fotos y cada foto confiable la reemplaza, siempre sobre el grafo;
+una foto que contradice lo caminado, p. ej. 40 m de salto tras 5 m de pasos, se descarta); `embedding` sigue en CPU.
+- **Alcance:** vistas 6.5 (Navegación guiada) y 6.6 (Llegada). Tras «Ubicarme», el PDR mueve la posición sobre el grafo
+  (`Proyeccion` y `Planificador` de FE-5.1, ARCHITECTURE §4.11 «Para FE-5.3»); cada ~10 m caminados (o antes si la
+  posición se vuelve dudosa; decisión abierta 4) la app toma una foto sola, la manda a `POST /v1/localize/frame` (BE-5.1)
+  y, si es confiable y coherente con lo caminado, **reemplaza** la posición; instrucciones habladas al acercarse a cada
+  giro (con `Instruccion.desdeM`); recalcular si se aleja ~15 m de la ruta varias lecturas seguidas; alertas cercanas a la
+  ruta; «has llegado»; sin red sigue solo con pasos y lo avisa (propuesta pendiente del usuario, decisión abierta 6);
+  reactivar el control de foto borrosa (`CalidadImagen.kt`, hoy en FE-4.3); deriva de la brújula (decisión abierta 16).
+  Ajustar en el campo los parámetros de `ParametrosRuta` y las distancias (aviso antes del giro, umbral de desvío, cada
+  cuánto se toma foto).
+- **Fuera:** el filtro de Kalman o de partículas (decisión abierta 5; un lote aparte solo si el campo muestra que la regla
+  simple no basta); editar el grafo desde la app y `GET /v1/route` (BE-5.3).
+- **Criterio de cierre** (el de la meta 3, aceptado por el usuario): en el campus, en al menos 5 recorridos de 50 a 150 m
+  dentro del grafo, el usuario llega a ≤ 5 m de la entrada del destino; cada giro se anuncia antes del cruce; si se
+  desvía, la app lo nota y recalcula; y la posición no se aleja más de ~10 m de la real en todo el trayecto gracias a las
+  fotos. Se planifica (documento de validación, comprobaciones) al empezar el lote.
+- **Pendientes del usuario:** cómo se lleva el teléfono (la cámara debe mirar hacia adelante al caminar); cada cuánto se
+  toma la foto; qué pasa sin señal.
 - **Historias:** HU-04, HU-05, HU-06.
 
 #### FE-5.2 — Estadísticas (diferido)
@@ -485,7 +544,8 @@ fuera; guía para construirlo en ARCHITECTURE §4.10, «Para los lotes siguiente
 | FE-4.4 | 4 | Pendiente | — | — | — | | Nace de FE-4.1 (decisión del usuario del 2026-10-27: FE-4.1 hace lo esencial): 7.12, mapa de la Galería, filtro por fecha, «Subir imágenes», minimapa y comparar cobertura en 7.13, acciones por fila, pulsación larga, base común de mapas y las capas de 7.8 (§2.2) |
 | FE-4.2 | 4 | Pendiente | [4-2](./validation/validation-4-2.md) | — | — | | Puede empezar ya |
 | FE-4.3 | 4 | Pendiente | [4-3](./validation/validation-4-3.md) | — | — | | Puede empezar ya (salvo lo que dependa de decisiones) |
-| FE-5.1 | 5 | Diferido | — | — | — | | |
+| FE-5.1 | 5 | En curso | [5-1](./validation/validation-5-1.md) | — | — | Local (`assets/grafo.json` v180, solo lectura); `dev` (`GET /v1/places`, solo lectura); teléfono en casa (ruta de prueba del mapa, APK de depuración) | Código y pruebas listos (ARCHITECTURE 0.15.0, §4.11; ADR-FE-38 y 39): grafo en `assets/` validado al leerlo (inválido → rutas desactivadas), proyección sobre la arista más cercana, Dijkstra a la entrada más cercana, instrucciones por ángulos con `ParametrosRuta`, emparejamiento por nombre normalizado, ruta y aviso en el mapa público, 6.3 con la distancia por el camino y la primera instrucción, destino y posición de prueba solo en depuración. 374 casos JVM (C1a 7; C2a 9 y 8; C3a 3; C4a 7 y 3); `pytest` 312 + 1 omitida; `validate51.py --entorno local` con código 0 (2026-10-28, worktree sin commit). **Falta** `validate51.py --entorno dev`: C4b con el teléfono en casa (paso guiado por `adb`) y C3b, que **hoy falla**: `GET /v1/places` en `dev` solo tiene «Bloque 35»; faltan `bloque 33`, `bloque 34`, `bloque 38`, `biblioteca`, `cafeteria` y `cocnverso` («Café Con.verso» según el usuario), que el usuario decide si se crean en 7.7 y con qué nombres. Criterios C1–C4 propuestos, a confirmar por el usuario |
+| FE-5.3 | 5 | Pendiente | — | — | — | | Nace el 2026-10-28 del FE-5.1 «diferido»: guía por voz con pasos y fotos (6.5, 6.6). Para construir y validar: FE-5.1 y BE-5.1 (`POST /v1/localize/frame`); criterio de la meta 3 (§2.2) |
 | FE-5.2 | 5 | Diferido | — | — | — | | |
 | FE-6.1 | 6 | Diferido | — | — | — | | |
 
@@ -498,9 +558,9 @@ fuera; guía para construirlo en ARCHITECTURE §4.10, «Para los lotes siguiente
 | HU-01 Ubicarme con una vuelta | FE-0.2, FE-3.2 | BE-2.4, BE-3.2, EMB-2.1–EMB-3.2, INF-1.1–INF-1.4 |
 | HU-02 Conocer mi ubicación y referencias | FE-3.2 | BE-3.1, BE-3.2, EMB-3.2 |
 | HU-03 Elegir destino por voz o lista | FE-0.3, FE-3.1 | BE-3.1 |
-| HU-04 Ser guiada hasta el destino | FE-5.1 | BE-5.3 |
-| HU-05 Avisos de obstáculos | FE-3.6, FE-5.1 | BE-3.3 |
-| HU-06 Seguimiento continuo de la posición | FE-0.9, FE-5.1 | BE-5.1, EMB-5.1 |
+| HU-04 Ser guiada hasta el destino | FE-5.1, FE-5.3 | BE-5.1 |
+| HU-05 Avisos de obstáculos | FE-3.6, FE-5.3 | BE-3.3 |
+| HU-06 Seguimiento continuo de la posición | FE-0.9, FE-5.3 | BE-5.1, EMB-5.1 |
 | HU-07 Personalizar voz y avisos | FE-4.2 | — |
 | HU-08 Usar la app solo con voz o TalkBack | FE-0.1, FE-3.5, FE-4.3 | — |
 | HU-09 Saber si hay conexión | FE-0.1, FE-1.1 | BE-1.1, INF-1.4 |

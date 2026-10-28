@@ -2,9 +2,9 @@
 
 | Campo | Valor |
 |---|---|
-| Versión del documento | **0.14.1** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
-| Fecha | 2026-10-27 |
-| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; validado en `dev` con el Xiaomi el 2026-10-27; la recarga del Panel, sin comprobar en el teléfono). Desde FE-3.3 las alertas de administración son «local primero» de verdad: un repositorio único del proceso (`AlertasRepository`, en disco en `files/alertas/editor.json`, ADR-FE-33) con una operación pendiente por id que se envía con `POST /v1/admin/alerts/sincronizar`; el editor 7.8 carga las alertas y los lugares reales, «Mi posición» usa la última posición del PDR de 7.4, el formulario 7.9 tiene dictado, «Escuchar cómo sonará», vigencia y «Ajustar en el mapa», existe la lista 7.10 y 7.4 guarda sus alertas en disco y dibuja las existentes con la ruta pública `GET /v1/alerts`, sin llamar a rutas protegidas (ADR-FE-34) (§4.9; validado en `dev` con el Xiaomi el 2026-10-27). Desde FE-4.1 Galería, Lista y Detalle de video (7.11, 7.13 y 7.14) usan el backend (`RemoteVideoRepository`, `GET`/`PATCH`/`DELETE /v1/admin/videos`, `/v1/admin/images` y su lote): la Lista junta los videos del servidor con los recorridos del teléfono sin subir (un recorrido sale una sola vez), 7.14 renombra y elimina de verdad (en el servidor o, en uno local, en disco) sin cerrar la app si falla y sin salir antes de que el servidor confirme, la Galería pagina y filtra en el servidor con «Reasignar» a lugares reales, «Ver fotos» de 7.6 y 7.7 abre la Galería filtrada, las miniaturas de los recorridos locales ya se ven en 7.14 y `EdicionesLocales` y `assets/videos/` desaparecen (§4.10; validado en `dev` con el Xiaomi el 2026-10-27; «Reasignar», el error del borrado y TalkBack, sin probar en el teléfono). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
+| Versión del documento | **0.15.0** (historia en [`CHANGELOG.md`](./CHANGELOG.md)) |
+| Fecha | 2026-10-28 |
+| Estado del código | Flujos público y de administración con varias vistas construidas sobre datos locales y *stubs*. Desde FE-1.1 existe el cliente HTTP (`data/remote/`, §5.10) y el indicador de conexión de Inicio usa `GET /v1/health` real; desde FE-1.2 el Login usa `POST /v1/auth/login` real, la sesión guarda `expira_en` y una ruta protegida sin sesión vuelve a Login (§5.3). Desde FE-2.3 el PDR deja de leer sensores en segundo plano, una grabación de 7.4 se retoma tras matar el proceso y la lógica pura del PDR y de la recolección tiene pruebas en la JVM (§4.3); de sus pruebas en dispositivo falta caminar un recorrido conocido con el PDR y 7.3 (FE-2.3 C3, PLAN §3). Desde FE-2.1 «Finalizar» abre la vista 7.5 (Resumen de video), los recorridos se suben al backend con una cola persistente (`data/local/`, re-codificación ≤ 1600 px y ≤ 4 MB, URLs prefirmadas, retomar sin duplicar) y Galería, Lista y Detalle de video ven lo recolectado (§4.4; validado en `dev` con un recorrido de prueba en casa). Desde FE-3.1 Selección de destino usa `GET /v1/places` real y el mapa público se abre desde Inicio (voz «mapa» y acción de TalkBack «Ver mapa»), con su PDR atado al ciclo de vida de la pantalla (§4.5; validado en `dev` con la lista real y la entrada por voz; la prueba con TalkBack y el punto de inicio del mapa sin tocarlo pasaron a FE-3.6). Desde FE-3.2 «Ubicarse» usa `POST /v1/localize` real (fotos re-codificadas a 1024 px, rumbos en norte verdadero), borra las fotos del escaneo al recibir la respuesta, abre la vista 6.3 (Resultado) y comparte destino y ubicación entre vistas públicas con `SesionDeNavegacion` (§4.6; probado en la JVM y con `validate32.py` en local, **sin probar en el teléfono ni en `dev`**: BE-3.2 aún no tiene dataset ni calibración). Desde FE-2.2 el «Resumen rápido» del Panel usa `GET /v1/admin/stats` real (`RemoteAdminRepository`) y sus «Fotos pendientes» salen de la cola local de subida y se releen al volver al Panel (§4.7; validado en `dev` con el Xiaomi el 2026-10-26; sin comprobar en el teléfono el texto de la fecha del último video, porque `dev` no tenía videos). Desde FE-3.4 la lista y el formulario de lugares (7.6 y 7.7) usan `/v1/admin/places` real (`RemoteLugaresAdminRepository`), el punto de llegada se elige en un mapa (`lugar_mapa.html`, puente `LugarBridge`), `Lugar` y `LugarDestino` quedaron en un solo modelo (`LugarDestino`, envuelto por `LugarAdmin` en la administración) y el Panel recarga su resumen al volver si cambiaron los lugares (§4.8; validado en `dev` con el Xiaomi el 2026-10-27; la recarga del Panel, sin comprobar en el teléfono). Desde FE-3.3 las alertas de administración son «local primero» de verdad: un repositorio único del proceso (`AlertasRepository`, en disco en `files/alertas/editor.json`, ADR-FE-33) con una operación pendiente por id que se envía con `POST /v1/admin/alerts/sincronizar`; el editor 7.8 carga las alertas y los lugares reales, «Mi posición» usa la última posición del PDR de 7.4, el formulario 7.9 tiene dictado, «Escuchar cómo sonará», vigencia y «Ajustar en el mapa», existe la lista 7.10 y 7.4 guarda sus alertas en disco y dibuja las existentes con la ruta pública `GET /v1/alerts`, sin llamar a rutas protegidas (ADR-FE-34) (§4.9; validado en `dev` con el Xiaomi el 2026-10-27). Desde FE-4.1 Galería, Lista y Detalle de video (7.11, 7.13 y 7.14) usan el backend (`RemoteVideoRepository`, `GET`/`PATCH`/`DELETE /v1/admin/videos`, `/v1/admin/images` y su lote): la Lista junta los videos del servidor con los recorridos del teléfono sin subir (un recorrido sale una sola vez), 7.14 renombra y elimina de verdad (en el servidor o, en uno local, en disco) sin cerrar la app si falla y sin salir antes de que el servidor confirme, la Galería pagina y filtra en el servidor con «Reasignar» a lugares reales, «Ver fotos» de 7.6 y 7.7 abre la Galería filtrada, las miniaturas de los recorridos locales ya se ven en 7.14 y `EdicionesLocales` y `assets/videos/` desaparecen (§4.10; validado en `dev` con el Xiaomi el 2026-10-27; «Reasignar», el error del borrado y TalkBack, sin probar en el teléfono). Desde FE-5.1 la app lee el grafo de caminos de `assets/grafo.json` (versión 180, de solo lectura, `GrafoDeLaApp`), calcula en el teléfono y sin red la ruta más corta desde la arista más cercana hasta la entrada más cercana del destino, con instrucciones por los ángulos entre tramos (`domain/ruta/`), la dibuja en el mapa público con la distancia por el camino y la primera instrucción, y la 6.3 dice esa distancia y la primera instrucción cuando el destino está en el grafo (§4.11; probado en la JVM y con `validate51.py --entorno local`, **sin probar en el teléfono ni en `dev`**). El resto de repositorios siguen siendo *stubs*. El estado por lote está **solo** en [`PLAN.md`](./PLAN.md) §3 |
 | Qué se construye y en qué orden | [`PLAN.md`](./PLAN.md) · cómo se comprueba cada lote: [`validation/`](./validation/) |
 
 Este documento describe la app: qué hace, cómo está organizada, qué sistemas la componen y **qué debe tener cada
@@ -108,6 +108,12 @@ oscura (se repite esa captura), baja confianza (se pide repetir la vuelta), sin 
 5. Durante el trayecto se mantiene la posición con el sistema híbrido (2.3).
 6. Si el usuario se desvía, se **recalcula la ruta** y se avisa.
 
+> **Implementación actual (FE-5.1, §4.11):** el paso 3 ya existe: el grafo lo entrega el equipo en `assets/grafo.json`
+> (la app lo lee tal cual, sin funciones para cambiarlo) y la ruta más corta se calcula en el teléfono, sin red
+> (`domain/ruta/`, §5.7). La 6.3 dice la distancia por el camino y la primera instrucción, y el mapa público dibuja la
+> ruta. Los pasos 4 a 6 (guía hablada en movimiento con pasos y fotos, recalcular al desviarse, alertas cercanas) son de
+> FE-5.3 (PLAN §2.2).
+
 ### 2.3 Seguimiento de posición (sistema híbrido)
 
 Dos sistemas trabajan en paralelo y se fusionan:
@@ -133,6 +139,12 @@ cuando la incertidumbre estimada supera un umbral. **Sin intervención del usuar
 > el sensor de hardware `TYPE_STEP_DETECTOR` se descartó porque tardaba 1–3 s en reaccionar y hacía lentas la
 > calibración (7.3b) y la recolección (7.4); con el acelerómetro el primer paso se cuenta en ~0,1 s. La **corrección visual**
 > y la **fusión** (`domain/fusion/`) todavía no existen. Detalle en 5.2.
+>
+> **Para la guía (decisión del usuario del 2026-10-27):** fotos + pasos con una regla simple: los pasos mueven la
+> posición entre fotos y cada foto confiable y coherente con lo caminado la reemplaza, siempre sobre el grafo (una foto
+> que contradice lo caminado, p. ej. 40 m de salto tras 5 m de pasos, se descarta). Lo construye FE-5.3; el filtro de
+> Kalman o de partículas queda fuera mientras el campo no muestre que hace falta (decisión abierta 5). FE-5.1 ya da
+> la proyección de una posición sobre la arista más cercana (`Proyeccion`, §5.7).
 
 ### 2.4 Recolección del dataset (admin)
 
@@ -241,13 +253,14 @@ vista de **Recolección en curso** con el botón "Agregar alerta aquí" (ver sec
 
 | Función | Detalle |
 |---|---|
-| Posición inicial | Toque en el mapa (solo si no se está rastreando) o botón GPS (`navigator.geolocation`). Al abrir, intenta usar el GPS automáticamente |
+| Posición inicial | Toque en el mapa (solo si no se está rastreando) o botón GPS (`navigator.geolocation`). Al abrir, intenta usar el GPS automáticamente. Desde FE-5.1, en el APK de depuración, también la posición de prueba (`onNativeInicio`, ADR-FE-38) |
 | Seguimiento por pasos (PDR) | **Ya no lo calcula la página.** Kotlin (`PdrEngine`) avanza una longitud de paso (la calibrada en 7.3b, o 0,72 m por defecto) por paso en la dirección del rumbo y envía la posición con `onNativePosition`; la página mueve el marcador, dibuja la trayectoria y calcula las estadísticas de pantalla (cadencia, calorías) |
 | Rumbo | El promedio circular de las últimas 6 lecturas lo hace Kotlin (`PdrEngine`); la página solo suaviza la flecha del marcador con un filtro adaptativo. Si Kotlin avisa que no hay brújula (`onNativeBrujula(false)`), aparece una **rueda manual de rumbo** que envía `setManualHeading` |
 | Trayectoria | Polilínea punteada con todos los puntos recorridos; botón de reinicio que vuelve al punto inicial |
 | Panel de estadísticas | Pasos, velocidad, aceleración (con gráfica en vivo), distancia, cadencia, rumbo, calorías y coordenadas |
 | Brújula | Widget con rosa de los vientos y orientación cardinal |
 | Centrar | Botón que centra el mapa en la posición actual |
+| Ruta (FE-5.1) | **La calcula Kotlin** (`domain/ruta/`, §5.7) con el destino de 6.4 (`SesionDeNavegacion`) y la posición del mapa, en cada cambio de posición; la página solo dibuja la polilínea verde y el punto de llegada (`onNativeRuta`). La distancia por el camino y la primera instrucción las muestra Kotlin arriba, en Compose (§5.9) |
 
 #### Puente WebView ↔ Android (`AndroidBridge`)
 
@@ -372,18 +385,19 @@ com.example.myapplication/
 ├── domain/                      # Lógica de negocio pura (sin Android)
 │   ├── model/                   # Posicion, Lugar, Alerta, Ruta, Video, Foto, Usuario...
 │   ├── usecase/                 # UbicarUsuario, CalcularRuta, IniciarRecoleccion, DetectarAlertasCercanas...
+│   ├── ruta/                    # FE-5.1: grafo (Nodo, Arista, Grafo), lectura y validación, proyección, ruta más corta, instrucciones y emparejamiento con los lugares (§5.7)
 │   └── fusion/                  # Fusión PDR + posición visual (Kalman/partículas)
 │
 ├── data/                        # Acceso a datos
 │   ├── remote/                  # Cliente HTTP (Retrofit + OkHttp, ADR-FE-12), DTOs, mapeo de errores y datos (§5.10)
 │   ├── repository/              # Implementaciones de repositorios
-│   └── local/                   # Desde FE-2.1: cola de subida de recorridos sobre los manifests de files/recoleccion/ (§5.10); desde FE-3.3, AlmacenAlertas (files/alertas/editor.json, §5.6); desde FE-4.1, MiniaturasLocales (cacheDir/miniaturas, §5.6); la caché pública de alertas es de FE-3.6
+│   └── local/                   # Desde FE-2.1: cola de subida de recorridos sobre los manifests de files/recoleccion/ (§5.10); desde FE-3.3, AlmacenAlertas (files/alertas/editor.json, §5.6); desde FE-4.1, MiniaturasLocales (cacheDir/miniaturas, §5.6); desde FE-5.1, GrafoDeLaApp (assets/grafo.json, §5.6); la caché pública de alertas es de FE-3.6
 │
 ├── sensors/                     # Sensores y PDR
 │   ├── PdrEngine, StepDetector, PdrTracker, OrientationProvider, InterruptorSensores (FE-2.3), ObservadorPrimerPlano (FE-3.1), Declinacion (FE-3.2)
 │
 ├── camera/                      # CameraX, captura automática (una carpeta por escaneo), calidad de imagen (sin uso por ahora)
-├── map/                         # WebView del mapa Leaflet/OSM, AndroidBridge y datos de capas (usuario, ruta, lugares, alertas). Hoy: MapaPublicoScreen, PuentePdr y MapaWebView (fábrica común de los WebView de mapa, 5.9)
+├── map/                         # WebView del mapa Leaflet/OSM, AndroidBridge y datos de capas (usuario, ruta, lugares, alertas). Hoy: MapaPublicoScreen, PuentePdr, MapaWebView (fábrica común de los WebView de mapa, 5.9) y, desde FE-5.1, RutaEnMapa (PruebaMapa, TextosRutaMapa, AvisoRuta; 5.7)
 ├── voice/                       # Wrappers de TextToSpeech y SpeechRecognizer
 └── session/                     # Sesión (token, rol, expira_en): SessionManager, AlmacenSesion, VigilanteSesion y EventosSesion (§5.3)
 ```
@@ -401,14 +415,16 @@ Pruebas unitarias (JVM) en `app/src/test/java/com/example/myapplication/`: `data
 FE-3.4 `data/remote/RemoteLugaresAdminRepositoryTest`, `ui/admin/lugares/` (`FormularioLugarTest`, `ErroresLugarTest`)
 y `ui/admin/panel/RecargaResumenTest`, desde FE-3.3 las cuatro de alertas, y desde FE-4.1
 `data/remote/RemoteVideoRepositoryTest`, `data/local/MiniaturasLocalesTest`, `ui/admin/videos/TextosVideosTest` y
-`ui/admin/recoleccion/HistorialRecoleccionTest` (`data/repository/VideoRepositoryCompuestoTest` reescrita) (lista y
+`ui/admin/recoleccion/HistorialRecoleccionTest` (`data/repository/VideoRepositoryCompuestoTest` reescrita), y desde
+FE-5.1 `domain/ruta/` (`LectorGrafoTest`, `ProyeccionRutaTest`, `InstruccionesTest`, `EmparejamientoTest`,
+`PlanificadorTest`, con la ayuda `GrafosDePrueba`, que lee el `assets/grafo.json` real) y `map/RutaEnMapaTest` (lista y
 conteos en §4.1).
 
 > Fuera del código Kotlin, el mapa vive en `app/src/main/assets/`: `index.html` y `app.js`
-> (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`), de la calibración (`calibracion_mapa.html/js`) y, desde FE-3.4, de los lugares (`lugar_mapa.html/js`), y la base común `mapa_base.js` (5.9). Desde FE-4.1 ya **no** hay `assets/videos/` (los videos de ejemplo, ~9,4 MB, sin uso: §4.10).
+> (Leaflet + OpenStreetMap, ver 2.6), las páginas del editor, del detalle de video, de la ubicación manual (`ubicacion_manual.html/js`), de la recolección (`recoleccion_mapa.html/js`), de la calibración (`calibracion_mapa.html/js`) y, desde FE-3.4, de los lugares (`lugar_mapa.html/js`), y la base común `mapa_base.js` (5.9). Desde FE-5.1 también el grafo de caminos `grafo.json` (un dato de solo lectura, no código: formato en §5.6). Desde FE-4.1 ya **no** hay `assets/videos/` (los videos de ejemplo, ~9,4 MB, sin uso: §4.10).
 
 > Actualmente en el repo existen `ui/`, `camera/`, `sensors/`, `map/`, `logs/`, `session/`,
-> `data/remote/` (desde FE-1.1), `data/local/` (desde FE-2.1), `data/repository/`, `domain/model/`, `domain/usecase/`,
+> `data/remote/` (desde FE-1.1), `data/local/` (desde FE-2.1), `data/repository/`, `domain/model/`, `domain/usecase/`, `domain/ruta/` (desde FE-5.1),
 > `ApiConfig.kt`, `MyApp.kt` y `MainActivity.kt`; el resto (`domain/fusion/`, `voice/`,
 > `ui/navigation/`) se crea a medida que se implementa. ⚠ Dentro del paquete Kotlin hay archivos que
 > no son código de la app (`archivos_zip.py`, `crear_archivos.py`, `out.zip`): sacarlos (`PLAN.md`, FE-4.3).
@@ -479,6 +495,12 @@ almacenamiento externo.
   `validate33.py`— e «Alertas: no se pudo releer la lista tras sincronizar (…)»; `AlmacenAlertasArchivo`: `AppLog.w`
   «Alertas: editor.json ilegible (…); se apartó y se empieza vacío»; nunca mensajes ni ids) y, en `RecoleccionVM`,
   «Alerta guardada en el teléfono (pendiente de sincronizar)» y «Alertas: no se pudieron leer las existentes (…)».
+  Desde FE-5.1 `Grafo` (`GrafoDeLaApp`, §5.6: `AppLog.i` «Grafo v180 cargado: 26 nodos, 31 aristas, 8 entradas»; `AppLog.w`
+  «Grafo: aviso: …», «grafo.json inválido (N errores): …; rutas desactivadas» o «grafo.json no se pudo leer (…); rutas
+  desactivadas»; y, una vez por proceso al cargar 6.4, «Grafo: N de M lugares del grafo sin lugar en el backend: …», con
+  los nombres del grafo, que son datos del campus y no la ubicación de nadie) y `Ruta` (`ResultadoUbicacionViewModel`, al
+  abrir 6.3 con destino: «Resultado: ruta por el camino: 60 m, 3 instrucciones[, fuera del camino]» o «Resultado: sin
+  ruta (destino fuera del grafo|sin posición|grafo no disponible|sin camino)»; sin posición ni nombres).
 - Registrar transiciones y decisiones, **no** cada lectura de sensor (50 por segundo).
 - No registrar datos sensibles (tokens, credenciales) **ni la ubicación de la persona** (FE-3.2, HU-23: las líneas del
   escaneo y del Resultado no llevan posición, rumbos de la respuesta ni nombres de lugares).
@@ -570,7 +592,9 @@ moverlos (moverlos a `ui/components/` es de FE-4.3, decisión del maestro del 20
 FE-4.1: `data/remote/RemoteVideoRepositoryTest` (15), `data/local/MiniaturasLocalesTest` (3),
 `ui/admin/videos/TextosVideosTest` (5) y `ui/admin/recoleccion/HistorialRecoleccionTest` (3), y
 `data/repository/VideoRepositoryCompuestoTest` reescrita (de 3 a 11: la mezcla servidor + teléfono); las otras 300 no
-cambian. Total al terminar el código de FE-4.1: **337** casos. No usan
+cambian. Total al terminar el código de FE-4.1: **337** casos. Desde FE-5.1: `domain/ruta/LectorGrafoTest` (7),
+`ProyeccionRutaTest` (9), `InstruccionesTest` (8), `EmparejamientoTest` (3), `PlanificadorTest` (7) y
+`map/RutaEnMapaTest` (3); las otras 337 no cambian. Total al terminar el código de FE-5.1: **374** casos (47 clases). No usan
   Android: el código probado no llama a `android.util.Log` (el registrador se inyecta, §5.10) ni a
   `EncryptedSharedPreferences` (la sesión se prueba con un `AlmacenSesion` en memoria, §5.3); lo de FE-2.3 es lógica
   pura (`PdrEngine`, `StepDetector`, `CalibracionPaso`, `DisparadorCaptura`, `Deriva`, `RetomarRecoleccion`,
@@ -1256,6 +1280,106 @@ el encabezado de 7.14 dice «28/10/2026» y la fila de 7.13 «27/10/2026» para 
 Bogotá (7.14 parece usar la fecha en UTC); 7.14 dice «22 m» (suma de tramos entre fotos, `Video.distanciaMetros`) y 7.13
 «13 m» (`distancia_m` del servidor) para el mismo video; el título «Videos de recolección» de 7.13 se dibuja debajo de
 la barra de estado (encima de la hora).
+
+### 4.11 Grafo y rutas (FE-5.1)
+
+Qué se construyó (detalle y firmas en §5.5, §5.6, §5.7, §5.8, §5.9 y §5.11; validación en
+[`validation-5-1`](./validation/validation-5-1.md)). Es la «App 1» de la meta «Guía en tiempo real (fotos + pasos)»: la
+guía hablada en movimiento, los pasos, las fotos y las vistas 6.5 y 6.6 son de **FE-5.3** (PLAN §2.2). No consume
+contratos nuevos del backend: solo `GET /v1/places` (backend §5.3, pública, la misma de FE-3.1), y solo el validador,
+para comprobar los nombres de lugar.
+
+**Decisiones del usuario** (dadas al maestro): (1) 2026-10-27: el grafo lo entrega el equipo y la app no tiene ninguna
+función que cambie cómo está construido; lo lee tal cual desde `assets/grafo.json`, de solo lectura, y la ruta se calcula
+en el teléfono (decisión abierta 2 resuelta; `GET /v1/route`, BE-5.3, deja de hacer falta). (2) 2026-10-28: al copiar el
+grafo, corregir los nombres de `lugar` para que coincidan **exactamente** con los lugares del backend (`GET /v1/places`
+en `dev`), sin cambiar coordenadas, ids ni aristas; un lugar que no exista en el backend se deja como está y se reporta;
+subir `version` y `actualizado`. Decisiones del lote: ADR-FE-38 (destino y posición de prueba del mapa, solo en el APK de
+depuración) y ADR-FE-39 (cómo se calcula la ruta y cómo casan los nombres).
+
+**El grafo copiado.** El `grafo.json` del equipo (formato 1, versión 179, del 2026-10-10) con un solo cambio de datos: el
+`lugar` de la entrada `n0007` pasó de `bloque 35` a **`Bloque 35`**, el nombre exacto en `dev`; `version` 180 y
+`actualizado` `2026-10-28T09:27:39-05:00`. El 2026-10-28 `GET /v1/places` en `dev` tenía **un solo lugar, «Bloque
+35»** (categoría `bloque`, 6.201286, −75.578834): los otros seis lugares del grafo —`bloque 33`, `bloque 34`, `bloque
+38`, `biblioteca` (dos entradas), `cafeteria` y `cocnverso` (según el usuario, «Café Con.verso»)— **no existen en el
+backend** y se dejaron como estaban, sin inventar nombres. Hasta que se creen en 7.7 (con un nombre o un alias que case,
+§5.7), elegirlos como destino no tiene ruta (6.3 da la línea recta, como antes) y `validate51.py` C3b falla. Contenido:
+26 nodos (18 `cruce` y 8 `entrada`), 31 aristas `camino`, accesibles y sin bloquear, 650 m, un solo componente.
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| Modelos | `domain/ruta/Grafo.kt` (nuevo) | `Nodo`, `Arista`, `Grafo`, `TiposNodo` (§5.7) |
+| Lectura y validación | `domain/ruta/LectorGrafo.kt` (nuevo) | `LectorGrafo.leer(texto): CargaGrafo`: `Valido` (con avisos) o `Invalido` (con errores); nunca lanza |
+| Geometría y proyección | `domain/ruta/Geo.kt`, `Proyeccion.kt` (nuevos) | Haversine, rumbo y plano local; `Proyeccion.masCercana` → `PuntoEnArista`: el punto de la **arista** más cercana (nodo virtual de partida), no el nodo más cercano |
+| Ruta más corta | `domain/ruta/CalculoRuta.kt` (nuevo) | Dijkstra desde el punto proyectado hasta la entrada más cercana **por el camino** del lugar (un lugar puede tener varias), sin aristas `bloqueada` |
+| Instrucciones | `domain/ruta/Instrucciones.kt` (nuevo) | Por los ángulos entre tramos: casi recto se junta; leve, normal y cerrado a izquierda o derecha; la primera respecto al rumbo de la persona; «Has llegado a …» al final. Parámetros con nombre en `ParametrosRuta` |
+| Emparejamiento | `domain/ruta/Emparejamiento.kt` (nuevo) | `EmparejarLugares`: casa el `lugar` del grafo con el `nombre` o un `alias` de un lugar del backend, normalizados (sin tildes, mayúsculas, espacios ni signos) |
+| Fachada | `domain/ruta/Planificador.kt` (nuevo) | `Planificador.calcular(…)`: `ResultadoRuta` (`Encontrada(Ruta)`, `DestinoFueraDelGrafo`, `SinCamino`); `Ruta.json()` para el mapa |
+| Carga en la app | `data/local/GrafoDeLaApp.kt` (nuevo) | `assets/grafo.json` una vez por proceso; inválido o ilegible → rutas desactivadas y una línea `Grafo` (§5.6) |
+| Vista 6.3 | `domain/usecase/DescribirUbicacion.kt`, `ui/ubicacion/ResultadoUbicacionViewModel.kt` | Con el destino en el grafo: «Tu destino, X, está a unos N metros por el camino.» + la primera instrucción (con el rumbo corregido) + «La navegación guiada llegará…»; si no, la línea recta de siempre. Línea `Ruta` al abrir (§3.2) |
+| Vista 6.4 | `ui/destino/SeleccionDestinoViewModel.kt` | Tras cargar `GET /v1/places`, una línea `Grafo` (una vez por proceso) con los lugares del grafo sin lugar en el backend; dentro de `runCatching`: nunca cambia el flujo de 6.4 |
+| Mapa público | `map/MapaPublicoScreen.kt`, `map/PuentePdr.kt`, `map/RutaEnMapa.kt` (nuevo), `assets/app.js` | Ruta en cada cambio de posición o de destino; aviso en Compose arriba del `WebView` («Ruta a X: N m por el camino» + la primera instrucción; *live region*); la página dibuja la ruta (`onNativeRuta`) y avisa que está lista (`listo`). Datos de prueba: `PruebaMapa` y `onNativeInicio` (§5.9) |
+| Ruta de prueba | `MainActivity.kt` | Extras `destino_prueba` y `posicion_prueba` junto a `--es ruta mapa` (solo APK depurable y arranque nuevo; §5.8, ADR-FE-38) |
+| Pruebas | `LectorGrafoTest` (7), `ProyeccionRutaTest` (9), `InstruccionesTest` (8), `EmparejamientoTest` (3), `PlanificadorTest` (7), `RutaEnMapaTest` (3) y la ayuda `GrafosDePrueba` | Criterios C1–C4 en la JVM (§4.1); `PlanificadorTest` y `RutaEnMapaTest` usan el `assets/grafo.json` real |
+| Validador | `src/ops/validate51.py` (sin ayudas nuevas en `comun.py`) | Local: C1a, C1b (estática del grafo), C2a, C3a y C4a (estática del modo de prueba + JVM). Dev: además C3b (`GET /v1/places`) y C4b (el mapa de prueba en el teléfono, en casa, con un paso guiado); manual C4c (§5.11) |
+
+**Flujo.** Inicio → «dos» → 6.4 → destino → Ubicarme → 6.3: con el destino en el grafo dice, p. ej., «Tu destino, Bloque
+35, está a unos 60 metros por el camino. Gira a tu izquierda y sigue recto 45 metros. La navegación guiada llegará en una
+próxima versión.». Inicio → «mapa» → tocar un punto (o el GPS): con un destino elegido en 6.4 (`SesionDeNavegacion`),
+arriba «Ruta a Bloque 35: 60 m por el camino» y «Camina 45 metros por el camino.», y la ruta en verde; con ▶, cada paso
+del PDR la recalcula. Sin destino, el mapa es el de antes (sin aviso). Con un destino fuera del grafo: «No tengo un camino
+hasta X: no está en el grafo.»; con el grafo inválido: «Rutas desactivadas: el grafo de caminos no es válido.».
+
+**Trampas.**
+- **El mapa no toma la posición de «Ubicarme»** (eso es de FE-3.6): la ruta del mapa sale del punto tocado (o del GPS, que
+  hoy falla: decisión abierta 14) o, en depuración, de la posición de prueba.
+- **La primera instrucción del mapa no da dirección mientras no se rastrea** (sin rumbo: «Camina N metros por el
+  camino.»); con ▶ usa el rumbo del PDR en el momento del paso. La de 6.3 sí usa el rumbo corregido (brújula +
+  `correccion_rumbo_grados`), recalculado como mucho una vez por segundo.
+- **A menos de 15 m del camino** (`fueraDelCaminoM`) la ruta empieza en el punto proyectado y su distancia **no** cuenta
+  ese tramo; a más, la primera instrucción es «Ve hasta el camino más cercano…» y sí lo cuenta.
+- **Rutas casi empatadas:** desde la posición de prueba (6.201434, −75.578427), a Bloque 35 por n0002 son 59,7 m y por
+  n0023, 60,9 m; a la biblioteca, por n0023 40,3 m y por n0014 40,8 m. Cambiar los `metros` del grafo cerca de ahí puede
+  cambiar la ruta elegida y lo que esperan `PlanificadorTest` y `validate51.py` (`TITULO_ESPERADO`, `PRIMERA_ESPERADA`).
+- **Tramos cortos entre cruces** (5,7 m de n0014 a n0016; 7,1 m de n0023 a n0008) dan instrucciones seguidas («… sigue
+  recto 6 metros.»): solo se juntan los tramos casi rectos, no los cortos. Ajuste de FE-5.3 si en el campo molesta.
+- **Una curva suave hecha de muchos tramos** se junta entera mientras cada cambio sea menor de 20° (se compara cada tramo
+  con el anterior, no con el inicio del tramo juntado). En el grafo de hoy no hay curvas así.
+- **Los `metros` de las aristas son los del archivo** (los usan Dijkstra y las distancias): se comprobó a mano que
+  coinciden con la distancia entre los nodos (a0001: 24,3 m declarados y 24,3 m por haversine; a0030: 82,8 y 82,9).
+- **Distancias redondeadas:** el aviso del mapa da metros enteros («60 m»), la 6.3 «a unos 60 metros» y las instrucciones
+  metros enteros, mínimo «1 metro».
+- **El aviso del mapa no habla:** TalkBack lo anuncia al cambiar (*live region* educada); **sin comprobar** con TalkBack.
+- **El mapa empieza centrado en Ciudad de México** (el `center` fijo de `app.js`, de antes de este lote) y salta al
+  campus al fijar la posición. Sin internet no carga Leaflet (`unpkg.com`, decisión abierta 13): no llega `listo()` y el
+  aviso se queda en «Destino: X. Toca el mapa…».
+- **Sin probar en el teléfono:** todo lo de este lote (el aviso, la ruta dibujada, la posición de prueba, la 6.3 con
+  ruta, las líneas `Grafo` y `Ruta`). Lo comprueba `validate51.py --entorno dev` (C4b) en casa.
+
+**Para FE-5.3** (lo que usa; firmas y reglas en §5.7, «Grafo y rutas»):
+- `GrafoDeLaApp.planificador(context): Planificador?` (`null` = rutas desactivadas) y `Planificador(grafo, parametros)`
+  para ajustar `ParametrosRuta` en el campo (valores de partida: 15 m, 20°, 45°, 120°, 150° y 0,5 m).
+- `Planificador.calcular(lat, lng, destino: LugarDestino, rumbo: Double?): ResultadoRuta` (o con `nombres` y
+  `nombreDestino`), `rutaA(destino, lat, lng, rumbo): Ruta?` y `entradasDe(destino)`. Sin estado: recalcular es volver a
+  llamar (26 nodos; se llama en cada paso sin problema).
+- `Ruta`: `instrucciones` (cada una con `tipo`, `giro`, `lado`, `metros` del tramo, `desdeM` = metros desde el inicio de
+  la ruta hasta la maniobra, `lat`/`lng` de la maniobra y `texto`), `puntos` (polilínea con `metrosDesdeAnterior`),
+  `metros`, `metrosAlCamino`, `fueraDelCamino`, `inicio` (`PuntoEnArista`: arista, `t`, distancia) y `entrada`. Para
+  avisar «antes del cruce», comparar los metros caminados sobre la ruta con `desdeM` de la siguiente maniobra.
+- `Proyeccion.masCercana(grafo, lat, lng)` para pegar la posición del PDR o de una foto al grafo y medir el desvío
+  (`distanciaM`).
+- El mapa ya dibuja cualquier `Ruta` con `onNativeRuta(ruta.json())` y muestra `TextosRutaMapa.aviso(…)`.
+- Lo que falta: vistas 6.5 y 6.6; voz en movimiento; foto cada ~10 m con `POST /v1/localize/frame` (BE-5.1) y la regla
+  simple de mezcla (§2.3); recalcular tras ~15 m de desvío varias lecturas seguidas; «has llegado» hablado; sin red;
+  reactivar `CalidadImagen.kt`; la posición de «Ubicarme» como inicio del mapa (FE-3.6).
+
+Verificado en local el 2026-10-28 (worktree de FE-5.1 sobre `bef5853`, sin commit): en Windows `testDebugUnitTest
+assembleDebug` → `BUILD SUCCESSFUL`, **374 casos, 0 fallos** (47 clases; los avisos del compilador son los de antes,
+ninguno en archivos del lote); en WSL `ruff check` («All checks passed!»), `ruff format --check` («27 files already
+formatted»), `pytest` (**312 passed, 1 skipped**) y `validate51.py --entorno local` → código 0 (P1; C1a 7/7; C1b
+«assets/grafo.json v180: 26 nodos, 31 aristas (0 bloqueadas), 8 entradas con lugar (7 lugares), 650 m, un solo
+componente»; C2a 9/9 y 8/8; C3a 3/3; C4a estática + 7/7 y 3/3; C3b y C4b omitidas; manual C4c). En `dev`, solo la
+lectura pública de `GET /v1/places` (un lugar, «Bloque 35»). **Sin probar en el teléfono** (lo coordina el maestro).
 
 ---
 
@@ -2283,8 +2407,11 @@ Cuidados:
   el foco): **sin comprobar** (FE-3.5).
 - Si Android mata el proceso y restaura la pila en `resultado`, el holder está vacío: la vista dice «No tengo una
   ubicación reciente» y ofrece «Volver a ubicarme» (no hay nada en disco, a propósito).
-- Con destino y confianza alta o media no avanza a ninguna parte (no hay 6.5 hasta FE-5.1): dice la distancia y la
-  dirección al destino y «La navegación guiada llegará en una próxima versión.»
+- Con destino y confianza alta o media no avanza a ninguna parte (no hay 6.5 hasta FE-5.3): dice la distancia y la
+  dirección al destino y «La navegación guiada llegará en una próxima versión.» Desde FE-5.1, si el destino está en el
+  grafo (`GrafoDeLaApp`, §5.7), dice en cambio la distancia **por el camino** y la primera instrucción de la ruta
+  («Tu destino, Bloque 35, está a unos 60 metros por el camino. Gira a tu izquierda y sigue recto 45 metros.»), con el
+  rumbo corregido; los textos se recalculan con la brújula (como las referencias, como mucho una vez por segundo).
 
 **Login (verificado, `ui/auth/LoginViewModel.kt` y `LoginScreen.kt`)**
 
@@ -2421,6 +2548,34 @@ en `data/remote/` (Retrofit, `ClienteApi.api`, §5.10). Los ViewModels de hoy cr
 | `ProgresoRecoleccion`, `VideoEnCurso`, `PuntoRecorrido` | `domain/model/ProgresoRecoleccion.kt` | FE-2.3: progreso de una grabación (clave `progress` del manifest), video `en_curso` leído para retomarlo y punto `(lat, lng)` de la trayectoria. Detalle abajo |
 | `ResultadoUbicacion` (`Ubicado`, `SinCoincidencias`), `PosicionEstimada`, `LugarCercano`, `ReferenciaLugar`, `NivelConfianza`, `UbicacionEstimada` | `domain/model/ResultadoUbicacion.kt` | FE-3.2: la respuesta de `POST /v1/localize` y la ubicación guardada. Detalle abajo |
 | `SesionNavegacion` (clase) y `SesionDeNavegacion` (`object`) | `domain/model/SesionNavegacion.kt` | FE-3.2: holder en memoria del flujo público (decisión abierta 15, ADR-FE-24). Detalle abajo |
+| `Nodo`, `Arista`, `Grafo`, `TiposNodo`, `CargaGrafo` | `domain/ruta/Grafo.kt`, `domain/ruta/LectorGrafo.kt` | FE-5.1: el grafo de caminos y el resultado de leerlo (§5.7, «Grafo y rutas») |
+| `GrafoDeLaApp` (`object`) | `data/local/GrafoDeLaApp.kt` | FE-5.1: `assets/grafo.json` leído una vez por proceso. Detalle abajo («`assets/grafo.json` y `GrafoDeLaApp`») |
+
+**`assets/grafo.json` y `GrafoDeLaApp` (FE-5.1; ADR-FE-39)**
+
+- **Qué es:** el grafo de caminos del campus que entrega el equipo; la app lo lee **tal cual** y no tiene ninguna función
+  que lo cambie (decisión del usuario del 2026-10-27, decisión abierta 2 resuelta). Va en `assets/` (de solo lectura,
+  dentro del APK); si un día lo sirve el backend, el formato no cambia y `version` dice si es el último.
+- **Formato 1** (el del editor que lo generó): `{"formato": 1, "version": 180, "actualizado": "2026-10-28T09:27:39-05:00",
+  "contadores": {"n": 31, "a": 43}, "nodos": [{"id": "n0001", "lat": 6.2017705, "lng": -75.5788399, "tipo": "cruce"},
+  {"id": "n0007", …, "tipo": "entrada", "lugar": "Bloque 35"}, …], "aristas": [{"id": "a0001", "a": "n0001", "b":
+  "n0031", "metros": 24.3, "tipo": "camino", "accesible": true, "bloqueada": false}, …]}`. `contadores` (los siguientes
+  ids libres del editor) se ignora. `lugar` es el **nombre** del lugar del backend (`GET /v1/places`); un lugar puede
+  tener varias entradas. Qué invalida el archivo y qué solo avisa: `LectorGrafo` (§5.7).
+- **Hoy** (versión 180): 26 nodos (18 `cruce`, 8 `entrada`), 31 aristas `camino`, accesibles y sin bloquear, 650 m, un
+  solo componente; 7 lugares: `bloque 33`, `Bloque 35`, `biblioteca` (dos entradas: n0010 al norte y n0030 al sur),
+  `bloque 38`, `cocnverso`, `bloque 34` y `cafeteria`. Solo `Bloque 35` existe en `dev` (2026-10-28; §4.11).
+- **Cambiarlo:** reemplazar el archivo subiendo `version` y `actualizado`; después `validate51.py --entorno local` (C1b
+  revisa el formato, que sea conexo y que toda entrada tenga lugar) y las pruebas `PlanificadorTest` y `RutaEnMapaTest`,
+  que esperan la ruta de prueba de la validación (si cambian los metros cerca de n0008, n0002 o n0007, cambian también
+  `TITULO_ESPERADO` y `PRIMERA_ESPERADA` de `validate51.py`).
+- **`GrafoDeLaApp`** (`object`): `ARCHIVO = "grafo.json"`, `TAG = "Grafo"`; `cargar(context): CargaGrafo` (la primera vez
+  lee el asset y lo pasa por `LectorGrafo.leer`; `@Synchronized`, nunca lanza: sin archivo da `Invalido(["no se pudo
+  leer grafo.json"])`; ~10 KB, se puede llamar desde el hilo principal); `planificador(context): Planificador?` (`null` =
+  rutas desactivadas); `avisarEmparejamiento(context, lugares: List<LugarDestino>)` (una vez por proceso: línea `Grafo`
+  con los lugares del grafo que no casan con ninguno del backend; la llama 6.4 dentro de `runCatching`). Líneas de
+  registro: §3.2. Lo usan `ResultadoUbicacionViewModel` (6.3), `MapaPublicoScreen` (los dos dentro de `runCatching`: si
+  algo fallara, la vista sigue sin rutas) y `SeleccionDestinoViewModel`.
 
 **`ResultadoUbicacion` y `SesionDeNavegacion` en detalle (FE-3.2)**
 
@@ -2692,7 +2847,7 @@ Qué casos **no** ejercitan estos datos de prueba (con el backend real, desde FE
 | `Deriva.estimar(distanciaDesdeAnclaM)` | ídem | `EstimacionDeriva(derivaM, precisionM, nivel)`: `derivaM` = 4 % de la distancia, `precisionM` = máx(25 % de la deriva; 1 m), `NivelCalidad` por la **deriva**: `ALTA` (< 15 m), `MEDIA` (< 30 m) o `BAJA`. | Heurística **provisional** (decisión 16). **`DerivaTest`** (6, FE-2.3): valores, precisión mínima, niveles (374 m → ALTA, 376 → MEDIA, 749 → MEDIA, 751 → BAJA), distancia negativa → 0, etiquetas |
 | `RetomarRecoleccion.estado(video: VideoEnCurso): EstadoRetomado` | `domain/usecase/RetomarRecoleccion.kt` | FE-2.3: con qué estado vuelve 7.4 a un video `en_curso`. `EstadoRetomado(lat, lng, rumbo, pasos, distanciaMetros, duracionSegundos, distanciaAnclaM, indiceAnclaFoto, indiceAnclaTrayectoria, trayectoria, modo, conProgreso)` | Con `progress`: se toma tal cual (rumbo normalizado a 0…360; índices recortados a `0..tamaño`; `distanciaAnclaM` entre 0 y la distancia; trayectoria vacía → el punto de partida); si la última foto es **posterior** al progreso (segundos enteros, `capturadaEnMs / 1000 > guardadoEnMs / 1000`), la posición y el rumbo salen de ella y su punto se añade a la trayectoria. Sin `progress`: posición y rumbo de la última foto (o el punto y rumbo de partida), trayectoria = partida + fotos, contadores y duración en 0, intervalo por defecto y el ancla **al final** (un re-anclaje no mueve las fotos que ya había). **`RetomarRecoleccionTest`** (6) |
 | `ConversionRumbo` | `domain/usecase/ConversionRumbo.kt` (`object`) | FE-3.2: `normalizar(grados): Double` · `magneticoAVerdadero(acimutMagnetico, declinacionGrados): Double` · `diferencia(a, b): Double` | `normalizar`: cualquier ángulo finito → [0, 360) redondeado a 0,1° (`roundToLong`); lo que el redondeo lleve a 360 sale 0 (359,96 → 0,0; −0,04 → 0,0); `NaN` o infinito → `IllegalArgumentException`. `magneticoAVerdadero` = `normalizar(acimut + declinación)` (declinación positiva al este; −180 y 180 sin declinación dan 180; 3° con −7,6° da 355,4°). `diferencia` = `a − b` en (−180, 180]. **`ConversionRumboTest`** (7, criterio C2): −180, 180 y 0; declinaciones positivas y negativas que cruzan el norte; barrido de −180 a 180 con cinco declinaciones siempre en [0, 360); redondeo; `NaN`; `diferencia`. `SubidaRecorrido.rumboContrato` (FE-2.1) hace lo mismo que `normalizar` para la subida y no se tocó |
-| `DescribirUbicacion` | `domain/usecase/DescribirUbicacion.kt` (`object`) | FE-3.2: `describir(ubicacion: UbicacionEstimada?, rumboBrujula: Double?, destino: LugarDestino?): DescripcionUbicacion` · `direccion(rumboAbsoluto, rumboActual): DireccionRelativa` · `rumboInicial(lat1, lng1, lat2, lng2)` · `metros(d)` · `rumboCorregido(rumboBrujula, correccion)`; constantes de texto `SIN_UBICACION`, `SIN_COINCIDENCIAS`, `NINGUN_LUGAR_JUNTO`, `NINGUN_LUGAR_CERCA`, `POCO_SEGURA`, `REPETIR_VUELTA`, `LLEGARA_NAVEGACION` | Textos de la vista 6.3 (reglas abajo). **`DescribirUbicacionTest`** (11): sectores y bordes, rumbo inicial a los cuatro puntos cardinales, `metros`, alta con cercano y referencias con el rumbo corregido, la corrección que cambia el sector, sin rumbo, baja, sin lugar cercano (la primera referencia es el más cercano, backend §5.3), sin lugares, con destino, `sin_coincidencias` y sin ubicación |
+| `DescribirUbicacion` | `domain/usecase/DescribirUbicacion.kt` (`object`) | FE-3.2: `describir(ubicacion: UbicacionEstimada?, rumboBrujula: Double?, destino: LugarDestino?, planificador: Planificador? = null): DescripcionUbicacion` (`planificador` desde FE-5.1) · `direccion(rumboAbsoluto, rumboActual): DireccionRelativa` · `rumboInicial(lat1, lng1, lat2, lng2)` · `metros(d)` · `rumboCorregido(rumboBrujula, correccion)`; constantes de texto `SIN_UBICACION`, `SIN_COINCIDENCIAS`, `NINGUN_LUGAR_JUNTO`, `NINGUN_LUGAR_CERCA`, `POCO_SEGURA`, `REPETIR_VUELTA`, `LLEGARA_NAVEGACION` | Textos de la vista 6.3 (reglas abajo). **`DescribirUbicacionTest`** (11): sectores y bordes, rumbo inicial a los cuatro puntos cardinales, `metros`, alta con cercano y referencias con el rumbo corregido, la corrección que cambia el sector, sin rumbo, baja, sin lugar cercano (la primera referencia es el más cercano, backend §5.3), sin lugares, con destino, `sin_coincidencias` y sin ubicación |
 
 **Reglas de `DescribirUbicacion`** (FE-3.2):
 - `DireccionRelativa` por la diferencia `d = diferencia(rumboAbsoluto, rumboActual)`: `|d| ≤ 45` → `AL_FRENTE` «al frente»,
@@ -2705,6 +2860,11 @@ Qué casos **no** ejercitan estos datos de prueba (con el backend real, desde FE
   lugar más cercano); sin ninguna: «No hay lugares conocidos cerca». `detalles`: una frase por referencia («Y está a tu
   derecha, a unos N metros.»), con `BAJA` además `POCO_SEGURA`, y con destino «Tu destino, Z, está <dirección>, a unos N
   metros.» (rumbo inicial y haversine de `CalibracionPaso.distanciaEntre` desde la posición) + `LLEGARA_NAVEGACION`.
+  **Desde FE-5.1**, si hay `planificador` y `planificador.rutaA(destino, lat, lng, rumboCorregido)` da una ruta, esas
+  dos frases son en cambio tres: «Tu destino, Z, está <metros(ruta.metros)> por el camino.», `ruta.primera.texto` (la
+  primera instrucción, respecto al rumbo corregido; sin rumbo, «Camina N metros por el camino.») y `LLEGARA_NAVEGACION`.
+  Sin ruta (destino fuera del grafo, sin camino o sin grafo válido) todo sigue como antes, palabra por palabra
+  (`PlanificadorTest` lo compara con `planificador = null`).
   `confianza` = «Confianza alta|media|baja»; `sugerirRepetir` = `BAJA`. `coordenadas` (desde 0.11.0) =
   `coordenadas(posicion.lat, posicion.lng)` = «Punto estimado: 6.20131, -75.57897» (5 decimales, `Locale.ROOT`, latitud
   primero); solo se muestra, no entra en `hablado`. Sin posición (`sin_coincidencias` o sin ubicación) es `null`.
@@ -2715,6 +2875,74 @@ Qué casos **no** ejercitan estos datos de prueba (con el backend real, desde FE
   vuelta.». Los dos con `sugerirRepetir` y sin `confianza`.
 
 Se pueden probar sin emulador (solo Kotlin).
+
+**Grafo y rutas (FE-5.1; paquete `domain/ruta/`, lógica pura con Gson y sin Android; ADR-FE-39)**
+
+Se usa así (lo hacen 6.3 y el mapa):
+
+```kotlin
+val planificador = GrafoDeLaApp.planificador(context) ?: return        // null: rutas desactivadas (§5.6)
+when (val r = planificador.calcular(lat, lng, destino /* LugarDestino */, rumboVerdadero /* o null */)) {
+    is ResultadoRuta.Encontrada -> r.ruta.metros / r.ruta.primera.texto / r.ruta.instrucciones / r.ruta.json()
+    ResultadoRuta.DestinoFueraDelGrafo -> …   // ninguna entrada casa con el destino: línea recta, como antes
+    ResultadoRuta.SinCamino -> …              // no se llega (aristas bloqueadas) o no hay aristas usables
+}
+```
+
+| Pieza | Firma | Reglas |
+|---|---|---|
+| `Nodo` | `data class Nodo(id: String, lat: Double, lng: Double, tipo: String, lugar: String? = null)` · `esEntrada` (`tipo == TiposNodo.ENTRADA`) | `TiposNodo.CRUCE = "cruce"`, `TiposNodo.ENTRADA = "entrada"`. `lugar` solo en las entradas: el nombre del lugar del backend |
+| `Arista` | `data class Arista(id, a, b, metros: Double, tipo = "camino", accesible = true, bloqueada = false)` · `otro(id): String?` | No dirigida. Una `bloqueada` no se usa nunca (ni para proyectar ni en la ruta); `tipo` y `accesible` se leen y hoy no cambian nada |
+| `Grafo` | `class Grafo(formato: Int, version: Int, actualizado: String?, nodos, aristas)` · `porId`, `entradas`, `usables` (no bloqueadas), `adyacencia` (de las usables), `lugares` (de las entradas, sin repetir, en el orden del archivo), `metrosTotales` | No valida nada (eso es `LectorGrafo`); las pruebas lo construyen a mano |
+| `CargaGrafo` | `sealed interface`: `Valido(grafo, avisos: List<String> = emptyList())` o `Invalido(errores: List<String>)` | |
+| `LectorGrafo` | `object` · `FORMATO = 1` · `leer(texto: String): CargaGrafo` · `validar(nodos, aristas): List<String>` · `componentes(nodos, aristas): List<Set<String>>` (el más grande primero) | **Nunca lanza.** **Invalida:** JSON roto o raíz que no es objeto; `formato` ≠ 1; `version` no entera; sin listas `nodos` o `aristas`; nodo sin `id`, `lat`/`lng` numéricos o `tipo`, o con coordenadas fuera de rango; arista sin `id`, `a` o `b`; ids de nodo o de arista repetidos; arista a un nodo inexistente o de un nodo a sí mismo; `entrada` sin `lugar` (o en blanco); sin nodos; más de un componente conexo (con todas las aristas, también las bloqueadas; un nodo aislado es un componente). **Solo avisa:** `tipo` de nodo desconocido; `metros` ausente o ≤ 0 (usa la haversine entre los nodos); `lugar` en un nodo que no es entrada (se ignora). Ignora `contadores`. `lugar` se recorta |
+| `Geo` | `object` · `RADIO_TIERRA_M` · `distancia(lat1, lng1, lat2, lng2)` (la haversine de `CalibracionPaso.distanciaEntre`) · `rumbo(…)` ([0, 360), sin redondear) · `diferencia(a, b)` ((−180, 180]; positivo = `a` a la derecha de `b`) · `class Plano(lat0, lng0)` (`x(lng)`, `y(lat)`, `lat(y)`, `lng(x)`, en metros) | Plano equirectangular local: en los 650 m del grafo, error de milímetros |
+| `PuntoEnArista` | `data class PuntoEnArista(arista, t: Double, lat, lng, distanciaM)` · `metrosHastaA = t · metros`, `metrosHastaB = (1 − t) · metros` | `t` ∈ [0, 1] desde el nodo `a`; `distanciaM` = de la persona al punto, en línea recta |
+| `Proyeccion` | `masCercana(grafo, lat, lng): PuntoEnArista?` | Sobre las aristas **usables**, en un plano centrado en la persona; `t` recortado a [0, 1]; empate exacto: la primera del archivo; `null` si no hay aristas usables. Es el **nodo virtual de partida**: evita mandar a la persona al nodo más cercano, que puede quedar detrás (`ProyeccionRutaTest`) |
+| `Camino` | `data class Camino(inicio: PuntoEnArista, nodos: List<Nodo>, metros: Double, entrada: Nodo)` | `nodos` va del primer nodo alcanzado (un extremo de la arista de `inicio`) a la entrada; `metros` por el grafo desde el punto proyectado |
+| `CalculoRuta` | `masCorta(grafo, inicio, destinos: Set<String>): Camino?` | Dijkstra; el nodo virtual se une a `a` y `b` con `metrosHastaA` y `metrosHastaB`; solo aristas usables; para en el primer destino que cierra (= la entrada más cercana por el camino); empates por id de nodo; `null` sin camino o con `destinos` vacío |
+| `ParametrosRuta` | `data class ParametrosRuta(fueraDelCaminoM = 15.0, rectoMaxGrados = 20.0, leveMaxGrados = 45.0, normalMaxGrados = 120.0, vueltaMinGrados = 150.0, puntoRepetidoM = 0.5)` | Valores **de partida** (tabla abajo); se ajustan en el campo con FE-5.3 |
+| `Giro`, `Lado`, `TipoInstruccion` | `enum Giro { RECTO, LEVE, NORMAL, CERRADO, VUELTA }` · `enum Lado(texto) { DERECHA, IZQUIERDA, NINGUNO }` · `enum TipoInstruccion { IR_AL_CAMINO, SALIDA, GIRO, LLEGADA }` | `RECTO` y `VUELTA` van con `NINGUNO` |
+| `PuntoRuta` | `data class PuntoRuta(lat, lng, metrosDesdeAnterior: Double = 0.0)` | Los metros son los declarados en las aristas (o, en el tramo hasta el camino, la distancia en línea recta): su suma es la longitud de la ruta |
+| `Instruccion` | `data class Instruccion(tipo, giro: Giro?, lado, metros, desdeM, lat, lng, texto)` | `giro`/`lado`: la maniobra al empezar el tramo (en `SALIDA`/`IR_AL_CAMINO`, respecto al rumbo de la persona; `null` sin rumbo y en `LLEGADA`); `metros`: largo del tramo que sigue (0 en `LLEGADA`); `desdeM`: metros desde el inicio de la ruta hasta la maniobra (`lat`, `lng`) |
+| `Instrucciones` | `object` · `clasificar(grados, p = ParametrosRuta()): Pair<Giro, Lado>` · `metrosTexto(m)` («1 metro» o «N metros», enteros, mínimo 1) · `generar(puntos, rumboActual: Double?, alCamino: Boolean, destino: String, p): List<Instruccion>` | Reglas y textos abajo |
+| `EmparejarLugares` | `object` · `normalizar(texto)` · `claves(lugar: LugarDestino): Set<String>` · `coincide(lugarGrafo, lugar): Boolean` · `emparejar(lugaresGrafo, lugares): Emparejamiento` | `normalizar`: minúsculas, sin tildes (NFD sin marcas) y **solo `[a-z0-9]`** («Café Con.verso» → `cafeconverso`, «bloque 35» → `bloque35`). Casa si el `lugar` normalizado es igual al `nombre` **o a un `alias`** normalizado del lugar del backend. `emparejar` prefiere el nombre exacto |
+| `Emparejamiento` | `data class Emparejamiento(coinciden: Map<String, LugarDestino>, exactos: Set<String>, sinLugarEnBackend: List<String>, sinEntrada: List<LugarDestino>)` | `exactos`: los que además se escriben igual; `sinEntrada`: destinos fuera del grafo |
+| `Ruta` | `data class Ruta(destino, entrada: Nodo, inicio: PuntoEnArista, metrosAlCamino, fueraDelCamino, metros, puntos: List<PuntoRuta>, instrucciones)` · `primera` · `json()` | `metros` = por el camino (+ `metrosAlCamino` si `fueraDelCamino`); `puntos` = polilínea para dibujar **desde la persona**; `json()` = `{"destino": "…", "metros": 59.7, "primera": "…", "puntos": [[lat, lng], …]}` (metros con 1 decimal) |
+| `ResultadoRuta` | `sealed interface`: `Encontrada(ruta)`, `DestinoFueraDelGrafo`, `SinCamino` | |
+| `Planificador` | `class Planificador(grafo, parametros = ParametrosRuta())` · `entradasDe(nombres): List<Nodo>` · `entradasDe(destino: LugarDestino)` · `calcular(lat, lng, nombres, nombreDestino, rumbo): ResultadoRuta` · `calcular(lat, lng, destino: LugarDestino, rumbo)` (nombres = `nombre` + `alias`, dice el `nombre`) · `rutaA(destino, lat, lng, rumbo): Ruta?` | Sin estado mutable: se puede llamar en cada paso y desde cualquier hilo. Pasos de `calcular`: entradas que casan (ninguna → `DestinoFueraDelGrafo`); `Proyeccion.masCercana` y `CalculoRuta.masCorta` (`null` → `SinCamino`); `fueraDelCamino` = `distanciaM > fueraDelCaminoM`; polilínea = persona, punto proyectado y nodos, sin puntos a menos de `puntoRepetidoM` del anterior; instrucciones desde la persona (con `IR_AL_CAMINO`) si está fuera del camino, o desde el punto proyectado si no |
+| `PruebaMapa`, `AvisoRuta`, `TextosRutaMapa` | `map/RutaEnMapa.kt` (sin Android): `object PruebaMapa` (`destino`, `posicion`, `leerPosicion("lat,lng")`, `fijar(destino, posicion)`, `limpiar()`) · `data class AvisoRuta(titulo, detalle: String? = null)` · `object TextosRutaMapa` (`RUTAS_DESACTIVADAS`, `titulo(destino, metros)`, `aviso(destino, rutasActivas, hayPosicion, resultado): AvisoRuta?`, `nombrePrueba(planificador, destino)`) | Avisos del mapa: sin destino, ninguno; sin grafo válido, «Rutas desactivadas: el grafo de caminos no es válido.»; sin posición, «Destino: X. Toca el mapa para fijar tu posición y ver la ruta.»; con ruta, «Ruta a X: N m por el camino» (metros enteros) y la primera instrucción; fuera del grafo, «No tengo un camino hasta X: no está en el grafo.»; sin camino, «No encontré un camino hasta X.». `nombrePrueba`: el `lugar` de la primera entrada que casa, o el texto tal cual (ADR-FE-38) |
+
+**Parámetros de partida (`ParametrosRuta`; FE-5.3 los ajusta en el campo):**
+
+| Parámetro | Valor | Qué decide |
+|---|---|---|
+| `fueraDelCaminoM` | 15 m | Más lejos de la arista más cercana: la primera instrucción lleva al camino («Ve hasta el camino más cercano…») y su tramo cuenta en `metros` |
+| `rectoMaxGrados` | 20° | Un cambio de rumbo menor entre un segmento y el anterior es «casi recto»: se junta en el mismo tramo |
+| `leveMaxGrados` | 45° | De 20° a menos de 45°: giro leve |
+| `normalMaxGrados` | 120° | De 45° a menos de 120°: giro normal |
+| `vueltaMinGrados` | 150° | De 120° a menos de 150°: giro cerrado; desde 150°: «date la vuelta» |
+| `puntoRepetidoM` | 0,5 m | Puntos más cercanos se toman como uno (proyectar justo sobre un nodo no da un tramo de 0 m) |
+
+**Reglas de `Instrucciones.generar`:** cada segmento tiene su rumbo (`Geo.rumbo`) y sus metros (`metrosDesdeAnterior` del
+punto final); un segmento se junta con el tramo anterior si `|diferencia(rumbo, rumbo del último segmento del tramo)| <
+rectoMaxGrados`, salvo el segmento siguiente al tramo hasta el camino (`alCamino`), que nunca se junta. La primera
+instrucción se clasifica con `diferencia(rumbo del primer tramo, rumboActual)` y las demás con el giro entre tramos
+(positivo = derecha). `desdeM` acumula los metros; la suma de `metros` de todas las instrucciones es `Ruta.metros`. Con
+un solo punto (la persona ya está en la entrada) solo hay `LLEGADA`. Textos (N = `metrosTexto`):
+
+| Caso | Texto |
+|---|---|
+| `SALIDA` sin rumbo | «Camina N por el camino.» |
+| `SALIDA` con rumbo | `RECTO` «Sigue recto N.» · `LEVE` «Gira levemente a tu derecha y sigue recto N.» · `NORMAL` «Gira a tu izquierda y sigue recto N.» · `CERRADO` «Gira cerrado a tu derecha y sigue recto N.» · `VUELTA` «Date la vuelta y sigue recto N.» |
+| `IR_AL_CAMINO` | Sin rumbo: «Ve hasta el camino más cercano, a N.»; con rumbo: «Ve hasta el camino más cercano: » + la frase de `SALIDA` en minúscula (p. ej. «…: date la vuelta y sigue recto 40 metros.») |
+| `GIRO` | «Gira levemente a la izquierda y sigue recto N.», «Gira a la derecha y sigue recto N.», «Gira cerrado a la izquierda y sigue recto N.», «Date la vuelta y sigue recto N.» y, solo tras el tramo hasta el camino, «Sigue recto N.» |
+| `LLEGADA` | «Has llegado a <destino>.» |
+
+Ejemplo con el grafo real (`PlanificadorTest`): desde (6.201434, −75.578427), sobre la arista a0043 (n0008–n0014), a
+«bloque35»: entrada n0007, 59,7 m por n0008 → n0002 → n0007, e instrucciones «Camina 45 metros por el camino.» (sin
+rumbo; mirando al norte, «Gira a tu izquierda y sigue recto 45 metros.»; mirando al oeste, «Sigue recto 45 metros.»),
+«Gira a la izquierda y sigue recto 14 metros.» y «Has llegado a Bloque 35.».
 
 Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(texto, todos)` → `List<LugarDestino>`, `BuscarLugares.filtrar(todos, busqueda)` e `InterpretarRespuesta.interpretar(texto)` → `Respuesta.SI / NO / NINGUNA`; las firmas coinciden con la tabla. Las **reglas** de la tabla se verificaron contra `BuscarLugares.kt` (bache 1). Desde FE-3.4 `filtrar` también es el buscador de la lista 7.6 (a través de `filtrarLugares`, 5.5, con los `LugarDestino` de cada `LugarAdmin`). Dos matices del uso: `mejores` siempre busca en la lista **completa** (ignora la búsqueda y la categoría activas), y el «Di cuál quieres» tras ofrecer opciones vuelve a buscar sobre todos los lugares, no solo sobre las opciones ofrecidas.
 
@@ -2750,7 +2978,7 @@ Uso verificado en `SeleccionDestinoViewModel` (5.5): `BuscarLugares.mejores(text
 | `admin/imagenes?lugar={lugar}&video={video}` (FE-4.1; antes `admin/imagenes`) | `GaleriaScreen` | `lugar` y `video`: ids (UUID) para abrir filtrada, opcionales (`navArgument` anulables, `defaultValue = null`); `navigate("admin/imagenes")` sin argumentos también vale (el Panel) | `onVolver` → `popBackStack()`. 7.12 no existe: tocar una foto muestra un `Toast` (FE-4.4) |
 | `admin/videos` | `VideosScreen` | — | `onVolver` → `popBackStack()`, `onAbrirVideo(id)` → `admin/videos/<id>`, `onNuevoVideo` (FE-4.1, «Nuevo video») → `navigate("admin/ubicacion-manual")` |
 | `admin/videos/{videoId}` | `VideoDetalleScreen` | `videoId` (argumento de ruta, texto): UUID del backend o, desde FE-2.1, `rec_NNNN` de un recorrido del teléfono | `onVolver` → `popBackStack()` (Atrás o «Volver» del JS; y, desde FE-4.1, tras eliminar el video cuando el servidor lo confirmó). Desde FE-4.1 ya no tiene `onAbrirImagen` (7.12 es de FE-4.4) |
-| `mapa` | `MapaPublicoScreen` (2.6) | — | Ruta pública registrada en FE-2.3. Desde FE-3.1 la abre `inicio` (`onVerMapa`); en el APK de depuración también se abre al arrancar con el extra `ruta` (abajo). Queda encima de `inicio`: Atrás (del sistema; la página no tiene botón Volver) vuelve a Inicio, que repite la bienvenida. No entrega nada |
+| `mapa` | `MapaPublicoScreen` (2.6) | Desde FE-5.1, el destino por `SesionDeNavegacion` (o, en depuración, el de prueba de `PruebaMapa`) | Ruta pública registrada en FE-2.3. Desde FE-3.1 la abre `inicio` (`onVerMapa`); en el APK de depuración también se abre al arrancar con el extra `ruta` (abajo) y, desde FE-5.1, con un destino y una posición de prueba. Queda encima de `inicio`: Atrás (del sistema; la página no tiene botón Volver) vuelve a Inicio, que repite la bienvenida. No entrega nada |
 
 Rutas con placeholder vacío (pantalla en blanco, no cierran la app): `admin/estadisticas` y `ajustes` (desde FE-2.1
 `admin/recoleccion/resumen` ya no lo es, y desde FE-3.4 tampoco `admin/lugares`). Registrar una ruta **dos veces** hace que la última
@@ -2800,6 +3028,15 @@ registrada** cierra la app con un error.
   com.example.myapplication/.MainActivity --es ruta mapa` (sin el `force-stop`, una tarea viva solo pasa al frente y el
   extra no llega). Desde FE-3.1 la entrada normal al mapa es desde Inicio; la ruta de prueba se conserva para
   `validation-2-3`.
+- **Destino y posición de prueba del mapa (FE-5.1, ADR-FE-38):** con la ruta de prueba `mapa` (y solo entonces: misma
+  condición de APK depurable y arranque nuevo), `MainActivity` lee además `EXTRA_DESTINO_PRUEBA` (`"destino_prueba"`: el
+  `lugar` de una entrada del grafo, comparado normalizado, así que `bloque35` vale por «Bloque 35» y no hacen falta
+  comillas en `adb`) y `EXTRA_POSICION_PRUEBA` (`"posicion_prueba"`: `"<lat>,<lng>"` con punto decimal) y los guarda en
+  `PruebaMapa` (`map/RutaEnMapa.kt`). El mapa usa la posición una vez, como un toque (`onNativeInicio`), y el destino en
+  lugar del de `SesionDeNavegacion`; al salir del mapa, `PruebaMapa.limpiar()`. Comando: `adb shell am force-stop
+  com.example.myapplication` y `adb shell am start -n com.example.myapplication/.MainActivity --es ruta mapa --es
+  destino_prueba bloque35 --es posicion_prueba 6.201434,-75.578427`. El flujo real nunca escribe `PruebaMapa`
+  (`validate51.py` C4a lo comprueba en el código).
 - **Permisos en la ruta:** `inicio` pide los iniciales y `ubicarme` la cámara antes de mostrar la
   pantalla (ver 5.3). `admin/recoleccion` pide solo la cámara; la ruta de navegación (6.5) deberá hacer lo mismo. `admin/calibracion` pide solo `Permisos.ACTIVIDAD`.
   `admin/ubicacion-manual` ya pide `Permisos.INICIALES` y descarta el resultado (la 7.3 en sí no necesita
@@ -2809,8 +3046,9 @@ registrada** cierra la app con un error.
   `destino` de la pila: la pila queda `[inicio, ubicarme]` y, tras el escaneo, `[inicio, resultado]` (antes quedaba
   `[inicio, destino, ubicarme]` y al volver se veía la confirmación vieja, 5.5). Ejemplos: Inicio → «uno» →
   `[inicio, ubicarme]` → `[inicio, resultado]`; «Ir a un lugar desde aquí» → `[inicio, destino]` → confirmar →
-  `[inicio, resultado]` (ubicación vigente). No hay ruta de navegación guiada (6.5, FE-5.1): la 6.3 dice la distancia y la
-  dirección al destino (decisión del usuario del 2026-10-26, ADR-FE-27).
+  `[inicio, resultado]` (ubicación vigente). No hay ruta de navegación guiada (6.5, FE-5.3): la 6.3 dice la distancia y la
+  dirección al destino (decisión del usuario del 2026-10-26, ADR-FE-27) o, desde FE-5.1, si el destino está en el grafo,
+  la distancia por el camino y la primera instrucción.
 - **Bordes del sistema:** `MainActivity` llama a `enableEdgeToEdge()`, así que cada pantalla debe aplicar `statusBarsPadding` / `navigationBarsPadding` (o `systemBarsPadding`) y, con teclado, `imePadding`. Inicio, Destino, Login y Resultado (FE-3.2) ya lo hacen.
 
 Verificado en los ViewModels: `DestinoEvento.Confirmado` lleva el `LugarDestino` completo (desde FE-3.2 la ruta lo
@@ -2894,19 +3132,30 @@ Cuidados:
 | Web → Kotlin | `AndroidBridge.setPosition(lat, lng)` | Punto de partida (toque en el mapa o GPS) |
 | Web → Kotlin | `AndroidBridge.setManualHeading(grados)` | Rumbo de la rueda manual (solo si no hay brújula) |
 | Web → Kotlin | `AndroidBridge.reset()` | Vuelve al punto de partida con los pasos en cero |
+| Web → Kotlin | `AndroidBridge.listo()` | FE-5.1: la página terminó `boot()` (al final, tras crear el mapa) y ya acepta `window.onNative*`; Kotlin envía entonces la posición de prueba y la ruta. Sin Leaflet (sin red) `initMap` falla antes y no llega: el mapa no muestra ruta |
 | Kotlin → Web | `window.onNativePosition(lat, lng, pasos, distanciaM, velocidadMps)` | Posición calculada tras cada paso (y al fijar o reiniciar). Con `pasos = 0` no se suma punto a la trayectoria |
 | Kotlin → Web | `window.onNativeHeading(grados)` | Rumbo 0–360, norte real, ya promediado (~20 Hz, solo con el seguimiento activo) |
 | Kotlin → Web | `window.onNativeAccel(desviacion)` | Desviación de la aceleración respecto a la gravedad (m/s²), solo para la gráfica |
 | Kotlin → Web | `window.onNativeBrujula(disponible)` | Se envía en cada `startSensors()` (no al volver del segundo plano, cuando el `PdrTracker` vuelve a registrar los sensores solo; FE-2.3); si es `false` aparece la rueda manual |
 | Kotlin → Web | `window.onNativeStepUnavailable(motivo)` | El teléfono no tiene acelerómetro (`'no_sensor'`); solo muestra un aviso. Ya no se envía `'permission_denied'` (el acelerómetro no necesita permiso) |
+| Kotlin → Web | `window.onNativeRuta(ruta)` | FE-5.1: `ruta` = el objeto de `Ruta.json()` (`{destino, metros, primera, puntos: [[lat, lng], …]}`, §5.7) o `null`. Quita la ruta anterior y dibuja una polilínea verde (`#22c55e`, grosor 6) y un círculo en la llegada; con `null` o menos de 2 puntos solo la quita. Se envía tras `listo()` en cada cambio de posición o de destino |
+| Kotlin → Web | `window.onNativeInicio(lat, lng)` | FE-5.1, solo con la posición de prueba (APK de depuración, ADR-FE-38): quita la portada («Comenzar») y hace lo mismo que un toque (`setUserPosition`, que llama a `setPosition`) |
 
 Se eliminaron `onNativeStep(count)` y la firma anterior `onNativeAccel(x, y, z)`.
 
 Requisitos del lado Kotlin (`map/MapaPublicoScreen.kt` y `map/PuentePdr.kt`): JavaScript activado en
-el `WebView`, `addJavascriptInterface(PuentePdr(tracker), "AndroidBridge")` y llamar a las funciones
+el `WebView`, `addJavascriptInterface(PuentePdr(tracker) { paginaLista = true }, "AndroidBridge")` (desde FE-5.1
+`PuentePdr(tracker, alListo: () -> Unit = {})`: `listo()` llama a `alListo` en el hilo principal) y llamar a las funciones
 `window.onNative*` con `evaluateJavascript` **desde el hilo principal**. Los métodos
 `@JavascriptInterface` llegan en un hilo del `WebView`, así que `PuentePdr` los reenvía al hilo
 principal, que es donde vive `PdrTracker`. El mapa se carga con `file:///android_asset/index.html`.
+
+**Aviso de ruta del mapa (FE-5.1):** `MapaPublicoScreen` es ahora una `Column` con, arriba, el aviso de Compose (solo si
+hay destino: `AvisoRuta(titulo, detalle)` de `TextosRutaMapa.aviso`, §5.7; fondo `#0A0E1A`, título blanco 18 sp en
+negrita, detalle verde claro 16 sp, `liveRegion = Polite`) y debajo el `WebView` (`weight(1f)`): el aviso no tapa la
+página. Recalcula la ruta en un `LaunchedEffect(paginaLista, webView, posicionActual, destinoSesion)`; `posicionActual`
+sale de `tracker.estado` (solo latitud y longitud, sin el rumbo, para no recalcular a 20 Hz) y el rumbo de la primera
+instrucción es el del PDR si el rastreo está activo, o ninguno.
 
 #### Funciones de `EditorBridge` (editor de mapa y alertas, 7.8)
 
@@ -3388,7 +3637,7 @@ cubre `MapeoDatosApiTest` con los ejemplos JSON del contrato del backend. `lugar
   `Declinacion.paraLaUltimaPosicion()` (última posición de `SesionDeNavegacion` o centro del campus, ADR-FE-25); el
   ViewModel guarda el rumbo de cada foto (el acimut del momento en que la pidió; §5.2).
 - `correccion_rumbo_grados` de la respuesta se suma al rumbo verdadero de la brújula: desde FE-3.2 lo hace la 6.3 para
-  las direcciones relativas (`DescribirUbicacion.rumboCorregido`); la navegación (6.5, FE-5.1) lo usará mientras dure.
+  las direcciones relativas (`DescribirUbicacion.rumboCorregido`) y, desde FE-5.1, la primera instrucción de la ruta; la navegación (6.5, FE-5.3) lo usará mientras dure.
 
 **Ubicarse (`POST /v1/localize`; FE-3.2, hecho; contrato en backend §5.3)**: `RemoteLocalizacionRepository.localizar(fotos)`.
 1. `fotos` (1 a `MAX_FOTOS` = 5; si no, `IllegalArgumentException` sin llamar): cada una se re-codifica en
@@ -3558,7 +3807,7 @@ guarda en un archivo JSON sin Room, y cómo se guarda la caché pública lo deci
 borran los ids de `eliminadas`. **Cuándo sincroniza:** al arrancar la app (Inicio), al volver la conexión y como mucho
 una vez cada 5 minutos mientras está en primer plano. La vigencia se evalúa al anunciar. **Dónde se anuncian:** en el
 mapa público (`MapaPublicoScreen`, ruta `mapa`, posición por PDR) y en el Resultado (6.3) desde FE-3.6 (antes del
-2026-10-25 se repartían entre FE-3.1 y FE-3.2); en la navegación (6.5) con FE-5.1. Todo esto es de FE-3.6, que no
+2026-10-25 se repartían entre FE-3.1 y FE-3.2); en la navegación (6.5) con FE-5.3. Todo esto es de FE-3.6, que no
 está en el núcleo: hasta entonces la app no descarga ni anuncia alertas. `POST /v1/localize` **no** trae alertas
 (backend §5.3: `lugar_cercano` y `referencias`): las de 6.3 salen de esta caché y de la posición estimada.
 
@@ -3708,7 +3957,7 @@ teléfono; FE-3.4 y FE-3.6 las reutilizan):
 | `esperar_enter(instruccion)` | Paso guiado: escribe `· PASO GUIADO — <instrucción>` y `· Pulsa Enter aquí cuando esté hecho (Ctrl+C cancela).` por stderr y lee una línea de la entrada estándar. EOF (sin terminal) → `ErrorConfiguracion` (código 3). Ctrl+C interrumpe el validador: la limpieza corre igual (`finally` de `correr`), pero no se escribe informe. Las pruebas la sustituyen |
 
 Ayudas que añadió FE-3.2 (para validadores que llaman a rutas `multipart/form-data`, p. ej. la sonda de
-`POST /v1/localize`; las reutilizará FE-5.1 con `/v1/localize/frame`):
+`POST /v1/localize`; las reutilizará FE-5.3 con `/v1/localize/frame`):
 
 | Elemento | Qué hace |
 |---|---|
@@ -3739,7 +3988,8 @@ FE-1.2: `test_validate12.py` y `test_comun_login.py`; 93 con FE-2.3: `test_valid
 `test_validate32.py`, 31, que incluye las de `cuerpo_multipart` y `http_post_multipart`; 222 con FE-2.2:
 `test_validate22.py`, 32; 241 con FE-3.4: `test_validate34.py`, 19; 253 con FE-3.3: `test_validate33.py`, 12; 278 con
 FE-4.1: `test_validate41.py`, 20, y `test_comun_fe41.py`, 5, de los que uno se omite sin Pillow; 290 con el arreglo de
-la navegación de FE-4.1: `test_validate41.py`, 28, y `test_comun_fe41.py`, 9: «289 passed, 1 skipped»).
+la navegación de FE-4.1: `test_validate41.py`, 28, y `test_comun_fe41.py`, 9: «289 passed, 1 skipped»; 312 con
+FE-5.1: `test_validate51.py`, 23: «312 passed, 1 skipped»).
 
 **Detalles internos de los validadores**
 - `ejecutar` añade al entorno del proceso hijo `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, `NO_COLOR=1`, `GH_PAGER=` y
@@ -4152,6 +4402,46 @@ la navegación de FE-4.1: `test_validate41.py`, 28, y `test_comun_fe41.py`, 9: �
   `setTimeout` y el de la app, `es_panel`, `MARCAS_PANEL` en `PanelAdminScreen.kt`), y comprueban que ni la contraseña,
   ni el token, ni la firma de las URLs `PUT`, ni los nombres de las apps de la pantalla de inicio salen por stdout, stderr
   o el informe, que nunca se pulsa Atrás en el Panel ni fuera de la app y que nunca se llama a `pm clear`.
+- `validate51.py` (FE-5.1; ejemplo de un validador que **abre una ruta de prueba con extras del `Intent`** en el APK de
+  depuración y lee un aviso de Compose sobre un `WebView`, sin backend nuevo ni AWS): IDs `C1a, C1b, C2a, C3a, C3b, C4a,
+  C4b` con grupos `C1 → [C1a, C1b]`, `C2 → [C2a]`, `C3 → [C3a, C3b]` y `C4 → [C4a, C4b]`; manual `C4c` (se imprime también
+  en `local`); entornos `local` y `dev`; sin ayudas nuevas en `comun.py`. Constantes: `CLASES_C1A` (`LectorGrafoTest`),
+  `CLASES_C2A` (`ProyeccionRutaTest`, `InstruccionesTest`), `CLASES_C3A` (`EmparejamientoTest`), `CLASES_C4A`
+  (`PlanificadorTest`, `RutaEnMapaTest`), `MINIMO_CASOS` (6; 7 y 6; 3; 5 y 3 — hoy 7; 9 y 8; 3; 7 y 3), `GRAFO`
+  (`assets/grafo.json`), `APP_JS`, `MAIN_ACTIVITY`, `FORMATO_GRAFO` (1), `DESTINO_PRUEBA` (`bloque35`: sin espacios, así
+  pasa por `am start --es` sin comillas), `POSICION_PRUEBA` (6.201434, −75.578427: sobre la arista n0008–n0014),
+  `TITULO_ESPERADO` («Ruta a Bloque 35: 60 m por el camino») y `PRIMERA_ESPERADA` («Camina 45 metros por el camino.»)
+  —los mismos que comprueba `PlanificadorTest`—, `PREFIJO_AVISO` («Ruta a »), `PREFIJO_DESTINO` («Ruta a Bloque 35: »),
+  `TEXTOS_SIN_RUTA` (los otros avisos de `TextosRutaMapa`), `LIMITE_RUTA_S` (30), `LIMITE_TOQUE_S` (15) e instrucciones
+  `INSTRUCCION_C4B` e `INSTRUCCION_C4C`. Piezas puras: `normalizar` (como `EmparejarLugares.normalizar`),
+  `componentes(ids, aristas)`, `revisar_grafo(texto) → ResumenGrafo(version, nodos, aristas, entradas, lugares, metros,
+  bloqueadas)` (las reglas de `LectorGrafo` que invalidan, más `metros` > 0 y al menos una entrada; la primera tanda de
+  errores → `Falla`), `emparejar(lugares_grafo, items) → Emparejamiento(exactos, normalizados, faltan)` (como la app:
+  nombre exacto o nombre/alias normalizado), `aviso_en_pantalla(nodos) → (título, detalle) | None` (el primer texto de la
+  app que empieza por «Ruta a » o por uno de `TEXTOS_SIN_RUTA`, y el siguiente texto de la app como detalle),
+  `comprobar_modo_prueba(archivos_kotlin, main_activity, app_js)` (`PruebaMapa.fijar(` solo en `MainActivity.kt`, una
+  vez, dentro de `if (rutaPrueba == "mapa")`, `rutaDePrueba` con `FLAG_DEBUGGABLE`, y `app.js` con `window.onNativeRuta`,
+  `window.onNativeInicio` y `bridgeCall('listo')`) y `metros_del_aviso(título)`. Precondiciones, en orden y sin seguir si
+  una falla: P1 Gradle (3); en `dev`, P2 dispositivo físico solo si C4b está incluida (3), y P3 URL vigente +
+  `ApiConfig.BASE_URL` igual + `GET /health` (2, o 3 sin URL) y P4 FE-3.1 «Hecho» en `PLAN_APP` y BE-3.1 «Hecho» en
+  `PLAN_BACKEND` (2) solo si C3b está incluida; las que no aplican quedan «no evaluada». Comprobaciones: C1a, C2a, C3a y
+  C4a con **una sola** ejecución de Gradle (las clases de las incluidas); C1b estática (`revisar_grafo` sobre
+  `assets/grafo.json`); C4a estática (`comprobar_modo_prueba`) + JVM. En `local`, C3b y C4b `omitida`. En `dev`: **C3b**
+  `GET /v1/places` (pública, sin token) y `emparejar` con los lugares del grafo: falla con la lista de los que no existen
+  (detalle con los exactos y los normalizados); **C4b** (si C1b y C4a, las incluidas, pasaron; si no, `omitida` «no se
+  hace: falló …»): registra la limpieza `am force-stop`, `installDebug` (sin `pm clear` ni permisos: el mapa no los pide),
+  `am force-stop` + `am start -W -n ACTIVIDAD --es ruta mapa --es destino_prueba bloque35 --es posicion_prueba
+  6.201434,-75.578427`, espera hasta 30 s el aviso «Ruta a …» (si se ve otro aviso, falla con él y la pista «¿sin internet
+  para Leaflet? ¿grafo inválido?»), exige `TITULO_ESPERADO` y `PRIMERA_ESPERADA`, **paso guiado** (`INSTRUCCION_C4B`:
+  tocar otro punto del mapa) y espera hasta 15 s un aviso «Ruta a Bloque 35: …» distinto, con su primera instrucción.
+  Nunca escribe en el backend ni borra nada del teléfono. Las pruebas (`tests/ops/test_validate51.py`, 23) simulan Gradle
+  (escribe los XML de las clases pedidas), adb (`getprop`, `am start` con los extras, `am force-stop`, `uiautomator
+  dump` del mapa con el aviso), la API (`/health` y `/places`, sin token) y el paso guiado (el toque cambia el aviso), y
+  recorren `main()` en `local` (sin adb ni red, una sola ejecución de Gradle) y `dev` (feliz con los 7 lugares por nombre
+  o alias; hoy, con solo «Bloque 35»; aviso con otra distancia; aviso sin ruta; el toque que no cambia nada; JVM que falla
+  y omite el teléfono; `--solo C1a,C2a` sin teléfono ni API; EOF en el paso guiado; BE-3.1 sin «Hecho»), además de las
+  piezas puras con el `grafo.json` y el `MainActivity.kt`/`app.js` reales y variantes rotas; comprueban que nunca se llama
+  a `pm clear`.
 - `pyproject.toml`: `requires-python >= 3.12`, `[tool.uv] package = false`, grupos `ops = []` y `dev = [pytest>=8.3,
   ruff>=0.8]`; ruff con `line-length = 120`, `target-version = "py312"`, reglas `E, F, W, I, B, UP` sobre
   `src/ops/**` y `tests/**`; pytest con `testpaths = ["tests"]` y `pythonpath = ["src/ops"]` (por eso las pruebas
@@ -4333,6 +4623,16 @@ la navegación de FE-4.1: `test_validate41.py`, 28, y `test_comun_fe41.py`, 9: �
   grep mWakefulness=` debe decir `Awake` (bloqueado y apagado decía `Dozing`), y que la persona lo desbloquee y suba el
   tiempo de suspensión de la pantalla. En MIUI, `dumpsys window | grep isKeyguardShowing` siguió diciendo `true` con el
   teléfono ya desbloqueado en la pantalla de inicio: no sirve para comprobarlo.
+- **FE-5.1, `validate51.py`:** el paso guiado de C4b lee la entrada estándar (terminal interactiva o, como en FE-2.2, una
+  FIFO con el toque hecho por `adb shell input tap <x> <y>` sobre el mapa, debajo del aviso). C4b es **en casa**: la
+  posición viene del `Intent`, no del teléfono, y el grafo va en el APK; necesita internet en el teléfono para Leaflet
+  (`unpkg.com`) y las teselas (sin ellas, `listo()` no llega y el aviso se queda en «Destino: Bloque 35. Toca el
+  mapa…»). C3b solo lee `GET /v1/places`: el 2026-10-28 `dev` tenía un solo lugar («Bloque 35»), así que C3b **falla**
+  con los otros seis hasta que se creen en 7.7 (no es un fallo de la app ni del validador; el usuario decide si se crean
+  y con qué nombres, y el validador casa nombre o alias normalizados, como la app). `uiautomator` debería volcar el aviso
+  porque es Compose (dos `TextView` fuera del `WebView`): **sin comprobar en el teléfono**, igual que el formato exacto de
+  `am start -W` con extras en MIUI (el validador solo mira el código de salida y «Error»). Si el `force-stop` de la
+  limpieza llega con la app en otra pantalla, no pasa nada (no hay datos que guardar).
 
 ---
 
@@ -4468,9 +4768,10 @@ confirmar avanza automáticamente a la guía.
 relativa (rumbo de la brújula corregido con `correccion_rumbo_grados`), confianza en texto, y los botones «Repetir en voz
 alta», «Ir a un lugar (desde aquí)», «Volver a ubicarme» (primero con confianza baja, sin coincidencias o sin ubicación)
 y «Volver al inicio». Por decisión del usuario del 2026-10-26 (ADR-FE-27): **sin mapa** y **sin comandos de voz** (la voz
-en 6.3 es de FE-3.5), y como la navegación guiada (6.5) es de FE-5.1, con un destino elegido en 6.4 la vista **no
+en 6.3 es de FE-3.5), y como la navegación guiada (6.5) es de FE-5.3, con un destino elegido en 6.4 la vista **no
 avanza**: dice la distancia y la dirección en línea recta al destino y «La navegación guiada llegará en una próxima
-versión.» Las alertas cercanas son de FE-3.6.
+versión.» Desde FE-5.1, si el destino está en el grafo, dice en cambio la distancia **por el camino** y la primera
+instrucción de la ruta (§5.5, §5.7). Las alertas cercanas son de FE-3.6.
 
 ---
 
@@ -4499,7 +4800,7 @@ lanza el escaneo 360° y luego la navegación.
 §5.10) y la foto de cada lugar si el backend la da (si no, o si no carga, el ícono de la categoría; hoy el backend no
 tiene fotos de lugares). Desde FE-3.2, con una ubicación vigente de «Ubicarse» (alta o media, ≤ 2 min; p. ej. al entrar
 con «Ir a un lugar desde aquí» de 6.3) la lista trae distancias reales y va por cercanía. Lo que falta: orden por
-popularidad (BE-5.2) y la vista 6.5 (FE-5.1).
+popularidad (BE-5.2) y la vista 6.5 (FE-5.3; la ruta ya existe desde FE-5.1).
 
 **Voz:** usa el mismo `VoiceController` de Inicio y Escaneo. Si se negó el micrófono, la vista
 funciona solo con toques y muestra un aviso. Tocar, pausar o salir invalida el flujo hablado en
@@ -4511,7 +4812,7 @@ para elegir.
 **Navegación:** al confirmar emite `DestinoEvento.Confirmado(lugar)`. Desde FE-3.2 `AppNav` guarda el destino en
 `SesionDeNavegacion` y abre el Resultado (6.3) si hay una ubicación vigente o, si no, el escaneo (`ubicarme`) y después
 el Resultado; Destino sale de la pila (5.8). La 6.3 dice la distancia y la dirección al destino (sin vista 6.5 hasta
-FE-5.1).
+FE-5.3; desde FE-5.1, por el camino si el destino está en el grafo).
 
 **Módulos que lo implementan:**
 
@@ -4566,6 +4867,10 @@ FE-5.1).
 - Avisos si hay poca confianza en la posición o pérdida de conexión (continúa con PDR).
 - Al llegar, navega a la vista de Llegada.
 
+**Implementación actual:** no existe; es de **FE-5.3** (PLAN §2.2). FE-5.1 dejó lo que necesita: la ruta por el grafo,
+la proyección sobre la arista más cercana y las instrucciones con el punto y la distancia de cada maniobra (§4.11,
+«Para FE-5.3», y §5.7, «Grafo y rutas»).
+
 ---
 
 ### 6.6 Llegada — `ui/navegacion/LlegadaScreen.kt`
@@ -4581,6 +4886,9 @@ FE-5.1).
 - Botón **"Volver al inicio"**.
 - Pregunta opcional de retroalimentación: *"¿Llegaste bien?"* (Sí / No) para mejorar el
   sistema.
+
+**Implementación actual:** no existe; es de FE-5.3. La instrucción de llegada («Has llegado a <destino>.») ya la da
+`Instrucciones` (§5.7).
 
 ---
 
@@ -5584,7 +5892,9 @@ La especificación de 6.3 pide un mapa y, como paso previo a la navegación, ava
 (Recomendado)» (frente a una ruta provisional que luego se tiraría): la 6.3 dice la distancia y la dirección en línea
 recta al destino y que la navegación guiada llegará más adelante; para la 6.3, «Sin mapa ni voz (Recomendado)»: texto y
 botones legibles por TalkBack; los comandos de voz en 6.3 son de FE-3.5 y el mapa queda pendiente. *Consecuencias:* la
-6.3 no tiene `WebView` ni `SpeechRecognizer`; el destino queda en `SesionDeNavegacion` para FE-5.1.
+6.3 no tiene `WebView` ni `SpeechRecognizer`; el destino queda en `SesionDeNavegacion` para FE-5.1. *Actualización
+(FE-5.1, 2026-10-28):* la 6.3 sigue sin avanzar ni mapa, pero con el destino en el grafo dice la distancia por el camino
+y la primera instrucción; la vista 6.5 pasó a FE-5.3.
 
 **ADR-FE-28 — El «Resumen rápido» junta backend y cola local en `RemoteAdminRepository`, y el Panel relee la cola al
 volver (aceptada, 2026-10-26, FE-2.2).**
@@ -5732,6 +6042,35 @@ de `GET /v1/admin/images` (de 100 en 100, hasta 500 fotos o 10 páginas) y de lo
 si se cortó. *Consecuencias:* contrato de `VideoBridge` ampliado (`pedirOtros`; `cargarOtros` con objeto; `editable`,
 `nota`, `local` y `rev` en el video, §5.9); C2 se comprueba en `dev` con la vuelta sola a 7.13 (`validate41.py` C2b) y en
 `local` con el JS (C2a); con más de 500 fotos en otros videos, la capa queda incompleta (el aviso lo dice).
+**ADR-FE-38 — Destino y posición de prueba del mapa solo en el APK de depuración (aceptada, 2026-10-28, FE-5.1).**
+La validación de FE-5.1 es en casa (lejos del campus) y por `adb`: hace falta abrir el mapa con un destino del grafo y una
+posición dentro del grafo, sin tocar el flujo real (6.4 → Ubicarme → 6.3) ni depender de la cámara, del backend ni de
+dónde está el teléfono. Opciones: (a) tocar el mapa por coordenadas de pantalla (frágil: depende del zoom, del tamaño y
+de las teselas); (b) escribir un destino falso en `SesionDeNavegacion` (mete datos de prueba en el holder del flujo real);
+(c) extras del `Intent` junto a la ruta de prueba `mapa` de FE-2.3 (ADR-FE-18), guardados aparte. Se eligió (c):
+`destino_prueba` y `posicion_prueba` solo se leen si la app es depurable, en un arranque nuevo y con `--es ruta mapa`;
+van a `PruebaMapa` (no a `SesionDeNavegacion`), el mapa usa la posición una vez como si fuera un toque
+(`onNativeInicio`) y todo se borra al salir del mapa. El destino se compara normalizado, así `bloque35` no necesita
+comillas en `adb`. *Consecuencias:* el APK de depuración acepta dos extras más (el de *release* los ignora: `rutaDePrueba`
+exige `FLAG_DEBUGGABLE`); `validate51.py` C4a comprueba en el código que solo `MainActivity` escribe `PruebaMapa` y dentro
+de esa condición; el toque real sigue siendo el camino normal (C4b lo prueba con el paso guiado).
+
+**ADR-FE-39 — La ruta se calcula en el teléfono sobre el grafo de `assets/`, desde la arista más cercana (aceptada,
+2026-10-28, FE-5.1; parte de decisiones del usuario del 2026-10-27).**
+Decisiones del usuario: el grafo lo entrega el equipo y la app lo lee tal cual, sin funciones para cambiarlo (decisión
+abierta 2), y la ruta se calcula en el teléfono (sin `GET /v1/route`). Decisiones del lote: (a) **`assets/grafo.json`**
+leído una vez por proceso (`GrafoDeLaApp`) y validado (`LectorGrafo`); uno inválido no cierra la app: desactiva las rutas
+y lo registra; (b) **proyección sobre la arista** más cercana con un nodo virtual de partida, no el nodo más cercano (que
+puede quedar detrás y mandar a la persona hacia atrás); las aristas `bloqueada` no se usan ni para proyectar; (c)
+**Dijkstra** (26 nodos: A* no aporta) hasta la entrada más cercana **por el camino** de las que casan con el destino; (d)
+**instrucciones por ángulos** con umbrales con nombre (`ParametrosRuta`: 20°, 45°, 120°, 150°; 15 m para «ve hasta el
+camino»), como valores de partida para ajustar en el campo; (e) **emparejamiento por nombre normalizado** (nombre o
+alias del backend contra `lugar` del grafo), en lugar de ids del backend en el grafo: el archivo del equipo no conoce los
+UUID y así un alias en 7.7 basta para casar un nombre distinto; (f) el mapa público muestra la distancia y la primera
+instrucción en un **aviso de Compose** encima del `WebView` (lo lee TalkBack como *live region* y `uiautomator` lo
+vuelca), y la página solo dibuja. *Consecuencias:* sin dependencias nuevas de Gradle (Gson ya estaba); la ruta funciona
+sin red; cambiar el grafo es cambiar un archivo del APK (subiendo `version`); un lugar del grafo sin lugar en el backend
+no tiene ruta (6.3 da la línea recta) y se avisa con una línea `Grafo`.
 
 ### 8.2 Decisiones abiertas
 
@@ -5742,18 +6081,24 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
    tráfico intensivo** de una app en producción. Antes de publicar, decidir si se mantiene, si
    se cambia a un proveedor de teselas con plan/clave propia o si se monta un servidor propio.
    Si el campus tiene interiores donde el mapa no llega, definir cómo se representan.
-2. **Grafo de caminos:** para calcular rutas se necesita un grafo de zonas transitables.
-   ¿Lo dibuja el admin en el editor de mapa (nueva herramienta), o se deriva de las
-   trayectorias recolectadas? **Aplazada a la Fase 5** (backend ADR-BE-11; `GET /v1/route` reservado).
+2. **Grafo de caminos: resuelta (decisión del usuario del 2026-10-27, aplicada en FE-5.1).** El grafo lo entrega el
+   equipo (`grafo.json`, formato 1) y la app no tiene ninguna función que cambie cómo está construido: lo lee tal cual
+   desde `assets/grafo.json`; la ruta se calcula en el teléfono, sin red (ADR-FE-39). Por eso la app ya no necesita
+   `GET /v1/route` (BE-5.3, reservado en backend ADR-BE-11). Si un día se descarga del servidor, el formato no cambia y
+   `version` dice si es el último.
 3. **Alertas de obstáculo:** son puntos manuales en el mapa con mensaje. **Radio por defecto: 15 m** (lo fija el
    contrato del backend, §5.5 de su documento). Queda por decidir si se anuncian solo las alertas cercanas a la ruta o
    todas, y si se complementa a futuro con detección por cámara (fuera del alcance actual).
 4. **Frecuencia de corrección visual** durante la navegación (tiempo / distancia /
-   incertidumbre) y su impacto en datos móviles y batería.
-5. **Algoritmo de fusión** PDR + visual: filtro de Kalman vs. filtro de partículas.
+   incertidumbre) y su impacto en datos móviles y batería. *Se decide en FE-5.3*; propuesta pendiente del usuario
+   (2026-10-27): una foto cada ~10 m caminados, o antes si la posición se vuelve dudosa.
+5. **Algoritmo de fusión** PDR + visual: filtro de Kalman vs. filtro de partículas. *Aplazada:* para FE-5.3 el usuario
+   decidió el 2026-10-27 una regla simple (los pasos mueven la posición, cada foto confiable y coherente con lo caminado
+   la reemplaza, siempre sobre el grafo; §2.3). Un filtro, solo en un lote aparte si el campo muestra que no basta.
 6. **Funcionamiento sin conexión:** ¿se permite navegar solo con PDR si se pierde la red?
    Recordar que el mapa base de OSM necesita internet (solo se ve lo que está en caché); la
-   navegación por voz sí podría continuar sin teselas.
+   navegación por voz sí podría continuar sin teselas. *Se decide en FE-5.3*; propuesta pendiente del usuario: seguir
+   guiando solo con pasos y avisar que la precisión bajó. La ruta de FE-5.1 ya se calcula sin red (el grafo va en el APK).
 7. **Privacidad de las fotos de ubicación: resuelta.** El backend las descarta tras responder y solo guarda un evento
    anónimo (backend ADR-BE-06). Queda por decidir si la app lo dice en voz alta antes del primer escaneo.
 8. **SDK mínimo/objetivo** y dispositivos soportados (sensores y cámara).
@@ -5778,7 +6123,8 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
     vigente): holder en memoria `SesionDeNavegacion`, por decisión del usuario del 2026-10-26 («En memoria
     (Recomendado)»; ADR-FE-24; 5.6 y 5.8).
 16. **Longitud de paso del PDR:** **resuelta** con la calibración por dispositivo de 7.3b (una pasada A→B; se guarda y
-    reemplaza el 0,72 m genérico, que queda solo como valor por defecto). **Sigue abierto:** la deriva de la brújula, la deriva
+    reemplaza el 0,72 m genérico, que queda solo como valor por defecto). **Sigue abierto** (para FE-5.3, que guía con
+    pasos): la deriva de la brújula, la deriva
     estimada de 7.4 (heurística provisional del 4 %, que habrá que reemplazar cuando exista corrección visual) y si conviene
     promediar varias pasadas (ver 7.3b).
 17. **Nombre del producto** *(nueva)*: «Campus Locator» en la documentación y «Campus Navi» en `LoginScreen`.
@@ -5812,7 +6158,7 @@ La numeración se conserva: otras secciones y documentos citan «decisión abier
 ### 9.2 Notas para quien implemente
 
 - La **calibración de la longitud de paso** ya existe (7.3b): pedirle al admin que calibre en un tramo de 30 m o más **antes de la
-  primera recolección** y que **camine igual** que al calibrar. Falta la calibración de la **deriva de la brújula** (FE-5.1).
+  primera recolección** y que **camine igual** que al calibrar. Falta la calibración de la **deriva de la brújula** (FE-5.3).
 - Las capturas deben tener **control de calidad** (blur, exposición) antes de enviarse (FE-4.3).
 - Las subidas deben tolerar **mala conexión** (cola local con reintentos).
 - Mantener un **registro de pruebas reales en dispositivo físico**: el emulador no

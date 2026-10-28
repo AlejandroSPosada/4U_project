@@ -3,6 +3,7 @@ package com.example.myapplication.ui.destino
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.myapplication.data.local.GrafoDeLaApp
 import com.example.myapplication.data.remote.RemoteLugaresRepository
 import com.example.myapplication.data.repository.LugaresRepository
 import com.example.myapplication.domain.model.CategoriaLugar
@@ -170,6 +171,9 @@ class SeleccionDestinoViewModel(app: Application) : AndroidViewModel(app) {
                 _estado.update { it.copy(cargando = false) }
                 refiltrar()
                 AppLog.i(TAG, "Lugares cargados: ${todos.size}")
+                // FE-5.1: avisa (línea `Grafo`, una vez por proceso) de las entradas del grafo sin lugar en el backend.
+                // Nunca cambia el flujo de 6.4: cualquier fallo se ignora.
+                runCatching { GrafoDeLaApp.avisarEmparejamiento(getApplication<Application>(), todos) }
                 if (conVoz) preguntarDestino()
             } catch (e: CancellationException) {
                 throw e

@@ -12,8 +12,12 @@ import com.example.myapplication.sensors.PdrTracker
  * así que cada uno reenvía al hilo principal, que es donde vive [PdrTracker].
  * Kotlin → Web está en `MapaPublicoScreen.kt` (`onNativePosition`, `onNativeHeading`, ...).
  */
-class PuentePdr(private val tracker: PdrTracker) {
+class PuentePdr(private val tracker: PdrTracker, private val alListo: () -> Unit = {}) {
     private val principal = Handler(Looper.getMainLooper())
+
+    /** FE-5.1: la página terminó de arrancar (`boot()` de app.js): ya acepta `window.onNative*`. */
+    @JavascriptInterface
+    fun listo() { principal.post { alListo() } }
 
     /** Empieza a leer sensores (pasos, rumbo, aceleración). */
     @JavascriptInterface

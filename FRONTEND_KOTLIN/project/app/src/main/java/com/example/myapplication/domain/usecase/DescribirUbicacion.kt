@@ -4,6 +4,7 @@ import com.example.myapplication.domain.model.LugarDestino
 import com.example.myapplication.domain.model.NivelConfianza
 import com.example.myapplication.domain.model.ResultadoUbicacion
 import com.example.myapplication.domain.model.UbicacionEstimada
+import com.example.myapplication.domain.ruta.Planificador
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -47,7 +48,9 @@ data class DescripcionUbicacion(
  * Direcciones relativas: `referencias[].rumbo_grados` es absoluto (backend §5.3); la dirección sale de compararlo con el
  * rumbo **corregido** de la persona = rumbo verdadero de la brújula + `correccion_rumbo_grados` (si viene). Sin rumbo de
  * la brújula se dice solo la distancia. El destino (FE-3.2, decisión del usuario del 2026-10-26: sin vista 6.5 hasta
- * FE-5.1) se describe igual, con la distancia y el rumbo en línea recta desde la posición estimada.
+ * FE-5.1) se describe igual, con la distancia y el rumbo en línea recta desde la posición estimada. Desde FE-5.1, si hay
+ * un [Planificador] y el destino está en el grafo, se dice en cambio la distancia **por el camino** y la primera
+ * instrucción de la ruta (respecto al rumbo corregido); fuera del grafo (o sin grafo válido), lo de antes.
  */
 object DescribirUbicacion {
 
@@ -96,14 +99,20 @@ object DescribirUbicacion {
 
     /**
      * [ubicacion] = la de `SesionDeNavegacion` (o `null`); [rumboBrujula] = rumbo **verdadero** sin corregir (el del
-     * sensor en 6.3 o, sin lectura, el del final del escaneo); [destino] = el elegido en 6.4, o `null`.
+     * sensor en 6.3 o, sin lectura, el del final del escaneo); [destino] = el elegido en 6.4, o `null`; [planificador]
+     * (FE-5.1) = el del grafo de la app, o `null` (sin rutas: solo la línea recta).
      */
-    fun describir(ubicacion: UbicacionEstimada?, rumboBrujula: Double?, destino: LugarDestino?): DescripcionUbicacion {
+    fun describir(
+        ubicacion: UbicacionEstimada?,
+        rumboBrujula: Double?,
+        destino: LugarDestino?,
+        planificador: Planificador? = null,
+    ): DescripcionUbicacion {
         val resultado = ubicacion?.resultado
         return when (resultado) {
             null -> sinPosicion(SIN_UBICACION, listOf("Toca «Volver a ubicarme» para dar la vuelta."), destino)
             is ResultadoUbicacion.SinCoincidencias -> sinPosicion(SIN_COINCIDENCIAS, listOf(REPETIR_VUELTA), destino)
-            is ResultadoUbicacion.Ubicado -> ubicado(resultado, rumboBrujula, destino)
+            is ResultadoUbicacion.Ubicado -> ubicado(resultado, rumboBrujula, destino, planificador)
         }
     }
 
@@ -125,6 +134,7 @@ object DescribirUbicacion {
         u: ResultadoUbicacion.Ubicado,
         rumboBrujula: Double?,
         destino: LugarDestino?,
+        planificador: Planificador?,
     ): DescripcionUbicacion {
         val rumbo = rumboCorregido(rumboBrujula, u.correccionRumboGrados)
         val baja = u.nivel == NivelConfianza.BAJA
@@ -158,8 +168,14 @@ object DescribirUbicacion {
             detalles += "${r.nombre} está $donde${metros(r.distanciaM)}."
         }
         if (baja) detalles += POCO_SEGURA
-        if (destino != null) {
-            val p = u.posicion
+        val p = u.posicion
+        val ruta = destino?.let { planificador?.rutaA(it, p.lat, p.lng, rumbo) }
+        if (destino != null && ruta != null) {
+            // FE-5.1: distancia por el camino y primera instrucción (respecto al rumbo corregido).
+            detalles += "Tu destino, ${destino.nombre}, está ${metros(ruta.metros)} por el camino."
+            detalles += ruta.primera.texto
+            detalles += LLEGARA_NAVEGACION
+        } else if (destino != null) {
             val d = CalibracionPaso.distanciaEntre(p.lat, p.lng, destino.lat, destino.lng)
             val donde = rumbo?.let {
                 "${direccion(rumboInicial(p.lat, p.lng, destino.lat, destino.lng), it).texto}, "

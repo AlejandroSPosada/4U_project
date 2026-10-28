@@ -23,6 +23,72 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.15.0] — 2026-10-28
+
+- **Lote que la motivó:** FE-5.1 (Grafo y rutas: la «App 1» de la meta «Guía en tiempo real (fotos + pasos)»), sobre
+  `main` en `bef5853` (0.14.1).
+- **Contratos que consume:** backend §5.3 (`GET /v1/places`, pública; solo la lee el validador y, para los nombres, el
+  aviso de 6.4). No hizo falta nada fuera del §5 del backend.
+- **Decisiones del usuario:** (2026-10-27) el grafo lo entrega el equipo y la app lo lee tal cual, sin funciones para
+  cambiarlo (resuelve la decisión abierta 2); la ruta se calcula en el teléfono (la app deja de depender de BE-5.3); fotos
+  + pasos con una regla simple de mezcla (para FE-5.3). (2026-10-28) Al copiar el grafo, corregir los nombres de `lugar`
+  para que coincidan exactamente con los del backend, sin tocar coordenadas, ids ni aristas, y reportar los que no existan.
+  El criterio de FE-5.3 es el de la meta 3, aceptado por el usuario.
+- **Decisiones del lote (ADR nuevas):** ADR-FE-38 — destino y posición de prueba del mapa por extras del `Intent`, solo en
+  el APK de depuración, guardados en `PruebaMapa` (no en `SesionDeNavegacion`). ADR-FE-39 — `assets/grafo.json` leído y
+  validado una vez por proceso (inválido → rutas desactivadas), proyección sobre la arista más cercana con nodo virtual,
+  Dijkstra a la entrada más cercana, instrucciones por ángulos con `ParametrosRuta`, emparejamiento por nombre o alias
+  normalizado y aviso de Compose encima del mapa.
+- **Qué cambió:**
+  - Datos: `app/src/main/assets/grafo.json` nuevo = el `grafo.json` del equipo (formato 1, versión 179, 2026-10-10) con
+    un solo cambio: `lugar` de `n0007` `bloque 35` → `Bloque 35` (el nombre exacto en `dev`); `version` 180 y
+    `actualizado` `2026-10-28T09:27:39-05:00`. `GET /v1/places` en `dev` tenía solo «Bloque 35»: `bloque 33`, `bloque 34`,
+    `bloque 38`, `biblioteca`, `cafeteria` y `cocnverso` («Café Con.verso» según el usuario) se dejaron como estaban.
+  - Código (`project/`): paquete nuevo `domain/ruta/` (`Grafo.kt`, `LectorGrafo.kt`, `Geo.kt`, `Proyeccion.kt`,
+    `CalculoRuta.kt`, `Instrucciones.kt`, `Emparejamiento.kt`, `Planificador.kt`); `data/local/GrafoDeLaApp.kt` y
+    `map/RutaEnMapa.kt` nuevos; `DescribirUbicacion.describir(…, planificador = null)` y `ResultadoUbicacionViewModel`
+    (6.3 con la distancia por el camino y la primera instrucción; línea `Ruta`); `SeleccionDestinoViewModel` (una línea
+    `Grafo` con los lugares sin pareja, en `runCatching`); `MapaPublicoScreen` (aviso de Compose, ruta en cada cambio de
+    posición o destino), `PuentePdr(tracker, alListo)` (`listo()`), `assets/app.js` (`onNativeRuta`, `onNativeInicio`,
+    `bridgeCall('listo')`); `MainActivity` (extras `destino_prueba` y `posicion_prueba`). Sin dependencias nuevas de
+    Gradle (Gson ya estaba).
+  - Pruebas JVM nuevas: `LectorGrafoTest` (7), `ProyeccionRutaTest` (9), `InstruccionesTest` (8), `EmparejamientoTest`
+    (3), `PlanificadorTest` (7), `RutaEnMapaTest` (3) y la ayuda `GrafosDePrueba`. Total 374 (47 clases); las 337 de antes
+    no cambian.
+  - Validadores: `src/ops/validate51.py` (local: C1a, C1b, C2a, C3a, C4a; `dev`: además C3b y C4b con un paso guiado;
+    manual C4c), sin ayudas nuevas en `comun.py`; `tests/ops/test_validate51.py` (23). Total 312 + 1 omitida.
+  - Documento: encabezado; §2.2 y §2.3 (notas de FE-5.1 y la regla simple de FE-5.3); §2.6 (fila «Ruta»); §3.2
+    (`domain/ruta/`, `GrafoDeLaApp`, pruebas, `grafo.json`, tags `Grafo` y `Ruta`); §4.1 (374 casos); **§4.11 nuevo**
+    (con trampas y «Para FE-5.3»); §5.5 (Resultado); §5.6 (`assets/grafo.json` y `GrafoDeLaApp`, modelos); §5.7
+    («Grafo y rutas»: firmas, reglas, parámetros y textos; `DescribirUbicacion` con `planificador`); §5.8 (`mapa` con el
+    destino y la posición de prueba); §5.9 (`listo`, `onNativeRuta`, `onNativeInicio`, aviso de ruta); §5.11
+    (`validate51.py`, 312 casos, trampas de FE-5.1); §6.3–§6.6 (implementación actual); ADR-FE-38 y 39; ADR-FE-27
+    (actualización); §8.2 (2 resuelta; 4, 5, 6 y 16 con lo que decide FE-5.3); §9.2.
+  - `validation-5-1` nueva (formato de `validation-4-1`).
+  - `PLAN.md`: «Alineado con» v0.15.0; §2.1: FE-5.1 «Grafo y rutas» (para construir FE-3.2; para validar FE-3.1 y BE-3.1,
+    sin BE-5.3) y FE-5.3 nuevo «Guía por voz con pasos y fotos» (FE-5.1 y BE-5.1); §2.2: los dos lotes con alcance,
+    criterios (C1–C4 de FE-5.1 propuestos; el de FE-5.3, el de la meta 3) y pendientes; §3: FE-5.1 «En curso», FE-5.3
+    «Pendiente»; §4: HU-04 en FE-5.1 y FE-5.3 (habilita BE-5.1, ya no BE-5.3), HU-05 y HU-06 en FE-5.3.
+- **Contradicciones corregidas:** §8.2 decía que el grafo de caminos estaba «aplazado a la Fase 5» con `GET /v1/route`
+  reservado, y PLAN §2.1 hacía depender FE-5.1 de BE-5.3: el usuario resolvió la decisión 2 (grafo del equipo, ruta en el
+  teléfono). Varias secciones (§5.5, §5.8, §5.10, §5.11, §6.3, §6.4, §9.2) daban la vista 6.5, la corrección visual con
+  `/v1/localize/frame` o la deriva de la brújula como de FE-5.1: ahora son de FE-5.3.
+- **Contratos tocados (§5):** nuevos — `domain/ruta/` (§5.7), `GrafoDeLaApp` y el formato de `assets/grafo.json` (§5.6),
+  `PruebaMapa`/`TextosRutaMapa`/`AvisoRuta` (§5.7), extras `destino_prueba`/`posicion_prueba` de la ruta `mapa` (§5.8),
+  `AndroidBridge.listo()`, `window.onNativeRuta` y `window.onNativeInicio` (§5.9). Compatibles —
+  `DescribirUbicacion.describir(…, planificador = null)` y `PuentePdr(tracker, alListo = {})` (parámetros con valor por
+  defecto). Menor.
+- **Cómo se verificó (2026-10-28, worktree de FE-5.1 sobre `bef5853`, sin commit):** en Windows `testDebugUnitTest
+  assembleDebug` → `BUILD SUCCESSFUL`, 374 casos, 0 fallos (47 clases; los avisos del compilador son los de antes); en WSL
+  `ruff check` («All checks passed!»), `ruff format --check` («27 files already formatted») y `pytest` (312 passed, 1
+  skipped); `validate51.py --entorno local` → código 0 (P1; C1a 7/7; C1b; C2a 9/9 y 8/8; C3a 3/3; C4a; C3b y C4b
+  omitidas; C4c manual). En `dev`, solo `GET /v1/places` (pública): un lugar, «Bloque 35». `git diff --stat` igual a
+  `--stat --ignore-cr-at-eol`.
+- **Pendiente:** `validate51.py --entorno dev` con el teléfono en casa (C4b, paso guiado por `adb`; lo coordina el maestro)
+  y la captura de C4c; C3b falla mientras `dev` no tenga los seis lugares que faltan (decisión del usuario: crearlos en 7.7
+  y con qué nombres, o corregir el grafo); confirmar los criterios C1–C4 propuestos; sin probar en el teléfono todo lo de
+  §4.11; FE-5.3 (planificar, espera a BE-5.1).
+
 ## [0.14.1] — 2026-10-27
 - Lote que la motivó: FE-4.1 (cierre: `validate41.py --entorno dev` sobre `7578938`).
 - Qué cambió (solo documentos y la evidencia): encabezado (FE-4.1 validado en `dev`); §4.10 con las tres ejecuciones
