@@ -60,13 +60,14 @@ La evidencia se guarda en `evidencia/fe-3-2/` y se cita en el PR. En los comando
 
 | ID | Qué hace la persona | Evidencia en el PR |
 |---|---|---|
-| C1c | Durante el paso guiado de C1b, con `embedding` encendido: elige 10 puntos conocidos del campus con dataset (junto a lugares de la lista que imprime el script) y en cada uno hace Inicio → «uno» (o el botón principal), da la vuelta y escucha el Resultado (6.3) | `c1-tabla.md`: los 10 puntos (punto, lugar esperado, lo que dijo la app, nivel de confianza, si pidió volver a ubicarse), apoyada en las líneas que imprime C1b; y un video con audio de al menos dos puntos (si muestra algo privado, no se versiona y se cita en el PR). Pasa si en cada punto la app dice el lugar correcto o, con confianza baja, lo dice y ofrece «Volver a ubicarme» |
+| C1c | Durante el paso guiado de C1b, con `embedding` encendido: elige 10 puntos conocidos del campus con dataset (junto a lugares de la lista que imprime el script) y en cada uno hace Inicio → «uno» (si no escucha, toca el botón principal, que desde 0.19.0 abre la escucha, y dilo), da la vuelta y escucha el Resultado (6.3) | `c1-tabla.md`: los 10 puntos (punto, lugar esperado, lo que dijo la app, nivel de confianza, si pidió volver a ubicarse), apoyada en las líneas que imprime C1b; y un video con audio de al menos dos puntos (si muestra algo privado, no se versiona y se cita en el PR). Pasa si en cada punto la app dice el lugar correcto o, con confianza baja, lo dice y ofrece «Volver a ubicarme» |
 | C4c | Durante el paso guiado de C4b, con `embedding` apagado: Inicio → «uno» → vuelta completa | `c4-video.mp4` con audio: tras «Analizando…», la app dice «El servicio de ubicación no está disponible en este momento» (§5.10) y no se cierra (si muestra algo privado, se cita en el PR) |
 
 **C1c — procedimiento** (en el campus; `embedding` lo enciende P7 si hace falta y lo apaga C1b al terminar):
 1. Con el teléfono en Inicio (lo abre el script) y **TalkBack desactivado** (la 6.3 con TalkBack es de FE-3.5), empezar a
    grabar la pantalla con audio en el primer punto.
-2. En cada punto: decir **«uno»** (o tocar el botón principal); escuchar las instrucciones y girar despacio con el
+2. En cada punto: decir **«uno»** (si Inicio no escucha, tocar el botón principal y decirlo; desde ARCHITECTURE 0.19.0
+   el toque ya no abre el escaneo); escuchar las instrucciones y girar despacio con el
    teléfono vertical hasta oír «Listo, analizando»; escuchar el Resultado. Anotar lo dicho. Tocar **«Volver al
    inicio»** (o Atrás).
 3. Con confianza baja o «No reconocí este lugar», la app ofrece «Volver a ubicarme» como primer botón: anotarlo (vale si

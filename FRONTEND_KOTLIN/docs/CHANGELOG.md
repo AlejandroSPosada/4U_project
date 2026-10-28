@@ -23,6 +23,39 @@ Las historias de usuario del catálogo de `PLAN.md` §5 también se versionan aq
 
 ---
 
+## [0.19.0] — 2026-10-28
+- Lote que la motivó: ninguno; cambio pedido por el usuario el 2026-10-28 y encargado por el maestro (adelanta parte de
+  FE-3.5). Decisiones literales: (1) «cuando se presiona el botón grande del inicio, inmediatamente nos arroja a la
+  opción "1". Solo debería irse a la opción 1 por voz.»; (2) «haz una espera mínima de 3 segundos cuando se esté
+  recibiendo input por voz. A veces sucede que tan pronto se activa la opción de audio, dice que no entiende, pero no dio
+  tiempo ni de hablar.»
+- Qué cambió: código: `InicioViewModel.alPresionarOrbe()` vuelve a `stopAll(); escuchar()` (no navega), fuera
+  `ubicarme()`, `TRAS_FALLOS` pública y tag `InicioVM`; `InicioScreen`: textos del orbe («Toca para hablar: uno, dos o
+  mapa.», descripción de TalkBack) y `InicioContent` sin `onUbicarme`; `VoiceController.listen` con espera mínima de
+  3 s (reintentos en silencio, nunca con su TTS hablando, cortable) y tag `Escucha`; `ui/inicio/EsperaEscucha.kt` nuevo
+  (`EsperaEscucha`, `FinSinTexto`) con `EsperaEscuchaTest` (5); `validate32.py`, solo el texto de los pasos manuales C1b
+  y C4b. Docs: encabezado; §2.1 (paso 1), §2.7 (excepción táctil y espera mínima); §3.2 (tags `Escucha` e `InicioVM`);
+  §4.5 (hallazgos de TalkBack: el doble toque ahora escucha); §4.13 (la escucha de 6.3 dura ≥ 3 s); §4.14 nueva (piezas,
+  qué escuchas cubre, comportamiento, trampas, pasos para el teléfono por `adb` con las líneas de `app.log`); §5.2
+  (`VoiceController` y fila nueva `EsperaEscucha`/`FinSinTexto`); §5.5 (Inicio: acciones, `InicioContent`, flujo del
+  orbe, pantalla, accesibilidad, el ⚠ «El orbe ya no escucha, navega» pasa a resuelto); §5.8 (ruta `inicio`); §6.1;
+  §8.1 ADR-FE-29 (enmienda) y ADR-FE-50 nueva; §8.2 decisión abierta 18. PLAN: FE-3.5 (lo adelantado, el ⚠ de C3 y su
+  fila de §3). `validation-3-5.md` (⚠ de C3) y `validation-3-2.md` (C1c: «uno», no el toque).
+- Contratos tocados (§5): incompatible (sube la menor en `0.x`): `InicioContent` sin `onUbicarme` e
+  `InicioViewModel.ubicarme()` eliminada (solo los usaba Inicio). Ampliados sin romper: `VoiceController(context,
+  reloj = …)`, comportamiento de `listen` (≥ 3 s antes de `onFail` salvo errores no reintentables), `EsperaEscucha` y
+  `FinSinTexto` nuevos, `InicioViewModel.TRAS_FALLOS`, tags `Escucha` e `InicioVM`. Cambian textos de Inicio (pantalla,
+  TalkBack, tras 3 fallos); ningún validador los lee (`validate31.py` solo mira la acción «Ver mapa» y los eventos, que
+  no cambian).
+- Cómo se verificó: worktree `fe-voz` sobre `main` `534b82e`, sin commit. En Windows `testDebugUnitTest assembleDebug`
+  → `BUILD SUCCESSFUL`, 435 casos, 0 fallos (59 clases); en WSL `ruff check`, `ruff format --check` (31 archivos) y
+  `pytest` (342 passed, 1 skipped). Fuentes leídas: §2.7, §4.13, §5.2, §5.5, §6.1, ADR-FE-27/29/47, §5.11; código de
+  `ui/inicio/` y los cuatro llamadores de `listen` (`SeleccionDestinoViewModel`, `ResultadoUbicacionViewModel`,
+  `AlertaFormSheet`, `InicioViewModel`).
+- Pendiente: probarlo en el teléfono (pasos en §4.14); confirmar qué error da el reconocedor del Xiaomi cuando hoy dice
+  «no entendí» al instante y si da pitido al empezar; decidir con el usuario, al hacer FE-3.5, si Ubicarme necesita una
+  acción de TalkBack (sin voz hoy no se llega) y cómo queda C3 de `validation-3-5`.
+
 ## [0.18.0] — 2026-10-28
 - Lote que la motivó: FE-5.3 (guía por voz con pasos y fotos, vistas 6.5 y 6.6; la «App 2» de la meta «Guía en tiempo
   real»).

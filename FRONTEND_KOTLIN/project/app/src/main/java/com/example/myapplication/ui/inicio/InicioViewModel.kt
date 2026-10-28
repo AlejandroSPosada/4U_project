@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.remote.ClienteApi
 import com.example.myapplication.data.remote.RemoteBackendHealth
 import com.example.myapplication.data.repository.BackendHealth
+import com.example.myapplication.logs.AppLog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +39,11 @@ class InicioViewModel(app: Application) : AndroidViewModel(app) {
         const val BIENVENIDA =
             "Di uno para saber dónde estás, dos para ir a un lugar, o mapa para ver el mapa."
         private const val NO_ENTENDI = "No te entendí. $BIENVENIDA"
+
+        /** Tras [MAX_INTENTOS] fallos deja de escuchar; tocar el orbe vuelve a escuchar (0.19.0). */
+        const val TRAS_FALLOS = "Toca el botón grande del centro cuando quieras hablar."
         private const val MAX_INTENTOS = 3
+        private const val TAG = "InicioVM"
     }
 
     private val voz = VoiceController(app)
@@ -67,14 +72,18 @@ class InicioViewModel(app: Application) : AndroidViewModel(app) {
         voz.speak(BIENVENIDA) { escuchar() }
     }
 
-    /** Toque en el orbe: interrumpe la voz y activa/reactiva la escucha. */
+    /**
+     * Toque en el orbe: interrumpe la voz y activa (o reinicia) la escucha. **No navega** (decisión del usuario del
+     * 2026-10-28: Ubicarme solo por voz, «uno»/«ubicarme»); si no entiende, repite las opciones como al abrir.
+     */
     fun alPresionarOrbe() {
         intentos = 0
-        navegar(InicioEvento.Ubicarme)   // ← antes: voz.stopAll(); escuchar()
+        AppLog.i(TAG, "Orbe tocado: escucho")
+        voz.stopAll()
+        escuchar()
     }
 
-    /** Acciones directas (TalkBack / sin voz). */
-    fun ubicarme() = navegar(InicioEvento.Ubicarme)
+    /** Acción de TalkBack «Ir a un lugar» del orbe (por voz: «dos»). Ubicarme no tiene acción directa (0.19.0). */
     fun irALugar() = navegar(InicioEvento.IrALugar)
 
     /** FE-3.1: acción de TalkBack «Ver mapa» (por voz: «mapa», [ComandoParser]). */
@@ -99,7 +108,9 @@ class InicioViewModel(app: Application) : AndroidViewModel(app) {
         voz.listen(
             onResult = { texto ->
                 _estado.value = _estado.value.copy(escuchando = false)
-                when (ComandoParser.parse(texto)) {
+                val comando = ComandoParser.parse(texto)
+                AppLog.i(TAG, "Comando de voz: $comando")
+                when (comando) {
                     Comando.UBICARME -> navegar(InicioEvento.Ubicarme)
                     Comando.IR_A_LUGAR -> navegar(InicioEvento.IrALugar)
                     Comando.VER_MAPA -> navegar(InicioEvento.VerMapa)
@@ -114,14 +125,16 @@ class InicioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun repetirOpciones() {
+        AppLog.i(TAG, "No entendí (fallo ${intentos + 1} de $MAX_INTENTOS)")
         if (++intentos >= MAX_INTENTOS) {
-            voz.speak("Presiona el botón central cuando quieras hablar.")
+            voz.speak(TRAS_FALLOS)
             return
         }
         voz.speak(NO_ENTENDI) { escuchar() }
     }
 
     private fun navegar(evento: InicioEvento) {
+        AppLog.i(TAG, "Navega: $evento")
         voz.stopAll()
         _estado.value = _estado.value.copy(escuchando = false)
         _eventos.tryEmit(evento)

@@ -55,15 +55,15 @@ MAX_PAGINAS_VIDEOS = 20
 
 INSTRUCCION_C1B = (
     f"En el campus, en cada uno de {MINIMO_PUNTOS_C1} puntos conocidos con dataset (junto a lugares de la lista de "
-    "arriba): desde Inicio di «uno» (o toca el botón principal), da la vuelta completa y escucha el Resultado; anota "
-    "para C1c el punto, el lugar esperado, lo que dijo la app, la confianza y si pidió volver a ubicarse; vuelve con "
-    f"«Volver al inicio». Graba en video con audio al menos dos puntos. Cuando termines los {MINIMO_PUNTOS_C1}, pulsa "
-    "Enter aquí."
+    "arriba): desde Inicio di «uno» (si no escucha, toca el botón principal y dilo), da la vuelta completa y escucha "
+    "el Resultado; anota para C1c el punto, el lugar esperado, lo que dijo la app, la confianza y si pidió volver a "
+    "ubicarse; vuelve con «Volver al inicio». Graba en video con audio al menos dos puntos. Cuando termines los "
+    f"{MINIMO_PUNTOS_C1}, pulsa Enter aquí."
 )
 INSTRUCCION_C4B = (
-    "Con embedding apagado: en el teléfono, desde Inicio di «uno» (o toca el botón principal) y da la vuelta "
-    f"completa grabando la pantalla con audio. Tras «Analizando…» la app debe decir «{MENSAJE_C4}» y seguir abierta. "
-    "Después pulsa Enter aquí."
+    "Con embedding apagado: en el teléfono, desde Inicio di «uno» (si no escucha, toca el botón principal y dilo) y "
+    f"da la vuelta completa grabando la pantalla con audio. Tras «Analizando…» la app debe decir «{MENSAJE_C4}» y "
+    "seguir abierta. Después pulsa Enter aquí."
 )
 
 

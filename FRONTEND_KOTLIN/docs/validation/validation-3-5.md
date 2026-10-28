@@ -36,6 +36,10 @@ escuchando antes la explicación hablada.
 |---|---|---|
 | C3 | Una persona usuaria de lector de pantalla hace dos veces el recorrido Inicio → Ubicarme → Resultado (6.3) → Destino (6.4, hasta confirmar un lugar), en `dev` y con `embedding` encendido (`embedding.py encender`, infra §3.4): una solo con voz (sin tocar la pantalla salvo para iniciar) y otra solo con TalkBack (sin voz). Se anota cada vez que hablan dos voces a la vez | Video con audio de cada recorrido; nota de la sesión (fecha, modelo, versión de Android y de TalkBack, si la explicación de permisos sonó antes del diálogo, voces superpuestas: 0, y observaciones), sin datos personales de quien probó |
 
+> ⚠ Desde ARCHITECTURE 0.19.0 (decisión del usuario del 2026-10-28, §4.14) Ubicarme solo se elige por voz: tocar el
+> orbe abre la escucha y no hay acción de TalkBack «Ubicarme». El recorrido «solo con TalkBack (sin voz)» de C3 no
+> puede llegar a Ubicarme sin decir «uno»: al hacer FE-3.5 hay que ajustar C3 o preguntar al usuario por esa acción.
+
 ## 4. Datos de prueba y limpieza
 
 No crea nada en el backend. `connectedDebugAndroidTest` instala y desinstala la app de prueba (por eso P3); el script

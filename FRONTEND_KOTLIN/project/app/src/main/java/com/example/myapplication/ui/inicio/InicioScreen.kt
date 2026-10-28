@@ -183,7 +183,6 @@ fun InicioScreen(
         backendEnLinea = estado.backendEnLinea,
         permisosFaltantes = faltantes,
         onOrbe = viewModel::alPresionarOrbe,
-        onUbicarme = viewModel::ubicarme,
         onIrALugar = viewModel::irALugar,
         onAccesoAdministrador = onAccesoAdministrador,
         onReintentarPermisos = { lanzadorPermisos.launch(permisosNecesarios()) },
@@ -192,13 +191,16 @@ fun InicioScreen(
     )
 }
 
+/**
+ * [onOrbe] escucha (0.19.0: el orbe ya no abre Ubicarme, que se elige solo por voz); [onIrALugar] y [onVerMapa] son las
+ * acciones de TalkBack del orbe.
+ */
 @Composable
 fun InicioContent(
     escuchando: Boolean,
     backendEnLinea: Boolean,
     permisosFaltantes: List<String>,
     onOrbe: () -> Unit,
-    onUbicarme: () -> Unit,
     onIrALugar: () -> Unit,
     onAccesoAdministrador: () -> Unit,
     onReintentarPermisos: () -> Unit,
@@ -230,7 +232,7 @@ fun InicioContent(
 
         Text(
             text = if (escuchando) "Te escucho…"
-            else "Presiona para ubicarte\no para llegar a un lugar.",
+            else "Toca para hablar:\nuno, dos o mapa.",
             color = Color.White,
             fontSize = 28.sp,
             lineHeight = 36.sp,
@@ -248,7 +250,6 @@ fun InicioContent(
             Orbe(
                 escuchando = escuchando,
                 onClick = onOrbe,
-                onUbicarme = onUbicarme,
                 onIrALugar = onIrALugar,
                 onVerMapa = onVerMapa,
             )
@@ -329,7 +330,6 @@ private fun AccionPermiso(texto: String, onClick: () -> Unit) {
 private fun Orbe(
     escuchando: Boolean,
     onClick: () -> Unit,
-    onUbicarme: () -> Unit,
     onIrALugar: () -> Unit,
     onVerMapa: () -> Unit,
 ) {
@@ -361,9 +361,10 @@ private fun Orbe(
             .border(3.dp, MoradoClaro, CircleShape)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics {
+                // 0.19.0: el orbe escucha; Ubicarme solo por voz (sin acción de TalkBack, decisión del usuario).
                 contentDescription =
-                    "Botón principal. Toca dos veces para iniciar el escaneo de 360 grados " +
-                            "y saber dónde estás."
+                    "Botón principal. Toca dos veces para hablar y di uno para saber dónde estás, " +
+                            "dos para ir a un lugar, o mapa para ver el mapa."
                 customActions = listOf(
                     CustomAccessibilityAction("Ir a un lugar") { onIrALugar(); true },
                     // FE-3.1: el mapa público (ruta `mapa`).
